@@ -1,0 +1,15 @@
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../prisma/prisma.module';
+import { AIModule } from '../ai/ai.module';
+import { PromptsModule } from '../prompts/prompts.module';
+import { InteractiveQuestionService } from './interactive-question.service';
+import { ReviewQuestionService } from './review-question.service';
+import { QuestionsController } from './questions.controller';
+
+@Module({
+    imports: [PrismaModule, AIModule, PromptsModule],
+    controllers: [QuestionsController],
+    providers: [InteractiveQuestionService, ReviewQuestionService],
+    exports: [InteractiveQuestionService, ReviewQuestionService],
+})
+export class QuestionsModule { }

@@ -1,0 +1,508 @@
+{
+    "meta": {
+        "schema_version": "1.1.0",
+        "awf_version": "3.3.0",
+        "updated_at": "2026-02-02T17:27:00+07:00"
+    },
+    "project": {
+        "name": "AI Teaching Assistant",
+        "type": "fullstack-web",
+        "status": "in_development",
+        "description": "Hệ thống tạo bài giảng tự động sử dụng AI (Gemini, Imagen, TTS) để generate PPTX, handouts, và quizzes từ outline"
+    },
+    "tech_stack": {
+        "frontend": {
+            "framework": "React 18",
+            "language": "TypeScript",
+            "bundler": "Vite",
+            "styling": "CSS Modules",
+            "routing": "react-router-dom"
+        },
+        "backend": {
+            "framework": "NestJS",
+            "language": "TypeScript",
+            "orm": "Prisma 7",
+            "auth": "JWT (passport-jwt)"
+        },
+        "database": {
+            "type": "PostgreSQL",
+            "orm": "Prisma",
+            "migrations": true
+        },
+        "ai_services": {
+            "primary_provider": "CLIProxyAPI (Priority 1 - VPS Self-hosted)",
+            "cliproxy": {
+                "description": "OpenAI-compatible proxy for free AI tier access",
+                "vps_domain": "https://cliproxy.hoclieu.id.vn",
+                "docker_image": "eceasy/cli-proxy-api:latest",
+                "config_path": "/home/trieuhoa/cliproxy/config.yaml",
+                "models": {
+                    "text": [
+                        "gemini-2.5-flash",
+                        "gemini-3-pro-preview",
+                        "gemini-3-flash-preview",
+                        "gemini-claude-sonnet-4-5"
+                    ],
+                    "image": [
+                        "gemini-3-pro-image-preview"
+                    ]
+                },
+                "features": [
+                    "Multi-account rotation (quota exceeded → switch project)",
+                    "OAuth login via docker exec --antigravity-login",
+                    "Round-robin routing strategy",
+                    "Cloudflare Tunnel for public access"
+                ],
+                "admin_config": "system_configs table (cliproxy.enabled, cliproxy.url, cliproxy.apiKey, cliproxy.defaultTextModel, cliproxy.defaultImageModel)"
+            },
+            "fallback_provider": "Gemini SDK (@google/genai)",
+            "llm": "Google Gemini (2.5 Pro/Flash, 2.0 Flash)",
+            "image": "Gemini Image Generation",
+            "tts": [
+                "Gemini 2.5 Flash Preview TTS",
+                "Vbee",
+                "ViTTS (Local/Self-hosted Vietnamese TTS with voice cloning)"
+            ],
+            "sdk": "@google/genai (NOT @google/generative-ai - legacy)"
+        },
+        "export": {
+            "pptx": "Python python-pptx"
+        }
+    },
+    "database_schema": {
+        "tables": [
+            {
+                "name": "users",
+                "description": "User accounts with auth",
+                "key_fields": [
+                    "id",
+                    "email",
+                    "passwordHash",
+                    "role"
+                ]
+            },
+            {
+                "name": "subjects",
+                "description": "Subject/Course groupings",
+                "key_fields": [
+                    "id",
+                    "userId",
+                    "name",
+                    "description"
+                ]
+            },
+            {
+                "name": "lessons",
+                "description": "Individual lessons with 6-step workflow",
+                "key_fields": [
+                    "id",
+                    "subjectId",
+                    "title",
+                    "outlineRaw",
+                    "detailedOutline",
+                    "slideScript",
+                    "currentStep",
+                    "status"
+                ]
+            },
+            {
+                "name": "slides",
+                "description": "Structured slide data (NEW - replaces slideScript TEXT)",
+                "key_fields": [
+                    "id",
+                    "lessonId",
+                    "slideIndex",
+                    "slideType",
+                    "title",
+                    "content",
+                    "visualIdea",
+                    "speakerNote",
+                    "imagePrompt",
+                    "imageUrl",
+                    "audioUrl",
+                    "status"
+                ]
+            },
+            {
+                "name": "slide_audios",
+                "description": "Audio per slide (DEPRECATED - merged into slides)",
+                "key_fields": [
+                    "id",
+                    "lessonId",
+                    "slideIndex",
+                    "speakerNote",
+                    "audioUrl",
+                    "status"
+                ]
+            },
+            {
+                "name": "interactive_questions",
+                "description": "MC/MR questions for focus checking during lesson (NEW)",
+                "key_fields": [
+                    "id",
+                    "lessonId",
+                    "questionType",
+                    "questionText",
+                    "answer1-10",
+                    "correctFeedback",
+                    "incorrectFeedback",
+                    "points"
+                ]
+            },
+            {
+                "name": "review_questions",
+                "description": "Bloom taxonomy questions for review (NEW)",
+                "key_fields": [
+                    "id",
+                    "lessonId",
+                    "questionId",
+                    "level",
+                    "question",
+                    "correctAnswer",
+                    "optionB",
+                    "optionC",
+                    "optionD",
+                    "explanation"
+                ]
+            },
+            {
+                "name": "question_banks",
+                "description": "Legacy question storage (DEPRECATED - use review_questions)",
+                "key_fields": [
+                    "id",
+                    "lessonId",
+                    "questionsJson",
+                    "levelCounts"
+                ]
+            },
+            {
+                "name": "pptx_templates",
+                "description": "PowerPoint templates",
+                "key_fields": [
+                    "id",
+                    "name",
+                    "titleBgUrl",
+                    "contentBgUrl",
+                    "stylingJson"
+                ]
+            },
+            {
+                "name": "api_keys",
+                "description": "Encrypted API keys for AI services",
+                "key_fields": [
+                    "id",
+                    "name",
+                    "keyEncrypted",
+                    "service",
+                    "userId"
+                ]
+            },
+            {
+                "name": "model_configs",
+                "description": "User AI model preferences per task",
+                "key_fields": [
+                    "id",
+                    "userId",
+                    "taskType",
+                    "provider",
+                    "modelName"
+                ]
+            },
+            {
+                "name": "tts_providers",
+                "description": "TTS provider configurations",
+                "key_fields": [
+                    "id",
+                    "name",
+                    "type",
+                    "endpoint"
+                ]
+            },
+            {
+                "name": "user_tts_configs",
+                "description": "User-specific TTS settings",
+                "key_fields": [
+                    "id",
+                    "userId",
+                    "providerId",
+                    "credentialsEnc"
+                ]
+            }
+        ],
+        "relationships": [
+            "User 1:N Subject",
+            "Subject 1:N Lesson",
+            "Lesson 1:N Slide",
+            "Lesson 1:N SlideAudio (deprecated)",
+            "Lesson 1:N InteractiveQuestion",
+            "Lesson 1:N ReviewQuestion",
+            "Lesson 1:1 QuestionBank (deprecated)",
+            "Lesson N:1 PPTXTemplate"
+        ]
+    },
+    "api_endpoints": {
+        "auth": [
+            "POST /auth/register",
+            "POST /auth/login",
+            "GET /auth/me",
+            "POST /auth/refresh"
+        ],
+        "subjects": [
+            "GET /subjects",
+            "POST /subjects",
+            "GET /subjects/:id",
+            "PUT /subjects/:id",
+            "DELETE /subjects/:id",
+            "GET /subjects/:id/lessons",
+            "POST /subjects/:id/lessons"
+        ],
+        "lessons": [
+            "GET /lessons/:id",
+            "DELETE /lessons/:id"
+        ],
+        "outline": [
+            "GET /lessons/:id/outline",
+            "PUT /lessons/:id/outline/raw",
+            "POST /lessons/:id/outline/generate"
+        ],
+        "slides": [
+            "GET /lessons/:id/slides - ⭐ Returns Slide[] entities (Step 5 data persistence)",
+            "GET /lessons/:id/slides/script-data - Returns lesson metadata (Step 3)",
+            "POST /lessons/:id/slides/generate",
+            "PUT /lessons/:id/slides/script"
+        ],
+        "slide_audio": [
+            "GET /lessons/:id/slide-audio",
+            "POST /lessons/:id/slide-audio/initialize",
+            "POST /lessons/:id/slide-audio/:idx/generate",
+            "POST /lessons/:id/slide-audio/generate-all",
+            "GET /lessons/:id/slide-audio/download-all"
+        ],
+        "questions_planned": [
+            "GET /lessons/:id/interactive-questions",
+            "POST /lessons/:id/interactive-questions/generate",
+            "GET /lessons/:id/review-questions",
+            "POST /lessons/:id/review-questions/generate",
+            "GET /lessons/:id/review-questions/export/excel"
+        ],
+        "slide_data": [
+            "GET /lessons/:id/slides (structured)",
+            "GET /lessons/:id/slides/:index",
+            "PUT /lessons/:id/slides/:index",
+            "POST /lessons/:id/slides/parse",
+            "POST /lessons/:id/slides/sync"
+        ],
+        "file_storage": [
+            "GET /files/:userId/:lessonId/:type/:filename - Authenticated file access",
+            "GET /files/:userId/:lessonId/:type (list)",
+            "GET /files/public/:userId/:lessonId/images/:filename - Public images for <img> tags",
+            "GET /files/public/system/templates/:templateId/:filename - System template backgrounds",
+            "GET /files/public/:userId/templates/:templateId/:filename - User template backgrounds"
+        ],
+        "export": [
+            "POST /lessons/:id/export/pptx",
+            "GET /lessons/:id/export/pptx/download"
+        ],
+        "pptx": [
+            "GET /lessons/:id/pptx/templates - List available templates (system + user)",
+            "GET /lessons/:id/pptx/status - Get generation status",
+            "GET /lessons/:id/pptx/generate-images - SSE stream for image generation",
+            "POST /lessons/:id/pptx/generate - Generate and download PPTX"
+        ],
+        "settings": [
+            "GET /user/settings",
+            "PUT /user/settings",
+            "GET /user/model-config",
+            "PUT /user/model-config/:taskType"
+        ],
+        "user_templates": [
+            "GET /user/templates - Get user's personal PPTX templates",
+            "POST /user/templates/upload - Upload a personal PPTX template",
+            "DELETE /user/templates/:id - Delete user's personal template"
+        ],
+        "prompts": [
+            "GET /admin/prompts - List all prompts",
+            "POST /admin/prompts - Create prompt",
+            "POST /admin/prompts/seed - Seed V2 prompts",
+            "POST /dev/seed-prompts - Dev seed (no auth)",
+            "GET /prompts/active/:slug - Get active prompt by slug"
+        ],
+        "prompt_composer": {
+            "buildFullPrompt(subjectId, slug, vars)": "Role (from Subject) + Task (from DB) - used for outline, slides, questions",
+            "buildTaskOnlyPrompt(slug, vars)": "Task prompt only - used for slides.design, slides.image"
+        }
+    },
+    "workflow": {
+        "name": "6-Step Lesson Creation",
+        "steps": [
+            {
+                "step": 1,
+                "name": "Nhập Outline",
+                "input": "Raw text/PDF",
+                "output": "outlineRaw",
+                "ai": false
+            },
+            {
+                "step": 2,
+                "name": "Tạo Outline Chi Tiết",
+                "input": "outlineRaw",
+                "output": "detailedOutline",
+                "ai": "Gemini"
+            },
+            {
+                "step": 3,
+                "name": "Kịch Bản Slide",
+                "input": "detailedOutline",
+                "output": "slides[] (title, content, visualIdea, speakerNote)",
+                "ai": "Gemini"
+            },
+            {
+                "step": 4,
+                "name": "Tạo Audio",
+                "input": "slides[].speakerNote",
+                "output": "slides[].audioUrl",
+                "ai": "TTS"
+            },
+            {
+                "step": 5,
+                "name": "Tạo PPTX",
+                "input": "slides[], template",
+                "output": "PPTX file",
+                "ai": "Imagen + Python"
+            },
+            {
+                "step": 6,
+                "name": "Ngân Hàng Câu Hỏi",
+                "input": "slides[]",
+                "output": "interactiveQuestions[], reviewQuestions[]",
+                "ai": "Gemini"
+            }
+        ]
+    },
+    "features": [
+        {
+            "name": "Authentication",
+            "status": "implemented",
+            "description": "JWT-based login/register with role support"
+        },
+        {
+            "name": "Subject Management",
+            "status": "implemented",
+            "description": "CRUD for subjects/courses"
+        },
+        {
+            "name": "Lesson Workflow (6 steps)",
+            "status": "implemented",
+            "description": "All 6 steps working with DB prompts and PromptComposer integration"
+        },
+        {
+            "name": "AI Model Configuration",
+            "status": "implemented",
+            "description": "User can select Gemini models per task"
+        },
+        {
+            "name": "Structured Slides",
+            "status": "implemented",
+            "description": "SlideDataModule with parser, CRUD API, auto-parse after Gemini generation"
+        },
+        {
+            "name": "Interactive Questions",
+            "status": "implemented",
+            "description": "MC/MR questions using questions.interactive prompt from DB via PromptComposer"
+        },
+        {
+            "name": "Review Questions (Bloom)",
+            "status": "implemented",
+            "description": "3-level taxonomy: Biết, Hiểu, Vận dụng - uses questions.review prompt from DB"
+        },
+        {
+            "name": "Prompt System",
+            "status": "implemented",
+            "description": "Database-driven prompts with seedV2() sync. PromptComposer combines Role + Task prompts."
+        }
+    ],
+    "question_types": {
+        "interactive_question": {
+            "purpose": "Kiểm tra tập trung trong suốt bài giảng",
+            "count": "5 câu/bài",
+            "types": [
+                "MC (Multiple Choice)",
+                "MR (Multiple Response)"
+            ],
+            "answers": "Tối đa 10, đáp án đúng có dấu *",
+            "media": [
+                "image",
+                "video",
+                "audio"
+            ],
+            "export_format": "18 cột (Question Type, Text, Media, Answers 1-10, Feedbacks, Points)"
+        },
+        "review_question": {
+            "purpose": "Ôn tập cuối bài theo Bloom taxonomy",
+            "count": "5-15 câu/bài (configurable)",
+            "levels": {
+                "1": "Biết (Remember)",
+                "2": "Hiểu (Understand)",
+                "3": "Vận dụng (Apply)"
+            },
+            "answers": "4 (A,B,C,D) - A luôn đúng",
+            "question_id_format": "B{lesson}-{level}-{order} (e.g., B1-1-01)",
+            "export_format": "7 cột (ID, Question, A, B, C, D, Explanation)"
+        }
+    },
+    "knowledge_items": {
+        "patterns": [
+            "NestJS module structure with controller/service/module",
+            "Prisma for type-safe database access",
+            "React Context for lesson editor state",
+            "6-step workflow with step tracking",
+            "⭐ PromptComposer: Role (system.role + Subject) + Task (from DB slug)",
+            "⭐ seedV2() in prompts.service.ts keeps DB and code in sync"
+        ],
+        "gotchas": [
+            "Gemini output format: **Slide N: Title** with **[Speaker Notes]:**",
+            "Prisma 7 requires typescript 5.5+",
+            "SlideAudio table deprecated - use Slide.audioUrl instead",
+            "TTSResult uses .audio (not .buffer) and .durationMs",
+            "FileStorageService path: datauser/{userId}/lessons/{lessonId}/audio/",
+            "JWT returns {id, email, role} - use req.user.id NOT req.user.userId",
+            "API response handling: check if response.data is array or object",
+            "TypeScript decorator metadata: use 'any' type for @Req() to avoid TS1272 error",
+            "⭐ Image model name: 'gemini-2.5-flash-image' NOT 'gemini-2.5-flash-preview-image-generation' (404 error)",
+            "⭐ Image SDK: Use @google/genai (new) NOT @google/generative-ai (legacy) for image generation",
+            "⭐ Image generation: Use client.models.generateContentStream() with config.responseModalities=['IMAGE','TEXT']",
+            "⭐ Browser <img> tags cannot send JWT headers - use public route /files/public/... for images",
+            "⭐ Vite proxy: Add '/files' proxy to forward static file requests to backend port 3001",
+            "⭐ GEMINI_API_KEY must be in .env for image generation fallback when user has no key in DB",
+            "⭐ buildFullPrompt for questions (needs role) vs buildTaskOnlyPrompt for design/image (no role needed)",
+            "⭐ Prompt variables: {title}, {slide_script}, {detailed_outline}, {raw_outline}, {lesson_id}",
+            "⭐ Always sync prompts.service.ts seedV2() when updating prompts in DB to prevent data loss",
+            "⭐ ExcelJS import: Use 'import * as ExcelJS from exceljs' (static), NOT 'await import()' (dynamic fails)",
+            "⭐ InteractiveQuestion answers: DB has answer1-10 fields, backend transforms to answers[] array for frontend",
+            "⭐ Excel export: Use api.get() with responseType:'blob', create download link via URL.createObjectURL()",
+            "⭐ Step 5 API split: GET /slides returns Slide[] entities, GET /slides/script-data returns lesson metadata",
+            "⭐ Template background paths: URLs like /files/public/system/templates/{uuid}/... map to datauser/system/templates/{uuid}/...",
+            "⭐ getLocalPath() in pptx.service.ts: Must handle BOTH /templates/... AND /files/public/.../templates/... URL patterns",
+            "⭐ Template image UI: Needs dedicated routes in file-storage.controller.ts to serve background images for <img> previews",
+            "⭐ ViTTS voice ID normalization: Strip 'vitts:' prefix before sending to API - voice format is 'ref:3', 'trained_xxx', or 'male'",
+            "⭐ ViTTS synthesize-with-saved-ref endpoint: Use form-urlencoded (URLSearchParams), NOT JSON body - API returns 422 with JSON",
+            "⭐ ViTTS multilingualMode: Optional param for handling mixed Vietnamese/English text - values: 'auto', 'syllable', 'english'",
+            "⭐ ViTTS API response parsing: /saved-references and /trained-voices return arrays directly, NOT nested {data:[]} objects"
+        ],
+        "conventions": [
+            "API routes: /lessons/:id/resource",
+            "Prisma map() for snake_case in DB",
+            "Frontend pages in src/pages/, components in src/components/"
+        ],
+        "prompt_slugs": {
+            "system.role": "Vai trò giảng viên - được kết hợp với Subject fields",
+            "outline.detailed": "Step 2 - Tạo dàn bài chi tiết từ raw outline",
+            "slides.script": "Step 3 - Tạo kịch bản slide từ detailed outline",
+            "slides.design": "Step 5 - Tối ưu content theo Golden Rule",
+            "slides.image": "Step 5 - Tạo prompt cho Imagen",
+            "questions.interactive": "Step 6 - 5 câu hỏi kiểm tra tập trung (MC/MR)",
+            "questions.review": "Step 6 - 15 câu Bloom taxonomy (Biết/Hiểu/Vận dụng)",
+            "handout.generate": "Tạo tài liệu handout"
+        }
+    }
+}

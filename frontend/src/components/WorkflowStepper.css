@@ -1,0 +1,135 @@
+.workflow-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 12px;
+    margin-bottom: 24px;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: all 0.3s ease;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.step:hover:not(.disabled) {
+    opacity: 0.8;
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.step.active,
+.step.completed {
+    opacity: 1;
+}
+
+.step.disabled {
+    cursor: not-allowed;
+    opacity: 0.3;
+}
+
+.step-icon-wrapper {
+    position: relative;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(51, 65, 85, 0.8);
+    border-radius: 50%;
+    margin-bottom: 8px;
+    transition: all 0.3s ease;
+}
+
+.step.active .step-icon-wrapper {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    transform: scale(1.15);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+.step.completed .step-icon-wrapper {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.step-icon {
+    font-size: 24px;
+}
+
+.step-check {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 18px;
+    height: 18px;
+    background: #22c55e;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: white;
+    font-weight: bold;
+    border: 2px solid #1e293b;
+}
+
+.step-name {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.step.active .step-name {
+    color: #a5b4fc;
+    font-weight: 600;
+}
+
+.step.completed .step-name {
+    color: #86efac;
+}
+
+.step-connector {
+    width: 40px;
+    height: 3px;
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 2px;
+    margin: 0 4px;
+    margin-bottom: 28px;
+    transition: background 0.3s ease;
+}
+
+.step-connector.completed {
+    background: linear-gradient(90deg, #22c55e, #6366f1);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .workflow-stepper {
+        padding: 16px 8px;
+        overflow-x: auto;
+    }
+
+    .step-name {
+        display: none;
+    }
+
+    .step-icon-wrapper {
+        width: 40px;
+        height: 40px;
+    }
+
+    .step-icon {
+        font-size: 20px;
+    }
+
+    .step-connector {
+        width: 24px;
+        margin-bottom: 0;
+    }
+}

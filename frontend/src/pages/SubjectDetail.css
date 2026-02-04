@@ -1,0 +1,196 @@
+.subject-detail-page {
+    max-width: 1000px;
+}
+
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 24px;
+    font-size: 14px;
+    color: #64748b;
+}
+
+.breadcrumb a {
+    color: #3b82f6;
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.lessons-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.lesson-card {
+    display: flex;
+    align-items: center;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(59, 130, 246, 0.1);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.lesson-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+}
+
+.lesson-link {
+    flex: 1;
+    padding: 20px 24px;
+    text-decoration: none;
+}
+
+.lesson-info h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0 0 8px 0;
+}
+
+.lesson-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-badge.draft {
+    background: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+}
+
+.status-badge.processing {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.status-badge.completed {
+    background: rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+}
+
+.status-badge.failed {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.created-date {
+    font-size: 13px;
+    color: #64748b;
+}
+
+.delete-btn {
+    padding: 12px 16px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.lesson-card:hover .delete-btn {
+    opacity: 1;
+}
+
+.error-state {
+    text-align: center;
+    color: #f87171;
+    padding: 60px;
+}
+
+/* Header Actions */
+.header-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Role Preview Card */
+.role-preview-card {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+}
+
+.role-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.role-icon {
+    font-size: 16px;
+}
+
+.role-preview-text {
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.role-additional {
+    margin: 8px 0 0 0;
+    font-size: 13px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Modal Large (for Edit) */
+.modal-large {
+    max-width: 600px !important;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Form Row (2 columns) */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.form-row .form-group {
+    margin-bottom: 16px;
+}
+
+/* Form Divider */
+.form-divider {
+    display: flex;
+    align-items: center;
+    margin: 24px 0 16px 0;
+}
+
+.form-divider::before,
+.form-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(59, 130, 246, 0.2);
+}
+
+.form-divider span {
+    padding: 0 16px;
+    color: #64748b;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}

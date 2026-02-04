@@ -1,0 +1,15 @@
+
+      <svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080">
+        <rect width="100%" height="100%" fill="#1f2937"/>
+        <rect x="10" y="10" width="1900" height="1060" 
+              fill="none" stroke="#4b5563" stroke-width="2" stroke-dasharray="10"/>
+        <text x="50%" y="45%" fill="#9ca3af" font-family="Arial, sans-serif" 
+              font-size="32" text-anchor="middle">
+          🖼️ Image Placeholder
+        </text>
+        <text x="50%" y="55%" fill="#6b7280" font-family="Arial, sans-serif" 
+              font-size="18" text-anchor="middle">
+          Educational slide illustration for &quot;Cảm ơn đã chú ý lắng nghe!&quot;: Hình nền giống slide tiêu đề nhưng ...
+        </text>
+      </svg>
+    

@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Docker
+docker-data/
+
+# Prisma
+backend/prisma/*.db
+backend/prisma/*.db-journal
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Brain (session is local)
+.brain/session.json

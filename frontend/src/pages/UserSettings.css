@@ -1,0 +1,493 @@
+.user-settings {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.user-settings.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    color: #94a3b8;
+}
+
+.settings-header {
+    margin-bottom: 32px;
+}
+
+.settings-header h1 {
+    margin: 0 0 8px 0;
+    font-size: 28px;
+    color: #f1f5f9;
+}
+
+.settings-header p {
+    margin: 0;
+    color: #94a3b8;
+}
+
+/* Messages */
+.settings-message {
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+.settings-message.success {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #4ade80;
+}
+
+.settings-message.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+}
+
+/* Sections */
+.settings-section {
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.settings-section h2 {
+    margin: 0 0 4px 0;
+    font-size: 18px;
+    color: #e2e8f0;
+}
+
+.section-desc {
+    margin: 0 0 20px 0;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+}
+
+/* Service Status Grid */
+.service-status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.service-status-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.service-status-card .service-icon {
+    font-size: 28px;
+}
+
+.service-status-card .service-info {
+    flex: 1;
+}
+
+.service-status-card .service-info h3 {
+    margin: 0 0 2px 0;
+    font-size: 14px;
+    color: #e2e8f0;
+}
+
+.service-status-card .service-info p {
+    margin: 0;
+    font-size: 12px;
+    color: #64748b;
+}
+
+.status-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.status-badge.ready {
+    background: rgba(34, 197, 94, 0.1);
+    color: #4ade80;
+}
+
+.status-badge.unavailable {
+    background: rgba(239, 68, 68, 0.1);
+    color: #fca5a5;
+}
+
+/* Buttons */
+.btn-add {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-add:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+/* Empty State */
+.empty-keys {
+    text-align: center;
+    padding: 40px;
+    color: #94a3b8;
+}
+
+.empty-keys span {
+    font-size: 40px;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.empty-keys p {
+    margin: 0 0 4px 0;
+    color: #e2e8f0;
+}
+
+.empty-keys small {
+    color: #64748b;
+}
+
+/* User Keys List */
+.user-keys-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.user-key-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.user-key-item .key-icon {
+    font-size: 24px;
+}
+
+.user-key-item .key-details {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.user-key-item .key-details strong {
+    color: #e2e8f0;
+    font-size: 14px;
+}
+
+.user-key-item .key-details span {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.user-key-item .key-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.user-key-item .key-actions button {
+    padding: 6px 10px;
+    background: rgba(100, 116, 139, 0.2);
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.user-key-item .key-actions button:hover {
+    background: rgba(100, 116, 139, 0.4);
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background: #1e293b;
+    border-radius: 12px;
+    width: 100%;
+    max-width: 420px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #f1f5f9;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #94a3b8;
+    cursor: pointer;
+}
+
+.modal-content form {
+    padding: 20px;
+}
+
+.form-group {
+    margin-bottom: 16px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.btn-cancel {
+    flex: 1;
+    padding: 10px;
+    background: rgba(100, 116, 139, 0.2);
+    border: none;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.btn-save {
+    flex: 1;
+    padding: 10px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* Model Configuration Section */
+.model-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.model-config-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.model-task-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.model-task-info .task-icon {
+    font-size: 28px;
+}
+
+.model-task-info strong {
+    display: block;
+    color: #e2e8f0;
+    font-size: 14px;
+}
+
+.model-task-info small {
+    color: #64748b;
+    font-size: 12px;
+}
+
+.model-config-card select {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.model-config-card select:hover {
+    border-color: #6366f1;
+}
+
+.model-config-card select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.model-config-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-discover {
+    padding: 10px 18px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 8px;
+    color: #4ade80;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-discover:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.2);
+}
+
+.btn-discover:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-save-config {
+    padding: 12px 24px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-save-config:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.btn-save-config:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* Template Section Styles */
+.template-item {
+    flex-wrap: wrap;
+}
+
+.template-previews {
+    display: flex;
+    gap: 8px;
+}
+
+.template-previews img {
+    width: 80px;
+    height: 45px;
+    object-fit: cover;
+    border-radius: 6px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* Image Upload Box */
+.image-upload-box {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: rgba(15, 23, 42, 0.5);
+    border: 2px dashed rgba(148, 163, 184, 0.3);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.image-upload-box:hover {
+    border-color: #6366f1;
+}
+
+.image-upload-box img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-upload-box .placeholder {
+    color: #64748b;
+    font-size: 14px;
+}
+
+.image-upload-box input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}

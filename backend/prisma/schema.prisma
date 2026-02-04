@@ -1,0 +1,412 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider   = "prisma-client-js"
+  engineType = "library"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ENUMS ====================
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum LessonStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ContentType {
+  PPTX
+  HANDOUT
+  QUIZ_EXCEL
+  QUIZ_WORD
+}
+
+enum TTSProviderType {
+  GEMINI
+  GOOGLE_CLOUD
+  VBEE
+  CUSTOM
+  VITTS
+}
+
+enum APIService {
+  GEMINI
+  GOOGLE_CLOUD_TTS
+  IMAGEN
+  VBEE
+  VITTS
+  CLIPROXY
+}
+
+enum ContentStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// ==================== MODELS ====================
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String   @map("password_hash")
+  role          UserRole @default(USER)
+  apiKeyEnc     String?  @map("api_key_enc") // Encrypted Gemini API key
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  subjects      Subject[]
+  ttsConfigs    UserTTSConfig[]
+  apiKeys       ApiKey[]
+  templates     PPTXTemplate[]
+  modelConfigs  ModelConfig[]
+
+  @@map("users")
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  name        String
+  description String?
+
+  // Role definition fields for AI prompt context
+  institutionType   String?  @map("institution_type")   // Đại học, Cao đẳng, THPT, Doanh nghiệp
+  expertiseArea     String?  @map("expertise_area")     // Lĩnh vực chuyên môn của giảng viên
+  courseName        String?  @map("course_name")        // Tên môn học đầy đủ
+  targetAudience    String?  @map("target_audience")    // Đối tượng học viên
+  majorName         String?  @map("major_name")         // Ngành học
+  additionalContext String?  @map("additional_context") @db.Text // Yêu cầu bổ sung
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessons Lesson[]
+
+  @@map("subjects")
+}
+
+model Lesson {
+  id         String       @id @default(uuid())
+  subjectId  String       @map("subject_id")
+  templateId String?      @map("template_id")
+  title      String
+  outlineRaw String?      @map("outline_raw") @db.Text
+  status     LessonStatus @default(DRAFT)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  // Step-by-step workflow data
+  detailedOutline String?  @map("detailed_outline") @db.Text  // Step 2 output
+  slideScript     String?  @map("slide_script") @db.Text      // Step 3 output (deprecated, use slides[])
+  currentStep     Int      @default(1) @map("current_step")   // Track progress (1-6)
+
+  // Relations
+  subject           Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  template          PPTXTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  generatedContents GeneratedContent[]
+  questionBank      QuestionBank?      // Deprecated: use interactiveQuestions + reviewQuestions
+  slideAudios       SlideAudio[]       // Step 4: Audio per slide (deprecated, use slides[])
+  
+  // New structured data
+  slides               Slide[]               // Step 3: Structured slide data
+  interactiveQuestions InteractiveQuestion[] // Step 6: Interactive questions during lesson
+  reviewQuestions      ReviewQuestion[]      // Step 6: Review questions (Bloom taxonomy)
+
+  @@map("lessons")
+}
+
+model Prompt {
+  id        String   @id @default(uuid())
+  slug      String   @unique // e.g., "pptx_content", "handout", "quiz"
+  name      String
+  content   String   @db.Text
+  variables String[] // e.g., ["{lesson_title}", "{subject_name}"]
+  version   Int      @default(1)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("prompts")
+}
+
+model TTSProvider {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  type           TTSProviderType
+  endpoint       String?
+  requiredFields String[]        @map("required_fields") // e.g., ["api_key", "voice_id"]
+  isSystem       Boolean         @default(false) @map("is_system")
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  // Relations
+  userConfigs UserTTSConfig[]
+
+  @@map("tts_providers")
+}
+
+model UserTTSConfig {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  providerId     String   @map("provider_id")
+  credentialsEnc String   @map("credentials_enc") @db.Text // Encrypted JSON
+  isDefault      Boolean  @default(false) @map("is_default")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider TTSProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerId])
+  @@map("user_tts_configs")
+}
+
+model ApiKey {
+  id           String     @id @default(uuid())
+  name         String // e.g., "System Gemini Key", "User's Gemini Key"
+  keyEncrypted String     @map("key_encrypted") @db.Text
+  service      APIService
+  isSystem     Boolean    @default(false) @map("is_system")
+  userId       String?    @map("user_id") // null = system key
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model GeneratedContent {
+  id          String        @id @default(uuid())
+  lessonId    String        @map("lesson_id")
+  type        ContentType
+  contentJson String?       @map("content_json") @db.Text // JSON structure of generated content
+  fileUrl     String?       @map("file_url") // MinIO URL
+  status      ContentStatus @default(PENDING)
+  errorMsg    String?       @map("error_msg")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  // Relations
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("generated_contents")
+}
+
+model PPTXTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  titleBgUrl   String   @map("title_bg_url")
+  contentBgUrl String   @map("content_bg_url")
+  thumbnailUrl String?  @map("thumbnail_url")
+  fileUrl      String?  @map("file_url")  // Path to uploaded PPTX template file
+  stylingJson  String?  @map("styling_json") @db.Text // JSON: fonts, colors, sizes
+  isSystem     Boolean  @default(false) @map("is_system")
+  isDefault    Boolean  @default(false) @map("is_default")
+  isActive     Boolean  @default(true) @map("is_active")
+  userId       String?  @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  lessons Lesson[]
+
+  @@map("pptx_templates")
+}
+
+// Question Bank for lesson quizzes (Step 5 of workflow)
+model QuestionBank {
+  id            String   @id @default(uuid())
+  lessonId      String   @unique @map("lesson_id")  // One-to-one with Lesson
+  questionsJson String   @map("questions_json") @db.Text  // Full question data as JSON
+  levelCounts   String?  @map("level_counts")             // {"level1": 5, "level2": 3, "level3": 2}
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("question_banks")
+}
+
+// Task types for AI model configuration
+enum TaskType {
+  OUTLINE     // Raw outline -> Detailed outline
+  SLIDES      // Detailed outline -> Slide script
+  QUESTIONS   // Generate quiz questions
+  IMAGE       // Generate images for slides
+  TTS         // Text-to-speech for audio
+}
+
+// User's AI model preference per task type
+model ModelConfig {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  taskType  TaskType @map("task_type")
+  provider  String   // GEMINI, IMAGEN, GOOGLE_TTS, etc.
+  modelName String   @map("model_name") // gemini-1.5-flash, gemini-2.0-flash, etc.
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskType])
+  @@map("model_configs")
+}
+
+// Audio per slide for Step 4: Generate Audio
+model SlideAudio {
+  id            String   @id @default(uuid())
+  lessonId      String   @map("lesson_id")
+  slideIndex    Int      @map("slide_index")      // 0-based, following slide order
+  slideTitle    String?  @map("slide_title")
+  speakerNote   String   @db.Text
+  audioFileName String?  @map("audio_file_name")  // slide_00.mp3, slide_01.mp3...
+  audioUrl      String?  @map("audio_url")        // Full URL for playback
+  audioDuration Float?   @map("audio_duration")   // seconds
+  voiceId       String?  @map("voice_id")
+  status        String   @default("pending")      // pending | generating | done | error
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, slideIndex])
+  @@map("slide_audios")
+}
+
+// ==================== NEW STRUCTURED MODELS ====================
+
+// Structured slide data (replaces slideScript TEXT)
+model Slide {
+  id          String   @id @default(uuid())
+  lessonId    String   @map("lesson_id")
+  slideIndex  Int      @map("slide_index")      // 0-based
+  slideType   String   @default("content")      // title, content, objectives, summary
+  title       String                            // Slide title
+  content     String?  @db.Text                 // Raw bullet points from Step 3
+  optimizedContentJson String? @map("optimized_content_json") @db.Text // AI-optimized bullets [JSON array]
+  visualIdea  String?  @map("visual_idea") @db.Text  // Image concept description
+  speakerNote String?  @map("speaker_note") @db.Text // Speaker notes/transcript
+  imagePrompt String?  @map("image_prompt") @db.Text // Prompt used to generate image
+  imageUrl    String?  @map("image_url")        // Generated image URL
+  audioUrl    String?  @map("audio_url")        // Generated audio URL
+  audioDuration Float? @map("audio_duration")   // Audio duration in seconds
+  status      String   @default("draft")        // draft, image_done, audio_done, complete
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, slideIndex])
+  @@map("slides")
+}
+
+// Interactive questions during lesson (MC/MR, check focus)
+model InteractiveQuestion {
+  id                String   @id @default(uuid())
+  lessonId          String   @map("lesson_id")
+  questionOrder     Int      @default(0) @map("question_order")
+  
+  // MC (Multiple Choice - 1 answer) | MR (Multiple Response - multiple answers)
+  questionType      String   @default("MC") @map("question_type")
+  questionText      String   @map("question_text") @db.Text
+  
+  // Media attachments (optional)
+  imageUrl          String?  @map("image_url")
+  videoUrl          String?  @map("video_url")
+  audioUrl          String?  @map("audio_url")
+  
+  // Answers (up to 10, correct answers start with *)
+  answer1           String?  @map("answer_1")
+  answer2           String?  @map("answer_2")
+  answer3           String?  @map("answer_3")
+  answer4           String?  @map("answer_4")
+  answer5           String?  @map("answer_5")
+  answer6           String?  @map("answer_6")
+  answer7           String?  @map("answer_7")
+  answer8           String?  @map("answer_8")
+  answer9           String?  @map("answer_9")
+  answer10          String?  @map("answer_10")
+  
+  // Feedback
+  correctFeedback   String?  @map("correct_feedback") @db.Text
+  incorrectFeedback String?  @map("incorrect_feedback") @db.Text
+  points            Int      @default(1)
+  
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  
+  @@map("interactive_questions")
+}
+
+// Review questions with Bloom's taxonomy levels
+model ReviewQuestion {
+  id              String   @id @default(uuid())
+  lessonId        String   @map("lesson_id")
+  
+  // Question ID format: B1-1-01 (LessonNum-Level-Order)
+  questionId      String   @map("question_id")
+  questionOrder   Int      @default(0) @map("question_order")
+  
+  // Bloom's level: 1=Biết (Remember), 2=Hiểu (Understand), 3=Vận dụng (Apply)
+  level           Int      @default(1)
+  
+  // Content
+  question        String   @db.Text
+  
+  // Answers - Option A is ALWAYS the correct answer
+  correctAnswer   String   @map("correct_answer")  // Option A (always correct)
+  optionB         String   @map("option_b")
+  optionC         String   @map("option_c")
+  optionD         String   @map("option_d")
+  
+  // Explanation of why A is correct
+  explanation     String?  @db.Text
+  
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  
+  // Relations
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  
+  @@unique([lessonId, questionId])
+  @@map("review_questions")
+}
+
+// ==================== SYSTEM CONFIG ====================
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("system_configs")
+}
