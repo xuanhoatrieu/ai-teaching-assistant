@@ -10,6 +10,7 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend
+  PPTX_IMAGE: ghcr.io/${{ github.repository }}/pptx-generator
 
 jobs:
   build-and-push:
@@ -52,6 +53,16 @@ jobs:
             type=semver,pattern={{version}}
             type=sha,prefix=
 
+      - name: Extract metadata for PPTX Generator
+        id: meta-pptx
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.PPTX_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,prefix=
+
       - name: Build and push Backend
         uses: docker/build-push-action@v5
         with:
@@ -72,6 +83,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push PPTX Generator
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/utils/pptx_generator
+          push: true
+          tags: ${{ steps.meta-pptx.outputs.tags }}
+          labels: ${{ steps.meta-pptx.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
       - name: Create deployment summary
         run: |
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
@@ -79,6 +100,8 @@ jobs:
           echo "### Images pushed:" >> $GITHUB_STEP_SUMMARY
           echo "- Backend: \`${{ env.BACKEND_IMAGE }}:main\`" >> $GITHUB_STEP_SUMMARY
           echo "- Frontend: \`${{ env.FRONTEND_IMAGE }}:main\`" >> $GITHUB_STEP_SUMMARY
+          echo "- PPTX Generator: \`${{ env.PPTX_IMAGE }}:main\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Next steps:" >> $GITHUB_STEP_SUMMARY
-          echo "Watchtower on VPS will auto-pull and deploy within 5 minutes." >> $GITHUB_STEP_SUMMARY
+          echo "On VPS run: docker compose pull && docker compose up -d" >> $GITHUB_STEP_SUMMARY
+
