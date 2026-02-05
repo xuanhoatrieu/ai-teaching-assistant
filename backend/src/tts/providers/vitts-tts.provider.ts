@@ -34,7 +34,8 @@ export class ViTTSTTSProvider implements ITTSProvider {
     }
 
     async generateAudio(text: string, options?: TTSOptions): Promise<TTSResult> {
-        this.logger.log(`Generating audio with ViTTS: ${text.substring(0, 50)}...`);
+        this.logger.log(`Generating audio with ViTTS. BaseURL: ${this.baseUrl}`);
+        this.logger.log(`Text preview: ${text.substring(0, 50)}...`);
 
         if (!this.apiKey) {
             throw new Error('ViTTS API key is required');

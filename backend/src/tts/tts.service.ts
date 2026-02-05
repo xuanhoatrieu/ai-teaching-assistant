@@ -216,6 +216,7 @@ export class TTSService {
                 // Parse ViTTS credentials
                 try {
                     const vittsCredentials = JSON.parse(vittsCredentialsJson);
+                    this.logger.log(`[DEBUG] ViTTS credentials: apiKey=${vittsCredentials.apiKey?.substring(0, 10)}..., baseUrl=${vittsCredentials.baseUrl || 'NOT SET'}`);
                     if (!vittsCredentials.apiKey) {
                         throw new Error('Invalid ViTTS credentials format. Expected: {"apiKey": "xxx", "baseUrl": "yyy"}');
                     }
