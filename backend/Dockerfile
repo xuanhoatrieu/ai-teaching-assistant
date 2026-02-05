@@ -13,7 +13,8 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Generate Prisma client
+# Generate Prisma client (needs dummy DATABASE_URL for Prisma 7)
+ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 RUN npx prisma generate
 
 # Build the application
@@ -32,6 +33,7 @@ COPY prisma ./prisma/
 RUN npm ci --only=production
 
 # Generate Prisma client
+ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 RUN npx prisma generate
 
 # Copy built application
