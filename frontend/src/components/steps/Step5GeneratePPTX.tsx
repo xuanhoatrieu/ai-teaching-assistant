@@ -272,15 +272,6 @@ export function Step5GeneratePPTX() {
         }
     };
 
-    const handleReset = () => {
-        setStatus('idle');
-        setProgress(0);
-        setError(null);
-        setSlideProgress([]);
-        setPptxBlob(null);
-        setContentGenerated(false);
-    };
-
     // Get selected template for preview
     const selectedTpl = templates.find(t => t.id === selectedTemplate);
 

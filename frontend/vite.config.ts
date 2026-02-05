@@ -12,7 +12,7 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api/, ''),
         // SSE requires these settings to prevent buffering
         configure: (proxy, _options) => {
-          proxy.on('proxyRes', (proxyRes, req, res) => {
+          proxy.on('proxyRes', (proxyRes, _req, res) => {
             // Check if this is an SSE response
             if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
               // Disable response buffering for SSE
