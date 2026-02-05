@@ -1,5 +1,5 @@
-# Build stage
-FROM node:20-alpine AS builder
+# Build stage - Use Node 22 for Prisma 7 compatibility
+FROM node:22-alpine AS builder
 
 # Install OpenSSL for Prisma
 RUN apk add --no-cache openssl
@@ -14,22 +14,22 @@ COPY prisma ./prisma/
 # Create .env with dummy DATABASE_URL for prisma generate
 RUN echo "DATABASE_URL=postgresql://user:pass@localhost:5432/db" > .env
 
-# Install dependencies
+# Install dependencies (including devDependencies for prisma)
 RUN npm ci
+
+# Generate Prisma client BEFORE copying source (critical for Prisma 7)
+RUN npx prisma generate
 
 # Copy source code
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
-
 # Build the application
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine AS production
+# Production stage - Use Node 22 for Prisma 7 compatibility
+FROM node:22-alpine AS production
 
-# Install OpenSSL for Prisma
+# Install OpenSSL for Prisma runtime
 RUN apk add --no-cache openssl
 
 WORKDIR /app
@@ -42,16 +42,23 @@ COPY prisma ./prisma/
 # Create .env with dummy DATABASE_URL for prisma generate
 RUN echo "DATABASE_URL=postgresql://user:pass@localhost:5432/db" > .env
 
-# Install production dependencies only
-RUN npm ci --only=production
+# Install production dependencies
+RUN npm ci --omit=dev
+
+# Install prisma CLI for generate (needed in production stage)
+RUN npm install prisma
 
 # Generate Prisma client
 RUN npx prisma generate
 
-# Copy built application
+# Copy built application from builder
 COPY --from=builder /app/dist ./dist
 
-# Remove dummy .env (will use real env at runtime)
+# Copy Prisma client from builder (since devDeps aren't installed here)
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+
+# Remove dummy .env
 RUN rm .env
 
 # Set environment
