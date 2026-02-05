@@ -6,9 +6,13 @@ RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files AND prisma.config.ts (Prisma 7 requirement)
 COPY package*.json ./
+COPY prisma.config.ts ./
 COPY prisma ./prisma/
+
+# Create .env with dummy DATABASE_URL for prisma generate
+RUN echo "DATABASE_URL=postgresql://user:pass@localhost:5432/db" > .env
 
 # Install dependencies
 RUN npm ci
@@ -17,7 +21,6 @@ RUN npm ci
 COPY . .
 
 # Generate Prisma client
-ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 RUN npx prisma generate
 
 # Build the application
@@ -31,19 +34,25 @@ RUN apk add --no-cache openssl
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files AND prisma.config.ts
 COPY package*.json ./
+COPY prisma.config.ts ./
 COPY prisma ./prisma/
+
+# Create .env with dummy DATABASE_URL for prisma generate
+RUN echo "DATABASE_URL=postgresql://user:pass@localhost:5432/db" > .env
 
 # Install production dependencies only
 RUN npm ci --only=production
 
 # Generate Prisma client
-ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 RUN npx prisma generate
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
+
+# Remove dummy .env (will use real env at runtime)
+RUN rm .env
 
 # Set environment
 ENV NODE_ENV=production
