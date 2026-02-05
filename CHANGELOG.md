@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-02-05] - Production Deployment 🚀
+
+### Added
+- **CI/CD Pipeline**
+  - GitHub Actions workflow for Docker image builds
+  - Auto-push to GitHub Container Registry (GHCR)
+  - Image tags: `ghcr.io/xuanhoatrieu/ai-teaching-assistant/{backend,frontend}:main`
+
+- **Deployment Documentation**
+  - `docs/DEPLOYMENT.md` - Quick deployment guide for updates
+  - `docs/DEPLOYING.md` - Full VPS setup guide
+
+### Fixed
+- **Prisma 7 Docker Compatibility**
+  - Switched to Node 22 Alpine (Prisma 7 requires Node 22+)
+  - Added OpenSSL for Alpine Linux
+  - Added `binaryTargets: ["native", "linux-musl-openssl-3.0.x"]`
+  - Removed `url` from schema.prisma (Prisma 7 uses prisma.config.ts only)
+
+- **NestJS Dockerfile**
+  - Fixed CMD path: `dist/src/main` instead of `dist/main`
+  - Properly copy Prisma client from builder stage
+
+- **Frontend API URL**
+  - Changed `API_BASE_URL` fallback from `localhost:3001` to `/api`
+  - Added nginx proxy configuration for `/api/` routing to backend
+
+### Infrastructure
+- VPS deployment with Docker Compose
+- Nginx reverse proxy for frontend with API routing
+- Cloudflare Tunnel for HTTPS
+  - Frontend: https://ai.hoclieu.id.vn
+  - Backend: https://api.hoclieu.id.vn
+- Removed Watchtower (Docker API version incompatible)
+
+---
+
 ## [2026-01-30] - PPTX Template Background Fixes
 
 ### Fixed

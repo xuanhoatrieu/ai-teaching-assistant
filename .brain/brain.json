@@ -2,12 +2,14 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-02T17:27:00+07:00"
+        "updated_at": "2026-02-05T14:30:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
         "type": "fullstack-web",
-        "status": "in_development",
+        "status": "production",
+        "production_url": "https://ai.hoclieu.id.vn",
+        "api_url": "https://api.hoclieu.id.vn",
         "description": "Hệ thống tạo bài giảng tự động sử dụng AI (Gemini, Imagen, TTS) để generate PPTX, handouts, và quizzes từ outline"
     },
     "tech_stack": {
@@ -487,7 +489,17 @@
             "⭐ ViTTS voice ID normalization: Strip 'vitts:' prefix before sending to API - voice format is 'ref:3', 'trained_xxx', or 'male'",
             "⭐ ViTTS synthesize-with-saved-ref endpoint: Use form-urlencoded (URLSearchParams), NOT JSON body - API returns 422 with JSON",
             "⭐ ViTTS multilingualMode: Optional param for handling mixed Vietnamese/English text - values: 'auto', 'syllable', 'english'",
-            "⭐ ViTTS API response parsing: /saved-references and /trained-voices return arrays directly, NOT nested {data:[]} objects"
+            "⭐ ViTTS API response parsing: /saved-references and /trained-voices return arrays directly, NOT nested {data:[]} objects",
+            "🐳 Prisma 7 Docker: Requires Node 22+ (not 20), OpenSSL on Alpine, binaryTargets: ['native', 'linux-musl-openssl-3.0.x']",
+            "🐳 Prisma 7 Docker: Remove 'url' from schema.prisma datasource - must use prisma.config.ts",
+            "🐳 Prisma 7 Docker: Create dummy .env with DATABASE_URL during build for prisma generate",
+            "🐳 NestJS Dockerfile: CMD uses 'dist/src/main' NOT 'dist/main' - check TypeScript output path",
+            "🐳 Docker Compose: ports: '3001:3001' REQUIRED to expose backend - different from PORT env var in container",
+            "🐳 Vite production: VITE_API_URL baked at BUILD time - use nginx proxy /api/ for runtime flexibility",
+            "🐳 Frontend nginx proxy: Add location /api/ { proxy_pass http://backend:3001/; } for API routing",
+            "🐳 Watchtower: Fails on older Docker (API version 1.25 vs 1.44) - remove and use manual docker compose pull",
+            "🚀 GHCR login: echo 'PAT_TOKEN' | docker login ghcr.io -u username --password-stdin",
+            "🚀 GitHub Actions: ghcr.io/${{ github.repository_owner }}/project/service:branch format for image tags"
         ],
         "conventions": [
             "API routes: /lessons/:id/resource",
