@@ -98,25 +98,9 @@ services:
     networks:
       - app-network
     restart: unless-stopped
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
 
-  # Watchtower - Auto update containers
-  watchtower:
-    image: containrrr/watchtower
-    container_name: watchtower
-    environment:
-      WATCHTOWER_CLEANUP: "true"
-      WATCHTOWER_POLL_INTERVAL: 300
-      WATCHTOWER_LABEL_ENABLE: "true"
-      WATCHTOWER_NOTIFICATIONS: "shoutrrr"
-      WATCHTOWER_NOTIFICATION_URL: ${NOTIFICATION_URL:-}
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ~/.docker/config.json:/config.json:ro
-    networks:
-      - app-network
-    restart: unless-stopped
+  # NOTE: Watchtower removed - VPS Docker API version incompatible
+  # Use manual update: docker compose pull && docker compose up -d
 
 networks:
   app-network:
