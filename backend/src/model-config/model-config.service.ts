@@ -426,7 +426,7 @@ export class ModelConfigService {
         try {
             const credentials = JSON.parse(vittsCredentialsJson);
             const apiKey = credentials.apiKey;
-            const baseUrl = credentials.baseUrl || 'https://vitts.hoclieu.id.vn';
+            const baseUrl = credentials.baseUrl || 'http://117.0.36.6:8000';
 
             const savedRefs: AvailableModel[] = [];
             const trainedVoices: AvailableModel[] = [];

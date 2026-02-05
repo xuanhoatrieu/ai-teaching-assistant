@@ -8,7 +8,7 @@ import {
     Voice,
 } from '../interfaces/tts-provider.interface';
 
-const DEFAULT_VITTS_BASE_URL = 'https://vitts.hoclieu.id.vn';
+const DEFAULT_VITTS_BASE_URL = 'http://117.0.36.6:8000';
 
 /**
  * ViTTS TTS Provider

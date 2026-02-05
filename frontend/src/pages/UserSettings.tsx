@@ -456,7 +456,7 @@ export function UserSettingsPage() {
         vbeeToken: '',
         vbeeAppId: '',
         vittsApiKey: '',
-        vittsBaseUrl: 'https://vitts.hoclieu.id.vn',
+        vittsBaseUrl: 'http://117.0.36.6:8000',
     });
 
     const fetchData = async () => {
@@ -487,10 +487,10 @@ export function UserSettingsPage() {
     const handleOpenModal = (key?: UserApiKey) => {
         if (key) {
             setEditingKey(key);
-            setFormData({ name: key.name, service: key.service, key: '', vbeeToken: '', vbeeAppId: '', vittsApiKey: '', vittsBaseUrl: 'https://vitts.hoclieu.id.vn' });
+            setFormData({ name: key.name, service: key.service, key: '', vbeeToken: '', vbeeAppId: '', vittsApiKey: '', vittsBaseUrl: 'http://117.0.36.6:8000' });
         } else {
             setEditingKey(null);
-            setFormData({ name: '', service: 'GEMINI', key: '', vbeeToken: '', vbeeAppId: '', vittsApiKey: '', vittsBaseUrl: 'https://vitts.hoclieu.id.vn' });
+            setFormData({ name: '', service: 'GEMINI', key: '', vbeeToken: '', vbeeAppId: '', vittsApiKey: '', vittsBaseUrl: 'http://117.0.36.6:8000' });
         }
         setShowModal(true);
     };
@@ -523,7 +523,7 @@ export function UserSettingsPage() {
             }
             keyToSubmit = JSON.stringify({
                 apiKey: formData.vittsApiKey,
-                baseUrl: formData.vittsBaseUrl || 'https://vitts.hoclieu.id.vn'
+                baseUrl: formData.vittsBaseUrl || 'http://117.0.36.6:8000'
             });
         }
 
@@ -724,7 +724,7 @@ export function UserSettingsPage() {
                                             type="text"
                                             value={formData.vittsBaseUrl}
                                             onChange={e => setFormData({ ...formData, vittsBaseUrl: e.target.value })}
-                                            placeholder="https://vitts.hoclieu.id.vn"
+                                            placeholder="http://117.0.36.6:8000"
                                         />
                                     </div>
                                 </>
