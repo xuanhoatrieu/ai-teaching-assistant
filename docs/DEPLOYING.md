@@ -169,7 +169,7 @@ Vào Cloudflare Dashboard → Zero Trust → Access → Tunnels → Chọn tunne
 
 | Hostname | Service |
 |----------|---------|
-| `hoclieu.id.vn` | `http://ai-teaching-frontend:80` |
+| `ai.hoclieu.id.vn` | `http://ai-teaching-frontend:80` |
 | `api.hoclieu.id.vn` | `http://ai-teaching-backend:3001` |
 
 ---
@@ -187,7 +187,7 @@ docker compose logs -f
 curl http://localhost:3001/health
 ```
 
-**Truy cập web:** https://hoclieu.id.vn (hoặc domain của bạn)
+**Truy cập web:** https://ai.hoclieu.id.vn
 
 ---
 
@@ -195,7 +195,7 @@ curl http://localhost:3001/health
 
 Khi bạn push code mới lên GitHub:
 1. GitHub Actions tự động build image mới
-2. Watchtower trên VPS tự động pull và restart (mỗi 5 phút)
+2. Trên VPS chạy: `docker compose pull && docker compose up -d`
 
 **Hoặc update thủ công:**
 ```bash
