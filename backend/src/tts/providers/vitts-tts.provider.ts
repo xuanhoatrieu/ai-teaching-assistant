@@ -102,6 +102,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
             {
                 headers: this.headers,
                 responseType: 'arraybuffer',
+                timeout: 120000, // 120 seconds for GPU model loading
             },
         );
 
@@ -136,6 +137,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
                 responseType: 'arraybuffer',
+                timeout: 120000, // 120 seconds for GPU model loading
             },
         );
 
@@ -224,7 +226,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
         try {
             const response = await axios.get(`${this.baseUrl}/api/v1/tts/voices`, {
                 headers: this.headers,
-                timeout: 10000,
+                timeout: 120000, // 120 seconds for GPU model loading
             });
             return response.status === 200;
         } catch {

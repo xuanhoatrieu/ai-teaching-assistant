@@ -133,6 +133,9 @@ export function Step4GenerateAudio() {
         }
     };
 
+    // Delay helper function
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     const generateAllAudios = async () => {
         try {
             setIsGeneratingAll(true);
@@ -142,6 +145,8 @@ export function Step4GenerateAudio() {
             const slidesToGenerate = slideAudios.filter(sa =>
                 sa.status !== 'COMPLETED' || !sa.audioUrl
             );
+
+            let isFirstSlide = true;
 
             // Process each slide one by one
             for (const slideAudio of slidesToGenerate) {
@@ -179,6 +184,18 @@ export function Step4GenerateAudio() {
                             ? { ...sa, status: 'ERROR' as const, errorMessage: 'Lỗi tạo audio' }
                             : sa
                     ));
+                }
+
+                // Add delay between requests to prevent ViTTS server overload
+                // First slide needs longer delay for GPU model to load into VRAM
+                // Subsequent slides need shorter delay for GPU to process
+                if (isFirstSlide) {
+                    console.log('First slide generated, waiting 8s for model warm-up...');
+                    await delay(8000); // 8 seconds for first slide (GPU model loading)
+                    isFirstSlide = false;
+                } else {
+                    console.log('Waiting 2.5s before next slide...');
+                    await delay(2500); // 2.5 seconds between subsequent slides
                 }
             }
         } catch (error) {
