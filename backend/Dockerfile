@@ -1,6 +1,9 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl
+
 WORKDIR /app
 
 # Copy package files
@@ -13,7 +16,7 @@ RUN npm ci
 # Copy source code
 COPY . .
 
-# Generate Prisma client (needs dummy DATABASE_URL for Prisma 7)
+# Generate Prisma client
 ENV DATABASE_URL="postgresql://user:pass@localhost:5432/db"
 RUN npx prisma generate
 
@@ -22,6 +25,9 @@ RUN npm run build
 
 # Production stage
 FROM node:20-alpine AS production
+
+# Install OpenSSL for Prisma
+RUN apk add --no-cache openssl
 
 WORKDIR /app
 
