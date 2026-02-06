@@ -126,8 +126,16 @@ export class GeminiService {
      * Used for dynamic model selection from user settings
      */
     async generateTextWithModel(prompt: string, modelName: string, apiKey: string): Promise<string> {
+        // Strip provider prefix (cliproxy:, gemini:, etc.) - these are internal routing prefixes
+        let effectiveModel = modelName;
+        if (effectiveModel.includes(':')) {
+            const originalModel = effectiveModel;
+            effectiveModel = effectiveModel.split(':').pop() || effectiveModel;
+            this.logger.log(`[DEBUG] Stripped prefix: ${originalModel} → ${effectiveModel}`);
+        }
+
         const client = new GoogleGenerativeAI(apiKey);
-        const model = client.getGenerativeModel({ model: modelName });
+        const model = client.getGenerativeModel({ model: effectiveModel });
 
         const result = await model.generateContent(prompt);
         const response = result.response;

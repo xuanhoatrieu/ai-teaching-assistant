@@ -324,7 +324,7 @@ Mỗi speakerNote phải theo công thức:
       "slideIndex": 2,
       "slideType": "agenda",
       "title": "Nội dung bài học",
-      "content": ["Nội dung 1", "Nội dung 2", "Nội dung 3"],
+      "content": ["Nội dung 1", "Nội dung 2", "Nội dung 3",...],
       "visualIdea": "Infographic với roadmap tương ứng với số lượng nội dung",
       "speakerNote": "Bài học hôm nay gồm các phần chính. Đầu tiên là... Sau đó mình sẽ tìm hiểu về..."
     },
@@ -332,7 +332,7 @@ Mỗi speakerNote phải theo công thức:
       "slideIndex": 3,
       "slideType": "objectives",
       "title": "Mục tiêu bài học",
-      "content": ["Mục tiêu 1", "Mục tiêu 2"],
+      "content": ["Mục tiêu 1", "Mục tiêu 2",...],
       "visualIdea": "Infographic với icons checklist và mũi tên tiến lên",
       "speakerNote": "Sau bài học này, các em sẽ có thể làm được gì? Thứ nhất là... Đây là phần khó hơn một chút, nhưng mình sẽ giải thích kỹ hơn ở slide sau."
     },
@@ -340,7 +340,7 @@ Mỗi speakerNote phải theo công thức:
       "slideIndex": 4,
       "slideType": "content",
       "title": "Tiêu đề mục",
-      "content": ["Ý chính 1", "Ý chính 2"],
+      "content": ["Ý chính 1", "Ý chính 2",...],
       "visualIdea": "Sơ đồ tư duy (mind map) thể hiện mối quan hệ giữa các khái niệm",
       "speakerNote": "Nào, giờ mình đến phần quan trọng nhé. Các em nhìn trên slide thấy có 2 ý chính..."
     },
@@ -357,7 +357,7 @@ Mỗi speakerNote phải theo công thức:
       "slideType": "summary",
       "title": "Tổng kết",
       "content": ["Tóm tắt 1", "Tóm tắt 2"],
-      "visualIdea": null,
+      "visualIdea": "Thank you for listening",
       "speakerNote": "Bài học của chúng ta đến đây là kết thúc. Tóm lại, hôm nay các em đã nắm được các nội dung chính..."
     }
   ]
@@ -539,62 +539,37 @@ Chỉ trả về JSON.`,
       {
         slug: 'slides.design',
         name: 'Design Slide Content',
-        content: `Bạn là một chuyên gia Thiết kế Nội dung Giảng dạy(Instructional Designer) với nhiệm vụ biên soạn nội dung cho các bài giảng đại học.Tôi sẽ cung cấp cho bạn một dàn ý thô cho một slide.
+        content: `## NHIỆM VỤ
+Format nội dung thô thành JSON bullets cho PowerPoint slide.
 
-** Nhiệm vụ của bạn là:** Chuyển hóa dàn ý đó thành nội dung slide hấp dẫn, chuyên nghiệp và dễ hiểu cho sinh viên, tuân thủ nghiêm ngặt các quy tắc sau:
+## ⚠️ RÀNG BUỘC TUYỆT ĐỐI
+- CHỈ ĐƯỢC sử dụng thông tin từ NỘI DUNG được cung cấp bên dưới
+- KHÔNG ĐƯỢC thêm kiến thức mới, số liệu mới, hoặc ý tưởng mới
+- KHÔNG ĐƯỢC sáng tạo nội dung ngoài phạm vi INPUT
+- Giữ nguyên tiêu đề được cung cấp
 
-          1. ** Đối tượng:** Sinh viên đại học.Nội dung cần có chiều sâu chuyên môn nhưng phải được diễn giải một cách dễ tiếp cận.
+## QUY TẮC FORMAT
+1. Tạo 3-5 bullets từ nội dung được cung cấp
+2. Mỗi bullet gồm:
+   - emoji: biểu tượng phù hợp (�🔬🎯⚙️🧠📝)
+   - point: Tối ưu ngắn gọn từ các nội dung
+   - description: giải thích ngắn gọn, dễ hiểu DỰA TRÊN NỘI DUNG
+3. Nếu là định nghĩa/khái niệm: emoji="" point="" description=nội dung đầy đủ
 
-2.  ** Mục tiêu:** Tối ưu hóa để giữ sự tập trung, khuyến khích tư duy và giúp sinh viên ghi nhớ kiến thức cốt lõi.
+## INPUT
+---
+**Tiêu đề:** {title}
+**Nội dung cần format:**
+{content}
+---
 
-3.  ** Tiêu đề:** Giữ nguyên tiêu đề được cung cấp.
-
-4.  ** RÀNG BUỘC SỐ LƯỢNG BULLETS:**
-    * ** Tối thiểu:** 2 bullets
-    * ** Tối đa:** 5 bullets
-      * Slide content thường có 3 - 4 bullets là lý tưởng
-
-5. ** Xử lý Nội dung:**
-    * ** Quy tắc Vàng(Ưu tiên số 1):** Nếu nội dung là một ** định nghĩa, khái niệm cốt lõi, hoặc một trích dẫn trực tiếp ** (ví dụ: có các từ 'là', 'được định nghĩa là', 'bao gồm', ...), ** BẠN PHẢI GIỮ NGUYÊN VĂN VÀ ĐẦY ĐỦ ** nội dung đó trong phần "description".Các trường "emoji" và "point" phải để trống.
-    * ** Với các nội dung khác:** Phân tách thành các luận điểm rõ ràng.Mỗi luận điểm phải bao gồm:
-        * ** "emoji":** Chọn một biểu tượng emoji ** tinh tế, mang tính học thuật **. 
-          ** Danh sách emoji gợi ý:**
-          📊 (thống kê) | 🔬 (khoa học) | 💡 (ý tưởng) | 📈 (tăng trưởng) | 🎯 (mục tiêu)
-          ⚙️ (cơ chế) | 🧠 (tư duy) | 📝 (ghi chú) | 🔗 (liên kết) | 📌 (quan trọng)
-          ⚡ (nhanh) | 🔑 (chìa khóa) | 📋 (danh sách) | 🌐 (toàn cầu) | 🛠️ (công cụ)
-        * ** "point":** Rút ra ** từ khóa(keyword) hoặc cụm từ cốt lõi ** quan trọng nhất.Đây phải là thứ mà sinh viên cần ghi vào vở.Phải thật ngắn gọn(tối đa 5 từ).
-        * ** "description":** Diễn giải ngắn gọn(≤12 từ) cho "point".Sử dụng ngôn ngữ rõ ràng, có thể dùng phép ẩn dụ hoặc ví dụ đơn giản.
-
-6. ** Định dạng đầu ra:** Chỉ trả về một đối tượng JSON duy nhất, không thêm bất kỳ lời giải thích hay định dạng markdown nào khác.
-
-** Dàn ý thô:**
-      ---
-** Tiêu đề:** { title }
-      ** Nội dung:**
-        { content }
-    ---
-
-** Cấu trúc JSON đầu ra bắt buộc:**
-      {
-        "title": "Tiêu đề Slide",
-        "bullets": [
-          {
-            "emoji": "💡",
-            "point": "Từ khóa chính",
-            "description": "Diễn giải ngắn gọn, dễ hiểu."
-          },
-          {
-            "emoji": "📈",
-            "point": "Từ khóa thứ hai",
-            "description": "Giải thích súc tích trong 12 từ."
-          },
-          {
-            "emoji": "",
-            "point": "",
-            "description": "Giữ nguyên đầy đủ định nghĩa hoặc khái niệm cốt lõi ở đây."
-          }
-        ]
-      }`,
+## OUTPUT (JSON only)
+{
+  "title": "Giữ nguyên tiêu đề từ input",
+  "bullets": [
+    {"emoji": "💡", "point": "Từ khóa từ input", "description": "Giải thích từ input"}
+  ]
+}`,
         variables: ['{title}', '{content}'],
       },
       {

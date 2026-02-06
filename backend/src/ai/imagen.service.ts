@@ -97,7 +97,15 @@ export class ImagenService {
 
         try {
             // Use provided model or default to image generation model
-            const effectiveModel = modelName || 'gemini-2.0-flash-exp-image-generation';
+            let effectiveModel = modelName || 'gemini-2.0-flash-exp-image-generation';
+
+            // Strip provider prefix (cliproxy:, gemini:, etc.) - these are internal routing prefixes
+            if (effectiveModel.includes(':')) {
+                const originalModel = effectiveModel;
+                effectiveModel = effectiveModel.split(':').pop() || effectiveModel;
+                this.logger.log(`[DEBUG] Stripped prefix: ${originalModel} → ${effectiveModel}`);
+            }
+
             this.logger.log(`[DEBUG] Using model: ${effectiveModel}`);
 
             // Build the prompt with aspect ratio guidance

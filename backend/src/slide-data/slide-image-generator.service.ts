@@ -77,10 +77,11 @@ export class SlideImageGeneratorService {
         }
 
         // Generate image using Imagen with user's configured model
+        // Use 1:1 square ratio to match 12cm x 12cm requirement
         this.logger.log(`[DEBUG] Slide ${slideIndex} - Calling imagenService.generateImage with apiKey=${effectiveApiKey ? 'present' : 'NULL'}`);
         const generatedImage = await this.imagenService.generateImage(
             imagePrompt,
-            '16:9',
+            '1:1',  // Square ratio (12cm x 12cm)
             modelConfig.modelName,
             effectiveApiKey || undefined
         );

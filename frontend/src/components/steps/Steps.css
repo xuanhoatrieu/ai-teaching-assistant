@@ -924,11 +924,11 @@
     padding: 8px;
 }
 
-/* Slide Preview Grid (Step 5) - Full Width */
+/* Slide Preview Grid (Step 5) - Full Width Rows */
 .slide-preview-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     margin: 24px 0;
     width: 100%;
 }
@@ -1590,19 +1590,16 @@
     margin-bottom: 16px;
 }
 
-.slide-preview-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 16px;
-}
+/* Note: slide-preview-grid is defined above at line 927 */
 
-/* Slide Card */
+/* Slide Card - Full Width Row Layout */
 .slide-card {
     background: rgba(30, 41, 59, 0.8);
     border: 1px solid rgba(148, 163, 184, 0.2);
     border-radius: 12px;
     overflow: hidden;
     transition: all 0.2s;
+    width: 100%;
 }
 
 .slide-card.complete {
@@ -1647,8 +1644,9 @@
 
 .slide-card-body {
     display: flex;
-    gap: 12px;
-    padding: 14px;
+    gap: 16px;
+    padding: 16px;
+    align-items: stretch;
 }
 
 .slide-content-col {
@@ -1690,27 +1688,27 @@
 }
 
 .slide-image-col {
-    width: 120px;
+    width: 200px;
     flex-shrink: 0;
 }
 
 .slide-image-col img {
     width: 100%;
-    height: 68px;
+    height: 112px;
     object-fit: cover;
-    border-radius: 6px;
+    border-radius: 8px;
     border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
 .slide-image-col .image-placeholder {
     width: 100%;
-    height: 68px;
+    height: 112px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: rgba(15, 23, 42, 0.5);
-    border-radius: 6px;
-    font-size: 24px;
+    border-radius: 8px;
+    font-size: 32px;
     color: #64748b;
 }
 

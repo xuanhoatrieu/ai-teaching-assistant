@@ -335,33 +335,34 @@ class PPTXGeneratorService:
         if not items:
             return
         
-        mid_point = (len(items) + 1) // 2
+        # Check if image exists
+        image_path = slide_data.get('imagePath')
+        has_image = image_path and os.path.exists(image_path)
         
-        # Left Column
-        left_col = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(4.5), Inches(4.0))
-        tf_left = left_col.text_frame
-        tf_left.clear()
-        tf_left.word_wrap = True
-        for item in items[:mid_point]:
-            p = tf_left.add_paragraph()
-            p.text = item
-            p.font.name = "Arial"
-            p.font.size = Pt(24)
-            p.font.color.rgb = RGBColor(58, 102, 77)
-            p.space_after = Pt(16)
+        # Content on LEFT side (like content slides)
+        # Image 1:1 (4.5\" x 4.5\") at position 5.2\", so content width = 4.5\"
+        content_width = Inches(4.5) if has_image else Inches(9)
+        content_col = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), content_width, Inches(4.0))
+        tf_content = content_col.text_frame
+        tf_content.clear()
+        tf_content.word_wrap = True
         
-        # Right Column
-        right_col = slide.shapes.add_textbox(Inches(5.0), Inches(1.2), Inches(4.5), Inches(4.0))
-        tf_right = right_col.text_frame
-        tf_right.clear()
-        tf_right.word_wrap = True
-        for item in items[mid_point:]:
-            p = tf_right.add_paragraph()
-            p.text = item
+        for item in items:
+            p = tf_content.add_paragraph()
+            p.text = f"• {item}" if not item.startswith('•') else item
             p.font.name = "Arial"
-            p.font.size = Pt(24)
+            p.font.size = Pt(22)
             p.font.color.rgb = RGBColor(58, 102, 77)
-            p.space_after = Pt(16)
+            p.space_after = Pt(12)
+        
+        # Add image on RIGHT if exists - 1:1 square ratio (4.5\" x 4.5\")
+        if has_image:
+            try:
+                # Image starts right after title (Y=1.0\")
+                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.5))
+                print(f"[PPTX] Agenda slide image added: {image_path}")
+            except Exception as e:
+                print(f"[PPTX] Could not add agenda image: {e}")
     
     def _add_content_slide_v2(self, slide, slide_data: Dict[str, Any], bg_path: Optional[str] = None):
         """
@@ -407,7 +408,8 @@ class PPTXGeneratorService:
         p_title.font.color.rgb = RGBColor(255, 255, 255)  # White text
         p_title.alignment = PP_ALIGN.CENTER
         
-        # Content textbox - width depends on image (match pptx_creator.py lines 146-153)
+        # Content textbox - width depends on image
+        # Image 1:1 (4.5" x 4.5") at position 5.2", so content width = 4.5"
         if has_image:
             content_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(4.5), Inches(4.0))
         else:
@@ -463,10 +465,12 @@ class PPTXGeneratorService:
                 p.font.color.rgb = RGBColor(58, 102, 77)
                 p.space_after = Pt(6)
         
-        # Add image if exists (match pptx_creator.py line 149)
+        # Add image if exists - 1:1 square ratio (4.5" x 4.5")
+        # Slide width 10", image 4.5", margin 0.3" -> offset 5.2"
         if has_image:
             try:
-                slide.shapes.add_picture(image_path, Inches(5.5), Inches(1.5), height=Inches(3))
+                # Image starts right after title (Y=1.0")
+                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.5))
             except Exception as e:
                 print(f"[PPTX] Could not add picture {image_path}: {e}")
     
@@ -671,9 +675,9 @@ class PPTXGeneratorService:
                 return
             
             # Position audio icon OUTSIDE visible slide area
-            # Negative position places it off-screen to the top-left
+            # On the LEFT side, starting from TOP edge down
             left = Inches(-0.6)   # Off-screen to the left
-            top = Inches(-0.6)    # Off-screen to the top
+            top = Inches(0.0)     # From top edge of slide
             width = Inches(0.4)
             height = Inches(0.4)
             

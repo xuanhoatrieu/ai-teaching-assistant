@@ -362,12 +362,16 @@ export class PptxService {
                 this.logger.log(`[PPTX] Slide ${slide.slideIndex}: Using original content (no AI optimization)`);
             }
 
+            // DEBUG: Log image path conversion
+            const imagePath = slide.imageUrl ? this.getLocalPath(slide.imageUrl) : undefined;
+            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: imageUrl=${slide.imageUrl || 'NULL'}, imagePath=${imagePath || 'NULL'}`);
+
             return {
                 slideIndex: slide.slideIndex,
                 title: slide.title,
                 content: contentArray,
                 bullets,  // Send structured bullets for proper rendering
-                imagePath: slide.imageUrl ? this.getLocalPath(slide.imageUrl) : undefined,
+                imagePath,
                 audioPath: audio?.audioUrl ? this.getLocalPath(audio.audioUrl) : undefined,
                 speakerNote: slide.speakerNote || '',
                 slideType: slide.slideType || 'content',

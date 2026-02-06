@@ -407,15 +407,15 @@ export function Step5GeneratePPTX() {
                                     <div className="slide-content-col">
                                         {slide.optimizedContent && slide.optimizedContent.length > 0 ? (
                                             <ul className="bullet-list">
-                                                {slide.optimizedContent.slice(0, 3).map((b, idx) => (
+                                                {slide.optimizedContent.map((b, idx) => (
                                                     <li key={idx}>
                                                         <span className="emoji">{b.emoji}</span>
                                                         <strong>{b.point}</strong>
+                                                        {b.description && (
+                                                            <span className="description"> - {b.description}</span>
+                                                        )}
                                                     </li>
                                                 ))}
-                                                {slide.optimizedContent.length > 3 && (
-                                                    <li className="more">+{slide.optimizedContent.length - 3} more</li>
-                                                )}
                                             </ul>
                                         ) : (
                                             <p className="placeholder">Chưa có nội dung</p>
