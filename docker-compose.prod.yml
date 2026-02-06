@@ -78,6 +78,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
       MINIO_BUCKET: ${MINIO_BUCKET:-ai-teaching}
+    volumes:
+      - ./backend/datauser:/app/datauser
     depends_on:
       postgres:
         condition: service_healthy

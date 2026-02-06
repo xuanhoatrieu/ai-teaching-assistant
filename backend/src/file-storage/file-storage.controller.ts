@@ -21,150 +21,9 @@ export class FileStorageController {
         private readonly prisma: PrismaService,
     ) { }
 
-    /**
-     * Serve audio/image files with authentication
-     * GET /files/:userId/:lessonId/:type/:filename
-     */
-    @Get(':userId/:lessonId/:type/:filename')
-    @UseGuards(JwtAuthGuard)
-    async serveFile(
-        @Param('userId') userId: string,
-        @Param('lessonId') lessonId: string,
-        @Param('type') type: string,
-        @Param('filename') filename: string,
-        @Req() req: Request,
-        @Res() res: Response,
-    ): Promise<void> {
-        // Validate type
-        if (type !== 'audio' && type !== 'images') {
-            throw new NotFoundException('Invalid file type');
-        }
-
-        // Get current user from JWT
-        const currentUser = req.user as { userId: string };
-
-        // Verify user has access to this lesson
-        const lesson = await this.prisma.lesson.findFirst({
-            where: { id: lessonId },
-            include: {
-                subject: {
-                    select: { userId: true },
-                },
-            },
-        });
-
-        if (!lesson) {
-            throw new NotFoundException('Lesson not found');
-        }
-
-        // Check if user owns the lesson (via subject ownership)
-        if (lesson.subject.userId !== currentUser.userId) {
-            throw new ForbiddenException('Access denied');
-        }
-
-        // Build file path
-        let filePath: string;
-        if (type === 'audio') {
-            filePath = this.fileStorageService.getAudioFilePath(userId, lessonId, filename);
-        } else {
-            filePath = this.fileStorageService.getImageFilePath(userId, lessonId, filename);
-        }
-
-        // Validate path is within datauser directory (security)
-        if (!this.fileStorageService.validatePathWithinDataUser(filePath)) {
-            throw new ForbiddenException('Invalid file path');
-        }
-
-        // Check if file exists
-        const exists = await this.fileStorageService.fileExists(filePath);
-        if (!exists) {
-            throw new NotFoundException('File not found');
-        }
-
-        // Determine content type
-        const ext = path.extname(filename).toLowerCase();
-        const contentTypes: Record<string, string> = {
-            '.mp3': 'audio/mpeg',
-            '.wav': 'audio/wav',
-            '.ogg': 'audio/ogg',
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp',
-            '.svg': 'image/svg+xml',
-        };
-
-        const contentType = contentTypes[ext] || 'application/octet-stream';
-
-        // Read and serve file
-        try {
-            const fileBuffer = await this.fileStorageService.readFile(filePath);
-
-            res.setHeader('Content-Type', contentType);
-            res.setHeader('Content-Length', fileBuffer.length);
-            res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-
-            res.send(fileBuffer);
-        } catch (error) {
-            throw new NotFoundException('File not found');
-        }
-    }
-
-    /**
-     * PUBLIC endpoint for serving images (no auth required)
-     * Browser <img> tags cannot send JWT headers, so we need a public route
-     * GET /files/public/:userId/:lessonId/images/:filename
-     * 
-     * Security: Only serves from images directory, path is validated
-     */
-    @Get('public/:userId/:lessonId/images/:filename')
-    async servePublicImage(
-        @Param('userId') userId: string,
-        @Param('lessonId') lessonId: string,
-        @Param('filename') filename: string,
-        @Res() res: Response,
-    ): Promise<void> {
-        // Build file path
-        const filePath = this.fileStorageService.getImageFilePath(userId, lessonId, filename);
-
-        // Validate path is within datauser directory (security)
-        if (!this.fileStorageService.validatePathWithinDataUser(filePath)) {
-            throw new ForbiddenException('Invalid file path');
-        }
-
-        // Check if file exists
-        const exists = await this.fileStorageService.fileExists(filePath);
-        if (!exists) {
-            throw new NotFoundException('File not found');
-        }
-
-        // Determine content type
-        const ext = path.extname(filename).toLowerCase();
-        const contentTypes: Record<string, string> = {
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.webp': 'image/webp',
-            '.svg': 'image/svg+xml',
-        };
-
-        const contentType = contentTypes[ext] || 'application/octet-stream';
-
-        // Read and serve file
-        try {
-            const fileBuffer = await this.fileStorageService.readFile(filePath);
-
-            res.setHeader('Content-Type', contentType);
-            res.setHeader('Content-Length', fileBuffer.length);
-            res.setHeader('Cache-Control', 'public, max-age=3600');
-
-            res.send(fileBuffer);
-        } catch (error) {
-            throw new NotFoundException('File not found');
-        }
-    }
+    // ============================================================
+    // PUBLIC ROUTES (MUST be before generic routes due to NestJS route matching)
+    // ============================================================
 
     /**
      * PUBLIC endpoint for serving SYSTEM template background images
@@ -285,6 +144,154 @@ export class FileStorageController {
         }
     }
 
+    /**
+     * PUBLIC endpoint for serving images (no auth required)
+     * Browser <img> tags cannot send JWT headers, so we need a public route
+     * GET /files/public/:userId/:lessonId/images/:filename
+     * 
+     * Security: Only serves from images directory, path is validated
+     */
+    @Get('public/:userId/:lessonId/images/:filename')
+    async servePublicImage(
+        @Param('userId') userId: string,
+        @Param('lessonId') lessonId: string,
+        @Param('filename') filename: string,
+        @Res() res: Response,
+    ): Promise<void> {
+        // Build file path
+        const filePath = this.fileStorageService.getImageFilePath(userId, lessonId, filename);
+
+        // Validate path is within datauser directory (security)
+        if (!this.fileStorageService.validatePathWithinDataUser(filePath)) {
+            throw new ForbiddenException('Invalid file path');
+        }
+
+        // Check if file exists
+        const exists = await this.fileStorageService.fileExists(filePath);
+        if (!exists) {
+            throw new NotFoundException('File not found');
+        }
+
+        // Determine content type
+        const ext = path.extname(filename).toLowerCase();
+        const contentTypes: Record<string, string> = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml',
+        };
+
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+
+        // Read and serve file
+        try {
+            const fileBuffer = await this.fileStorageService.readFile(filePath);
+
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Length', fileBuffer.length);
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+
+            res.send(fileBuffer);
+        } catch (error) {
+            throw new NotFoundException('File not found');
+        }
+    }
+
+    // ============================================================
+    // AUTHENTICATED ROUTES (generic routes with params)
+    // ============================================================
+
+    /**
+     * Serve audio/image files with authentication
+     * GET /files/:userId/:lessonId/:type/:filename
+     */
+    @Get(':userId/:lessonId/:type/:filename')
+    @UseGuards(JwtAuthGuard)
+    async serveFile(
+        @Param('userId') userId: string,
+        @Param('lessonId') lessonId: string,
+        @Param('type') type: string,
+        @Param('filename') filename: string,
+        @Req() req: Request,
+        @Res() res: Response,
+    ): Promise<void> {
+        // Validate type
+        if (type !== 'audio' && type !== 'images') {
+            throw new NotFoundException('Invalid file type');
+        }
+
+        // Get current user from JWT
+        const currentUser = req.user as { userId: string };
+
+        // Verify user has access to this lesson
+        const lesson = await this.prisma.lesson.findFirst({
+            where: { id: lessonId },
+            include: {
+                subject: {
+                    select: { userId: true },
+                },
+            },
+        });
+
+        if (!lesson) {
+            throw new NotFoundException('Lesson not found');
+        }
+
+        // Check if user owns the lesson (via subject ownership)
+        if (lesson.subject.userId !== currentUser.userId) {
+            throw new ForbiddenException('Access denied');
+        }
+
+        // Build file path
+        let filePath: string;
+        if (type === 'audio') {
+            filePath = this.fileStorageService.getAudioFilePath(userId, lessonId, filename);
+        } else {
+            filePath = this.fileStorageService.getImageFilePath(userId, lessonId, filename);
+        }
+
+        // Validate path is within datauser directory (security)
+        if (!this.fileStorageService.validatePathWithinDataUser(filePath)) {
+            throw new ForbiddenException('Invalid file path');
+        }
+
+        // Check if file exists
+        const exists = await this.fileStorageService.fileExists(filePath);
+        if (!exists) {
+            throw new NotFoundException('File not found');
+        }
+
+        // Determine content type
+        const ext = path.extname(filename).toLowerCase();
+        const contentTypes: Record<string, string> = {
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.ogg': 'audio/ogg',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml',
+        };
+
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+
+        // Read and serve file
+        try {
+            const fileBuffer = await this.fileStorageService.readFile(filePath);
+
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Length', fileBuffer.length);
+            res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+
+            res.send(fileBuffer);
+        } catch (error) {
+            throw new NotFoundException('File not found');
+        }
+    }
 
     /**
      * List files in a lesson's audio or images directory
