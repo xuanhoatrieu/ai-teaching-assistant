@@ -1,6 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GeminiService } from '../ai/gemini.service';
+import { AiProviderService } from '../ai/ai-provider.service';
+import { ApiKeysService } from '../api-keys/api-keys.service';
+import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { ReviewQuestion } from '@prisma/client';
 
@@ -31,7 +33,9 @@ export class ReviewQuestionService {
 
     constructor(
         private prisma: PrismaService,
-        private geminiService: GeminiService,
+        private aiProvider: AiProviderService,
+        private apiKeysService: ApiKeysService,
+        private modelConfigService: ModelConfigService,
         private promptComposer: PromptComposerService,
     ) { }
 
@@ -148,11 +152,13 @@ export class ReviewQuestionService {
 
     /**
      * Generate review questions from slides using AI
+     * Now requires userId to get API key from user settings
      */
     async generateFromSlides(
         lessonId: string,
         lessonNumber: number,
         slidesContent: string,
+        userId: string,
         levelCounts: LevelCounts = { level1: 4, level2: 3, level3: 3 },
     ): Promise<ReviewQuestion[]> {
         const total = levelCounts.level1 + levelCounts.level2 + levelCounts.level3;
@@ -168,6 +174,15 @@ export class ReviewQuestionService {
             throw new NotFoundException(`Lesson ${lessonId} not found`);
         }
 
+        // Get API key from user settings (not from env var!)
+        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+        if (!apiKey) {
+            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
+        }
+
+        // Get configured model for QUESTIONS task
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
+
         // Build prompt using PromptComposer (Role from Subject + Task from DB)
         const prompt = await this.promptComposer.buildFullPrompt(
             lesson.subjectId,
@@ -175,16 +190,20 @@ export class ReviewQuestionService {
             {
                 title: lesson.title,
                 slide_script: slidesContent,
-                level1_count: String(levelCounts.level1),
-                level2_count: String(levelCounts.level2),
-                level3_count: String(levelCounts.level3),
+                lesson_id: String(lessonNumber),
+                count_level1: String(levelCounts.level1),
+                count_level2: String(levelCounts.level2),
+                count_level3: String(levelCounts.level3),
             },
         );
 
         this.logger.log(`Built prompt for review questions (${prompt.length} chars)`);
 
         try {
-            const response = await this.geminiService.generateText(prompt);
+            // Use AiProviderService (CLIProxy → Gemini SDK fallback) with user's API key
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+            const response = aiResult.content;
+            this.logger.log(`Review questions generated via ${aiResult.provider} (${aiResult.model})`);
 
             // Clean JSON response - handle markdown code blocks
             const cleanedResponse = this.cleanJsonResponse(response);
@@ -201,7 +220,7 @@ export class ReviewQuestionService {
             const levelCounters = { 1: 0, 2: 0, 3: 0 };
 
             for (const q of questions) {
-                const level = q.level || 1;
+                const level = q.difficulty || q.level || 1;
                 levelCounters[level]++;
 
                 const created = await this.createQuestion(lessonId, lessonNumber, {

@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-05T14:30:00+07:00"
+        "updated_at": "2026-02-06T10:10:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -508,13 +508,52 @@
         ],
         "prompt_slugs": {
             "system.role": "Vai trò giảng viên - được kết hợp với Subject fields",
-            "outline.detailed": "Step 2 - Tạo dàn bài chi tiết từ raw outline",
-            "slides.script": "Step 3 - Tạo kịch bản slide từ detailed outline",
-            "slides.design": "Step 5 - Tối ưu content theo Golden Rule",
-            "slides.image": "Step 5 - Tạo prompt cho Imagen",
+            "outline.detailed": "Step 2 - Tạo dàn bài chi tiết từ raw outline (JSON với learningGuide, situation, sections, reviewQuestions)",
+            "slides.script": "Step 3 - Tạo kịch bản slide (20-30 slides, slideIndex từ 1)",
+            "slides.design": "Step 5 - Tối ưu content (2-5 bullets, emoji học thuật, description ≤12 từ)",
+            "slides.image": "Step 5 - Tạo prompt cho Imagen (educational illustration style)",
             "questions.interactive": "Step 6 - 5 câu hỏi kiểm tra tập trung (MC/MR)",
             "questions.review": "Step 6 - 15 câu Bloom taxonomy (Biết/Hiểu/Vận dụng)",
             "handout.generate": "Tạo tài liệu handout"
+        },
+        "prompt_constraints": {
+            "slides.script": {
+                "slide_count": "20-30 slides (1 title + 1 agenda + 1 objectives + 15-18 content + 1 questions + 1 summary)",
+                "slideIndex": "BẮT ĐẦU TỪ 1, KHÔNG phải 0",
+                "visualIdea_types": [
+                    "Diagram/Flowchart",
+                    "Mind map",
+                    "Chart/Graph",
+                    "Comparison table",
+                    "Timeline",
+                    "Infographic",
+                    "Illustration",
+                    "Formula/Equation",
+                    "Architecture",
+                    "Scientific figure"
+                ],
+                "speakerNote_structure": "Hook → Explain → Bridge",
+                "speakerNote_rules": [
+                    "Không viết từ 'Hook', 'Explain', 'Bridge' vào nội dung",
+                    "Không dùng dấu * trong speakerNote",
+                    "Tránh từ 'cốt lõi'",
+                    "Dùng ngôn ngữ NÓI tự nhiên (Nào, À, Nha, Đúng không)",
+                    "Xưng hô: 'các em' cho sinh viên đại học"
+                ],
+                "speakerNote_length": {
+                    "title_agenda": "30-50 từ (20-35 giây)",
+                    "objectives": "50-70 từ (35-50 giây)",
+                    "content": "100-180 từ (1-2 phút)",
+                    "summary": "60-90 từ (40-60 giây)"
+                }
+            },
+            "slides.design": {
+                "bullet_count": "2-5 bullets (3-4 lý tưởng)",
+                "emoji_suggestions": "📊🔬💡📈🎯⚙️🧠📝🔗📌⚡🔑📋🌐🛠️",
+                "point_max_words": 5,
+                "description_max_words": 12,
+                "golden_rule": "Định nghĩa/khái niệm → giữ nguyên văn, emoji + point để trống"
+            }
         }
     }
 }

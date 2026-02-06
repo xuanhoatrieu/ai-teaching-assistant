@@ -315,9 +315,12 @@ function ModelConfigSection({ serviceStatus }: { serviceStatus: Record<string, b
     };
 
     const handleModelChange = (taskType: string, modelName: string) => {
-        // Find provider based on model
+        // Determine provider based on model name prefix
         let provider = 'GEMINI';
-        if (modelName.includes('imagen')) provider = 'IMAGEN';
+        if (modelName.startsWith('cliproxy:')) provider = 'CLIPROXY';
+        else if (modelName.startsWith('vitts:')) provider = 'VITTS';
+        else if (modelName.startsWith('vbee:')) provider = 'VBEE';
+        else if (modelName.includes('imagen')) provider = 'IMAGEN';
         else if (modelName.includes('Neural') || modelName.includes('vi-VN')) provider = 'GOOGLE_TTS';
 
         setConfigs(prev => ({
@@ -345,8 +348,13 @@ function ModelConfigSection({ serviceStatus }: { serviceStatus: Record<string, b
     };
 
     const getModelsForTask = (taskType: string): AvailableModel[] => {
-        // All models now come from unified GEMINI array, filter by supportedTasks
-        const allModels = availableModels.GEMINI || [];
+        // Merge models from ALL providers: GEMINI, CLIPROXY, VITTS, VBEE
+        const allModels: AvailableModel[] = [
+            ...(availableModels.GEMINI || []),
+            ...(availableModels.CLIPROXY || []),
+            ...(availableModels.VITTS || []),
+            ...(availableModels.VBEE || []),
+        ];
         return allModels.filter(model => model.supportedTasks.includes(taskType));
     };
 

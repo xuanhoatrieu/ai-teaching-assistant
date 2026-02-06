@@ -26,7 +26,8 @@ export class ViTTSTTSProvider implements ITTSProvider {
 
     constructor(credentials: TTSCredentials) {
         this.apiKey = credentials.apiKey || '';
-        this.baseUrl = (credentials.baseUrl || DEFAULT_VITTS_BASE_URL).replace(/\/$/, '');
+        // Always use direct IP to avoid Cloudflare tunnel 530 errors
+        this.baseUrl = DEFAULT_VITTS_BASE_URL;
     }
 
     private get headers() {

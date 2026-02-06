@@ -69,15 +69,18 @@ export class ModelConfigService {
 
     /**
      * Get model for a specific task type
+     * Priority: User setting > Admin setting (CLIProxy) > System default
+     * This is the FAST method - no network calls, just DB lookup
      */
     async getModelForTask(userId: string, taskType: TaskTypeValue): Promise<{ provider: string; modelName: string }> {
         // Validate userId - must be a non-empty string
         if (!userId || typeof userId !== 'string' || userId.trim() === '') {
             this.logger.warn(`getModelForTask called with invalid userId: ${typeof userId} = ${userId}`);
-            return DEFAULT_MODELS[taskType];
+            return this.getDefaultForTask(taskType);
         }
 
         try {
+            // Priority 1: Check user's own config
             const config = await this.prisma.modelConfig.findUnique({
                 where: {
                     userId_taskType: { userId: userId.trim(), taskType: taskType as any },
@@ -85,12 +88,44 @@ export class ModelConfigService {
             });
 
             if (config) {
+                this.logger.debug(`[getModelForTask] User ${userId} has custom config for ${taskType}: ${config.modelName}`);
                 return { provider: config.provider, modelName: config.modelName };
             }
         } catch (error) {
             this.logger.error(`Error fetching model config for user ${userId}: ${error.message}`);
         }
 
+        // Priority 2 & 3: Admin (CLIProxy) defaults, then system defaults
+        return this.getDefaultForTask(taskType);
+    }
+
+    /**
+     * Get default model for a task (Admin > System)
+     * Fast method - uses cached CLIProxy config if available
+     */
+    private async getDefaultForTask(taskType: TaskTypeValue): Promise<{ provider: string; modelName: string }> {
+        // Check CLIProxy admin defaults
+        if (this.cliproxy) {
+            try {
+                const isEnabled = await this.cliproxy.isEnabled();
+                if (isEnabled) {
+                    const cliproxyConfig = await this.cliproxy.getConfig();
+
+                    if (taskType === 'OUTLINE' || taskType === 'SLIDES' || taskType === 'QUESTIONS') {
+                        if (cliproxyConfig.defaultTextModel) {
+                            return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTextModel };
+                        }
+                    }
+                    if (taskType === 'IMAGE' && cliproxyConfig.defaultImageModel) {
+                        return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultImageModel };
+                    }
+                }
+            } catch (error: any) {
+                this.logger.warn(`Failed to get CLIProxy config: ${error.message}`);
+            }
+        }
+
+        // Fallback to system defaults
         return DEFAULT_MODELS[taskType];
     }
 
@@ -251,15 +286,14 @@ export class ModelConfigService {
                 },
             ];
 
-            // Verify API key is valid by making a simple request
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-            await model.generateContent('Hello');
+            // NOTE: Removed API verification call (generateContent('Hello')) for performance
+            // API key validation is done when actually using the model
 
-            this.logger.log(`Discovered ${knownModels.length} Gemini models for user ${userId}`);
+            this.logger.log(`Returning ${knownModels.length} known Gemini models for user ${userId}`);
             return knownModels;
         } catch (error: any) {
             this.logger.error(`Failed to discover models: ${error.message}`);
-            throw new Error(`Failed to verify API key: ${error.message}`);
+            throw new Error(`Failed to get models: ${error.message}`);
         }
     }
 
@@ -426,7 +460,10 @@ export class ModelConfigService {
         try {
             const credentials = JSON.parse(vittsCredentialsJson);
             const apiKey = credentials.apiKey;
-            const baseUrl = credentials.baseUrl || 'http://117.0.36.6:8000';
+            // Use direct IP instead of Cloudflare tunnel to avoid 530 errors
+            const baseUrl = 'http://117.0.36.6:8000';
+
+            this.logger.log(`ViTTS credentials: baseUrl=${baseUrl}, apiKey=${apiKey?.substring(0, 8)}...`);
 
             const savedRefs: AvailableModel[] = [];
             const trainedVoices: AvailableModel[] = [];

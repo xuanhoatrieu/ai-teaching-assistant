@@ -9,6 +9,7 @@ import {
     Query,
     UseGuards,
     Res,
+    Req,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -87,12 +88,15 @@ export class QuestionsController {
     async generateInteractiveQuestions(
         @Param('lessonId') lessonId: string,
         @Body() dto: GenerateQuestionsDto,
+        @Req() req: any,
     ) {
+        const userId = req.user.id;
         // Get slides content for generation
         const slidesContent = await this.getSlidesContent(lessonId);
         return this.interactiveQuestionService.generateFromSlides(
             lessonId,
             slidesContent,
+            userId,
             dto.count || 5,
         );
     }
@@ -153,7 +157,9 @@ export class QuestionsController {
     async generateReviewQuestions(
         @Param('lessonId') lessonId: string,
         @Body() dto: GenerateReviewQuestionsDto,
+        @Req() req: any,
     ) {
+        const userId = req.user.id;
         const slidesContent = await this.getSlidesContent(lessonId);
         const lessonNumber = await this.getLessonNumber(lessonId);
 
@@ -161,6 +167,7 @@ export class QuestionsController {
             lessonId,
             lessonNumber,
             slidesContent,
+            userId,
             {
                 level1: dto.level1 || 4,
                 level2: dto.level2 || 3,

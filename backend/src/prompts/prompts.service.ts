@@ -447,9 +447,30 @@ Chỉ trả về JSON.`,
 **Input:**
 - Chủ đề/Bài học: {title}
 - Số hiệu bài: {lesson_id}
-- Nội dung bài giảng:
+- Nội dung bài giảng (slide script):
 {slide_script}
-- Số lượng câu hỏi: Mức Biết (5), Mức Hiểu (5), Mức Vận dụng (5)
+
+- Số lượng câu hỏi theo mức độ:
+  + Mức Biết (Remember): {count_level1} câu
+  + Mức Hiểu (Understand): {count_level2} câu
+  + Mức Vận dụng (Apply): {count_level3} câu
+
+---
+
+## ⚠️ RÀNG BUỘC QUAN TRỌNG - BẮT BUỘC TUÂN THỦ:
+
+### 🚫 TUYỆT ĐỐI KHÔNG ĐƯỢC:
+- Tạo câu hỏi về nội dung KHÔNG CÓ trong slide script được cung cấp
+- Thêm thông tin, số liệu, ví dụ không được đề cập trong bài giảng
+- Suy diễn hoặc mở rộng kiến thức ngoài phạm vi bài học
+- Tạo câu hỏi về kiến thức nền tảng chung không được giảng dạy
+
+### ✅ CHỈ ĐƯỢC PHÉP:
+- Tạo câu hỏi DỰA TRÊN NỘI DUNG CÓ TRONG slide script
+- Sử dụng thuật ngữ, định nghĩa, ví dụ ĐÃ ĐƯỢC ĐỀ CẬP
+- Kiểm tra kiến thức mà sinh viên ĐÃ ĐƯỢC HỌC trong bài
+
+---
 
 **YÊU CẦU CHI TIẾT:**
 
@@ -461,15 +482,15 @@ Chỉ trả về JSON.`,
 - Vị trí đáp án đúng cân bằng giữa A, B, C, D
 
 2. **Mức BIẾT (Độ khó 1):**
-- Kiểm tra trí nhớ về khái niệm, thuật ngữ, định nghĩa
+- Kiểm tra trí nhớ về khái niệm, thuật ngữ, định nghĩa ĐÃ ĐƯỢC GIẢNG
 - Từ khóa: ai, cái gì, ở đâu, khi nào, liệt kê, định nghĩa, nhận dạng
 
 3. **Mức HIỂU (Độ khó 2):**
-- Kiểm tra khả năng diễn giải, giải thích, so sánh
+- Kiểm tra khả năng diễn giải, giải thích, so sánh NỘI DUNG BÀI HỌC
 - Từ khóa: so sánh, giải thích, vì sao, tóm tắt, phân biệt, khái quát
 
 4. **Mức VẬN DỤNG (Độ khó 3):**
-- Áp dụng kiến thức vào tình huống mới
+- Áp dụng kiến thức TRONG BÀI vào tình huống mới
 - Từ khóa: áp dụng, sử dụng, giải quyết, dự đoán, thực hiện
 
 **Định dạng đầu ra (JSON):**
@@ -513,67 +534,67 @@ Chỉ trả về JSON.`,
 }
 
 Chỉ trả về JSON.`,
-        variables: ['{title}', '{lesson_id}', '{slide_script}'],
+        variables: ['{title}', '{lesson_id}', '{slide_script}', '{count_level1}', '{count_level2}', '{count_level3}'],
       },
       {
         slug: 'slides.design',
         name: 'Design Slide Content',
-        content: `Bạn là một chuyên gia Thiết kế Nội dung Giảng dạy (Instructional Designer) với nhiệm vụ biên soạn nội dung cho các bài giảng đại học. Tôi sẽ cung cấp cho bạn một dàn ý thô cho một slide.
+        content: `Bạn là một chuyên gia Thiết kế Nội dung Giảng dạy(Instructional Designer) với nhiệm vụ biên soạn nội dung cho các bài giảng đại học.Tôi sẽ cung cấp cho bạn một dàn ý thô cho một slide.
 
-**Nhiệm vụ của bạn là:** Chuyển hóa dàn ý đó thành nội dung slide hấp dẫn, chuyên nghiệp và dễ hiểu cho sinh viên, tuân thủ nghiêm ngặt các quy tắc sau:
+** Nhiệm vụ của bạn là:** Chuyển hóa dàn ý đó thành nội dung slide hấp dẫn, chuyên nghiệp và dễ hiểu cho sinh viên, tuân thủ nghiêm ngặt các quy tắc sau:
 
-1.  **Đối tượng:** Sinh viên đại học. Nội dung cần có chiều sâu chuyên môn nhưng phải được diễn giải một cách dễ tiếp cận.
+          1. ** Đối tượng:** Sinh viên đại học.Nội dung cần có chiều sâu chuyên môn nhưng phải được diễn giải một cách dễ tiếp cận.
 
-2.  **Mục tiêu:** Tối ưu hóa để giữ sự tập trung, khuyến khích tư duy và giúp sinh viên ghi nhớ kiến thức cốt lõi.
+2.  ** Mục tiêu:** Tối ưu hóa để giữ sự tập trung, khuyến khích tư duy và giúp sinh viên ghi nhớ kiến thức cốt lõi.
 
-3.  **Tiêu đề:** Giữ nguyên tiêu đề được cung cấp.
+3.  ** Tiêu đề:** Giữ nguyên tiêu đề được cung cấp.
 
-4.  **RÀNG BUỘC SỐ LƯỢNG BULLETS:**
-    * **Tối thiểu:** 2 bullets
-    * **Tối đa:** 5 bullets
-    * Slide content thường có 3-4 bullets là lý tưởng
+4.  ** RÀNG BUỘC SỐ LƯỢNG BULLETS:**
+    * ** Tối thiểu:** 2 bullets
+    * ** Tối đa:** 5 bullets
+      * Slide content thường có 3 - 4 bullets là lý tưởng
 
-5.  **Xử lý Nội dung:**
-    * **Quy tắc Vàng (Ưu tiên số 1):** Nếu nội dung là một **định nghĩa, khái niệm cốt lõi, hoặc một trích dẫn trực tiếp** (ví dụ: có các từ 'là', 'được định nghĩa là', 'bao gồm',...), **BẠN PHẢI GIỮ NGUYÊN VĂN VÀ ĐẦY ĐỦ** nội dung đó trong phần "description". Các trường "emoji" và "point" phải để trống.
-    * **Với các nội dung khác:** Phân tách thành các luận điểm rõ ràng. Mỗi luận điểm phải bao gồm:
-        * **"emoji":** Chọn một biểu tượng emoji **tinh tế, mang tính học thuật**. 
-          **Danh sách emoji gợi ý:**
+5. ** Xử lý Nội dung:**
+    * ** Quy tắc Vàng(Ưu tiên số 1):** Nếu nội dung là một ** định nghĩa, khái niệm cốt lõi, hoặc một trích dẫn trực tiếp ** (ví dụ: có các từ 'là', 'được định nghĩa là', 'bao gồm', ...), ** BẠN PHẢI GIỮ NGUYÊN VĂN VÀ ĐẦY ĐỦ ** nội dung đó trong phần "description".Các trường "emoji" và "point" phải để trống.
+    * ** Với các nội dung khác:** Phân tách thành các luận điểm rõ ràng.Mỗi luận điểm phải bao gồm:
+        * ** "emoji":** Chọn một biểu tượng emoji ** tinh tế, mang tính học thuật **. 
+          ** Danh sách emoji gợi ý:**
           📊 (thống kê) | 🔬 (khoa học) | 💡 (ý tưởng) | 📈 (tăng trưởng) | 🎯 (mục tiêu)
           ⚙️ (cơ chế) | 🧠 (tư duy) | 📝 (ghi chú) | 🔗 (liên kết) | 📌 (quan trọng)
           ⚡ (nhanh) | 🔑 (chìa khóa) | 📋 (danh sách) | 🌐 (toàn cầu) | 🛠️ (công cụ)
-        * **"point":** Rút ra **từ khóa (keyword) hoặc cụm từ cốt lõi** quan trọng nhất. Đây phải là thứ mà sinh viên cần ghi vào vở. Phải thật ngắn gọn (tối đa 5 từ).
-        * **"description":** Diễn giải ngắn gọn (≤12 từ) cho "point". Sử dụng ngôn ngữ rõ ràng, có thể dùng phép ẩn dụ hoặc ví dụ đơn giản.
+        * ** "point":** Rút ra ** từ khóa(keyword) hoặc cụm từ cốt lõi ** quan trọng nhất.Đây phải là thứ mà sinh viên cần ghi vào vở.Phải thật ngắn gọn(tối đa 5 từ).
+        * ** "description":** Diễn giải ngắn gọn(≤12 từ) cho "point".Sử dụng ngôn ngữ rõ ràng, có thể dùng phép ẩn dụ hoặc ví dụ đơn giản.
 
-6.  **Định dạng đầu ra:** Chỉ trả về một đối tượng JSON duy nhất, không thêm bất kỳ lời giải thích hay định dạng markdown nào khác.
+6. ** Định dạng đầu ra:** Chỉ trả về một đối tượng JSON duy nhất, không thêm bất kỳ lời giải thích hay định dạng markdown nào khác.
 
-**Dàn ý thô:**
----
-**Tiêu đề:** {title}
-**Nội dung:**
-{content}
----
+** Dàn ý thô:**
+      ---
+** Tiêu đề:** { title }
+      ** Nội dung:**
+        { content }
+    ---
 
-**Cấu trúc JSON đầu ra bắt buộc:**
-{
-  "title": "Tiêu đề Slide",
-  "bullets": [
-    {
-      "emoji": "💡",
-      "point": "Từ khóa chính",
-      "description": "Diễn giải ngắn gọn, dễ hiểu."
-    },
-    {
-      "emoji": "📈",
-      "point": "Từ khóa thứ hai",
-      "description": "Giải thích súc tích trong 12 từ."
-    },
-    {
-      "emoji": "",
-      "point": "",
-      "description": "Giữ nguyên đầy đủ định nghĩa hoặc khái niệm cốt lõi ở đây."
-    }
-  ]
-}`,
+** Cấu trúc JSON đầu ra bắt buộc:**
+      {
+        "title": "Tiêu đề Slide",
+        "bullets": [
+          {
+            "emoji": "💡",
+            "point": "Từ khóa chính",
+            "description": "Diễn giải ngắn gọn, dễ hiểu."
+          },
+          {
+            "emoji": "📈",
+            "point": "Từ khóa thứ hai",
+            "description": "Giải thích súc tích trong 12 từ."
+          },
+          {
+            "emoji": "",
+            "point": "",
+            "description": "Giữ nguyên đầy đủ định nghĩa hoặc khái niệm cốt lõi ở đây."
+          }
+        ]
+      }`,
         variables: ['{title}', '{content}'],
       },
       {
@@ -582,53 +603,53 @@ Chỉ trả về JSON.`,
         content: `You are an expert Educational Art Director specialized in creating visuals for lecture slides.
 
 Your task is to create a clear, accurate, and visually consistent image that illustrates the following concept:
----
-{visual_idea}
----
+    ---
+      { visual_idea }
+    ---
 
 ### 🔹 Purpose
-Create an **educational illustration** (not abstract art) that directly visualizes the described idea for teaching.
+Create an ** educational illustration ** (not abstract art) that directly visualizes the described idea for teaching.
 
 ### 🔹 Visual Style
-- Prefer: *flat 2D infographic*, *diagram*, *minimalist educational style*.
-- For code or syntax: use *IDE-style windows*, *syntax highlighting*, *indentation marks*, and *language-appropriate icons*.
-- For conceptual ideas: use *clear icons*, *logical layout*, and *color grouping*.
-- For real-world metaphors: use *simple realistic scenes* (e.g., computer, classroom, network diagram).
+      - Prefer: * flat 2D infographic *, * diagram *, * minimalist educational style *.
+- For code or syntax: use * IDE - style windows *, * syntax highlighting *, * indentation marks *, and * language - appropriate icons *.
+- For conceptual ideas: use * clear icons *, * logical layout *, and * color grouping *.
+- For real - world metaphors: use * simple realistic scenes * (e.g., computer, classroom, network diagram).
 
 ### 🔹 Text Handling
-- **Do NOT include any text** unless it is *essential* to understanding the concept.
-- If text genuinely helps clarify meaning (e.g., showing "Python" vs "Java", "Hello, World!", or short code labels), include it clearly.
-- Limit to **1–2 short words or phrases**, ≤25 characters each.
-- Use simple fonts (sans-serif or monospace).
+      - ** Do NOT include any text ** unless it is * essential * to understanding the concept.
+- If text genuinely helps clarify meaning(e.g., showing "Python" vs "Java", "Hello, World!", or short code labels), include it clearly.
+- Limit to ** 1–2 short words or phrases **, ≤25 characters each.
+- Use simple fonts(sans - serif or monospace).
 - Avoid decorative typography.
 
 Examples when text is allowed:
-- Comparing languages → "Python" / "Java"
-- Showing output → "Hello, World!"
-- Slide summary → "Lesson Summary"
+    - Comparing languages → "Python" / "Java"
+      - Showing output → "Hello, World!"
+        - Slide summary → "Lesson Summary"
 
-In all other cases: **no text, just icons or visuals.**
+In all other cases: ** no text, just icons or visuals.**
 
 ### 🔹 Lighting & Color
-- Soft classroom lighting, neutral background.
-- Color palette: clear contrast, educational tone (blue, orange, gray, white).
+      - Soft classroom lighting, neutral background.
+- Color palette: clear contrast, educational tone(blue, orange, gray, white).
 
 ### 🔹 Avoid
---no watermark, --no handwriting, --no distorted text, --no abstract shapes, --no glowing cubes, --no sci-fi, --no cinematic lighting
---no text in the picture unless essential as described above.`,
+    --no watermark, --no handwriting, --no distorted text, --no abstract shapes, --no glowing cubes, --no sci - fi, --no cinematic lighting
+    --no text in the picture unless essential as described above.`,
         variables: ['{visual_idea}'],
       },
       {
         slug: 'handout.generate',
         name: 'Generate Handout',
-        content: `**TASK:** Tạo handout từ outline.
+        content: `** TASK:** Tạo handout từ outline.
 
-**INPUT:**
-- Tiêu đề: {title}
-- Outline: {detailed_outline}
+** INPUT:**
+      - Tiêu đề: { title }
+    - Outline: { detailed_outline }
 
-## OUTPUT (JSON):
-{"title":"...", "sections":[{"heading":"...", "content":"...", "keyPoints":[]}], "summary":"..."}
+## OUTPUT(JSON):
+    { "title": "...", "sections": [{ "heading": "...", "content": "...", "keyPoints": [] }], "summary": "..." }
 
 Chỉ trả về JSON.`,
         variables: ['{title}', '{detailed_outline}'],

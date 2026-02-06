@@ -1,6 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { GeminiService } from '../ai/gemini.service';
+import { AiProviderService } from '../ai/ai-provider.service';
+import { ApiKeysService } from '../api-keys/api-keys.service';
+import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { InteractiveQuestion } from '@prisma/client';
 
@@ -26,7 +28,9 @@ export class InteractiveQuestionService {
 
     constructor(
         private prisma: PrismaService,
-        private geminiService: GeminiService,
+        private aiProvider: AiProviderService,
+        private apiKeysService: ApiKeysService,
+        private modelConfigService: ModelConfigService,
         private promptComposer: PromptComposerService,
     ) { }
 
@@ -146,10 +150,12 @@ export class InteractiveQuestionService {
 
     /**
      * Generate interactive questions from slides using AI
+     * Requires userId to get API key from user settings
      */
     async generateFromSlides(
         lessonId: string,
         slidesContent: string,
+        userId: string,
         count: number = 5,
     ): Promise<InteractiveQuestion[]> {
         this.logger.log(`Generating ${count} interactive questions for lesson ${lessonId}`);
@@ -164,6 +170,15 @@ export class InteractiveQuestionService {
             throw new NotFoundException(`Lesson ${lessonId} not found`);
         }
 
+        // Get API key from user settings (not from env var!)
+        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+        if (!apiKey) {
+            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
+        }
+
+        // Get configured model for QUESTIONS task
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
+
         // Build prompt using PromptComposer (Role from Subject + Task from DB)
         const prompt = await this.promptComposer.buildFullPrompt(
             lesson.subjectId,
@@ -177,7 +192,10 @@ export class InteractiveQuestionService {
         this.logger.log(`Built prompt for interactive questions (${prompt.length} chars)`);
 
         try {
-            const response = await this.geminiService.generateText(prompt);
+            // Use AiProviderService (CLIProxy → Gemini SDK fallback) with user's API key
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+            const response = aiResult.content;
+            this.logger.log(`Interactive questions generated via ${aiResult.provider} (${aiResult.model})`);
 
             // Parse JSON response - handle both {questions: [...]} and direct array
             let questions: any[];

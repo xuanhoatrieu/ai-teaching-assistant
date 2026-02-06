@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import './ModelSelector.css';
 
@@ -33,26 +33,64 @@ const TASK_LABELS: Record<TaskType, string> = {
 
 export function ModelSelector({ taskType, label, onChange, compact = false }: ModelSelectorProps) {
     const [selectedModel, setSelectedModel] = useState<string>('');
+    const [selectedModelDisplay, setSelectedModelDisplay] = useState<string>('');
     const [availableModels, setAvailableModels] = useState<AvailableModel[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingModels, setIsLoadingModels] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
+    const hasLoadedModels = useRef(false);
 
     useEffect(() => {
-        fetchModelConfig();
+        // On mount: Only fetch current config (fast)
+        fetchCurrentConfig();
     }, [taskType]);
 
-    const fetchModelConfig = async () => {
+    /**
+     * FAST: Only fetch user's current config on mount
+     * No discover call - just get the currently selected model
+     */
+    const fetchCurrentConfig = async () => {
         try {
             setIsLoading(true);
-
-            // Fetch user's current config and available models
-            const [configRes, modelsRes] = await Promise.all([
-                api.get('/user/model-config'),
-                api.get('/user/model-config/discover'),
-            ]);
-
+            const configRes = await api.get('/user/model-config');
             const configs = configRes.data.configs as Record<string, ModelConfig>;
             const defaults = configRes.data.defaults as Record<string, ModelConfig>;
+
+            // Priority: User config > Admin default
+            const userConfig = configs[taskType];
+            const adminDefault = defaults[taskType];
+            const finalConfig = userConfig || adminDefault;
+
+            if (finalConfig) {
+                let modelName = finalConfig.modelName;
+                if (finalConfig.provider === 'CLIPROXY' && !modelName.startsWith('cliproxy:')) {
+                    modelName = `cliproxy:${modelName}`;
+                }
+                setSelectedModel(modelName);
+                // Create display name from model name
+                const displayName = modelName
+                    .replace('cliproxy:', '🌐 ')
+                    .replace('gemini-', 'Gemini ')
+                    .replace('-', ' ');
+                setSelectedModelDisplay(displayName);
+            }
+        } catch (err) {
+            console.error('Error fetching model config:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    /**
+     * LAZY: Discover all available models only when dropdown is opened
+     * Called once per session
+     */
+    const fetchAvailableModels = async () => {
+        if (hasLoadedModels.current || isLoadingModels) return;
+
+        try {
+            setIsLoadingModels(true);
+            const modelsRes = await api.get('/user/model-config/discover');
 
             // Get models from both GEMINI and CLIPROXY
             const geminiModels = modelsRes.data.models?.GEMINI || [];
@@ -64,56 +102,45 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                 m.supportedTasks.includes(taskType)
             );
 
-            // Get admin default for this task
-            const adminDefault = defaults[taskType];
-
-            // Sort models: put admin default first
+            // Sort: put selected model first, then alphabetically
             const sortedModels = filteredModels.sort((a, b) => {
-                const aIsDefault = a.name === adminDefault?.modelName || a.name === `cliproxy:${adminDefault?.modelName}`;
-                const bIsDefault = b.name === adminDefault?.modelName || b.name === `cliproxy:${adminDefault?.modelName}`;
-                if (aIsDefault && !bIsDefault) return -1;
-                if (!aIsDefault && bIsDefault) return 1;
-                return 0;
+                const aIsSelected = a.name === selectedModel;
+                const bIsSelected = b.name === selectedModel;
+                if (aIsSelected && !bIsSelected) return -1;
+                if (!aIsSelected && bIsSelected) return 1;
+                return a.displayName.localeCompare(b.displayName);
             });
+
             setAvailableModels(sortedModels);
+            hasLoadedModels.current = true;
 
-            // Debug log
-            console.log(`[ModelSelector ${taskType}] defaults:`, defaults);
-            console.log(`[ModelSelector ${taskType}] adminDefault:`, adminDefault);
-            console.log(`[ModelSelector ${taskType}] sortedModels:`, sortedModels.map(m => m.name));
-
-            // Determine which model to select
-            const userConfig = configs[taskType];
-
-            // PRIORITIZE ADMIN DEFAULT from CLIPROXY over old GEMINI user configs
-            let finalConfig = adminDefault; // Start with admin default
-
-            if (userConfig && userConfig.provider === 'CLIPROXY') {
-                // Keep user config only if they explicitly chose a CLIPROXY model
-                finalConfig = userConfig;
-                console.log(`[ModelSelector ${taskType}] Using user's CLIPROXY selection`);
-            } else if (adminDefault?.provider === 'CLIPROXY') {
-                console.log(`[ModelSelector ${taskType}] Admin default is CLIPROXY, overriding old GEMINI config`);
-            }
-
-            console.log(`[ModelSelector ${taskType}] finalConfig:`, finalConfig);
-            if (finalConfig) {
-                // Add cliproxy: prefix if admin default is CLIPROXY but modelName doesn't have prefix
-                let modelName = finalConfig.modelName;
-                if (finalConfig.provider === 'CLIPROXY' && !modelName.startsWith('cliproxy:')) {
-                    modelName = `cliproxy:${modelName}`;
-                }
-                setSelectedModel(modelName);
+            // Update display name from discovered models
+            const currentModel = sortedModels.find(m => m.name === selectedModel);
+            if (currentModel) {
+                setSelectedModelDisplay(currentModel.displayName);
             }
         } catch (err) {
-            console.error('Error fetching model config:', err);
+            console.error('Error discovering models:', err);
         } finally {
-            setIsLoading(false);
+            setIsLoadingModels(false);
+        }
+    };
+
+    const handleOpenDropdown = () => {
+        if (!isOpen) {
+            setIsOpen(true);
+            // Lazy load models when dropdown opens
+            if (!hasLoadedModels.current) {
+                fetchAvailableModels();
+            }
+        } else {
+            setIsOpen(false);
         }
     };
 
     const handleSelectModel = async (model: AvailableModel) => {
         setSelectedModel(model.name);
+        setSelectedModelDisplay(model.displayName);
         setIsOpen(false);
 
         // Determine provider from model name
@@ -138,8 +165,7 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
     };
 
     const getSelectedModelDisplay = () => {
-        const model = availableModels.find(m => m.name === selectedModel);
-        return model?.displayName || selectedModel || 'Đang tải...';
+        return selectedModelDisplay || selectedModel || 'Đang tải...';
     };
 
     if (isLoading) {
@@ -157,7 +183,7 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
             <div className="model-selector-dropdown">
                 <button
                     className="model-selector-trigger"
-                    onClick={() => setIsOpen(!isOpen)}
+                    onClick={handleOpenDropdown}
                 >
                     <span className="selected-model">{getSelectedModelDisplay()}</span>
                     <span className="dropdown-arrow">{isOpen ? '▲' : '▼'}</span>
@@ -165,7 +191,9 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
 
                 {isOpen && (
                     <div className="model-selector-menu">
-                        {availableModels.length === 0 ? (
+                        {isLoadingModels ? (
+                            <div className="model-loading">⏳ Đang tải danh sách models...</div>
+                        ) : availableModels.length === 0 ? (
                             <div className="no-models">Không có model khả dụng</div>
                         ) : (
                             availableModels.map((model) => (
