@@ -1,9 +1,11 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
+import { PromptsService } from './prompts/prompts.service';
 
 async function bootstrap() {
+  const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
   // Enable validation
@@ -19,5 +21,14 @@ async function bootstrap() {
   app.enableCors();
 
   await app.listen(process.env.PORT ?? 3001);
+
+  // Auto-seed prompts on startup to keep database in sync with code
+  try {
+    const promptsService = app.get(PromptsService);
+    const result = await promptsService.seedV2();
+    logger.log(`✅ Auto-seeded ${result.seeded} prompts on startup`);
+  } catch (error) {
+    logger.warn(`⚠️ Could not auto-seed prompts: ${error.message}`);
+  }
 }
 bootstrap();
