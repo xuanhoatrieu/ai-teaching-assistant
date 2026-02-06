@@ -334,11 +334,15 @@ export class PptxService {
             where: { lessonId },
             orderBy: { slideIndex: 'asc' },
         });
+        this.logger.log(`[PPTX] Found ${slideAudios.length} audio records for lesson ${lessonId}`);
+        slideAudios.forEach(a => this.logger.log(`[PPTX]   Audio: slideIndex=${a.slideIndex}, audioUrl=${a.audioUrl}`));
 
         // Build slide content for Python service
         // IMPORTANT: Use optimizedContentJson (AI-generated) if available, fallback to original content
         const slideContents: SlideContent[] = lesson.slides.map(slide => {
             const audio = slideAudios.find(a => a.slideIndex === slide.slideIndex);
+            const audioPath = audio?.audioUrl ? this.getLocalPath(audio.audioUrl) : undefined;
+            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: audioUrl=${audio?.audioUrl || 'NULL'}, audioPath=${audioPath || 'NULL'}`);
 
             // Parse optimized content if available - send structured bullets to Python
             let bullets: OptimizedBullet[] | undefined;
@@ -372,7 +376,7 @@ export class PptxService {
                 content: contentArray,
                 bullets,  // Send structured bullets for proper rendering
                 imagePath,
-                audioPath: audio?.audioUrl ? this.getLocalPath(audio.audioUrl) : undefined,
+                audioPath,
                 speakerNote: slide.speakerNote || '',
                 slideType: slide.slideType || 'content',
             };
