@@ -924,15 +924,79 @@
     padding: 8px;
 }
 
-/* Slide Preview Grid (Step 5) */
+/* Slide Preview Grid (Step 5) - Full Width */
 .slide-preview-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
     margin: 24px 0;
-    max-width: 500px;
-    margin-left: auto;
-    margin-right: auto;
+    width: 100%;
+}
+
+/* Slides Table (Step 3) */
+.slides-table-wrapper {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    margin-top: 20px;
+}
+
+.slides-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.slides-table th,
+.slides-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    vertical-align: top;
+}
+
+.slides-table th {
+    background: rgba(30, 41, 59, 0.8);
+    color: #94a3b8;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+}
+
+.slides-table tbody tr:hover {
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.slides-table .slide-index {
+    font-weight: 700;
+    color: #a5b4fc;
+    text-align: center;
+}
+
+.slides-table .slide-title-cell {
+    font-weight: 600;
+    color: #f1f5f9;
+    max-width: 200px;
+}
+
+.slides-table .slide-content-cell {
+    color: #94a3b8;
+    max-width: 250px;
+    line-height: 1.5;
+}
+
+.slides-table .slide-visual-cell {
+    color: #fcd34d;
+    font-style: italic;
+    max-width: 180px;
+}
+
+.slides-table .slide-speaker-cell {
+    color: #a5b4fc;
+    max-width: 300px;
+    line-height: 1.5;
 }
 
 .slide-preview {
@@ -1686,4 +1750,231 @@
     padding: 12px 16px;
     border-radius: 8px;
     margin-bottom: 16px;
+}
+
+/* ========================================
+   Interactive Questions Answers Display
+   ======================================== */
+
+.answers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 12px 0;
+    padding: 0;
+}
+
+.answers-list .answer {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: rgba(30, 41, 59, 0.6);
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #e2e8f0;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+}
+
+.answers-list .answer:hover {
+    background: rgba(30, 41, 59, 0.8);
+}
+
+.answers-list .answer.correct {
+    background: rgba(34, 197, 94, 0.15);
+    border-left-color: #22c55e;
+    color: #86efac;
+    font-weight: 500;
+}
+
+/* Interactive Question Card Enhancement */
+.interactive-card {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.interactive-card .question-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.interactive-card .question-type {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.interactive-card .question-points {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fcd34d;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.interactive-card .question-text {
+    color: #f1f5f9;
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    line-height: 1.5;
+}
+
+.interactive-card .feedback {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+/* ========================================
+   Step 2: Full Question Display in Outline
+   ======================================== */
+
+/* Review Questions List */
+.review-questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.review-question-item {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 10px;
+    padding: 16px;
+    border-left: 4px solid #6366f1;
+}
+
+.rq-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.rq-id {
+    font-family: monospace;
+    font-size: 12px;
+    color: #64748b;
+    background: rgba(30, 41, 59, 0.8);
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.rq-question {
+    color: #e2e8f0;
+    font-size: 14px;
+    margin: 8px 0;
+    line-height: 1.5;
+}
+
+.rq-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.rq-option {
+    background: rgba(30, 41, 59, 0.6);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+.rq-option.correct {
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+    border-left: 3px solid #22c55e;
+}
+
+.rq-explanation {
+    color: #fcd34d;
+    font-size: 13px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+/* Interactive Questions List */
+.interactive-questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.interactive-question-item {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 10px;
+    padding: 16px;
+    border-left: 4px solid #a5b4fc;
+}
+
+.iq-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.iq-points {
+    background: rgba(251, 191, 36, 0.2);
+    color: #fcd34d;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.iq-question {
+    color: #e2e8f0;
+    font-size: 14px;
+    margin: 8px 0;
+    line-height: 1.5;
+}
+
+.iq-feedback {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(148, 163, 184, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 13px;
+}
+
+/* Discussion Questions (Step 2 Outline) */
+.discussion-questions {
+    margin: 0;
+    padding-left: 24px;
+}
+
+.discussion-question {
+    padding: 10px 0;
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.6;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.discussion-question:last-child {
+    border-bottom: none;
+}
+
+/* Sub-content in outline sections */
+.sub-content {
+    color: #94a3b8;
+    font-size: 13px;
+    margin: 4px 0 0 0;
+    line-height: 1.5;
 }

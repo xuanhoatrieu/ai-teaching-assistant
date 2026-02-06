@@ -168,9 +168,31 @@ export class SlideDataService {
      */
     private tryParseAsJson(slideScript: string): ParsedSlide[] | null {
         try {
-            // Try to extract JSON from code blocks first
-            const jsonMatch = slideScript.match(/```json?\s*([\s\S]*?)```/);
-            const jsonStr = jsonMatch ? jsonMatch[1].trim() : slideScript.trim();
+            let jsonStr = slideScript.trim();
+
+            // Try multiple patterns to extract JSON from code blocks
+            // Pattern 1: ```json ... ``` (with newlines)
+            // Pattern 2: ```json...``` (without newlines)
+            // Pattern 3: ``` ... ``` (plain code block)
+            const patterns = [
+                /```json\s*\n([\s\S]*?)\n\s*```/,  // ```json\n...\n```
+                /```json\s*([\s\S]*?)```/,          // ```json...```
+                /```\s*\n([\s\S]*?)\n\s*```/,      // ```\n...\n```
+                /```([\s\S]*?)```/,                 // ```...```
+            ];
+
+            for (const pattern of patterns) {
+                const match = jsonStr.match(pattern);
+                if (match && match[1]) {
+                    const extracted = match[1].trim();
+                    // Verify it looks like JSON
+                    if (extracted.startsWith('{') || extracted.startsWith('[')) {
+                        jsonStr = extracted;
+                        console.log(`[DEBUG tryParseAsJson] Extracted JSON using pattern: ${pattern.source.substring(0, 30)}...`);
+                        break;
+                    }
+                }
+            }
 
             // Try parsing as JSON
             const parsed = JSON.parse(jsonStr);
@@ -184,18 +206,22 @@ export class SlideDataService {
             }
 
             if (!slides || !Array.isArray(slides) || slides.length === 0) {
+                console.log(`[DEBUG tryParseAsJson] No slides array found in parsed JSON`);
                 return null;
             }
 
+            console.log(`[DEBUG tryParseAsJson] Successfully parsed ${slides.length} slides from JSON`);
+
             return slides.map((slide: any, index: number) => ({
-                slideIndex: slide.slideIndex ?? slide.slide_index ?? index + 1,
-                slideType: this.inferSlideType(slide.slideType ?? slide.slide_type ?? 'content', slide.title ?? '', index + 1),
+                slideIndex: slide.slideIndex ?? slide.slide_index ?? index,
+                slideType: this.inferSlideType(slide.slideType ?? slide.slide_type ?? 'content', slide.title ?? '', index),
                 title: slide.title ?? `Slide ${index + 1}`,
                 content: Array.isArray(slide.content) ? slide.content.join('\n') : slide.content ?? null,
                 visualIdea: slide.visualIdea ?? slide.visual_idea ?? slide['Visual Idea'] ?? null,
                 speakerNote: slide.speakerNote ?? slide.speaker_note ?? slide['Speaker Notes'] ?? null,
             }));
-        } catch {
+        } catch (error) {
+            console.log(`[DEBUG tryParseAsJson] JSON parse failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
             return null;
         }
     }
@@ -208,9 +234,9 @@ export class SlideDataService {
         if (!outline || typeof outline !== 'object') return null;
 
         const slides: any[] = [];
-        let slideIndex = 0;
+        let slideIndex = 1; // Start from 1, not 0
 
-        // Slide 0: Title slide
+        // Slide 1: Title slide
         if (outline.title) {
             slides.push({
                 slideIndex: slideIndex++,
@@ -222,7 +248,7 @@ export class SlideDataService {
             });
         }
 
-        // Slide 1: Agenda
+        // Slide 2: Agenda
         if (outline.agenda && Array.isArray(outline.agenda)) {
             slides.push({
                 slideIndex: slideIndex++,

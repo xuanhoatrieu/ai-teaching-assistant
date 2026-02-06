@@ -11,19 +11,27 @@ interface ContentSection {
     subsections?: { id: string; title: string; description?: string }[];
 }
 
-interface InteractiveQuestion {
-    type: 'MC' | 'MR';
+interface ReviewQuestion {
+    questionId?: string;
+    type?: string;
     question: string;
-    answers: { text: string; correct: boolean }[];
-    correctFeedback?: string;
-    incorrectFeedback?: string;
-    points?: number;
+    correctAnswer?: string;
+    optionB?: string;
+    optionC?: string;
+    optionD?: string;
+    explanation?: string;
+    level?: number;
 }
 
 interface ParsedOutline {
     title?: string;
     agenda?: string[];
     objectives?: string[];
+    // New structure from prompt
+    learningGuide?: string;
+    situation?: string;
+    situationSolution?: string;
+    // Legacy structure (also supported)
     studyGuide?: {
         equipment?: string[];
         materials?: string[];
@@ -33,14 +41,23 @@ interface ParsedOutline {
         story?: string;
         question?: string;
     };
-    content?: ContentSection[];
     scenarioResolution?: string;
+    // Main content sections
+    content?: ContentSection[];
+    sections?: {
+        id: string;
+        title: string;
+        subsections?: {
+            id?: string;
+            title: string;
+            content?: string;
+            points?: string[];
+        }[]
+    }[];
     summary?: string[];
-    reviewQuestions?: { type: string; question: string }[];
+    // Discussion questions (strings only, not object with options)
+    reviewQuestions?: (string | ReviewQuestion)[];
     closingMessage?: string;
-    interactiveQuestions?: InteractiveQuestion[];
-    // Legacy support
-    sections?: { id: string; title: string; subsections?: { title: string; points?: string[] }[] }[];
 }
 
 // Parse JSON from AI response (handles ```json blocks with nested code)
@@ -104,7 +121,16 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
                 </div>
             )}
 
-            {outline.studyGuide && (
+            {/* New learningGuide field (string) */}
+            {outline.learningGuide && (
+                <div className="outline-block">
+                    <h4>📖 Hướng dẫn học tập</h4>
+                    <p>{outline.learningGuide}</p>
+                </div>
+            )}
+
+            {/* Legacy studyGuide field (object) */}
+            {!outline.learningGuide && outline.studyGuide && (
                 <div className="outline-block">
                     <h4>📖 Hướng dẫn học tập</h4>
                     {outline.studyGuide.equipment && outline.studyGuide.equipment.length > 0 && (
@@ -119,7 +145,16 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
                 </div>
             )}
 
-            {outline.scenario && (outline.scenario.story || outline.scenario.question) && (
+            {/* New situation field (string) */}
+            {outline.situation && (
+                <div className="outline-block scenario-block">
+                    <h4>💡 Tình huống mở đầu</h4>
+                    <p className="scenario-story">{outline.situation}</p>
+                </div>
+            )}
+
+            {/* Legacy scenario field (object) */}
+            {!outline.situation && outline.scenario && (outline.scenario.story || outline.scenario.question) && (
                 <div className="outline-block scenario-block">
                     <h4>💡 Tình huống mở đầu</h4>
                     {outline.scenario.story && <p className="scenario-story">{outline.scenario.story}</p>}
@@ -127,7 +162,7 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
                 </div>
             )}
 
-            {/* New content structure */}
+            {/* New content format */}
             {outline.content && outline.content.length > 0 && (
                 <div className="outline-block">
                     <h4>📖 Chi tiết các phần</h4>
@@ -149,7 +184,7 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
                 </div>
             )}
 
-            {/* Legacy sections support */}
+            {/* Sections from prompt format (with content field) */}
             {!outline.content && outline.sections && outline.sections.length > 0 && (
                 <div className="outline-block">
                     <h4>📖 Chi tiết các phần</h4>
@@ -159,8 +194,9 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
                             {section.subsections && section.subsections.length > 0 && (
                                 <ul>
                                     {section.subsections.map((sub, i) => (
-                                        <li key={i}>
-                                            <strong>{sub.title}</strong>
+                                        <li key={sub.id || i}>
+                                            <strong>{sub.id || `${section.id}.${i + 1}`} {sub.title}</strong>
+                                            {sub.content && <p className="sub-content">{sub.content}</p>}
                                             {sub.points && sub.points.length > 0 && (
                                                 <ul className="sub-points">
                                                     {sub.points.map((p, j) => (
@@ -177,7 +213,16 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
                 </div>
             )}
 
-            {outline.scenarioResolution && (
+            {/* New situationSolution field */}
+            {outline.situationSolution && (
+                <div className="outline-block">
+                    <h4>✅ Giải quyết tình huống</h4>
+                    <p>{outline.situationSolution}</p>
+                </div>
+            )}
+
+            {/* Legacy scenarioResolution field */}
+            {!outline.situationSolution && outline.scenarioResolution && (
                 <div className="outline-block">
                     <h4>✅ Giải quyết tình huống</h4>
                     <p>{outline.scenarioResolution}</p>
@@ -195,35 +240,17 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
                 </div>
             )}
 
+            {/* Discussion questions - handles both string[] and object[] */}
             {outline.reviewQuestions && outline.reviewQuestions.length > 0 && (
                 <div className="outline-block">
-                    <h4>❓ Câu hỏi ôn tập</h4>
-                    <ol>
+                    <h4>💬 Câu hỏi thảo luận ({outline.reviewQuestions.length} câu)</h4>
+                    <ol className="discussion-questions">
                         {outline.reviewQuestions.map((q, i) => (
-                            <li key={i}>{q.question}</li>
+                            <li key={i} className="discussion-question">
+                                {typeof q === 'string' ? q : q.question}
+                            </li>
                         ))}
                     </ol>
-                </div>
-            )}
-
-            {outline.interactiveQuestions && outline.interactiveQuestions.length > 0 && (
-                <div className="outline-block">
-                    <h4>🎮 Câu hỏi tương tác ({outline.interactiveQuestions.length} câu)</h4>
-                    {outline.interactiveQuestions.map((q, i) => (
-                        <div key={i} className="interactive-question">
-                            <p className="q-header">
-                                <span className={`q-type ${q.type}`}>{q.type}</span>
-                                <strong>{q.question}</strong>
-                            </p>
-                            <ul className="q-answers">
-                                {q.answers.map((a, j) => (
-                                    <li key={j} className={a.correct ? 'correct' : ''}>
-                                        {a.correct ? '✓ ' : ''}{a.text}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ))}
                 </div>
             )}
 

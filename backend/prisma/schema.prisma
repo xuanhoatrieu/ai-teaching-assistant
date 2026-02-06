@@ -278,7 +278,7 @@ model ModelConfig {
 model SlideAudio {
   id            String   @id @default(uuid())
   lessonId      String   @map("lesson_id")
-  slideIndex    Int      @map("slide_index")      // 0-based, following slide order
+  slideIndex    Int      @map("slide_index")      // 1-based, following slide order
   slideTitle    String?  @map("slide_title")
   speakerNote   String   @db.Text
   audioFileName String?  @map("audio_file_name")  // slide_00.mp3, slide_01.mp3...
@@ -303,7 +303,7 @@ model SlideAudio {
 model Slide {
   id          String   @id @default(uuid())
   lessonId    String   @map("lesson_id")
-  slideIndex  Int      @map("slide_index")      // 0-based
+  slideIndex  Int      @map("slide_index")      // 1-based
   slideType   String   @default("content")      // title, content, objectives, summary
   title       String                            // Slide title
   content     String?  @db.Text                 // Raw bullet points from Step 3

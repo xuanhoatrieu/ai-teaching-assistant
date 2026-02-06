@@ -115,7 +115,7 @@ export function Step3DesignSlides() {
     const [editMode, setEditMode] = useState(false);
     const [slideScript, setSlideScript] = useState(lessonData?.slideScript || '');
     const [slides, setSlides] = useState<Slide[]>([]);
-    const [viewMode, setViewMode] = useState<'cards' | 'preview'>('cards');
+    const [viewMode, setViewMode] = useState<'table' | 'cards' | 'preview'>('table');
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // Parse slide JSON for preview
@@ -259,6 +259,12 @@ export function Step3DesignSlides() {
                             {!editMode && (
                                 <div className="view-toggle">
                                     <button
+                                        className={viewMode === 'table' ? 'active' : ''}
+                                        onClick={() => setViewMode('table')}
+                                    >
+                                        📋 Bảng
+                                    </button>
+                                    <button
                                         className={viewMode === 'cards' ? 'active' : ''}
                                         onClick={() => setViewMode('cards')}
                                     >
@@ -268,7 +274,7 @@ export function Step3DesignSlides() {
                                         className={viewMode === 'preview' ? 'active' : ''}
                                         onClick={() => setViewMode('preview')}
                                     >
-                                        📋 Preview
+                                        📝 Preview
                                     </button>
                                 </div>
                             )}
@@ -348,6 +354,33 @@ export function Step3DesignSlides() {
                                 </button>
                             </div>
                         </>
+                    ) : viewMode === 'table' && hasSlides ? (
+                        <div className="slides-table-wrapper">
+                            <table className="slides-table">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '60px' }}>Slide</th>
+                                        <th style={{ width: '80px' }}>Loại</th>
+                                        <th style={{ minWidth: '150px' }}>Tiêu đề</th>
+                                        <th style={{ minWidth: '200px' }}>Nội dung</th>
+                                        <th style={{ minWidth: '150px' }}>Visual Idea</th>
+                                        <th style={{ minWidth: '250px' }}>Lời giảng</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {slidesArray.map((slide) => (
+                                        <tr key={slide.id} className={`slide-row slide-type-${slide.slideType}`}>
+                                            <td className="slide-index">{slide.slideIndex}</td>
+                                            <td><span className={`slide-type-badge ${slide.slideType}`}>{slide.slideType}</span></td>
+                                            <td className="slide-title-cell">{slide.title}</td>
+                                            <td className="slide-content-cell">{slide.content || '-'}</td>
+                                            <td className="slide-visual-cell">{slide.visualIdea || '-'}</td>
+                                            <td className="slide-speaker-cell">{slide.speakerNote || '-'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     ) : viewMode === 'cards' && hasSlides ? (
                         <div className="slides-grid">
                             {slidesArray.map((slide) => (
