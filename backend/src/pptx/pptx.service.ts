@@ -329,20 +329,12 @@ export class PptxService {
         this.logger.log(`[PPTX] Content BG Path: ${contentBgPath || 'none'}`);
         this.logger.log(`[PPTX] Content BG Exists: ${contentBgPath ? require('fs').existsSync(contentBgPath) : false}`);
 
-        // Get audio files paths
-        const slideAudios = await this.prisma.slideAudio.findMany({
-            where: { lessonId },
-            orderBy: { slideIndex: 'asc' },
-        });
-        this.logger.log(`[PPTX] Found ${slideAudios.length} audio records for lesson ${lessonId}`);
-        slideAudios.forEach(a => this.logger.log(`[PPTX]   Audio: slideIndex=${a.slideIndex}, audioUrl=${a.audioUrl}`));
-
         // Build slide content for Python service
         // IMPORTANT: Use optimizedContentJson (AI-generated) if available, fallback to original content
+        // NOTE: audioUrl is stored directly on the Slide model (not SlideAudio table)
         const slideContents: SlideContent[] = lesson.slides.map(slide => {
-            const audio = slideAudios.find(a => a.slideIndex === slide.slideIndex);
-            const audioPath = audio?.audioUrl ? this.getLocalPath(audio.audioUrl) : undefined;
-            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: audioUrl=${audio?.audioUrl || 'NULL'}, audioPath=${audioPath || 'NULL'}`);
+            const audioPath = slide.audioUrl ? this.getLocalPath(slide.audioUrl) : undefined;
+            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: audioUrl=${slide.audioUrl || 'NULL'}, audioPath=${audioPath || 'NULL'}`);
 
             // Parse optimized content if available - send structured bullets to Python
             let bullets: OptimizedBullet[] | undefined;
