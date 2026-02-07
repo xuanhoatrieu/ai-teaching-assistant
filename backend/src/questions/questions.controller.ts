@@ -152,6 +152,7 @@ export class QuestionsController {
 
     /**
      * POST /lessons/:lessonId/review-questions/generate
+     * Deletes existing questions and creates new ones
      */
     @Post('review-questions/generate')
     async generateReviewQuestions(
@@ -174,6 +175,37 @@ export class QuestionsController {
                 level3: dto.level3 || 3,
             },
         );
+    }
+
+    /**
+     * POST /lessons/:lessonId/review-questions/append
+     * Keeps existing questions and adds new ones
+     */
+    @Post('review-questions/append')
+    async appendReviewQuestions(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: GenerateReviewQuestionsDto,
+        @Req() req: any,
+    ) {
+        const userId = req.user.id;
+        const slidesContent = await this.getSlidesContent(lessonId);
+        const lessonNumber = await this.getLessonNumber(lessonId);
+
+        const newQuestions = await this.reviewQuestionService.appendFromSlides(
+            lessonId,
+            lessonNumber,
+            slidesContent,
+            userId,
+            {
+                level1: dto.level1 || 4,
+                level2: dto.level2 || 3,
+                level3: dto.level3 || 3,
+            },
+        );
+
+        // Return all questions (existing + new)
+        const allQuestions = await this.reviewQuestionService.getQuestions(lessonId);
+        return allQuestions;
     }
 
     /**

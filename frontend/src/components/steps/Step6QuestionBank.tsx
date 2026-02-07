@@ -33,8 +33,9 @@ export function Step6QuestionBank() {
     const { lessonId, lessonData } = useLessonEditor();
 
     // Review Questions state
-    const [levelCounts, setLevelCounts] = useState({ level1: 5, level2: 3, level3: 2 });
+    const [levelCounts, setLevelCounts] = useState({ level1: 20, level2: 20, level3: 10 });
     const [isGeneratingReview, setIsGeneratingReview] = useState(false);
+    const [isAppendingReview, setIsAppendingReview] = useState(false);
     const [reviewQuestions, setReviewQuestions] = useState<ReviewQuestion[]>([]);
 
     // Interactive Questions state
@@ -72,6 +73,7 @@ export function Step6QuestionBank() {
 
     // ========== REVIEW QUESTIONS ==========
     const handleGenerateReview = async () => {
+        if (reviewQuestions.length > 0 && !confirm('⚠️ Thao tác này sẽ XÓA toàn bộ câu hỏi cũ và tạo mới. Tiếp tục?')) return;
         setIsGeneratingReview(true);
         setMessage(null);
         try {
@@ -83,6 +85,21 @@ export function Step6QuestionBank() {
             setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo câu hỏi ôn tập' });
         } finally {
             setIsGeneratingReview(false);
+        }
+    };
+
+    const handleAppendReview = async () => {
+        setIsAppendingReview(true);
+        setMessage(null);
+        try {
+            const response = await api.post(`/lessons/${lessonId}/review-questions/append`, levelCounts);
+            const allQuestions = response.data.questions || response.data || [];
+            setReviewQuestions(allQuestions);
+            setMessage({ type: 'success', text: `✓ Đã thêm câu hỏi! Tổng: ${allQuestions.length} câu` });
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo thêm câu hỏi ôn tập' });
+        } finally {
+            setIsAppendingReview(false);
         }
     };
 
@@ -363,7 +380,7 @@ export function Step6QuestionBank() {
                                 <input
                                     type="number"
                                     min="0"
-                                    max="20"
+                                    max="50"
                                     value={levelCounts.level1}
                                     onChange={(e) => setLevelCounts({ ...levelCounts, level1: +e.target.value })}
                                 />
@@ -376,7 +393,7 @@ export function Step6QuestionBank() {
                                 <input
                                     type="number"
                                     min="0"
-                                    max="20"
+                                    max="50"
                                     value={levelCounts.level2}
                                     onChange={(e) => setLevelCounts({ ...levelCounts, level2: +e.target.value })}
                                 />
@@ -389,30 +406,41 @@ export function Step6QuestionBank() {
                                 <input
                                     type="number"
                                     min="0"
-                                    max="20"
+                                    max="50"
                                     value={levelCounts.level3}
                                     onChange={(e) => setLevelCounts({ ...levelCounts, level3: +e.target.value })}
                                 />
                             </div>
                         </div>
-                        <button
-                            className="btn-primary"
-                            onClick={handleGenerateReview}
-                            disabled={isGeneratingReview || (levelCounts.level1 + levelCounts.level2 + levelCounts.level3 === 0)}
-                        >
-                            {isGeneratingReview ? '🔄 Đang tạo...' : '🤖 Tạo Câu Hỏi Ôn Tập'}
-                        </button>
+                        <div className="button-group" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                                className="btn-primary"
+                                onClick={handleGenerateReview}
+                                disabled={isGeneratingReview || isAppendingReview || (levelCounts.level1 + levelCounts.level2 + levelCounts.level3 === 0)}
+                            >
+                                {isGeneratingReview ? '🔄 Đang tạo...' : '🤖 Tạo Mới (Xóa cũ)'}
+                            </button>
+                            {reviewQuestions.length > 0 && (
+                                <button
+                                    className="btn-secondary"
+                                    onClick={handleAppendReview}
+                                    disabled={isGeneratingReview || isAppendingReview || (levelCounts.level1 + levelCounts.level2 + levelCounts.level3 === 0)}
+                                >
+                                    {isAppendingReview ? '🔄 Đang thêm...' : '➕ Tạo Thêm (Giữ cũ)'}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
-                    {isGeneratingReview && (
+                    {(isGeneratingReview || isAppendingReview) && (
                         <div className="generating-state">
                             <div className="loading-spinner"></div>
-                            <p>Đang tạo câu hỏi ôn tập...</p>
+                            <p>{isAppendingReview ? 'Đang tạo thêm câu hỏi...' : 'Đang tạo câu hỏi ôn tập...'}</p>
                             <p className="hint">Tổng số: {levelCounts.level1 + levelCounts.level2 + levelCounts.level3} câu</p>
                         </div>
                     )}
 
-                    {!isGeneratingReview && reviewQuestions.length > 0 && (
+                    {!isGeneratingReview && !isAppendingReview && reviewQuestions.length > 0 && (
                         <div className="questions-preview">
                             <h3>Câu hỏi Ôn tập ({reviewQuestions.length})</h3>
                             <div className="questions-table-wrapper">
@@ -521,7 +549,8 @@ export function Step6QuestionBank() {
                         </div>
                     )}
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }

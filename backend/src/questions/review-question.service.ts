@@ -161,6 +161,35 @@ export class ReviewQuestionService {
         userId: string,
         levelCounts: LevelCounts = { level1: 4, level2: 3, level3: 3 },
     ): Promise<ReviewQuestion[]> {
+        // Delete existing questions before generating new ones
+        await this.deleteAllQuestions(lessonId);
+        return this._generateQuestions(lessonId, lessonNumber, slidesContent, userId, levelCounts);
+    }
+
+    /**
+     * Append additional review questions WITHOUT deleting existing ones
+     */
+    async appendFromSlides(
+        lessonId: string,
+        lessonNumber: number,
+        slidesContent: string,
+        userId: string,
+        levelCounts: LevelCounts = { level1: 4, level2: 3, level3: 3 },
+    ): Promise<ReviewQuestion[]> {
+        // Do NOT delete existing - just append new questions
+        return this._generateQuestions(lessonId, lessonNumber, slidesContent, userId, levelCounts);
+    }
+
+    /**
+     * Internal: Generate questions using AI and save to DB
+     */
+    private async _generateQuestions(
+        lessonId: string,
+        lessonNumber: number,
+        slidesContent: string,
+        userId: string,
+        levelCounts: LevelCounts,
+    ): Promise<ReviewQuestion[]> {
         const total = levelCounts.level1 + levelCounts.level2 + levelCounts.level3;
         this.logger.log(`Generating ${total} review questions for lesson ${lessonId}`);
 
@@ -211,9 +240,6 @@ export class ReviewQuestionService {
 
             // Handle both {questions: [...]} and direct array format
             const questions = parsed.questions || parsed;
-
-            // Delete existing questions
-            await this.deleteAllQuestions(lessonId);
 
             // Group by level and create with proper questionId
             const createdQuestions: ReviewQuestion[] = [];
