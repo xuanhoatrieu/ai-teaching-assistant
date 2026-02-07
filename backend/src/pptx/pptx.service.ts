@@ -329,12 +329,28 @@ export class PptxService {
         this.logger.log(`[PPTX] Content BG Path: ${contentBgPath || 'none'}`);
         this.logger.log(`[PPTX] Content BG Exists: ${contentBgPath ? require('fs').existsSync(contentBgPath) : false}`);
 
+        // Get audio from BOTH sources:
+        // 1. Slide.audioUrl (new model) - preferred
+        // 2. SlideAudio table (legacy) - fallback for old data
+        const slideAudios = await this.prisma.slideAudio.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+        this.logger.log(`[PPTX] Found ${slideAudios.length} legacy audio records in SlideAudio table`);
+
         // Build slide content for Python service
         // IMPORTANT: Use optimizedContentJson (AI-generated) if available, fallback to original content
-        // NOTE: audioUrl is stored directly on the Slide model (not SlideAudio table)
         const slideContents: SlideContent[] = lesson.slides.map(slide => {
-            const audioPath = slide.audioUrl ? this.getLocalPath(slide.audioUrl) : undefined;
-            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: audioUrl=${slide.audioUrl || 'NULL'}, audioPath=${audioPath || 'NULL'}`);
+            // Try Slide.audioUrl first (new), then SlideAudio table (legacy)
+            let audioUrl = slide.audioUrl;
+            let audioSource = 'Slide';
+            if (!audioUrl) {
+                const legacyAudio = slideAudios.find(a => a.slideIndex === slide.slideIndex);
+                audioUrl = legacyAudio?.audioUrl || null;
+                audioSource = legacyAudio?.audioUrl ? 'SlideAudio(legacy)' : 'none';
+            }
+            const audioPath = audioUrl ? this.getLocalPath(audioUrl) : undefined;
+            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: audio=${audioSource}, audioUrl=${audioUrl || 'NULL'}, audioPath=${audioPath || 'NULL'}`);
 
             // Parse optimized content if available - send structured bullets to Python
             let bullets: OptimizedBullet[] | undefined;

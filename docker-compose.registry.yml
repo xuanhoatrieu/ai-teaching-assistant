@@ -75,6 +75,7 @@ services:
       PPTX_SERVICE_URL: http://pptx-generator:3002
     volumes:
       - ./datauser:/app/datauser
+      - ./uploads:/app/uploads
     ports:
       - "3001:3001"
     depends_on:
@@ -94,6 +95,7 @@ services:
     container_name: ai-teaching-pptx
     volumes:
       - ./datauser:/app/datauser
+      - ./uploads:/app/uploads
     networks:
       - app-network
     restart: unless-stopped
