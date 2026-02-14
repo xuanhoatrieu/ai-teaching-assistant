@@ -345,16 +345,37 @@ export function Step2BuildOutline() {
     };
 
     const handleSaveEdit = async () => {
+        // Auto-clean markdown code blocks if present (handles nested code)
+        let cleanedOutline = detailedOutline.trim();
+        const jsonStartTag = cleanedOutline.indexOf('```json');
+        if (jsonStartTag !== -1) {
+            const contentStart = jsonStartTag + '```json'.length;
+            const lastBackticks = cleanedOutline.lastIndexOf('```');
+            if (lastBackticks > contentStart) {
+                cleanedOutline = cleanedOutline.substring(contentStart, lastBackticks).trim();
+            }
+        } else {
+            const plainStart = cleanedOutline.indexOf('```');
+            if (plainStart !== -1 && plainStart < 10) {
+                const contentStart = cleanedOutline.indexOf('\n', plainStart) + 1;
+                const lastBackticks = cleanedOutline.lastIndexOf('```');
+                if (lastBackticks > contentStart) {
+                    cleanedOutline = cleanedOutline.substring(contentStart, lastBackticks).trim();
+                }
+            }
+        }
+
         // Validate JSON before saving
         try {
-            JSON.parse(detailedOutline);
+            JSON.parse(cleanedOutline);
         } catch {
             setMessage({ type: 'error', text: '❌ JSON không hợp lệ. Vui lòng kiểm tra lại.' });
             return;
         }
 
         try {
-            await updateDetailedOutline(detailedOutline);
+            await updateDetailedOutline(cleanedOutline);
+            setDetailedOutline(cleanedOutline); // Update local state with cleaned version
             isDirtyRef.current = false;
             setEditMode(false);
             setMessage({ type: 'success', text: '✓ Đã lưu thay đổi!' });
