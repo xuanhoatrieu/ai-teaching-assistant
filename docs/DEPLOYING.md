@@ -244,3 +244,5 @@ Nếu gặp lỗi, chạy lệnh này và gửi kết quả:
 ```bash
 docker compose ps && docker compose logs --tail=50
 ```
+## Tạo tài khoản admin
+docker compose exec postgres psql -U postgres -d ai_teaching -c "UPDATE users SET role = 'ADMIN' WHERE email = 'xuanhoaspt@gmail.com';"

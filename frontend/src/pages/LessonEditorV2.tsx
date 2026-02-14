@@ -34,6 +34,17 @@ function LessonEditorContent() {
     };
 
     const handleNextStep = async () => {
+        // Auto-save detailed outline when leaving Step 2
+        if (currentStep === 2 && lessonData?.detailedOutline) {
+            try {
+                await api.put(`/lessons/${lessonData.id}/outline/detailed`, {
+                    detailedOutline: lessonData.detailedOutline
+                });
+            } catch (err) {
+                console.error('Auto-save outline failed:', err);
+            }
+        }
+
         // Auto-save slide script when leaving Step 3
         if (currentStep === 3 && lessonData?.slideScript) {
             try {

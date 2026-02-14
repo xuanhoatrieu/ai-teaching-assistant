@@ -149,3 +149,5 @@ docker compose up -d
 │   └── default.conf        # Nginx proxy config
 └── datauser/               # User data (audio, images)
 ```
+## Tạo tài khoản admin
+docker compose exec postgres psql -U postgres -d ai_teaching -c "UPDATE users SET role = 'ADMIN' WHERE email = 'xuanhoaspt@gmail.com';"

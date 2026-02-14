@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api } from '../../lib/api';
 import { ModelSelector } from '../ModelSelector';
@@ -271,6 +271,41 @@ export function Step2BuildOutline() {
     const [detailedOutline, setDetailedOutline] = useState(lessonData?.detailedOutline || '');
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Track unsaved edits for auto-save on unmount
+    const isDirtyRef = useRef(false);
+    const outlineRef = useRef(detailedOutline);
+
+    // Keep refs in sync with state
+    useEffect(() => {
+        outlineRef.current = detailedOutline;
+    }, [detailedOutline]);
+
+    // Sync local state when lessonData changes (after generate/refresh)
+    useEffect(() => {
+        if (lessonData?.detailedOutline) {
+            setDetailedOutline(lessonData.detailedOutline);
+            isDirtyRef.current = false;
+        }
+    }, [lessonData?.detailedOutline]);
+
+    // Auto-save on unmount if there are unsaved edits
+    useEffect(() => {
+        return () => {
+            if (isDirtyRef.current && outlineRef.current) {
+                try {
+                    JSON.parse(outlineRef.current);
+                    // Fire-and-forget save
+                    api.put(`/lessons/${lessonId}/outline/detailed`, {
+                        detailedOutline: outlineRef.current,
+                    }).catch(err => console.error('Auto-save outline failed:', err));
+                } catch {
+                    // JSON invalid, skip auto-save
+                    console.warn('Outline JSON invalid, skipping auto-save');
+                }
+            }
+        };
+    }, [lessonId]);
+
     // Parse outline JSON for preview
     const parsedOutline = useMemo(() => {
         const content = lessonData?.detailedOutline || '';
@@ -283,16 +318,21 @@ export function Step2BuildOutline() {
 
         try {
             const response = await api.post(`/lessons/${lessonId}/outline/generate`);
-            const content = response.data.content || response.data.detailedOutline || response.data;
+            // Response: { detailedOutline: { content: "...", coveragePercent, warnings } }
+            const wrapper = response.data.detailedOutline || response.data;
+            const content = typeof wrapper === 'object' ? wrapper.content : wrapper;
             setDetailedOutline(typeof content === 'string' ? content : JSON.stringify(content, null, 2));
+            isDirtyRef.current = false;
             await refreshLessonData();
 
-            // Show coverage info if available
-            if (response.data.coveragePercent !== undefined) {
-                const warnings = response.data.warnings?.join(' ') || '';
+            // Show coverage info if available (data is inside the wrapper)
+            const coveragePercent = wrapper?.coveragePercent ?? response.data.coveragePercent;
+            const warnings = wrapper?.warnings ?? response.data.warnings;
+            if (coveragePercent !== undefined) {
+                const warningText = warnings?.join(' ') || '';
                 setMessage({
                     type: 'success',
-                    text: `✓ Đã tạo outline! Coverage: ${response.data.coveragePercent}% ${warnings}`
+                    text: `✓ Đã tạo outline! Coverage: ${coveragePercent}% ${warningText}`
                 });
             } else {
                 setMessage({ type: 'success', text: '✓ Đã tạo outline chi tiết thành công!' });
@@ -315,6 +355,7 @@ export function Step2BuildOutline() {
 
         try {
             await updateDetailedOutline(detailedOutline);
+            isDirtyRef.current = false;
             setEditMode(false);
             setMessage({ type: 'success', text: '✓ Đã lưu thay đổi!' });
         } catch (err: any) {
@@ -396,7 +437,10 @@ export function Step2BuildOutline() {
                             <textarea
                                 className="content-textarea json-editor"
                                 value={detailedOutline}
-                                onChange={(e) => setDetailedOutline(e.target.value)}
+                                onChange={(e) => {
+                                    setDetailedOutline(e.target.value);
+                                    isDirtyRef.current = true;
+                                }}
                                 rows={25}
                                 spellCheck={false}
                             />
