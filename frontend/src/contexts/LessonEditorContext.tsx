@@ -79,6 +79,32 @@ export function LessonEditorProvider({ lessonId, children }: LessonEditorProvide
         }
     }, [lessonId]);
 
+    // Refresh lesson data WITHOUT overwriting currentStep
+    // Use this when components need fresh data but should NOT reset navigation
+    const refreshLessonDataOnly = useCallback(async () => {
+        try {
+            const lessonRes = await api.get(`/lessons/${lessonId}`);
+            const outlineRes = await api.get(`/lessons/${lessonId}/outline`);
+
+            const data: LessonData = {
+                id: lessonRes.data.id,
+                title: lessonRes.data.title,
+                subjectId: lessonRes.data.subjectId,
+                outlineRaw: outlineRes.data.rawOutline,
+                detailedOutline: outlineRes.data.detailedOutline,
+                slideScript: lessonRes.data.slideScript,
+                currentStep: outlineRes.data.currentStep || 1,
+                status: lessonRes.data.status,
+            };
+
+            setLessonData(data);
+            // NOTE: Intentionally NOT calling setCurrentStep here
+            // to prevent navigation state from being overwritten
+        } catch (err: any) {
+            console.error('Error refreshing lesson data:', err);
+        }
+    }, [lessonId]);
+
     useEffect(() => {
         fetchLessonData();
     }, [fetchLessonData]);
@@ -86,7 +112,7 @@ export function LessonEditorProvider({ lessonId, children }: LessonEditorProvide
     const updateOutlineRaw = async (raw: string) => {
         try {
             await api.put(`/lessons/${lessonId}/outline/raw`, { rawOutline: raw });
-            await fetchLessonData();
+            await refreshLessonDataOnly();
         } catch (err: any) {
             throw new Error(err.response?.data?.message || 'Failed to save outline');
         }
@@ -95,7 +121,7 @@ export function LessonEditorProvider({ lessonId, children }: LessonEditorProvide
     const updateDetailedOutline = async (detailed: string) => {
         try {
             await api.put(`/lessons/${lessonId}/outline/detailed`, { detailedOutline: detailed });
-            await fetchLessonData();
+            await refreshLessonDataOnly();
         } catch (err: any) {
             throw new Error(err.response?.data?.message || 'Failed to save detailed outline');
         }
@@ -104,7 +130,7 @@ export function LessonEditorProvider({ lessonId, children }: LessonEditorProvide
     const updateSlideScript = async (script: string) => {
         try {
             await api.put(`/lessons/${lessonId}/slides/script`, { slideScript: script });
-            await fetchLessonData();
+            await refreshLessonDataOnly();
         } catch (err: any) {
             throw new Error(err.response?.data?.message || 'Failed to save slide script');
         }
@@ -118,7 +144,7 @@ export function LessonEditorProvider({ lessonId, children }: LessonEditorProvide
         currentStep,
         stepMountCounter,
         setCurrentStep,
-        refreshLessonData: fetchLessonData,
+        refreshLessonData: refreshLessonDataOnly,
         updateOutlineRaw,
         updateDetailedOutline,
         updateSlideScript,

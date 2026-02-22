@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-06T10:10:00+07:00"
+        "updated_at": "2026-02-22T22:45:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -260,6 +260,7 @@
         ],
         "lessons": [
             "GET /lessons/:id",
+            "PUT /lessons/:id",
             "DELETE /lessons/:id"
         ],
         "outline": [
@@ -421,6 +422,11 @@
             "name": "Prompt System",
             "status": "implemented",
             "description": "Database-driven prompts with seedV2() sync. PromptComposer combines Role + Task prompts."
+        },
+        {
+            "name": "Lesson Management",
+            "status": "implemented",
+            "description": "Edit (rename) and delete lessons with confirmation modals. Delete cascades to slides, audio, questions."
         }
     ],
     "question_types": {
@@ -499,7 +505,9 @@
             "🐳 Frontend nginx proxy: Add location /api/ { proxy_pass http://backend:3001/; } for API routing",
             "🐳 Watchtower: Fails on older Docker (API version 1.25 vs 1.44) - remove and use manual docker compose pull",
             "🚀 GHCR login: echo 'PAT_TOKEN' | docker login ghcr.io -u username --password-stdin",
-            "🚀 GitHub Actions: ghcr.io/${{ github.repository_owner }}/project/service:branch format for image tags"
+            "🚀 GitHub Actions: ghcr.io/${{ github.repository_owner }}/project/service:branch format for image tags",
+            "⭐ refreshLessonDataOnly(): Refresh lesson data WITHOUT overwriting currentStep - prevents navigation resets when Step 3+ calls refresh",
+            "⭐ CSS class scoping: .delete-btn in Subjects.css uses position:absolute (for subject cards). Must scope with .subject-card .delete-btn to avoid overriding lesson card .delete-btn"
         ],
         "conventions": [
             "API routes: /lessons/:id/resource",

@@ -17,6 +17,18 @@ export function SubjectDetailPage() {
     const [showModal, setShowModal] = useState(false);
     const [newTitle, setNewTitle] = useState('');
 
+    // Edit lesson modal
+    const [showEditLessonModal, setShowEditLessonModal] = useState(false);
+    const [editLessonId, setEditLessonId] = useState<string | null>(null);
+    const [editLessonTitle, setEditLessonTitle] = useState('');
+    const [isEditingSaving, setIsEditingSaving] = useState(false);
+
+    // Delete lesson confirmation modal
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deleteLessonId, setDeleteLessonId] = useState<string | null>(null);
+    const [deleteLessonTitle, setDeleteLessonTitle] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+
     // Edit subject modal
     const [showEditModal, setShowEditModal] = useState(false);
     const [editForm, setEditForm] = useState<CreateSubjectData>({
@@ -62,14 +74,49 @@ export function SubjectDetailPage() {
         }
     };
 
-    const handleDeleteLesson = async (lessonId: string) => {
-        if (!confirm('Delete this lesson?')) return;
+    // ===== Edit Lesson =====
+    const openEditLessonModal = (lesson: Lesson) => {
+        setEditLessonId(lesson.id);
+        setEditLessonTitle(lesson.title);
+        setShowEditLessonModal(true);
+    };
 
+    const handleSaveEditLesson = async () => {
+        if (!editLessonId || !editLessonTitle.trim()) return;
+        setIsEditingSaving(true);
         try {
-            await lessonsApi.delete(lessonId);
+            await lessonsApi.update(editLessonId, { title: editLessonTitle.trim() });
+            setShowEditLessonModal(false);
+            setEditLessonId(null);
+            setEditLessonTitle('');
             fetchData();
         } catch (err: any) {
-            setError(err.response?.data?.message || 'Failed to delete lesson');
+            setError(err.response?.data?.message || 'Không thể cập nhật bài giảng');
+        } finally {
+            setIsEditingSaving(false);
+        }
+    };
+
+    // ===== Delete Lesson =====
+    const openDeleteModal = (lesson: Lesson) => {
+        setDeleteLessonId(lesson.id);
+        setDeleteLessonTitle(lesson.title);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDeleteLesson = async () => {
+        if (!deleteLessonId) return;
+        setIsDeleting(true);
+        try {
+            await lessonsApi.delete(deleteLessonId);
+            setShowDeleteModal(false);
+            setDeleteLessonId(null);
+            setDeleteLessonTitle('');
+            fetchData();
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Không thể xóa bài giảng');
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -184,17 +231,27 @@ export function SubjectDetailPage() {
                                     <div className="lesson-meta">
                                         {getStatusBadge(lesson.status)}
                                         <span className="created-date">
-                                            {new Date(lesson.createdAt).toLocaleDateString()}
+                                            {new Date(lesson.createdAt).toLocaleDateString('vi-VN')}
                                         </span>
                                     </div>
                                 </div>
                             </Link>
-                            <button
-                                className="delete-btn"
-                                onClick={() => handleDeleteLesson(lesson.id)}
-                            >
-                                🗑️
-                            </button>
+                            <div className="lesson-actions">
+                                <button
+                                    className="edit-lesson-btn"
+                                    onClick={(e) => { e.preventDefault(); openEditLessonModal(lesson); }}
+                                    title="Đổi tên bài giảng"
+                                >
+                                    ✏️
+                                </button>
+                                <button
+                                    className="delete-btn"
+                                    onClick={(e) => { e.preventDefault(); openDeleteModal(lesson); }}
+                                    title="Xóa bài giảng"
+                                >
+                                    🗑️
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -326,6 +383,65 @@ export function SubjectDetailPage() {
                             </button>
                             <button className="primary-btn" onClick={handleUpdateSubject} disabled={!editForm.name.trim()}>
                                 Lưu thay đổi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Lesson Modal */}
+            {showEditLessonModal && (
+                <div className="modal-overlay" onClick={() => setShowEditLessonModal(false)}>
+                    <div className="modal" onClick={(e) => e.stopPropagation()}>
+                        <h2>✏️ Đổi tên bài giảng</h2>
+                        <div className="form-group">
+                            <label>Tên bài giảng</label>
+                            <input
+                                type="text"
+                                value={editLessonTitle}
+                                onChange={(e) => setEditLessonTitle(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSaveEditLesson()}
+                                autoFocus
+                            />
+                        </div>
+                        <div className="modal-actions">
+                            <button className="secondary-btn" onClick={() => setShowEditLessonModal(false)}>
+                                Hủy
+                            </button>
+                            <button
+                                className="primary-btn"
+                                onClick={handleSaveEditLesson}
+                                disabled={!editLessonTitle.trim() || isEditingSaving}
+                            >
+                                {isEditingSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Delete Lesson Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="modal-overlay" onClick={() => setShowDeleteModal(false)}>
+                    <div className="modal delete-confirm-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="delete-confirm-icon">⚠️</div>
+                        <h2>Xóa bài giảng?</h2>
+                        <p className="delete-confirm-text">
+                            Bạn có chắc muốn xóa bài giảng <strong>"{deleteLessonTitle}"</strong>?
+                        </p>
+                        <p className="delete-confirm-warning">
+                            Tất cả dữ liệu liên quan (outline, slides, audio, câu hỏi) sẽ bị xóa vĩnh viễn.
+                        </p>
+                        <div className="modal-actions">
+                            <button className="secondary-btn" onClick={() => setShowDeleteModal(false)}>
+                                Hủy
+                            </button>
+                            <button
+                                className="danger-btn"
+                                onClick={confirmDeleteLesson}
+                                disabled={isDeleting}
+                            >
+                                {isDeleting ? 'Đang xóa...' : '🗑️ Xóa vĩnh viễn'}
                             </button>
                         </div>
                     </div>

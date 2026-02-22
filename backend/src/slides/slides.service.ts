@@ -189,7 +189,99 @@ export class SlidesService {
             }
         }
 
+        // Sync speaker notes to existing SlideAudio records (preserve audio files)
+        try {
+            await this.syncSpeakerNotesToSlideAudios(lessonId, slideScript);
+        } catch (syncError) {
+            this.logger.warn(`⚠️ Failed to sync speaker notes to SlideAudio: ${syncError.message}`);
+        }
+
         return updatedLesson;
+    }
+
+    /**
+     * Sync speaker notes from slideScript JSON to existing SlideAudio records.
+     * Only updates records where the speaker note has actually changed.
+     * Resets audio status to 'pending' for changed notes (audio is outdated).
+     * Does NOT delete/recreate records — preserves existing audio files.
+     */
+    private async syncSpeakerNotesToSlideAudios(lessonId: string, slideScript: string) {
+        // Check if SlideAudio records exist for this lesson
+        const existingAudios = await this.prisma.slideAudio.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        if (existingAudios.length === 0) {
+            this.logger.debug(`No SlideAudio records for lesson ${lessonId}, skipping sync`);
+            return;
+        }
+
+        // Parse speaker notes from the new slideScript
+        const parsedNotes = this.parseSpeakerNotesFromSlideScript(slideScript);
+        if (parsedNotes.length === 0) {
+            this.logger.warn(`Could not parse speaker notes from slideScript for lesson ${lessonId}`);
+            return;
+        }
+
+        let updatedCount = 0;
+        for (const audio of existingAudios) {
+            // Find matching parsed note by slideIndex
+            const parsed = parsedNotes.find(p => p.slideIndex === audio.slideIndex);
+            if (!parsed) continue;
+
+            // Only update if the note actually changed
+            if (parsed.speakerNote !== audio.speakerNote) {
+                await this.prisma.slideAudio.update({
+                    where: { id: audio.id },
+                    data: {
+                        speakerNote: parsed.speakerNote,
+                        // Reset status to pending since note changed (audio is now outdated)
+                        status: 'pending',
+                    },
+                });
+                updatedCount++;
+            }
+        }
+
+        if (updatedCount > 0) {
+            this.logger.log(`✅ Synced ${updatedCount} speaker notes to SlideAudio for lesson ${lessonId}`);
+        }
+    }
+
+    /**
+     * Parse speaker notes from slideScript JSON string.
+     * Returns array of { slideIndex, speakerNote } for matching.
+     */
+    private parseSpeakerNotesFromSlideScript(slideScript: string): Array<{ slideIndex: number; speakerNote: string }> {
+        try {
+            // Extract JSON from markdown code block if present
+            let jsonStr = slideScript;
+            const jsonStartTag = slideScript.indexOf('```json');
+            if (jsonStartTag !== -1) {
+                const contentStart = jsonStartTag + '```json'.length;
+                const lastBackticks = slideScript.lastIndexOf('```');
+                if (lastBackticks > contentStart) {
+                    jsonStr = slideScript.substring(contentStart, lastBackticks);
+                }
+            }
+
+            const data = JSON.parse(jsonStr.trim());
+            const slidesArray = data.slides || data;
+
+            if (!Array.isArray(slidesArray)) {
+                return [];
+            }
+
+            return slidesArray
+                .filter((s: any) => s.speakerNote !== undefined)
+                .map((s: any) => ({
+                    slideIndex: s.slideIndex ?? 0,
+                    speakerNote: s.speakerNote || '',
+                }));
+        } catch {
+            return [];
+        }
     }
 
     /**

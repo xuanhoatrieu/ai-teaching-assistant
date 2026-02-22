@@ -31,7 +31,7 @@ interface SlideAudio {
 }
 
 export function Step4GenerateAudio() {
-    const { lessonId, lessonData } = useLessonEditor();
+    const { lessonId, lessonData, refreshLessonData } = useLessonEditor();
     const [slideAudios, setSlideAudios] = useState<SlideAudio[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
@@ -46,10 +46,11 @@ export function Step4GenerateAudio() {
     const shouldStopGenerating = useRef(false);
 
     useEffect(() => {
-        if (lessonData?.id && lessonData?.slideScript) {
+        if (lessonData?.id) {
+            refreshLessonData();  // Pick up slideScript changes from Step 3
             loadSlideAudios();
         }
-    }, [lessonData?.id, lessonData?.slideScript]);
+    }, [lessonData?.id]);
 
     // Normalize status from backend (lowercase) to frontend (uppercase)
     const normalizeStatus = (status: string): 'PENDING' | 'GENERATING' | 'COMPLETED' | 'ERROR' => {
@@ -343,8 +344,30 @@ export function Step4GenerateAudio() {
         }
     };
 
+    // Delete ALL audios
+    const deleteAllAudios = async () => {
+        if (!confirm('Xóa TẤT CẢ audio đã tạo? Hành động này không thể hoàn tác.')) return;
+
+        try {
+            // Stop any playing audio
+            if (currentlyPlaying !== null) {
+                stopAudio(currentlyPlaying);
+            }
+
+            await api.delete(`/lessons/${lessonId}/slide-audios/delete-all`);
+
+            // Reload the slide audios to get fresh data
+            await loadSlideAudios();
+        } catch (error) {
+            console.error('Error deleting all audios:', error);
+            alert('Lỗi khi xóa audio');
+        }
+    };
+
     const completedCount = slideAudios.filter(sa => sa.status === 'COMPLETED').length;
     const hasAnyAudio = completedCount > 0;
+    // Detect stale audio: status is PENDING but audioUrl still exists (note changed after audio was generated)
+    const staleAudioCount = slideAudios.filter(sa => sa.status === 'PENDING' && sa.audioUrl).length;
 
     if (isLoading) {
         return (
@@ -400,6 +423,14 @@ export function Step4GenerateAudio() {
                     </button>
                 )}
             </div>
+
+            {/* Stale Audio Warning Banner */}
+            {staleAudioCount > 0 && (
+                <div className="stale-audio-warning">
+                    ⚠️ <strong>{staleAudioCount} slide</strong> có lời giảng đã được sửa nhưng audio chưa cập nhật.
+                    Nhấn <strong>"🎙️ Tạo Audio"</strong> để tạo lại, hoặc <strong>"🗑️ Xóa tất cả audio"</strong> để bắt đầu lại.
+                </div>
+            )}
 
             {/* TTS Configuration */}
             <TTSSelector onChange={(config) => {
@@ -477,8 +508,17 @@ export function Step4GenerateAudio() {
                                         )}
                                     </td>
                                 </tr>
+                                {/* Stale Audio Warning Row */}
+                                {slide.status === 'PENDING' && slide.audioUrl && (
+                                    <tr key={`${slide.id}-stale`} className="stale-row">
+                                        <td></td>
+                                        <td colSpan={2}>
+                                            <div className="stale-message">⚠️ Lời giảng đã thay đổi — audio cũ có thể không khớp. Nhấn "🎙️ Tạo Audio" để cập nhật.</div>
+                                        </td>
+                                    </tr>
+                                )}
                                 {/* Playback Row */}
-                                {slide.status === 'COMPLETED' && slide.audioUrl && (
+                                {(slide.status === 'COMPLETED' || (slide.status === 'PENDING' && slide.audioUrl)) && (
                                     <tr key={`${slide.id}-playback`} className="playback-row">
                                         <td></td>
                                         <td colSpan={2}>
@@ -539,11 +579,14 @@ export function Step4GenerateAudio() {
                 </table>
             </div>
 
-            {/* Download All Button */}
+            {/* Bottom Actions: Download All & Delete All */}
             {hasAnyAudio && (
                 <div className="bottom-actions">
                     <button className="btn-download-all" onClick={downloadAllAudios}>
                         📥 Tải Tất Cả Audio (ZIP)
+                    </button>
+                    <button className="btn-delete-all" onClick={deleteAllAudios}>
+                        🗑️ Xóa Tất Cả Audio
                     </button>
                 </div>
             )}

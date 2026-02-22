@@ -76,6 +76,12 @@ export class SlideAudioController {
         return this.slideAudioService.syncSpeakerNotesToSlideScript(lessonId);
     }
 
+    // Delete ALL audios for a lesson (reset all to pending)
+    @Delete('delete-all')
+    async deleteAllAudios(@Param('lessonId') lessonId: string) {
+        return this.slideAudioService.deleteAllSlideAudios(lessonId);
+    }
+
     // Download all audios as ZIP
     @Get('download-all')
     async downloadAllAudios(

@@ -109,6 +109,7 @@ function SlideScriptPreview({ script }: { script: ParsedSlideScript }) {
 
 export function Step3DesignSlides() {
     const { lessonId, lessonData, updateSlideScript, refreshLessonData } = useLessonEditor();
+
     const [isGenerating, setIsGenerating] = useState(false);
     const [isGeneratingImages, setIsGeneratingImages] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -128,8 +129,16 @@ export function Step3DesignSlides() {
     useEffect(() => {
         if (lessonId) {
             fetchSlides();
+            refreshLessonData();  // Ensure fresh slideScript from backend
         }
     }, [lessonId]);
+
+    // Sync local slideScript state when lessonData changes (e.g. after Step 4 edits)
+    useEffect(() => {
+        if (lessonData?.slideScript && !editMode) {
+            setSlideScript(lessonData.slideScript);
+        }
+    }, [lessonData?.slideScript]);
 
     const fetchSlides = async () => {
         try {

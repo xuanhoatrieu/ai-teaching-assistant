@@ -530,6 +530,57 @@ export class SlideAudioService {
         return updated;
     }
 
+    // Delete ALL audios for a lesson (reset all to pending)
+    async deleteAllSlideAudios(lessonId: string) {
+        const slideAudios = await this.prisma.slideAudio.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        if (slideAudios.length === 0) {
+            throw new NotFoundException(`No slide audios found for lesson ${lessonId}`);
+        }
+
+        const audioDir = this.getAudioDir(lessonId);
+        let deletedFiles = 0;
+
+        // Delete audio files from disk
+        for (const audio of slideAudios) {
+            if (audio.audioFileName) {
+                const filePath = path.join(audioDir, audio.audioFileName);
+                try {
+                    if (fs.existsSync(filePath)) {
+                        fs.unlinkSync(filePath);
+                        deletedFiles++;
+                    }
+                } catch (err) {
+                    this.logger.warn(`Failed to delete audio file: ${filePath}`, err);
+                }
+            }
+        }
+
+        // Reset all records to pending
+        await this.prisma.slideAudio.updateMany({
+            where: { lessonId },
+            data: {
+                status: 'pending',
+                audioFileName: null,
+                audioUrl: null,
+                audioDuration: null,
+                voiceId: null,
+                errorMessage: null,
+            },
+        });
+
+        this.logger.log(`Deleted ${deletedFiles} audio files and reset ${slideAudios.length} records for lesson ${lessonId}`);
+
+        return {
+            message: `Đã xóa ${deletedFiles} file audio`,
+            deletedFiles,
+            totalRecords: slideAudios.length,
+        };
+    }
+
     // Update speaker note for a slide and sync to slideScript
     async updateSpeakerNote(lessonId: string, slideIndex: number, newNote: string) {
         const slideAudio = await this.prisma.slideAudio.findUnique({

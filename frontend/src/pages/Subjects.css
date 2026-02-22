@@ -152,7 +152,7 @@
     color: #64748b;
 }
 
-.delete-btn {
+.subject-card .delete-btn {
     position: absolute;
     top: 16px;
     right: 16px;

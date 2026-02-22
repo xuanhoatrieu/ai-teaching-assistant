@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-02-14] - Outline Fix & UI Polish
+
+### Fixed
+- **Outline Edit JSON Error**
+  - Fixed `handleGenerate` response parsing to correctly extract `wrapper.content` from nested controller response
+  - Added `useEffect` to sync local `detailedOutline` state when `lessonData` refreshes
+  - Added auto-clean for markdown ` ```json ` wrappers before `JSON.parse` in `handleSaveEdit`
+  - Added auto-save on component unmount via `useRef` + cleanup `useEffect`
+
+- **Nginx 504 Gateway Timeout on AI Generation**
+  - Increased `proxy_read_timeout`, `proxy_connect_timeout`, `proxy_send_timeout` to 180s in `nginx.conf`
+  - AI generation requests (outline, slides) can take 60-120s, default 60s was too short
+
+- **Auto-save Outline on Step Navigation**
+  - `handleNextStep` in `LessonEditorV2.tsx` now saves `detailedOutline` before moving from Step 2 to Step 3
+  - Matches existing auto-save pattern for slide script (Step 3 → Step 4)
+
+### Changed
+- Browser title: `frontend` → `AI Teaching Assistant`
+- Favicon: Replaced default Vite SVG with custom graduation cap + AI circuit icon
+- Added `<meta description>` for SEO
+
+---
+
 ## [2026-02-05] - Production Deployment 🚀
 
 ### Added
