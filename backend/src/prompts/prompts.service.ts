@@ -464,6 +464,14 @@ Chỉ trả về JSON.`,
 - Thêm thông tin, số liệu, ví dụ không được đề cập trong bài giảng
 - Suy diễn hoặc mở rộng kiến thức ngoài phạm vi bài học
 - Tạo câu hỏi về kiến thức nền tảng chung không được giảng dạy
+- Sử dụng cụm từ trích dẫn/tham chiếu ngược đến bài giảng trong câu hỏi, đáp án hoặc giải thích.
+  CẤM HOÀN TOÀN các cụm từ: "Theo bài giảng", "Trong bài học", "Được nhắc đến trong",
+  "Bài giảng nhấn mạnh", "Giảng viên hướng dẫn", "Trong phần X của bài", "Slide X trình bày",
+  "Như đã học", "Được đề cập", "Theo nội dung bài"
+  → Câu hỏi phải đứng ĐỘC LẬP như một câu hỏi kiểm tra kiến thức thông thường.
+  Ví dụ:
+    ❌ SAI: "Theo bài giảng, Python là ngôn ngữ thuộc loại nào?"
+    ✅ ĐÚNG: "Python là ngôn ngữ lập trình thuộc loại nào?"
 
 ### ✅ CHỈ ĐƯỢC PHÉP:
 - Tạo câu hỏi DỰA TRÊN NỘI DUNG CÓ TRONG slide script

@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { CLIProxyProvider } from '../ai/cliproxy.provider';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Task types for model configuration - must match Prisma TaskType enum
 export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'QUESTIONS', 'IMAGE', 'TTS'] as const;
@@ -163,7 +162,36 @@ export class ModelConfigService {
     }
 
     /**
-     * Discover available Gemini models using user's API key
+     * Known model display names and task assignments
+     * Used to enrich dynamically discovered models with friendly names
+     */
+    private readonly KNOWN_GEMINI_MODELS: Record<string, { displayName: string; description: string; supportedTasks: string[] }> = {
+        'gemini-2.5-pro': { displayName: 'Gemini 2.5 Pro ⭐', description: 'Best for complex reasoning and content creation', supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'] },
+        'gemini-2.5-flash': { displayName: 'Gemini 2.5 Flash', description: 'Fast and efficient for most tasks', supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'] },
+        'gemini-2.0-flash': { displayName: 'Gemini 2.0 Flash', description: 'Previous generation, still powerful', supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'] },
+        'gemini-1.5-pro': { displayName: 'Gemini 1.5 Pro', description: 'Stable long-context model', supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'] },
+        'gemini-1.5-flash': { displayName: 'Gemini 1.5 Flash', description: 'Fast and cost-effective', supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'] },
+        'gemini-2.0-flash-exp-image-generation': { displayName: 'Gemini 2.0 Flash Image Gen ⭐', description: 'Native image generation', supportedTasks: ['IMAGE'] },
+        'imagen-3.0-generate-002': { displayName: 'Imagen 3.0', description: 'High quality image generation', supportedTasks: ['IMAGE'] },
+        'gemini-2.5-flash-preview-tts': { displayName: 'Gemini 2.5 Flash TTS ⭐', description: 'Fast TTS', supportedTasks: ['TTS'] },
+        'gemini-2.5-pro-preview-tts': { displayName: 'Gemini 2.5 Pro TTS', description: 'High quality TTS', supportedTasks: ['TTS'] },
+    };
+
+    /**
+     * Classify a Gemini model ID into supported tasks
+     */
+    private classifyGeminiModel(modelId: string): string[] {
+        const id = modelId.toLowerCase();
+        if (id.includes('tts')) return ['TTS'];
+        if (id.includes('image') || id.includes('imagen')) return ['IMAGE'];
+        if (id.includes('embedding') || id.includes('aqa') || id.includes('retrieval')) return []; // skip non-generative
+        // Default: text generation tasks
+        return ['OUTLINE', 'SLIDES', 'QUESTIONS'];
+    }
+
+    /**
+     * Discover available Gemini models dynamically using the API
+     * Falls back to known models list if API call fails
      */
     async discoverGeminiModels(userId: string): Promise<AvailableModel[]> {
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
@@ -173,67 +201,60 @@ export class ModelConfigService {
         }
 
         try {
-            const genAI = new GoogleGenerativeAI(apiKey);
+            // Dynamically fetch models from Gemini API
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=100`
+            );
 
-            // Gemini 2.5 models - all capabilities unified under Gemini API
-            const knownModels: AvailableModel[] = [
-                // Content generation models
-                {
-                    name: 'gemini-2.5-pro',
-                    displayName: 'Gemini 2.5 Pro ⭐',
-                    description: 'Best for complex reasoning and content creation',
-                    supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'],
-                },
-                {
-                    name: 'gemini-2.5-flash',
-                    displayName: 'Gemini 2.5 Flash',
-                    description: 'Fast and efficient for most tasks',
-                    supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'],
-                },
-                {
-                    name: 'gemini-2.0-flash',
-                    displayName: 'Gemini 2.0 Flash',
-                    description: 'Previous generation, still powerful',
-                    supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'],
-                },
-                {
-                    name: 'gemini-1.5-pro',
-                    displayName: 'Gemini 1.5 Pro',
-                    description: 'Stable long-context model',
-                    supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'],
-                },
-                {
-                    name: 'gemini-2.0-flash',
-                    displayName: 'Gemini 1.5 Flash',
-                    description: 'Fast and cost-effective',
-                    supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'],
-                },
-                // Image generation models
-                {
-                    name: 'gemini-2.0-flash-exp-image-generation',
-                    displayName: 'Gemini 2.0 Flash Image Gen ⭐',
-                    description: 'Native image generation with Gemini 2.0 Flash',
-                    supportedTasks: ['IMAGE'],
-                },
-                {
-                    name: 'imagen-3.0-generate-002',
-                    displayName: 'Imagen 3.0',
-                    description: 'High quality dedicated image generation',
-                    supportedTasks: ['IMAGE'],
-                },
-                // TTS models - Gemini (2 models)
-                {
-                    name: 'gemini-2.5-flash-preview-tts',
-                    displayName: 'Gemini 2.5 Flash TTS ⭐',
-                    description: 'Fast TTS - Gemini 2.5',
-                    supportedTasks: ['TTS'],
-                },
-                {
-                    name: 'gemini-2.5-pro-preview-tts',
-                    displayName: 'Gemini 2.5 Pro TTS',
-                    description: 'High quality TTS - Gemini 2.5',
-                    supportedTasks: ['TTS'],
-                },
+            const discoveredModels: AvailableModel[] = [];
+            const seenNames = new Set<string>();
+
+            if (response.ok) {
+                const data = await response.json();
+                const apiModels = data.models || [];
+
+                for (const model of apiModels) {
+                    // model.name is like "models/gemini-2.5-pro" — extract the ID
+                    const modelId = (model.name || '').replace('models/', '');
+                    if (!modelId || seenNames.has(modelId)) continue;
+
+                    // Classify tasks
+                    const supportedTasks = this.classifyGeminiModel(modelId);
+                    if (supportedTasks.length === 0) continue; // Skip embeddings etc.
+
+                    // Use known display name if available, otherwise format from ID
+                    const known = this.KNOWN_GEMINI_MODELS[modelId];
+                    discoveredModels.push({
+                        name: modelId,
+                        displayName: known?.displayName || this.formatModelDisplayName(modelId),
+                        description: known?.description || model.description || model.displayName || '',
+                        supportedTasks: known?.supportedTasks || supportedTasks,
+                    });
+                    seenNames.add(modelId);
+                }
+
+                this.logger.log(`Discovered ${discoveredModels.length} Gemini models from API`);
+            } else {
+                this.logger.warn(`Gemini API listModels returned ${response.status}, falling back to known models`);
+            }
+
+            // If API returned models, use them; otherwise fall back to known list
+            if (discoveredModels.length > 0) {
+                // Add known models that weren't in the API response (like imagen)
+                for (const [name, info] of Object.entries(this.KNOWN_GEMINI_MODELS)) {
+                    if (!seenNames.has(name)) {
+                        discoveredModels.push({ name, ...info });
+                    }
+                }
+            } else {
+                // Fallback: use the static known models list
+                for (const [name, info] of Object.entries(this.KNOWN_GEMINI_MODELS)) {
+                    discoveredModels.push({ name, ...info });
+                }
+            }
+
+            // Always add TTS voices (static, not from API)
+            discoveredModels.push(
                 // Gemini TTS Voices - Full 30 voices
                 { name: 'gemini-voice:Zephyr', displayName: 'Zephyr (Nữ - Tươi sáng)', description: 'Giọng nữ tươi sáng', supportedTasks: ['TTS_VOICE'] },
                 { name: 'gemini-voice:Puck', displayName: 'Puck (Nam - Rộn ràng)', description: 'Giọng nam rộn ràng', supportedTasks: ['TTS_VOICE'] },
@@ -266,31 +287,12 @@ export class ModelConfigService {
                 { name: 'gemini-voice:Sadaltager', displayName: 'Sadaltager (Hiểu biết)', description: 'Giọng thông minh', supportedTasks: ['TTS_VOICE'] },
                 { name: 'gemini-voice:Sulafat', displayName: 'Sulafat (Ấm áp)', description: 'Giọng ấm áp', supportedTasks: ['TTS_VOICE'] },
                 // Vbee TTS Voices - Sample voices
-                {
-                    name: 'vbee:hn_female_thutrang_news_48k-1',
-                    displayName: 'Vbee - Thu Trang (Nữ HN)',
-                    description: 'Giọng nữ Hà Nội - Vbee TTS',
-                    supportedTasks: ['TTS_VOICE'],
-                },
-                {
-                    name: 'vbee:sg_male_minhhoang_news_48k-1',
-                    displayName: 'Vbee - Minh Hoàng (Nam SG)',
-                    description: 'Giọng nam Sài Gòn - Vbee TTS',
-                    supportedTasks: ['TTS_VOICE'],
-                },
-                {
-                    name: 'vbee:hn_female_maingoc_news_48k-1',
-                    displayName: 'Vbee - Mai Ngọc (Nữ HN)',
-                    description: 'Giọng nữ Hà Nội - Vbee TTS',
-                    supportedTasks: ['TTS_VOICE'],
-                },
-            ];
+                { name: 'vbee:hn_female_thutrang_news_48k-1', displayName: 'Vbee - Thu Trang (Nữ HN)', description: 'Giọng nữ Hà Nội - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
+                { name: 'vbee:sg_male_minhhoang_news_48k-1', displayName: 'Vbee - Minh Hoàng (Nam SG)', description: 'Giọng nam Sài Gòn - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
+                { name: 'vbee:hn_female_maingoc_news_48k-1', displayName: 'Vbee - Mai Ngọc (Nữ HN)', description: 'Giọng nữ Hà Nội - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
+            );
 
-            // NOTE: Removed API verification call (generateContent('Hello')) for performance
-            // API key validation is done when actually using the model
-
-            this.logger.log(`Returning ${knownModels.length} known Gemini models for user ${userId}`);
-            return knownModels;
+            return discoveredModels;
         } catch (error: any) {
             this.logger.error(`Failed to discover models: ${error.message}`);
             throw new Error(`Failed to get models: ${error.message}`);
@@ -298,8 +300,56 @@ export class ModelConfigService {
     }
 
     /**
+     * Format a model ID into a human-readable display name
+     * e.g. "gemini-2.5-ultra-latest" → "Gemini 2.5 Ultra Latest"
+     */
+    private formatModelDisplayName(modelId: string): string {
+        return modelId
+            .split(/[-_]/)
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+    }
+
+    /**
      * Discover available models from CLIProxy
      * Fetches from /v1/models endpoint and categorizes by task type
+     */
+    /**
+     * Classify a CLIProxy model ID into supported tasks
+     * Default: all models get text tasks unless they are specifically image/tts/embedding
+     */
+    private classifyCLIProxyModel(modelId: string): string[] {
+        const id = modelId.toLowerCase();
+
+        // Skip non-generative models
+        if (id.includes('embedding') || id.includes('retrieval') || id.includes('moderation')) {
+            return [];
+        }
+
+        const tasks: string[] = [];
+
+        // Image-specific models
+        if (id.includes('image') || id.includes('imagen') || id.includes('dall-e')) {
+            tasks.push('IMAGE');
+        }
+
+        // TTS-specific models
+        if (id.includes('tts') || id.includes('speech')) {
+            tasks.push('TTS');
+        }
+
+        // If not specifically image/tts, or if it's a general-purpose model, assign text tasks
+        if (tasks.length === 0) {
+            tasks.push('OUTLINE', 'SLIDES', 'QUESTIONS');
+        }
+
+        return tasks;
+    }
+
+    /**
+     * Discover available models from CLIProxy
+     * Fetches from /v1/models endpoint and categorizes by task type
+     * All models are included by default (GPT, Claude, Gemini, etc.)
      */
     async discoverCLIProxyModels(): Promise<AvailableModel[]> {
         if (!this.cliproxy) {
@@ -317,29 +367,11 @@ export class ModelConfigService {
 
             for (const model of modelList) {
                 const modelId = model.id;
-                const supportedTasks: string[] = [];
+                const supportedTasks = this.classifyCLIProxyModel(modelId);
 
-                // Categorize models based on their capabilities
-                if (modelId.includes('flash') || modelId.includes('pro')) {
-                    if (!modelId.includes('image') && !modelId.includes('tts')) {
-                        supportedTasks.push('OUTLINE', 'SLIDES', 'QUESTIONS');
-                    }
-                }
-                if (modelId.includes('image') || modelId.includes('imagen')) {
-                    supportedTasks.push('IMAGE');
-                }
-                if (modelId.includes('tts')) {
-                    supportedTasks.push('TTS');
-                }
-
-                // Skip if no supported tasks (e.g., embeddings)
+                // Skip non-generative models (embeddings, moderation)
                 if (supportedTasks.length === 0) {
-                    // Default to text tasks for generic models
-                    if (modelId.includes('gemini') || modelId.includes('claude')) {
-                        supportedTasks.push('OUTLINE', 'SLIDES', 'QUESTIONS');
-                    } else {
-                        continue;
-                    }
+                    continue;
                 }
 
                 models.push({
@@ -350,7 +382,7 @@ export class ModelConfigService {
                 });
             }
 
-            this.logger.log(`Discovered ${models.length} CLIProxy models`);
+            this.logger.log(`Discovered ${models.length} CLIProxy models (from ${modelList.length} total)`);
             return models;
         } catch (error: any) {
             this.logger.error(`Failed to discover CLIProxy models: ${error.message}`);
