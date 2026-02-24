@@ -244,11 +244,15 @@ code {
     background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
     border: 1px solid rgba(59, 130, 246, 0.2);
     border-radius: 16px;
-    width: 100%;
-    max-width: 600px;
+    width: 95vw;
     max-height: 90vh;
     overflow-y: auto;
     box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content.prompt-modal {
+    width: 50vw !important;
+    max-width: none !important;
 }
 
 .modal-header {
@@ -327,7 +331,10 @@ code {
 
 .form-group textarea {
     resize: vertical;
-    min-height: 100px;
+    min-height: 400px;
+    font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
 }
 
 .form-group small {

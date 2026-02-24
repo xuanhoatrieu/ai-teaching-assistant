@@ -285,6 +285,173 @@ export class SlidesService {
     }
 
     /**
+     * Generate speaker notes for all slides using AI (Step 4)
+     * Uses the focused 'slides.speaker-notes' prompt with slide content as input.
+     */
+    async generateSpeakerNotes(lessonId: string, userId: string) {
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+            include: { subject: true },
+        });
+
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        // Get slides from DB (created by Step 3)
+        const slides = await this.prisma.slide.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        if (slides.length === 0) {
+            throw new BadRequestException('No slides found. Complete Step 3 first.');
+        }
+
+        // Build slides_content string for the prompt
+        const slidesContent = slides.map(s => {
+            let content = '';
+            if (s.content) {
+                try {
+                    const parsed = JSON.parse(s.content);
+                    content = Array.isArray(parsed) ? parsed.join(', ') : s.content;
+                } catch {
+                    // Content is plain text, not JSON
+                    content = s.content;
+                }
+            }
+            return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual: ${s.visualIdea}` : ''}`;
+        }).join('\n\n');
+
+        // Get API key
+        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+        if (!apiKey) {
+            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
+        }
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
+
+        // Build prompt using the new focused speaker-notes prompt
+        const prompt = await this.promptComposer.buildFullPrompt(
+            lesson.subjectId,
+            'slides.speaker-notes',
+            {
+                title: lesson.title,
+                slides_content: slidesContent,
+            },
+        );
+
+        this.logger.debug(`Generated speaker notes prompt (${prompt.length} chars)`);
+
+        // Generate using AI
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const result = aiResult.content;
+        this.logger.log(`Speaker notes generated via ${aiResult.provider} (${aiResult.model})`);
+
+        // Parse JSON response
+        let speakerNotes: Array<{ slideIndex: number; speakerNote: string }> = [];
+        try {
+            let jsonStr = result;
+            const jsonStartTag = result.indexOf('```json');
+            if (jsonStartTag !== -1) {
+                const contentStart = jsonStartTag + '```json'.length;
+                const lastBackticks = result.lastIndexOf('```');
+                if (lastBackticks > contentStart) {
+                    jsonStr = result.substring(contentStart, lastBackticks);
+                }
+            }
+
+            const data = JSON.parse(jsonStr.trim());
+            speakerNotes = data.speakerNotes || data;
+
+            if (!Array.isArray(speakerNotes)) {
+                throw new Error('Response is not an array');
+            }
+        } catch (parseError) {
+            this.logger.error(`Failed to parse speaker notes: ${parseError.message}`);
+            throw new BadRequestException(`Failed to parse AI response: ${parseError.message}`);
+        }
+
+        // Update Slide.speakerNote in DB
+        for (const note of speakerNotes) {
+            const existingSlide = slides.find(s => s.slideIndex === note.slideIndex);
+            if (existingSlide) {
+                await this.prisma.slide.update({
+                    where: { id: existingSlide.id },
+                    data: { speakerNote: note.speakerNote },
+                });
+            }
+        }
+
+        // Also sync speakerNotes into slideScript JSON for backward compat
+        if (lesson.slideScript) {
+            try {
+                let jsonStr = lesson.slideScript;
+                const jsonStartTag = lesson.slideScript.indexOf('```json');
+                if (jsonStartTag !== -1) {
+                    const contentStart = jsonStartTag + '```json'.length;
+                    const lastBackticks = lesson.slideScript.lastIndexOf('```');
+                    if (lastBackticks > contentStart) {
+                        jsonStr = lesson.slideScript.substring(contentStart, lastBackticks);
+                    }
+                }
+                const scriptData = JSON.parse(jsonStr.trim());
+                if (scriptData.slides && Array.isArray(scriptData.slides)) {
+                    for (const note of speakerNotes) {
+                        const slide = scriptData.slides.find((s: any) => s.slideIndex === note.slideIndex);
+                        if (slide) {
+                            slide.speakerNote = note.speakerNote;
+                        }
+                    }
+                    await this.prisma.lesson.update({
+                        where: { id: lessonId },
+                        data: { slideScript: JSON.stringify(scriptData, null, 2) },
+                    });
+                }
+            } catch (e) {
+                this.logger.warn(`Could not sync speaker notes to slideScript: ${e.message}`);
+            }
+        }
+
+        // Upsert SlideAudio records
+        const slideAudios: any[] = [];
+        for (const note of speakerNotes) {
+            const existingAudio = await this.prisma.slideAudio.findUnique({
+                where: { lessonId_slideIndex: { lessonId, slideIndex: note.slideIndex } },
+            });
+
+            if (existingAudio) {
+                // Update speaker note, reset status if note changed
+                const updated = await this.prisma.slideAudio.update({
+                    where: { id: existingAudio.id },
+                    data: {
+                        speakerNote: note.speakerNote,
+                        slideTitle: slides.find(s => s.slideIndex === note.slideIndex)?.title || existingAudio.slideTitle,
+                        status: existingAudio.speakerNote !== note.speakerNote ? 'pending' : existingAudio.status,
+                    },
+                });
+                slideAudios.push(updated);
+            } else {
+                // Create new record
+                const created = await this.prisma.slideAudio.create({
+                    data: {
+                        lessonId,
+                        slideIndex: note.slideIndex,
+                        slideTitle: slides.find(s => s.slideIndex === note.slideIndex)?.title || `Slide ${note.slideIndex}`,
+                        speakerNote: note.speakerNote,
+                        status: 'pending',
+                    },
+                });
+                slideAudios.push(created);
+            }
+        }
+
+        this.logger.log(`✅ Generated ${speakerNotes.length} speaker notes for lesson ${lessonId}`);
+
+        return slideAudios;
+    }
+
+    /**
      * Regenerate optimized content for a single slide
      */
     async regenerateSlideContent(lessonId: string, slideIndex: number, userId: string) {

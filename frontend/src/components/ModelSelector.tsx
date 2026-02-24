@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import './ModelSelector.css';
 
-type TaskType = 'OUTLINE' | 'SLIDES' | 'QUESTIONS' | 'IMAGE' | 'TTS';
+type TaskType = 'OUTLINE' | 'SLIDES' | 'SPEAKER_NOTES' | 'QUESTIONS' | 'IMAGE' | 'TTS';
 
 interface AvailableModel {
     name: string;
@@ -26,6 +26,7 @@ interface ModelConfig {
 const TASK_LABELS: Record<TaskType, string> = {
     OUTLINE: '🧠 Model tạo Outline',
     SLIDES: '📝 Model tạo Kịch bản',
+    SPEAKER_NOTES: '🎤 Model tạo Lời Giảng',
     QUESTIONS: '❓ Model tạo Câu hỏi',
     IMAGE: '🖼️ Model tạo Hình ảnh',
     TTS: '🔊 Model Text-to-Speech',

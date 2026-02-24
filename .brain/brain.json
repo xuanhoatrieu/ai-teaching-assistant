@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-22T22:45:00+07:00"
+        "updated_at": "2026-02-23T17:08:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -401,7 +401,7 @@
         {
             "name": "AI Model Configuration",
             "status": "implemented",
-            "description": "User can select Gemini models per task"
+            "description": "Dynamic model discovery: Gemini API list + CLIProxy all models (GPT/Claude/etc). User can select per task."
         },
         {
             "name": "Structured Slides",
@@ -507,7 +507,10 @@
             "🚀 GHCR login: echo 'PAT_TOKEN' | docker login ghcr.io -u username --password-stdin",
             "🚀 GitHub Actions: ghcr.io/${{ github.repository_owner }}/project/service:branch format for image tags",
             "⭐ refreshLessonDataOnly(): Refresh lesson data WITHOUT overwriting currentStep - prevents navigation resets when Step 3+ calls refresh",
-            "⭐ CSS class scoping: .delete-btn in Subjects.css uses position:absolute (for subject cards). Must scope with .subject-card .delete-btn to avoid overriding lesson card .delete-btn"
+            "⭐ CSS class scoping: .delete-btn in Subjects.css uses position:absolute (for subject cards). Must scope with .subject-card .delete-btn to avoid overriding lesson card .delete-btn",
+            "⭐ Model Discovery (CLIProxy): Default-include ALL models for text tasks. Only skip embedding/moderation. Old code filtered by keyword (flash/pro/gemini/claude) which excluded GPT models",
+            "⭐ Model Discovery (Gemini): Use fetch() to https://generativelanguage.googleapis.com/v1beta/models?key=... to dynamically list models. Merge with KNOWN_GEMINI_MODELS for display names. Fallback to static list if API fails",
+            "⭐ Review Question Prompt: Must explicitly prohibit citation phrases like 'Theo bài giảng', 'Trong bài học' etc. Add negative constraints in prompt for LLM compliance"
         ],
         "conventions": [
             "API routes: /lessons/:id/resource",

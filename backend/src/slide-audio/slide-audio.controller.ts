@@ -9,15 +9,22 @@ import {
     Res,
     UseGuards,
     Request,
+    UploadedFile,
+    UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SlideAudioService } from './slide-audio.service';
+import { SlidesService } from '../slides/slides.service';
 
 @Controller('lessons/:lessonId/slide-audios')
 @UseGuards(JwtAuthGuard)
 export class SlideAudioController {
-    constructor(private readonly slideAudioService: SlideAudioService) { }
+    constructor(
+        private readonly slideAudioService: SlideAudioService,
+        private readonly slidesService: SlidesService,
+    ) { }
 
     // Get all slide audios for a lesson
     @Get()
@@ -29,6 +36,33 @@ export class SlideAudioController {
     @Post('init')
     async initializeSlideAudios(@Param('lessonId') lessonId: string) {
         return this.slideAudioService.initializeSlideAudios(lessonId);
+    }
+
+    // Generate speaker notes using AI (Step 4 - new)
+    @Post('generate-speaker-notes')
+    async generateSpeakerNotes(
+        @Param('lessonId') lessonId: string,
+        @Request() req,
+    ) {
+        return this.slidesService.generateSpeakerNotes(lessonId, req.user.id);
+    }
+
+    // Upload recorded audio for a slide (alternative to TTS)
+    @Post(':index/upload-recording')
+    @UseInterceptors(FileInterceptor('audio', {
+        storage: require('multer').memoryStorage(),
+        limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+    }))
+    async uploadRecording(
+        @Param('lessonId') lessonId: string,
+        @Param('index') index: string,
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        return this.slideAudioService.uploadRecording(
+            lessonId,
+            parseInt(index, 10),
+            file,
+        );
     }
 
     // Generate audio for all slides

@@ -1783,7 +1783,7 @@
     background: rgba(34, 197, 94, 0.15);
     border-left-color: #22c55e;
     color: #86efac;
-    font-weight: 500;
+    font-weight: 400;
 }
 
 /* Interactive Question Card Enhancement */
@@ -1823,7 +1823,7 @@
 .interactive-card .question-text {
     color: #f1f5f9;
     font-size: 15px;
-    font-weight: 500;
+    font-weight: 400;
     margin-bottom: 12px;
     line-height: 1.5;
 }
@@ -1832,6 +1832,16 @@
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.answers-list .answer .edit-input {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: #e2e8f0;
+    font-size: 13px;
+    width: 100%;
 }
 
 /* ========================================

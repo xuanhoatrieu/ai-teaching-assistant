@@ -182,7 +182,7 @@ export function PromptsPage() {
             {/* Modal Form */}
             {showModal && (
                 <div className="modal-overlay" onClick={closeModal}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+                    <div className="modal-content prompt-modal" onClick={(e) => e.stopPropagation()}>
                         <div className="modal-header">
                             <h2>{editingPrompt ? 'Edit Prompt' : 'Add New Prompt'}</h2>
                             <button className="close-btn" onClick={closeModal}>×</button>
@@ -217,7 +217,7 @@ export function PromptsPage() {
                                     onChange={(e) => setForm({ ...form, content: e.target.value })}
                                     placeholder="Prompt content with variables like {title}, {content}..."
                                     required
-                                    rows={10}
+                                    rows={20}
                                 />
                                 <small>Use curly braces for variables: {'{variable_name}'}</small>
                             </div>

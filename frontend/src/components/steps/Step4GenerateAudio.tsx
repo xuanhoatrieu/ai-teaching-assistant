@@ -1,19 +1,17 @@
-import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api, API_BASE_URL } from '../../lib/api';
 import { TTSSelector } from '../TTSSelector';
+import { ModelSelector } from '../ModelSelector';
 import '../ModelSelector.css';
 import './Step4GenerateAudio.css';
 
 // Helper to get full audio URL from backend
 const getFullAudioUrl = (audioUrl: string | null): string => {
     if (!audioUrl) return '';
-    // If it's already a full URL, return as-is
     if (audioUrl.startsWith('http://') || audioUrl.startsWith('https://')) {
         return audioUrl;
     }
-    // Prepend backend URL
     return `${API_BASE_URL}${audioUrl}`;
 };
 
@@ -30,10 +28,22 @@ interface SlideAudio {
     errorMessage: string | null;
 }
 
+interface SlideContent {
+    id: string;
+    slideIndex: number;
+    slideType: string;
+    title: string;
+    content: string | null;
+    visualIdea: string | null;
+    speakerNote: string | null;
+}
+
 export function Step4GenerateAudio() {
     const { lessonId, lessonData, refreshLessonData } = useLessonEditor();
     const [slideAudios, setSlideAudios] = useState<SlideAudio[]>([]);
+    const [slideContents, setSlideContents] = useState<SlideContent[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
     const [generatingSlides, setGeneratingSlides] = useState<Set<number>>(new Set());
     const [editingSlide, setEditingSlide] = useState<number | null>(null);
@@ -42,17 +52,19 @@ export function Step4GenerateAudio() {
     const [playbackProgress, setPlaybackProgress] = useState<Record<number, number>>({});
     const [currentTime, setCurrentTime] = useState<Record<number, number>>({});
     const [multilingualMode, setMultilingualMode] = useState<string>('');
+    const [recordingSlide, setRecordingSlide] = useState<number | null>(null);
     const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
     const shouldStopGenerating = useRef(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const chunksRef = useRef<Blob[]>([]);
 
     useEffect(() => {
         if (lessonData?.id) {
-            refreshLessonData();  // Pick up slideScript changes from Step 3
-            loadSlideAudios();
+            refreshLessonData();
+            loadData();
         }
     }, [lessonData?.id]);
 
-    // Normalize status from backend (lowercase) to frontend (uppercase)
     const normalizeStatus = (status: string): 'PENDING' | 'GENERATING' | 'COMPLETED' | 'ERROR' => {
         const normalized = status?.toLowerCase() || 'pending';
         switch (normalized) {
@@ -75,32 +87,111 @@ export function Step4GenerateAudio() {
         }));
     };
 
-    const loadSlideAudios = async () => {
+    const loadData = async () => {
         try {
             setIsLoading(true);
-            const response = await api.get(`/lessons/${lessonId}/slide-audios`);
-
-            if (response.data && response.data.length > 0) {
-                setSlideAudios(normalizeSlideAudios(response.data));
-            } else if (lessonData?.slideScript) {
-                const initResponse = await api.post(`/lessons/${lessonId}/slide-audios/init`);
-                setSlideAudios(normalizeSlideAudios(initResponse.data));
+            // Load slide contents from Slide table
+            const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
+            if (slidesRes.data && slidesRes.data.length > 0) {
+                setSlideContents(slidesRes.data);
             }
-        } catch (error) {
-            console.error('Error loading slide audios:', error);
-            if (lessonData?.slideScript) {
+
+            // Load existing SlideAudio records
+            const audioRes = await api.get(`/lessons/${lessonId}/slide-audios`);
+            if (audioRes.data && audioRes.data.length > 0) {
+                setSlideAudios(normalizeSlideAudios(audioRes.data));
+            } else if (lessonData?.slideScript) {
+                // Initialize from slideScript if no audios exist yet
                 try {
-                    const initResponse = await api.post(`/lessons/${lessonId}/slide-audios/init`);
-                    setSlideAudios(normalizeSlideAudios(initResponse.data));
-                } catch (initError) {
-                    console.error('Error initializing slide audios:', initError);
+                    const initRes = await api.post(`/lessons/${lessonId}/slide-audios/init`);
+                    setSlideAudios(normalizeSlideAudios(initRes.data));
+                } catch (initErr) {
+                    console.error('Error initializing slide audios:', initErr);
                 }
             }
+        } catch (error) {
+            console.error('Error loading data:', error);
         } finally {
             setIsLoading(false);
         }
     };
 
+    // ═══════════════════════════════════════════════════════════════
+    // SPEAKER NOTES GENERATION (NEW)
+    // ═══════════════════════════════════════════════════════════════
+    const generateSpeakerNotes = async () => {
+        try {
+            setIsGeneratingNotes(true);
+            const response = await api.post(`/lessons/${lessonId}/slide-audios/generate-speaker-notes`);
+            setSlideAudios(normalizeSlideAudios(response.data));
+            // Also reload slide contents to get updated speakerNote fields
+            const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
+            if (slidesRes.data) setSlideContents(slidesRes.data);
+        } catch (error) {
+            console.error('Error generating speaker notes:', error);
+            alert('Lỗi khi tạo lời giảng. Vui lòng thử lại.');
+        } finally {
+            setIsGeneratingNotes(false);
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // RECORDING (NEW)
+    // ═══════════════════════════════════════════════════════════════
+    const startRecording = async (slideIndex: number) => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            mediaRecorderRef.current = mediaRecorder;
+            chunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) chunksRef.current.push(e.data);
+            };
+
+            mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach(t => t.stop());
+                const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+                await uploadRecording(slideIndex, blob);
+                setRecordingSlide(null);
+            };
+
+            mediaRecorder.start();
+            setRecordingSlide(slideIndex);
+        } catch (err) {
+            console.error('Error starting recording:', err);
+            alert('Không thể truy cập microphone. Vui lòng kiểm tra quyền.');
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+        }
+    };
+
+    const uploadRecording = async (slideIndex: number, blob: Blob) => {
+        try {
+            const formData = new FormData();
+            formData.append('audio', blob, `recording_slide_${slideIndex}.webm`);
+            const response = await api.post(
+                `/lessons/${lessonId}/slide-audios/${slideIndex}/upload-recording`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' } },
+            );
+            const normalizedData = { ...response.data, status: normalizeStatus(response.data.status) };
+            setSlideAudios(prev => prev.map(sa =>
+                sa.slideIndex === slideIndex ? normalizedData : sa
+            ));
+        } catch (error) {
+            console.error('Error uploading recording:', error);
+            alert('Lỗi khi upload audio ghi âm.');
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // EXISTING FUNCTIONALITY (KEPT)
+    // ═══════════════════════════════════════════════════════════════
     const generateSingleAudio = async (slideIndex: number) => {
         try {
             setGeneratingSlides(prev => new Set(prev).add(slideIndex));
@@ -115,7 +206,6 @@ export function Step4GenerateAudio() {
             setSlideAudios(prev => prev.map(sa =>
                 sa.slideIndex === slideIndex ? normalizedData : sa
             ));
-
             if (response.data.audioUrl) {
                 playAudio(slideIndex, response.data.audioUrl);
             }
@@ -134,69 +224,41 @@ export function Step4GenerateAudio() {
         }
     };
 
-    // Delay helper function
     const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
     const generateAllAudios = async () => {
         try {
             setIsGeneratingAll(true);
             shouldStopGenerating.current = false;
-
-            // Get slides that need audio generation (no audio or need regeneration)
             const slidesToGenerate = slideAudios.filter(sa =>
                 sa.status !== 'COMPLETED' || !sa.audioUrl
             );
-
             let isFirstSlide = true;
-
-            // Process each slide one by one
             for (const slideAudio of slidesToGenerate) {
-                // Check if user requested to stop
-                if (shouldStopGenerating.current) {
-                    console.log('Generation stopped by user');
-                    break;
-                }
-
+                if (shouldStopGenerating.current) break;
                 const slideIndex = slideAudio.slideIndex;
-
-                // Set this specific slide to GENERATING
                 setSlideAudios(prev => prev.map(sa =>
-                    sa.slideIndex === slideIndex
-                        ? { ...sa, status: 'GENERATING' as const }
-                        : sa
+                    sa.slideIndex === slideIndex ? { ...sa, status: 'GENERATING' as const } : sa
                 ));
-
                 try {
-                    // Generate audio for this slide
                     const response = await api.post(`/lessons/${lessonId}/slide-audios/${slideIndex}/generate`, {
                         multilingualMode: multilingualMode || undefined,
                     });
                     const normalizedData = { ...response.data, status: normalizeStatus(response.data.status) };
-
-                    // Update this slide immediately with result
                     setSlideAudios(prev => prev.map(sa =>
                         sa.slideIndex === slideIndex ? normalizedData : sa
                     ));
                 } catch (slideError) {
                     console.error(`Error generating audio for slide ${slideIndex}:`, slideError);
-                    // Mark as error and continue with next slide
                     setSlideAudios(prev => prev.map(sa =>
-                        sa.slideIndex === slideIndex
-                            ? { ...sa, status: 'ERROR' as const, errorMessage: 'Lỗi tạo audio' }
-                            : sa
+                        sa.slideIndex === slideIndex ? { ...sa, status: 'ERROR' as const, errorMessage: 'Lỗi tạo audio' } : sa
                     ));
                 }
-
-                // Add delay between requests to prevent ViTTS server overload
-                // First slide needs longer delay for GPU model to load into VRAM
-                // Subsequent slides need shorter delay for GPU to process
                 if (isFirstSlide) {
-                    console.log('First slide generated, waiting 8s for model warm-up...');
-                    await delay(8000); // 8 seconds for first slide (GPU model loading)
+                    await delay(8000);
                     isFirstSlide = false;
                 } else {
-                    console.log('Waiting 2.5s before next slide...');
-                    await delay(2500); // 2.5 seconds between subsequent slides
+                    await delay(2500);
                 }
             }
         } catch (error) {
@@ -207,19 +269,14 @@ export function Step4GenerateAudio() {
         }
     };
 
-    const stopGenerating = () => {
-        shouldStopGenerating.current = true;
-    };
+    const stopGenerating = () => { shouldStopGenerating.current = true; };
 
     const startEdit = (slideIndex: number, currentNote: string) => {
         setEditingSlide(slideIndex);
         setEditedNote(currentNote);
     };
 
-    const cancelEdit = () => {
-        setEditingSlide(null);
-        setEditedNote('');
-    };
+    const cancelEdit = () => { setEditingSlide(null); setEditedNote(''); };
 
     const saveEdit = async (slideIndex: number) => {
         try {
@@ -238,43 +295,31 @@ export function Step4GenerateAudio() {
     };
 
     const playAudio = (slideIndex: number, audioUrl: string) => {
-        // Stop currently playing
         if (currentlyPlaying !== null && audioRefs.current[currentlyPlaying]) {
             audioRefs.current[currentlyPlaying].pause();
             audioRefs.current[currentlyPlaying].currentTime = 0;
         }
-
         if (!audioRefs.current[slideIndex]) {
             audioRefs.current[slideIndex] = new Audio();
         }
-
         const audio = audioRefs.current[slideIndex];
-        // Use full backend URL for audio
         audio.src = getFullAudioUrl(audioUrl);
-
-        // Track playback progress
         audio.ontimeupdate = () => {
             if (audio.duration > 0) {
-                const progress = (audio.currentTime / audio.duration) * 100;
-                setPlaybackProgress(prev => ({ ...prev, [slideIndex]: progress }));
+                setPlaybackProgress(prev => ({ ...prev, [slideIndex]: (audio.currentTime / audio.duration) * 100 }));
                 setCurrentTime(prev => ({ ...prev, [slideIndex]: audio.currentTime }));
             }
         };
-
         audio.onended = () => {
             setCurrentlyPlaying(null);
             setPlaybackProgress(prev => ({ ...prev, [slideIndex]: 0 }));
             setCurrentTime(prev => ({ ...prev, [slideIndex]: 0 }));
         };
-        audio.onerror = (e) => {
-            console.error('Audio playback error:', e);
+        audio.onerror = () => {
             setCurrentlyPlaying(null);
             setPlaybackProgress(prev => ({ ...prev, [slideIndex]: 0 }));
         };
-        audio.play().catch(err => {
-            console.error('Failed to play audio:', err);
-            setCurrentlyPlaying(null);
-        });
+        audio.play().catch(() => setCurrentlyPlaying(null));
         setCurrentlyPlaying(slideIndex);
     };
 
@@ -291,7 +336,6 @@ export function Step4GenerateAudio() {
             const response = await api.get(`/lessons/${lessonId}/slide-audios/download-all`, {
                 responseType: 'blob'
             });
-
             const blob = new Blob([response.data], { type: 'application/zip' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -307,7 +351,6 @@ export function Step4GenerateAudio() {
         }
     };
 
-    // Format duration - backend returns seconds, not ms
     const formatDuration = (durationInSeconds: number | null) => {
         if (!durationInSeconds || durationInSeconds <= 0) return '--:--';
         const totalSeconds = Math.floor(durationInSeconds);
@@ -316,26 +359,15 @@ export function Step4GenerateAudio() {
         return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
 
-    // Delete audio for a slide
     const deleteAudio = async (slideIndex: number) => {
         if (!confirm(`Xóa audio cho slide ${slideIndex + 1}?`)) return;
-
         try {
-            // Stop if currently playing
-            if (currentlyPlaying === slideIndex) {
-                stopAudio(slideIndex);
-            }
-
-            // Call API to delete audio
+            if (currentlyPlaying === slideIndex) stopAudio(slideIndex);
             const response = await api.delete(`/lessons/${lessonId}/slide-audios/${slideIndex}`);
             const normalizedData = { ...response.data, status: normalizeStatus(response.data.status) };
-
-            // Update UI with response
             setSlideAudios(prev => prev.map(sa =>
                 sa.slideIndex === slideIndex ? normalizedData : sa
             ));
-
-            // Clear progress for this slide
             setPlaybackProgress(prev => ({ ...prev, [slideIndex]: 0 }));
             setCurrentTime(prev => ({ ...prev, [slideIndex]: 0 }));
         } catch (error) {
@@ -344,48 +376,69 @@ export function Step4GenerateAudio() {
         }
     };
 
-    // Delete ALL audios
     const deleteAllAudios = async () => {
         if (!confirm('Xóa TẤT CẢ audio đã tạo? Hành động này không thể hoàn tác.')) return;
-
         try {
-            // Stop any playing audio
-            if (currentlyPlaying !== null) {
-                stopAudio(currentlyPlaying);
-            }
-
+            if (currentlyPlaying !== null) stopAudio(currentlyPlaying);
             await api.delete(`/lessons/${lessonId}/slide-audios/delete-all`);
-
-            // Reload the slide audios to get fresh data
-            await loadSlideAudios();
+            await loadData();
         } catch (error) {
             console.error('Error deleting all audios:', error);
             alert('Lỗi khi xóa audio');
         }
     };
 
+    // ═══════════════════════════════════════════════════════════════
+    // RENDER HELPERS
+    // ═══════════════════════════════════════════════════════════════
+    const parseContent = (content: string | null): string[] => {
+        if (!content) return [];
+        try {
+            const parsed = JSON.parse(content);
+            return Array.isArray(parsed) ? parsed : [content];
+        } catch {
+            return content.split('\n').filter(l => l.trim());
+        }
+    };
+
+    const hasSpeakerNotes = slideAudios.some(sa => sa.speakerNote?.trim());
     const completedCount = slideAudios.filter(sa => sa.status === 'COMPLETED').length;
     const hasAnyAudio = completedCount > 0;
-    // Detect stale audio: status is PENDING but audioUrl still exists (note changed after audio was generated)
     const staleAudioCount = slideAudios.filter(sa => sa.status === 'PENDING' && sa.audioUrl).length;
 
+    // Use slide contents as the primary list, merge with audio data
+    const slides = slideContents.length > 0
+        ? slideContents
+        : slideAudios.map(sa => ({
+            id: sa.id,
+            slideIndex: sa.slideIndex,
+            slideType: 'content',
+            title: sa.slideTitle,
+            content: null,
+            visualIdea: null,
+            speakerNote: sa.speakerNote,
+        }));
+
+    // ═══════════════════════════════════════════════════════════════
+    // RENDER
+    // ═══════════════════════════════════════════════════════════════
     if (isLoading) {
         return (
             <div className="step4-audio">
                 <div className="loading-state">
                     <div className="loading-spinner"></div>
-                    <p>Đang tải lời giảng từ kịch bản...</p>
+                    <p>Đang tải dữ liệu slides...</p>
                 </div>
             </div>
         );
     }
 
-    if (slideAudios.length === 0 && !lessonData?.slideScript) {
+    if (slides.length === 0 && !lessonData?.slideScript) {
         return (
             <div className="step4-audio">
                 <div className="empty-state">
                     <span className="empty-icon">🔊</span>
-                    <h3>Chưa có lời giảng</h3>
+                    <h3>Chưa có nội dung slides</h3>
                     <p>Bạn cần hoàn thành kịch bản slide (Bước 3) trước khi tạo lời giảng audio.</p>
                 </div>
             </div>
@@ -397,40 +450,57 @@ export function Step4GenerateAudio() {
             {/* Header */}
             <div className="audio-header">
                 <div className="header-left">
-                    <h2>🔊 Bước 4: Tạo Lời Giảng (Audio)</h2>
+                    <h2>🔊 Bước 4: Lời Giảng & Audio</h2>
                     <p className="audio-stats">
                         📊 <strong>{completedCount}</strong> / {slideAudios.length} slides đã có audio
+                        {hasSpeakerNotes && <> · ✅ Đã có lời giảng</>}
                     </p>
                 </div>
-                <button
-                    className="btn-generate-all"
-                    onClick={generateAllAudios}
-                    disabled={isGeneratingAll}
-                >
-                    {isGeneratingAll ? (
-                        <><span className="spinner"></span> Đang tạo...</>
-                    ) : (
-                        '🎙️ Tạo Audio Tất Cả'
-                    )}
-                </button>
-                {isGeneratingAll && (
+                <div className="header-actions">
+                    {/* Generate Speaker Notes Button */}
                     <button
-                        className="btn-stop"
-                        onClick={stopGenerating}
-                        title="Dừng tạo audio"
+                        className="btn-generate-notes"
+                        onClick={generateSpeakerNotes}
+                        disabled={isGeneratingNotes}
                     >
-                        ⏹️ Dừng lại
+                        {isGeneratingNotes ? (
+                            <><span className="spinner"></span> Đang tạo lời giảng...</>
+                        ) : hasSpeakerNotes ? (
+                            '🔄 Tạo lại Lời Giảng'
+                        ) : (
+                            '✨ Tạo Lời Giảng'
+                        )}
                     </button>
-                )}
+                    {/* Generate All Audio Button */}
+                    <button
+                        className="btn-generate-all"
+                        onClick={generateAllAudios}
+                        disabled={isGeneratingAll || !hasSpeakerNotes}
+                        title={!hasSpeakerNotes ? 'Tạo lời giảng trước' : ''}
+                    >
+                        {isGeneratingAll ? (
+                            <><span className="spinner"></span> Đang tạo audio...</>
+                        ) : (
+                            '🎙️ Tạo Audio Tất Cả'
+                        )}
+                    </button>
+                    {isGeneratingAll && (
+                        <button className="btn-stop" onClick={stopGenerating} title="Dừng tạo audio">
+                            ⏹️ Dừng
+                        </button>
+                    )}
+                </div>
             </div>
 
-            {/* Stale Audio Warning Banner */}
+            {/* Stale Audio Warning */}
             {staleAudioCount > 0 && (
                 <div className="stale-audio-warning">
-                    ⚠️ <strong>{staleAudioCount} slide</strong> có lời giảng đã được sửa nhưng audio chưa cập nhật.
-                    Nhấn <strong>"🎙️ Tạo Audio"</strong> để tạo lại, hoặc <strong>"🗑️ Xóa tất cả audio"</strong> để bắt đầu lại.
+                    ⚠️ <strong>{staleAudioCount} slide</strong> có lời giảng đã sửa nhưng audio chưa cập nhật.
                 </div>
             )}
+
+            {/* Model Selection for Speaker Notes */}
+            <ModelSelector taskType="SPEAKER_NOTES" compact />
 
             {/* TTS Configuration */}
             <TTSSelector onChange={(config) => {
@@ -439,147 +509,154 @@ export function Step4GenerateAudio() {
                 }
             }} />
 
-            {/* Speaker Notes Table */}
-            <div className="speaker-notes-table">
-                <table>
-                    <thead>
-                        <tr>
-                            <th className="col-slide">#</th>
-                            <th className="col-note">Lời Giảng (Speaker Note)</th>
-                            <th className="col-actions">Thao tác</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {slideAudios.map((slide) => (
-                            <React.Fragment key={slide.id}>
-                                <tr className={`slide-row status-${slide.status.toLowerCase()}`}>
-                                    <td className="col-slide">
-                                        <span className="slide-number">{slide.slideIndex + 1}</span>
-                                    </td>
-                                    <td className="col-note">
-                                        {editingSlide === slide.slideIndex ? (
-                                            <div className="edit-mode">
-                                                <textarea
-                                                    value={editedNote}
-                                                    onChange={(e) => setEditedNote(e.target.value)}
-                                                    rows={4}
-                                                    autoFocus
-                                                />
-                                                <div className="edit-buttons">
-                                                    <button className="btn-save" onClick={() => saveEdit(slide.slideIndex)}>
-                                                        💾 Lưu
-                                                    </button>
-                                                    <button className="btn-cancel" onClick={cancelEdit}>
-                                                        Hủy
-                                                    </button>
-                                                </div>
+            {/* Slide Cards */}
+            <div className="slide-cards">
+                {slides.map((slide) => {
+                    const audio = slideAudios.find(sa => sa.slideIndex === slide.slideIndex);
+                    const contentItems = parseContent(slide.content);
+                    const speakerNote = audio?.speakerNote || slide.speakerNote || '';
+                    const hasAudio = audio?.status === 'COMPLETED' || (audio?.status === 'PENDING' && audio?.audioUrl);
+                    const isEditing = editingSlide === slide.slideIndex;
+                    const isGenerating = generatingSlides.has(slide.slideIndex) || audio?.status === 'GENERATING';
+                    const isRecording = recordingSlide === slide.slideIndex;
+
+                    return (
+                        <div key={slide.id} className={`slide-card ${audio?.status?.toLowerCase() || 'pending'}`}>
+                            {/* Card Header: Slide Number + Title */}
+                            <div className="card-header">
+                                <span className="slide-badge">{slide.slideIndex}</span>
+                                <h3 className="slide-title">{slide.title}</h3>
+                                <span className="slide-type-badge">{slide.slideType}</span>
+                            </div>
+
+                            {/* Card Body: 2-Column Layout */}
+                            <div className="card-body">
+                                {/* Left: Slide Content */}
+                                <div className="card-content-col">
+                                    <div className="col-label">📋 Nội dung Slide</div>
+                                    {contentItems.length > 0 ? (
+                                        <ul className="content-bullets">
+                                            {contentItems.map((item, i) => (
+                                                <li key={i}>{item}</li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="empty-content">Không có nội dung chi tiết</p>
+                                    )}
+                                    {slide.visualIdea && (
+                                        <div className="visual-hint">🖼️ {slide.visualIdea}</div>
+                                    )}
+                                </div>
+
+                                {/* Right: Speaker Note */}
+                                <div className="card-note-col">
+                                    <div className="col-label">🎤 Lời Giảng</div>
+                                    {isEditing ? (
+                                        <div className="edit-mode">
+                                            <textarea
+                                                value={editedNote}
+                                                onChange={(e) => setEditedNote(e.target.value)}
+                                                rows={6}
+                                                autoFocus
+                                            />
+                                            <div className="edit-buttons">
+                                                <button className="btn-save" onClick={() => saveEdit(slide.slideIndex)}>💾 Lưu</button>
+                                                <button className="btn-cancel" onClick={cancelEdit}>Hủy</button>
                                             </div>
-                                        ) : (
-                                            <div className="note-content">
-                                                <p>{slide.speakerNote}</p>
-                                            </div>
-                                        )}
-                                    </td>
-                                    <td className="col-actions">
-                                        {editingSlide !== slide.slideIndex && (
-                                            <div className="action-buttons">
-                                                <button
-                                                    className="btn-edit"
-                                                    onClick={() => startEdit(slide.slideIndex, slide.speakerNote)}
-                                                    title="Chỉnh sửa lời giảng"
-                                                >
-                                                    ✏️ Edit
-                                                </button>
-                                                <button
-                                                    className="btn-generate"
-                                                    onClick={() => generateSingleAudio(slide.slideIndex)}
-                                                    disabled={generatingSlides.has(slide.slideIndex) || slide.status === 'GENERATING'}
-                                                    title="Tạo/Tạo lại audio"
-                                                >
-                                                    {generatingSlides.has(slide.slideIndex) || slide.status === 'GENERATING' ? (
-                                                        <><span className="spinner-small"></span> Đang tạo</>
-                                                    ) : slide.status === 'COMPLETED' ? (
-                                                        '🔄 Tạo lại'
-                                                    ) : (
-                                                        '🎙️ Tạo Audio'
-                                                    )}
-                                                </button>
-                                            </div>
-                                        )}
-                                    </td>
-                                </tr>
-                                {/* Stale Audio Warning Row */}
-                                {slide.status === 'PENDING' && slide.audioUrl && (
-                                    <tr key={`${slide.id}-stale`} className="stale-row">
-                                        <td></td>
-                                        <td colSpan={2}>
-                                            <div className="stale-message">⚠️ Lời giảng đã thay đổi — audio cũ có thể không khớp. Nhấn "🎙️ Tạo Audio" để cập nhật.</div>
-                                        </td>
-                                    </tr>
+                                        </div>
+                                    ) : speakerNote ? (
+                                        <div className="note-content">
+                                            <p>{speakerNote}</p>
+                                            <button className="btn-edit-inline" onClick={() => startEdit(slide.slideIndex, speakerNote)} title="Chỉnh sửa">
+                                                ✏️
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <p className="empty-note">Chưa có lời giảng. Nhấn "✨ Tạo Lời Giảng" để tạo.</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Card Footer: Audio Controls */}
+                            <div className="card-footer">
+                                <div className="audio-actions">
+                                    {/* Generate TTS Button */}
+                                    <button
+                                        className="btn-generate"
+                                        onClick={() => generateSingleAudio(slide.slideIndex)}
+                                        disabled={isGenerating || !speakerNote}
+                                        title={!speakerNote ? 'Cần có lời giảng trước' : 'Tạo audio TTS'}
+                                    >
+                                        {isGenerating ? (
+                                            <><span className="spinner-small"></span> Đang tạo</>
+                                        ) : hasAudio ? '🔄 Tạo lại' : '🎙️ Tạo Audio'}
+                                    </button>
+
+                                    {/* Record Button */}
+                                    {isRecording ? (
+                                        <button className="btn-recording" onClick={stopRecording}>
+                                            ⏹️ Dừng ghi
+                                        </button>
+                                    ) : (
+                                        <button
+                                            className="btn-record"
+                                            onClick={() => startRecording(slide.slideIndex)}
+                                            disabled={recordingSlide !== null && recordingSlide !== slide.slideIndex}
+                                            title="Ghi âm giọng nói"
+                                        >
+                                            🎤 Ghi âm
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Audio Playback */}
+                                {hasAudio && audio && (
+                                    <div className="playback-section">
+                                        <div className="progress-bar-container">
+                                            <div
+                                                className="progress-bar"
+                                                style={{ width: `${playbackProgress[slide.slideIndex] || 0}%` }}
+                                            />
+                                        </div>
+                                        <div className="playback-controls">
+                                            {currentlyPlaying === slide.slideIndex ? (
+                                                <button className="btn-stop-play" onClick={() => stopAudio(slide.slideIndex)}>⏹️</button>
+                                            ) : (
+                                                <button className="btn-play" onClick={() => playAudio(slide.slideIndex, audio.audioUrl!)}>▶️</button>
+                                            )}
+                                            <span className="time-display">
+                                                {formatDuration(currentTime[slide.slideIndex] || 0)} / {formatDuration(audio.audioDuration)}
+                                            </span>
+                                            <span className="audio-source">
+                                                {audio.voiceId === 'recording' ? '🎤 Ghi âm' : `🤖 ${audio.voiceId || 'TTS'}`}
+                                            </span>
+                                            <a
+                                                href={getFullAudioUrl(audio.audioUrl)}
+                                                download={audio.audioFileName || `slide${slide.slideIndex}.wav`}
+                                                className="btn-download"
+                                                title="Tải xuống"
+                                            >📥</a>
+                                            <button className="btn-delete-small" onClick={() => deleteAudio(slide.slideIndex)} title="Xóa audio">🗑️</button>
+                                        </div>
+                                    </div>
                                 )}
-                                {/* Playback Row */}
-                                {(slide.status === 'COMPLETED' || (slide.status === 'PENDING' && slide.audioUrl)) && (
-                                    <tr key={`${slide.id}-playback`} className="playback-row">
-                                        <td></td>
-                                        <td colSpan={2}>
-                                            <div className="playback-section">
-                                                {/* Progress bar - full width */}
-                                                <div className="progress-bar-container">
-                                                    <div
-                                                        className="progress-bar"
-                                                        style={{ width: `${playbackProgress[slide.slideIndex] || 0}%` }}
-                                                    />
-                                                </div>
-                                                <div className="playback-controls">
-                                                    {currentlyPlaying === slide.slideIndex ? (
-                                                        <button className="btn-stop" onClick={() => stopAudio(slide.slideIndex)}>
-                                                            ⏹️ Dừng
-                                                        </button>
-                                                    ) : (
-                                                        <button className="btn-play" onClick={() => playAudio(slide.slideIndex, slide.audioUrl!)}>
-                                                            ▶️ Phát
-                                                        </button>
-                                                    )}
-                                                    <span className="time-display">
-                                                        {formatDuration(currentTime[slide.slideIndex] || 0)} / {formatDuration(slide.audioDuration)}
-                                                    </span>
-                                                    <span className="filename">📁 {slide.audioFileName || `slide${slide.slideIndex + 1}.wav`}</span>
-                                                    <a
-                                                        href={getFullAudioUrl(slide.audioUrl)}
-                                                        download={slide.audioFileName || `slide${slide.slideIndex + 1}.wav`}
-                                                        className="btn-download"
-                                                        title="Tải xuống"
-                                                    >
-                                                        📥
-                                                    </a>
-                                                    <button
-                                                        className="btn-delete-small"
-                                                        onClick={() => deleteAudio(slide.slideIndex)}
-                                                        title="Xóa audio"
-                                                    >
-                                                        🗑️
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
+
+                                {/* Stale warning */}
+                                {audio?.status === 'PENDING' && audio?.audioUrl && (
+                                    <div className="stale-message">⚠️ Lời giảng đã thay đổi — audio có thể không khớp</div>
                                 )}
-                                {/* Error Row */}
-                                {slide.status === 'ERROR' && slide.errorMessage && (
-                                    <tr key={`${slide.id}-error`} className="error-row">
-                                        <td></td>
-                                        <td colSpan={2}>
-                                            <div className="error-message">⚠️ {slide.errorMessage}</div>
-                                        </td>
-                                    </tr>
+
+                                {/* Error */}
+                                {audio?.status === 'ERROR' && audio?.errorMessage && (
+                                    <div className="error-message">⚠️ {audio.errorMessage}</div>
                                 )}
-                            </React.Fragment>
-                        ))}
-                    </tbody>
-                </table>
+                            </div>
+                        </div>
+                    );
+                })}
             </div>
 
-            {/* Bottom Actions: Download All & Delete All */}
+            {/* Bottom Actions */}
             {hasAnyAudio && (
                 <div className="bottom-actions">
                     <button className="btn-download-all" onClick={downloadAllAudios}>

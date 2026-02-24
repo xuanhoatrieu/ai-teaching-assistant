@@ -212,9 +212,9 @@ Chỉ trả về JSON.`,
       {
         slug: 'slides.script',
         name: 'Design Slides Script',
-        content: `**Design Presentation Slides & Transcript**
+        content: `**Design Presentation Slides**
 
-**Mục tiêu:** Chuyển hóa một outline đã có thành kịch bản chi tiết cho từng slide trong bài giảng PowerPoint (.pptx). Đồng thời, soạn sẵn lời giảng (transcript) tự nhiên cho từng slide.
+**Mục tiêu:** Chuyển hóa một outline đã có thành kịch bản chi tiết cho từng slide trong bài giảng PowerPoint (.pptx). Chỉ tập trung vào NỘI DUNG SLIDE và GỢI Ý HÌNH ẢNH. Lời giảng (speaker notes) sẽ được tạo riêng ở bước sau.
 
 **Input:**
 - Tiêu đề: {title}
@@ -224,12 +224,12 @@ Chỉ trả về JSON.`,
 ---
 
 ## RÀNG BUỘC SỐ LƯỢNG SLIDE:
-- **Tổng số slide:** 20-30 slides (tùy độ phức tạp nội dung)
+- **Tổng số slide:** 20-35 slides (tùy độ phức tạp nội dung)
 - Cấu trúc gợi ý:
   - 1 slide Title
   - 1 slide Agenda
   - 1 slide Objectives
-  - 15-18 slides Content (nội dung chính)
+  - 20-30 slides Content (nội dung chính)
   - 1 slide Questions (câu hỏi thảo luận)
   - 1 slide Summary
 
@@ -258,53 +258,6 @@ Chỉ trả về JSON.`,
 
 ---
 
-## 🎤 QUY TẮC VIẾT SPEAKERNOTE (QUAN TRỌNG):
-
-### Cấu trúc: Hook → Explain → Bridge
-Mỗi speakerNote phải theo công thức:
-1. **Hook (mở đầu):** Thu hút sự chú ý - câu hỏi tu từ, ví dụ thực tế, hoặc kết nối slide trước
-2. **Explain (giảng):** Diễn giải nội dung slide - KHÔNG đọc lại bullet points
-3. **Bridge (chuyển tiếp):** Câu dẫn sang slide tiếp theo hoặc tóm lại ý chính
-**Đặc biệt chú ý không được viết các từ Hook (mở đầu), Explain (giảng), Bridge (chuyển tiếp) và dấu * vào nội dung speakerNote**
-
-### Ngôn ngữ NÓI tự nhiên:
-- **Từ nối:** "Nào", "À", "Nha", "Đúng không", "Thế thì"
-- **Câu hỏi tu từ:** "Vậy tại sao...?", "Thế làm sao...?", "Các em có bao giờ tự hỏi...?"
-- **Ngắt tự nhiên:** Dùng "...", "–" để tạo nhịp
-- **Xưng hô:** "các em" (đối với sinh viên đại học)
-
-### Transition Words (Từ chuyển tiếp):
-- Mở đầu: "Nào, bây giờ...", "Tiếp theo...", "Quay lại với...", "Về phần này..."
-- Giải thích: "Nói đơn giản thì...", "Cụ thể là...", "Tức là...", "Để mình giải thích..."
-- Nhấn mạnh: "Điểm quan trọng là...", "Các em chú ý nha...", "Đây là phần hay..."
-- Ví dụ: "Lấy ví dụ nhé...", "Giống như khi...", "Tưởng tượng rằng..."
-- Tổng kết: "Vậy tóm lại...", "Rút ra được là...", "Kết luận là..."
-
-### Độ dài theo loại slide:
-- Slide title/agenda: 30-50 từ (20-35 giây)
-- Slide objectives: 50-70 từ (35-50 giây)
-- Slide content: 100-180 từ (1-2 phút)
-- Slide summary: 60-90 từ (40-60 giây)
-
-### TRÁNH:
-- ❌ Đọc nguyên văn bullet points
-- ❌ Giọng văn như sách giáo khoa
-- ❌ Câu văn quá dài, quá học thuật
-- ❌ Bắt đầu mọi câu giống nhau
-- ❌ Dùng các từ như cốt lõi, 
-
----
-
-## VÍ DỤ SPEAKERNOTE:
-
-❌ **SAI (Văn viết):**
-"Deep Learning là một phương pháp học sâu trong trí tuệ nhân tạo. Nó có 3 đặc tính quan trọng: khả năng xấp xỉ, tối ưu hóa, và khái quát hóa."
-
-✅ **ĐÚNG (Văn nói tự nhiên):**
-"Nào, bây giờ đến phần thú vị nhé – Deep Learning. Các em có bao giờ tự hỏi tại sao nó lại hoạt động tốt đến vậy không? Thực ra về mặt lý thuyết, chúng ta vẫn chưa hiểu hoàn toàn đâu. Nhưng có 3 góc nhìn để giải thích: khả năng xấp xỉ, tối ưu, và khái quát hóa. Mình sẽ đi qua từng cái một nhé..."
-
----
-
 ## Định dạng đầu ra (JSON):
 **LƯU Ý QUAN TRỌNG: slideIndex BẮT ĐẦU TỪ 1, KHÔNG phải 0**
 
@@ -318,7 +271,7 @@ Mỗi speakerNote phải theo công thức:
       "subtitle": "Tên môn học",
       "content": [],
       "visualIdea": null,
-      "speakerNote": "Xin chào các em! Hôm nay chúng ta sẽ cùng tìm hiểu về..."
+      "speakerNote": null
     },
     {
       "slideIndex": 2,
@@ -326,7 +279,7 @@ Mỗi speakerNote phải theo công thức:
       "title": "Nội dung bài học",
       "content": ["Nội dung 1", "Nội dung 2", "Nội dung 3",...],
       "visualIdea": "Infographic với roadmap tương ứng với số lượng nội dung",
-      "speakerNote": "Bài học hôm nay gồm các phần chính. Đầu tiên là... Sau đó mình sẽ tìm hiểu về..."
+      "speakerNote": null
     },
     {
       "slideIndex": 3,
@@ -334,7 +287,7 @@ Mỗi speakerNote phải theo công thức:
       "title": "Mục tiêu bài học",
       "content": ["Mục tiêu 1", "Mục tiêu 2",...],
       "visualIdea": "Infographic với icons checklist và mũi tên tiến lên",
-      "speakerNote": "Sau bài học này, các em sẽ có thể làm được gì? Thứ nhất là... Đây là phần khó hơn một chút, nhưng mình sẽ giải thích kỹ hơn ở slide sau."
+      "speakerNote": null
     },
     {
       "slideIndex": 4,
@@ -342,29 +295,134 @@ Mỗi speakerNote phải theo công thức:
       "title": "Tiêu đề mục",
       "content": ["Ý chính 1", "Ý chính 2",...],
       "visualIdea": "Sơ đồ tư duy (mind map) thể hiện mối quan hệ giữa các khái niệm",
-      "speakerNote": "Nào, giờ mình đến phần quan trọng nhé. Các em nhìn trên slide thấy có 2 ý chính..."
+      "speakerNote": null
     },
     {
-      "slideIndex": 19,
+      "slideIndex": ...,
       "slideType": "questions",
       "title": "Câu hỏi thảo luận",
       "content": ["Câu hỏi 1", "Câu hỏi 2"],
       "visualIdea": null,
-      "speakerNote": "Trước khi kết thúc bài học, các em hãy trả lời các câu hỏi sau đây..."
+      "speakerNote": null
     },
     {
-      "slideIndex": 20,
+      "slideIndex": ...,
       "slideType": "summary",
       "title": "Tổng kết",
       "content": ["Tóm tắt 1", "Tóm tắt 2"],
       "visualIdea": "Thank you for listening",
-      "speakerNote": "Bài học của chúng ta đến đây là kết thúc. Tóm lại, hôm nay các em đã nắm được các nội dung chính..."
+      "speakerNote": null
     }
   ]
 }
 
 Chỉ trả về JSON.`,
         variables: ['{title}', '{detailed_outline}'],
+      },
+      {
+        slug: 'slides.speaker-notes',
+        name: 'Generate Speaker Notes',
+        content: `**Generate Speaker Notes (Lời Giảng)**
+
+**Mục tiêu:** Soạn lời giảng (transcript/speaker notes) tự nhiên, hấp dẫn cho từng slide dựa trên nội dung slide đã có.
+
+**Input:**
+- Tiêu đề bài học: {title}
+- Nội dung các slides:
+{slides_content}
+
+---
+
+## 🎤 QUY TẮC VIẾT SPEAKERNOTE (QUAN TRỌNG):
+
+### Cấu trúc: Hook → Explain → Bridge
+Mỗi speakerNote phải theo công thức:
+1. **Hook (mở đầu):** Thu hút sự chú ý - câu hỏi tu từ, ví dụ thực tế, hoặc kết nối slide trước
+2. **Explain (giảng):** Diễn giải nội dung slide - KHÔNG đọc lại bullet points
+3. **Bridge (chuyển tiếp):** Câu dẫn sang slide tiếp theo hoặc tóm lại ý chính
+**Đặc biệt chú ý không được viết các từ Hook (mở đầu), Explain (giảng), Bridge (chuyển tiếp) và dấu * vào nội dung speakerNote**
+
+### Mỗi speakerNote content phải:
+- Giải thích đầy đủ các ý trong outline
+- Không lược bỏ nội dung chuyên môn
+- Có ví dụ minh họa khi cần
+- Có phân tích ngắn để làm rõ bản chất
+- Có kết nối logic với phần trước
+
+### Văn phong yêu cầu:
+- Giọng giảng viên đại học
+- Tự nhiên nhưng không suồng sã
+- Không lạm dụng từ đệm như “Nào”, “À”, “Nha”
+- Không quá học thuật như sách giáo khoa
+- Không đọc lại bullet
+- Không liệt kê máy móc
+
+Ngôn ngữ nên:
+
+- Rõ ràng
+- Có ví dụ khi cần
+- Có phân tích ngắn gọn
+- Có nhấn mạnh điểm quan trọng
+- Có câu chuyển mạch hợp lý
+
+### Transition Words (Từ chuyển tiếp):
+- Mở đầu: "Nào, bây giờ...", "Tiếp theo...", "Quay lại với...", "Về phần này..."
+- Giải thích: "Nói đơn giản thì...", "Cụ thể là...", "Tức là..."
+- Nhấn mạnh: "Điểm quan trọng là...", "Các em cần chú ý...", "Đây là phần quan trọng..."
+- Ví dụ: "ví dụ như là...", "Giống như khi..."
+- Tổng kết: "Vậy tóm lại...", "Rút ra được là...", "Kết luận là..."
+
+### Độ dài theo loại slide:
+- Slide title/agenda: 80-100 từ (40-60 giây)
+- Slide objectives: 80-100 từ (40-60 giây)
+- Slide content: 200-250 từ (1-2 phút)
+- Slide summary: 100-120 từ (40-60 giây)
+
+### TRÁNH:
+- ❌ Đọc nguyên văn bullet points
+- ❌ Giọng văn như sách giáo khoa
+- ❌ Câu văn quá dài, quá học thuật
+- ❌ Bắt đầu mọi câu giống nhau
+- ❌ Dùng quá nhiều câu hỏi tu từ
+- ❌ Lặp cấu trúc câu đơn điệu
+- ❌ Dùng các từ như cốt lõi
+
+### TỐI ƯU CHO TTS:
+- Không đưa ký hiệu kỹ thuật khó đọc vào speakerNote
+- Không để nhiều ký tự đặc biệt
+- Không viết biểu thức dạng code trong lời giảng
+- Diễn đạt toán tử bằng lời nếu cần
+- Câu vừa phải, nhịp rõ ràng
+
+---
+
+## VÍ DỤ SPEAKERNOTE:
+
+❌ **SAI (Văn viết):**
+"Deep Learning là một phương pháp học sâu trong trí tuệ nhân tạo. Nó có 3 đặc tính quan trọng: khả năng xấp xỉ, tối ưu hóa, và khái quát hóa."
+
+✅ **ĐÚNG (Văn nói tự nhiên):**
+"Tiếp theo, chúng ta sẽ tìm hiểu về Deep Learning. Đây là phần rất hay vì thực ra về mặt lý thuyết, chúng ta vẫn chưa hiểu hoàn toàn tại sao nó lại hoạt động tốt đến vậy. Tuy nhiên, có 3 góc nhìn chính để giải thích: khả năng xấp xỉ, tối ưu, và khái quát hóa. Chúng ta sẽ đi qua từng phần một để các em nắm rõ bản chất của từng đặc tính."
+
+---
+
+## Định dạng đầu ra (JSON):
+
+{
+  "speakerNotes": [
+    {
+      "slideIndex": 1,
+      "speakerNote": "Xin chào các em! Hôm nay chúng ta sẽ cùng tìm hiểu về..."
+    },
+    {
+      "slideIndex": 2,
+      "speakerNote": "Bài học hôm nay gồm các phần chính. Đầu tiên là..."
+    }
+  ]
+}
+
+Chỉ trả về JSON.`,
+        variables: ['{title}', '{slides_content}'],
       },
       {
         slug: 'questions.interactive',
@@ -386,7 +444,7 @@ Chỉ trả về JSON.`,
 
 **LOẠI CÂU HỎI:**
 - MC (Multiple Choice): Chọn 1 đáp án đúng
-- MR (Multiple Response): Chọn nhiều đáp án đúng
+- MR (Multiple Response): 5-8 đáp án tổng (2-4 đúng + 3-4 sai)
 
 **QUY TẮC:**
 - Đáp án đúng bắt đầu bằng dấu \`*\`
@@ -424,8 +482,10 @@ Chỉ trả về JSON.`,
       "answers": [
         {"text": "*Đáp án đúng 1", "isCorrect": true},
         {"text": "*Đáp án đúng 2", "isCorrect": true},
+        {"text": "*Đáp án đúng ...", "isCorrect": true},
         {"text": "Đáp án sai 1", "isCorrect": false},
-        {"text": "Đáp án sai 2", "isCorrect": false}
+        {"text": "Đáp án sai 2", "isCorrect": false},
+        {"text": "Đáp án sai ...", "isCorrect": false}
       ],
       "correctFeedback": "Tuyệt vời!...",
       "incorrectFeedback": "Chưa chính xác...",

@@ -247,14 +247,13 @@ export class QuestionsController {
 
         // Set columns with width
         worksheet.columns = [
-            { header: 'ID', key: 'questionId', width: 12 },
-            { header: 'Mức độ', key: 'level', width: 10 },
-            { header: 'Câu hỏi', key: 'question', width: 50 },
-            { header: 'A (Đúng)', key: 'correctAnswer', width: 30 },
-            { header: 'B', key: 'optionB', width: 30 },
-            { header: 'C', key: 'optionC', width: 30 },
-            { header: 'D', key: 'optionD', width: 30 },
-            { header: 'Giải thích', key: 'explanation', width: 40 },
+            { header: 'Question ID', key: 'questionId', width: 12 },
+            { header: 'Question', key: 'question', width: 50 },
+            { header: 'Correct Answer (A)', key: 'correctAnswer', width: 30 },
+            { header: 'Option B', key: 'optionB', width: 30 },
+            { header: 'Option C', key: 'optionC', width: 30 },
+            { header: 'Option D', key: 'optionD', width: 30 },
+            { header: 'Explanation', key: 'explanation', width: 40 },
         ];
 
         // Style header row
@@ -268,10 +267,8 @@ export class QuestionsController {
 
         // Add data
         for (const q of questions) {
-            const levelLabel = q.level === 1 ? 'Biết' : q.level === 2 ? 'Hiểu' : 'Vận dụng';
             worksheet.addRow({
                 questionId: q.questionId,
-                level: levelLabel,
                 question: q.question,
                 correctAnswer: q.correctAnswer,
                 optionB: q.optionB,
@@ -282,7 +279,7 @@ export class QuestionsController {
         }
 
         // Set response headers
-        const filename = `review_questions_${lesson?.title || lessonId}.xlsx`;
+        const filename = `${lesson?.title || 'lesson'}_review.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
 
@@ -351,7 +348,7 @@ export class QuestionsController {
         }
 
         // Set response headers
-        const filename = `interactive_questions_${lesson?.title || lessonId}.xlsx`;
+        const filename = `${lesson?.title || 'lesson'}_interactive.xlsx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
 

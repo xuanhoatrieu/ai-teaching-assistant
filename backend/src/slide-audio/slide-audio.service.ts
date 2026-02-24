@@ -968,5 +968,93 @@ export class SlideAudioService {
 
         return Buffer.concat([header, pcmData]);
     }
-}
 
+    /**
+     * Upload a recorded audio file for a slide (alternative to TTS)
+     * Saves to the same path as TTS-generated audio.
+     */
+    async uploadRecording(
+        lessonId: string,
+        slideIndex: number,
+        file: { buffer: Buffer; mimetype: string; originalname: string },
+    ) {
+        // Find or create SlideAudio record
+        let slideAudio = await this.prisma.slideAudio.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+
+        if (!slideAudio) {
+            // Create a new record if it doesn't exist
+            slideAudio = await this.prisma.slideAudio.create({
+                data: {
+                    lessonId,
+                    slideIndex,
+                    slideTitle: `Slide ${slideIndex}`,
+                    speakerNote: '',
+                    status: 'pending',
+                },
+            });
+        }
+
+        // Determine file extension from mimetype
+        const extMap: Record<string, string> = {
+            'audio/webm': 'webm',
+            'audio/wav': 'wav',
+            'audio/wave': 'wav',
+            'audio/x-wav': 'wav',
+            'audio/mpeg': 'mp3',
+            'audio/mp3': 'mp3',
+            'audio/ogg': 'ogg',
+            'audio/mp4': 'm4a',
+        };
+        const ext = extMap[file.mimetype] || 'webm';
+
+        // Delete old audio file if exists
+        if (slideAudio.audioFileName) {
+            const oldPath = path.join(this.getAudioDir(lessonId), slideAudio.audioFileName);
+            try {
+                if (fs.existsSync(oldPath)) {
+                    fs.unlinkSync(oldPath);
+                }
+            } catch (err) {
+                this.logger.warn(`Failed to delete old audio file: ${oldPath}`, err);
+            }
+        }
+
+        // Save new file
+        const audioDir = this.getAudioDir(lessonId);
+        const fileName = `slide_${String(slideIndex).padStart(2, '0')}_rec.${ext}`;
+        const filePath = path.join(audioDir, fileName);
+        fs.writeFileSync(filePath, file.buffer);
+
+        this.logger.log(`Saved recording: ${filePath} (${file.buffer.length} bytes, ${file.mimetype})`);
+
+        // Estimate duration for WAV files
+        let audioDuration: number | null = null;
+        if (ext === 'wav' && file.buffer.length > 44) {
+            try {
+                const byteRate = file.buffer.readUInt32LE(28);
+                if (byteRate > 0) {
+                    audioDuration = (file.buffer.length - 44) / byteRate;
+                }
+            } catch {
+                // Ignore parsing errors
+            }
+        }
+
+        // Update record
+        const updated = await this.prisma.slideAudio.update({
+            where: { id: slideAudio.id },
+            data: {
+                status: 'done',
+                audioFileName: fileName,
+                audioUrl: `/uploads/lessons/${lessonId}/audio/${fileName}`,
+                audioDuration,
+                voiceId: 'recording',
+                errorMessage: null,
+            },
+        });
+
+        return updated;
+    }
+}

@@ -151,6 +151,7 @@ export function Step6QuestionBank() {
         try {
             await api.put(`/lessons/${lessonId}/interactive-questions/${q.id}`, {
                 questionText: q.questionText,
+                answers: q.answers,
                 correctFeedback: q.correctFeedback,
                 incorrectFeedback: q.incorrectFeedback,
             });
@@ -180,7 +181,7 @@ export function Step6QuestionBank() {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `review_questions_${lessonId}.xlsx`);
+            link.setAttribute('download', `${lessonData?.title || 'lesson'}_review.xlsx`);
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -197,7 +198,7 @@ export function Step6QuestionBank() {
             const url = window.URL.createObjectURL(new Blob([response.data]));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `interactive_questions_${lessonId}.xlsx`);
+            link.setAttribute('download', `${lessonData?.title || 'lesson'}_interactive.xlsx`);
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -206,23 +207,6 @@ export function Step6QuestionBank() {
         }
     };
 
-    const getLevelLabel = (level: number) => {
-        switch (level) {
-            case 1: return 'Biết';
-            case 2: return 'Hiểu';
-            case 3: return 'Vận dụng';
-            default: return 'Unknown';
-        }
-    };
-
-    const getLevelClass = (level: number) => {
-        switch (level) {
-            case 1: return 'level-know';
-            case 2: return 'level-understand';
-            case 3: return 'level-apply';
-            default: return '';
-        }
-    };
 
     // Parse answers from array with * prefix for correct
     const parseAnswers = (answers: string[]) => {
@@ -348,11 +332,33 @@ export function Step6QuestionBank() {
                                             <p className="question-text">{q.questionText}</p>
                                         )}
                                         <div className="answers-list">
-                                            {parseAnswers(q.answers || []).map((a, i) => (
-                                                <div key={i} className={`answer ${a.isCorrect ? 'correct' : ''}`}>
-                                                    {a.isCorrect ? '✅' : '⬜'} {a.text}
-                                                </div>
-                                            ))}
+                                            {editingInteractiveId === q.id ? (
+                                                (q.answers || []).map((ans, i) => (
+                                                    <div key={i} className={`answer ${ans.startsWith('*') ? 'correct' : ''}`}>
+                                                        {ans.startsWith('*') ? '✅' : '⬜'}
+                                                        <input
+                                                            type="text"
+                                                            value={ans.replace(/^\*/, '')}
+                                                            onChange={(e) => {
+                                                                const prefix = ans.startsWith('*') ? '*' : '';
+                                                                const newAnswers = [...q.answers];
+                                                                newAnswers[i] = prefix + e.target.value;
+                                                                setInteractiveQuestions(prev =>
+                                                                    prev.map(p => p.id === q.id ? { ...p, answers: newAnswers } : p)
+                                                                );
+                                                            }}
+                                                            style={{ flex: 1, marginLeft: 8 }}
+                                                            className="edit-input"
+                                                        />
+                                                    </div>
+                                                ))
+                                            ) : (
+                                                parseAnswers(q.answers || []).map((a, i) => (
+                                                    <div key={i} className={`answer ${a.isCorrect ? 'correct' : ''}`}>
+                                                        {a.isCorrect ? '✅' : '⬜'} {a.text}
+                                                    </div>
+                                                ))
+                                            )}
                                         </div>
                                         <div className="feedback">
                                             <div className="feedback-correct">✅ {q.correctFeedback}</div>
@@ -448,7 +454,6 @@ export function Step6QuestionBank() {
                                     <thead>
                                         <tr>
                                             <th style={{ width: '80px' }}>ID</th>
-                                            <th style={{ width: '70px' }}>Mức độ</th>
                                             <th style={{ minWidth: '250px' }}>Câu hỏi</th>
                                             <th style={{ width: '120px' }}>A (Đúng)</th>
                                             <th style={{ width: '120px' }}>B</th>
@@ -462,11 +467,6 @@ export function Step6QuestionBank() {
                                         {reviewQuestions.map((q) => (
                                             <tr key={q.id}>
                                                 <td className="q-id">{q.questionId || q.id}</td>
-                                                <td>
-                                                    <span className={`level-badge ${getLevelClass(q.level)}`}>
-                                                        {getLevelLabel(q.level)}
-                                                    </span>
-                                                </td>
                                                 <td className="q-text">
                                                     {editingReviewId === q.id ? (
                                                         <input

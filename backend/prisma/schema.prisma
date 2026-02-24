@@ -250,11 +250,12 @@ model QuestionBank {
 
 // Task types for AI model configuration
 enum TaskType {
-  OUTLINE     // Raw outline -> Detailed outline
-  SLIDES      // Detailed outline -> Slide script
-  QUESTIONS   // Generate quiz questions
-  IMAGE       // Generate images for slides
-  TTS         // Text-to-speech for audio
+  OUTLINE        // Raw outline -> Detailed outline
+  SLIDES         // Detailed outline -> Slide script
+  SPEAKER_NOTES  // Generate speaker notes for slides
+  QUESTIONS      // Generate quiz questions
+  IMAGE          // Generate images for slides
+  TTS            // Text-to-speech for audio
 }
 
 // User's AI model preference per task type
