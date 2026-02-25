@@ -57,6 +57,32 @@
     cursor: not-allowed;
 }
 
+/* Optimize & QA Button */
+.btn-optimize-notes {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+}
+
+.btn-optimize-notes:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);
+}
+
+.btn-optimize-notes:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* Generate All Audio Button */
 .btn-generate-all {
     padding: 10px 20px;
@@ -207,11 +233,24 @@
     text-transform: capitalize;
 }
 
-/* Card Body: 2-Column */
+/* Card Body: 2-Column (default) */
 .card-body {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0;
+}
+
+/* Card Body: 3-Column for raw vs optimized notes */
+.card-body.card-body-3col {
+    grid-template-columns: 1fr 1fr 1fr;
+}
+
+.card-note-raw {
+    border-left: 3px solid rgba(139, 92, 246, 0.3);
+}
+
+.card-note-optimized {
+    border-left: 3px solid rgba(34, 197, 94, 0.3);
 }
 
 .card-content-col,
@@ -667,7 +706,9 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-    .card-body {
+
+    .card-body,
+    .card-body.card-body-3col {
         grid-template-columns: 1fr;
     }
 

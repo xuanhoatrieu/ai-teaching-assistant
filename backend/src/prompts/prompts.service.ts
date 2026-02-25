@@ -322,9 +322,9 @@ Chỉ trả về JSON.`,
       {
         slug: 'slides.speaker-notes',
         name: 'Generate Speaker Notes',
-        content: `**Generate Speaker Notes (Lời Giảng)**
+        content: `**Generate Speaker Notes (Lời Giảng) - Bước 1: Tạo Nội Dung**
 
-**Mục tiêu:** Soạn lời giảng (transcript/speaker notes) tự nhiên, hấp dẫn cho từng slide dựa trên nội dung slide đã có.
+**Mục tiêu:** Soạn lời giảng (transcript/speaker notes) cho từng slide dựa trên nội dung slide đã có. Tập trung vào NỘI DUNG đầy đủ, chính xác. Văn phong và tối ưu TTS sẽ được xử lý ở bước sau.
 
 **Input:**
 - Tiêu đề bài học: {title}
@@ -333,76 +333,62 @@ Chỉ trả về JSON.`,
 
 ---
 
-## 🎤 QUY TẮC VIẾT SPEAKERNOTE (QUAN TRỌNG):
+## ⚠️ YÊU CẦU BẮT BUỘC VỀ ĐỘ DÀI (CRITICAL):
 
-### Cấu trúc: Hook → Explain → Bridge
-Mỗi speakerNote phải theo công thức:
-1. **Hook (mở đầu):** Thu hút sự chú ý - câu hỏi tu từ, ví dụ thực tế, hoặc kết nối slide trước
-2. **Explain (giảng):** Diễn giải nội dung slide - KHÔNG đọc lại bullet points
-3. **Bridge (chuyển tiếp):** Câu dẫn sang slide tiếp theo hoặc tóm lại ý chính
-**Đặc biệt chú ý không được viết các từ Hook (mở đầu), Explain (giảng), Bridge (chuyển tiếp) và dấu * vào nội dung speakerNote**
+| Loại slide | Số từ TỐI THIỂU | Thời lượng nói |
+|-----------|-----------------|----------------|
+| title/agenda | 100 từ | 40-60 giây |
+| objectives | 100 từ | 40-60 giây |
+| **content** | **200 từ** | **1.5-2 phút** |
+| summary | 100 từ | 40-60 giây |
 
-### Mỗi speakerNote content phải:
-- Giải thích đầy đủ các ý trong outline
-- Không lược bỏ nội dung chuyên môn
-- Có ví dụ minh họa khi cần
-- Có phân tích ngắn để làm rõ bản chất
-- Có kết nối logic với phần trước
-
-### Văn phong yêu cầu:
-- Giọng giảng viên đại học
-- Tự nhiên nhưng không suồng sã
-- Không lạm dụng từ đệm như “Nào”, “À”, “Nha”
-- Không quá học thuật như sách giáo khoa
-- Không đọc lại bullet
-- Không liệt kê máy móc
-
-Ngôn ngữ nên:
-
-- Rõ ràng
-- Có ví dụ khi cần
-- Có phân tích ngắn gọn
-- Có nhấn mạnh điểm quan trọng
-- Có câu chuyển mạch hợp lý
-
-### Transition Words (Từ chuyển tiếp):
-- Mở đầu: "Nào, bây giờ...", "Tiếp theo...", "Quay lại với...", "Về phần này..."
-- Giải thích: "Nói đơn giản thì...", "Cụ thể là...", "Tức là..."
-- Nhấn mạnh: "Điểm quan trọng là...", "Các em cần chú ý...", "Đây là phần quan trọng..."
-- Ví dụ: "ví dụ như là...", "Giống như khi..."
-- Tổng kết: "Vậy tóm lại...", "Rút ra được là...", "Kết luận là..."
-
-### Độ dài theo loại slide:
-- Slide title/agenda: 80-100 từ (40-60 giây)
-- Slide objectives: 80-100 từ (40-60 giây)
-- Slide content: 200-250 từ (1-2 phút)
-- Slide summary: 100-120 từ (40-60 giây)
-
-### TRÁNH:
-- ❌ Đọc nguyên văn bullet points
-- ❌ Giọng văn như sách giáo khoa
-- ❌ Câu văn quá dài, quá học thuật
-- ❌ Bắt đầu mọi câu giống nhau
-- ❌ Dùng quá nhiều câu hỏi tu từ
-- ❌ Lặp cấu trúc câu đơn điệu
-- ❌ Dùng các từ như cốt lõi
-
-### TỐI ƯU CHO TTS:
-- Không đưa ký hiệu kỹ thuật khó đọc vào speakerNote
-- Không để nhiều ký tự đặc biệt
-- Không viết biểu thức dạng code trong lời giảng
-- Diễn đạt toán tử bằng lời nếu cần
-- Câu vừa phải, nhịp rõ ràng
+⛔ NẾU SPEAKERNOTE CỦA SLIDE CONTENT DƯỚI 200 TỪ → BẠN ĐÃ LÀM SAI. PHẢI VIẾT LẠI DÀI HƠN.
+⛔ Mỗi slide content phải có ĐỦ 3 phần: mở đầu + giảng giải chi tiết + chuyển tiếp.
 
 ---
 
-## VÍ DỤ SPEAKERNOTE:
+## 🎤 QUY TẮC VIẾT SPEAKERNOTE:
 
-❌ **SAI (Văn viết):**
+### Cấu trúc bắt buộc: Mở đầu → Giảng giải → Chuyển tiếp
+1. **Mở đầu (1-2 câu):** Kết nối với slide trước, đặt vấn đề, hoặc nêu tình huống thực tế
+2. **Giảng giải (phần chính, chiếm 70-80% nội dung):** Diễn giải từng ý trong slide - KHÔNG đọc lại bullet points mà phải GIẢI THÍCH, cho ví dụ, phân tích
+3. **Chuyển tiếp (1-2 câu):** Tóm ý chính và dẫn sang slide tiếp theo
+
+**Đặc biệt chú ý: Không được viết các từ "Mở đầu", "Giảng giải", "Chuyển tiếp" và dấu * vào nội dung speakerNote. Viết liền mạch tự nhiên.**
+
+### Phần giảng giải PHẢI bao gồm:
+- Giải thích rõ ràng từng ý trong slide (không bỏ sót)
+- Ít nhất 1-2 ví dụ minh họa cụ thể
+- Phân tích ngắn để làm rõ ý nghĩa
+- Kết nối logic giữa các ý với nhau
+- Nhấn mạnh điểm quan trọng cần ghi nhớ
+
+## 🗣️ VĂN PHONG:
+- Viết như transcript bài giảng đại học
+- Trực tiếp, rõ ràng, đi thẳng vào nội dung chuyên môn
+- KHÔNG dùng ẩn dụ, hình tượng, so sánh văn chương, cường điệu hóa
+
+### TRÁNH:
+- ❌ Đọc nguyên văn bullet points
+- ❌ Viết quá ngắn gọn, thiếu giải thích
+- ❌ Bắt đầu mọi câu giống nhau
+- ❌ Dùng quá nhiều câu hỏi tu từ
+
+---
+
+## VÍ DỤ SPEAKERNOTE CHO SLIDE CONTENT (~220 từ):
+
+❌ **SAI (Quá ngắn, chỉ ~50 từ):**
 "Deep Learning là một phương pháp học sâu trong trí tuệ nhân tạo. Nó có 3 đặc tính quan trọng: khả năng xấp xỉ, tối ưu hóa, và khái quát hóa."
 
-✅ **ĐÚNG (Văn nói tự nhiên):**
-"Tiếp theo, chúng ta sẽ tìm hiểu về Deep Learning. Đây là phần rất hay vì thực ra về mặt lý thuyết, chúng ta vẫn chưa hiểu hoàn toàn tại sao nó lại hoạt động tốt đến vậy. Tuy nhiên, có 3 góc nhìn chính để giải thích: khả năng xấp xỉ, tối ưu, và khái quát hóa. Chúng ta sẽ đi qua từng phần một để các em nắm rõ bản chất của từng đặc tính."
+✅ **ĐÚNG (Đủ dài, ~220 từ):**
+"Tiếp theo, chúng ta sẽ tìm hiểu về Deep Learning, hay còn gọi là học sâu. Đây là phần rất quan trọng vì cho đến nay, giới nghiên cứu vẫn chưa hiểu hoàn toàn tại sao Deep Learning lại hoạt động tốt đến vậy. Tuy nhiên có 3 góc nhìn chính giúp chúng ta giải thích được phần nào.
+
+Đầu tiên là khả năng xấp xỉ. Nói đơn giản, một mạng neural đủ lớn có thể xấp xỉ bất kỳ hàm số nào. Điều này có nghĩa là về mặt lý thuyết, Deep Learning có thể học được mọi mối quan hệ trong dữ liệu.
+
+Thứ hai là khả năng tối ưu. Mặc dù bài toán tối ưu trong Deep Learning rất phức tạp với hàng triệu tham số, nhưng các thuật toán gradient descent vẫn tìm được lời giải tốt. Ví dụ như khi huấn luyện mô hình nhận diện hình ảnh, dù có hàng triệu trọng số cần điều chỉnh, quá trình training vẫn hội tụ được.
+
+Cuối cùng là khả năng khái quát hóa. Mô hình có thể hoạt động tốt trên dữ liệu chưa từng thấy, không chỉ dữ liệu đã dùng để huấn luyện. Chúng ta sẽ đi sâu vào từng phần ở các slide tiếp theo."
 
 ---
 
@@ -412,7 +398,7 @@ Ngôn ngữ nên:
   "speakerNotes": [
     {
       "slideIndex": 1,
-      "speakerNote": "Xin chào các em! Hôm nay chúng ta sẽ cùng tìm hiểu về..."
+      "speakerNote": "Xin chào các em. Hôm nay chúng ta sẽ cùng tìm hiểu về..."
     },
     {
       "slideIndex": 2,
@@ -421,8 +407,146 @@ Ngôn ngữ nên:
   ]
 }
 
+⚠️ NHẮC LẠI: Mỗi speakerNote cho slide content phải TỐI THIỂU 200 từ. Giải thích đầy đủ tất cả các ý trong slide. Kiểm tra lại trước khi trả kết quả.
+
 Chỉ trả về JSON.`,
         variables: ['{title}', '{slides_content}'],
+      },
+      {
+        slug: 'slides.optimize-notes',
+        name: 'Optimize & QA Speaker Notes',
+        content: `**Tối Ưu & Kiểm Duyệt Speaker Notes - Bước 2**
+
+**Mục tiêu:** Kiểm duyệt chất lượng, sửa ngôn ngữ cường điệu/ẩn dụ, và tối ưu cho TTS (Text-to-Speech).
+
+**Input:**
+- Nội dung các slides gốc (để cross-check):
+{slides_content}
+
+- Speaker notes hiện tại (từ Bước 1):
+{speaker_notes}
+
+---
+
+## ⛔ NGUYÊN TẮC BẮT BUỘC — ĐỌC KỸ TRƯỚC KHI LÀM
+
+1. **GIỮ NGUYÊN cấu trúc đoạn văn:** Giữ nguyên số đoạn, số câu, thứ tự câu, cách dẫn dắt narrative
+2. **KHÔNG XÓA CÂU NÀO:** Mọi câu trong bản gốc đều phải có mặt trong output (có thể sửa vài từ trong câu)
+3. **KHÔNG chuyển văn narrative sang liệt kê:** Nếu bản gốc viết dạng đoạn văn dẫn dắt → output phải giữ dạng đoạn văn dẫn dắt. TUYỆT ĐỐI KHÔNG chuyển thành "Một là..., Hai là..., Ba là..."
+4. **CHỈ ĐƯỢC THÊM, KHÔNG ĐƯỢC BỚT:** Nếu phát hiện thiếu nội dung → thêm câu mới
+5. **SỐ TỪ OUTPUT >= 95% SỐ TỪ INPUT:** Vi phạm quy tắc này = THẤT BẠI
+
+---
+
+## ✅ NHIỆM VỤ 1: KIỂM DUYỆT CHẤT LƯỢNG
+
+So khớp speaker notes với slide content gốc để phát hiện và sửa lỗi:
+
+| Vấn đề | Cách xử lý |
+|--------|------------|
+| Slide content có 4 ý, speaker note chỉ giải thích 2 | Bổ sung giải thích cho 2 ý còn thiếu |
+| Speaker note < 200 từ (slide content) | Viết bổ sung thêm ví dụ, giải thích chi tiết hơn |
+| Speaker note < 100 từ (slide title/agenda/summary) | Viết bổ sung |
+| Thiếu ví dụ minh họa | Thêm ít nhất 1 ví dụ |
+| Giải thích sai hoặc mâu thuẫn với slide | Sửa cho đúng |
+
+---
+
+## ✅ NHIỆM VỤ 2: SỬA NGÔN NGỮ CƯỜNG ĐIỆU VÀ ẨN DỤ
+
+Tìm trong mỗi câu các cụm từ thuộc các dạng dưới đây và thay bằng ngôn ngữ trực tiếp. **Chỉ sửa cụm từ có vấn đề, giữ nguyên phần còn lại của câu.**
+
+### CÁC DẠNG CẦN SỬA:
+- **Ẩn dụ/hình tượng:** giải phẫu, mổ xẻ, lộ trình, chặng, chinh phục, giải mã, mở khóa, nắm bắt → thay bằng từ trực tiếp (xem xét, phân tích, nội dung, phần, học, tìm hiểu)
+- **Cường điệu:** hack não, thần kỳ, tuyệt vời, bùng nổ, kinh điển, muôn thuở, không gì tốt hơn, cực kỳ → thay bằng từ trung tính (thú vị, hiệu quả, phổ biến, thường gặp)
+- **Văn chương:** viên gạch nền tảng, cánh cửa mở ra, vũ khí sắc bén, chìa khóa vàng, cơn ác mộng, như một mớ dây điện → thay bằng mô tả trực tiếp
+- **Suồng sã quá mức:** giảm tần suất "Nào", "À", "Nha", "nhé" cuối câu liên tiếp
+
+### CÁC CẶP VÍ DỤ (chỉ sửa cụm từ, giữ nguyên câu):
+❌ "Chúng ta hãy cùng **giải phẫu** cấu trúc của một chương trình con."
+✅ "Chúng ta hãy cùng **xem** cấu trúc của một chương trình con."
+
+❌ "Để hiểu rõ đệ quy, **không gì tốt hơn là** xét **ví dụ kinh điển**: Tính giai thừa."
+✅ "Để hiểu rõ đệ quy, chúng ta sẽ xét ví dụ tính giai thừa."
+
+❌ "Cuối cùng, **một câu hỏi muôn thuở**: Khi nào nên dùng Đệ quy?"
+✅ "Cuối cùng, vậy khi nào nên dùng Đệ quy và khi nào nên dùng Vòng lặp?"
+
+❌ "Tổng kết lại, các bạn cần **khắc sâu** ba điểm chính."
+✅ "Tổng kết lại, các bạn cần **nhớ** ba điểm chính."
+
+❌ "Đây chính là **chìa khóa vàng** để **mở ra cánh cửa** của môn Cấu trúc dữ liệu."
+✅ "Đây là **nền tảng quan trọng** cho môn Cấu trúc dữ liệu."
+
+❌ "Code sẽ **rối rắm như một mớ dây điện**, và việc debug sẽ là **cơn ác mộng**."
+✅ "Code sẽ **khó đọc, khó bảo trì**, và việc tìm lỗi sẽ **rất khó khăn**."
+
+❌ "**Lộ trình** hôm nay gồm 5 **chặng** chính."
+✅ "**Bài học** hôm nay gồm 5 **phần** chính."
+
+### VÍ DỤ ĐOẠN VĂN ĐÚNG PHONG CÁCH (giữ cấu trúc narrative, chỉ sửa từ):
+"Tóm lại, chương trình con hay hàm là đơn vị tổ chức cơ bản của một chương trình. Khi hệ thống lớn dần lên, chúng ta không thể viết mọi thứ trong một khối mã duy nhất. Thay vào đó, chúng ta chia nhỏ thành nhiều hàm, mỗi hàm thực hiện một nhiệm vụ rõ ràng. Cách tổ chức này giúp chương trình dễ đọc, dễ kiểm tra và dễ sửa đổi khi có yêu cầu mới.
+Việc nắm vững cách thiết kế hàm, quản lý tham số, kiểm soát phạm vi biến và hiểu tư duy đệ quy sẽ giúp các em hình thành thói quen viết mã có cấu trúc. Đây là nền tảng quan trọng cho các môn học tiếp theo, đặc biệt khi làm việc với các cấu trúc dữ liệu và thuật toán phức tạp hơn."
+
+---
+
+## ✅ NHIỆM VỤ 3: TỐI ƯU CHO TTS
+
+Lời giảng sẽ được đọc bởi phần mềm Text-to-Speech. Chuyển đổi mọi code/ký hiệu sang dạng lời nói:
+
+### Quy tắc chuyển đổi mã nguồn sang lời nói:
+- ❌ KHÔNG viết: \`tinh_tong(a, b)\`
+- ✅ PHẢI viết: "hàm tính tổng, nhận hai tham số a và b"
+- ❌ KHÔNG viết: \`*args\` và \`**kwargs\`
+- ✅ PHẢI viết: "star args" và "double star kwargs" hoặc "tham số vị trí động" và "tham số từ khóa động"
+- ❌ KHÔNG viết: \`tao_hinh_chu_nhat(chieu_dai=10, chieu_rong=20)\`
+- ✅ PHẢI viết: "hàm tạo hình chữ nhật, với chiều dài bằng 10 và chiều rộng bằng 20"
+- ❌ KHÔNG viết: \`if n <= 1: return 1\`
+- ✅ PHẢI viết: "nếu n nhỏ hơn hoặc bằng 1 thì trả về 1"
+- ❌ KHÔNG viết: \`factorial(n-1)\`
+- ✅ PHẢI viết: "gọi lại hàm factorial với tham số n trừ 1"
+
+### Quy tắc chung cho TTS:
+- Tên hàm/biến tiếng Việt có dấu gạch dưới: đọc bằng lời, không giữ nguyên tên code
+- Tên hàm/biến tiếng Anh ngắn (sort, print, len): giữ nguyên
+- Tên hàm/biến tiếng Anh dài hoặc có dấu gạch dưới: diễn giải bằng lời
+- Toán tử: viết bằng từ ("bằng", "nhỏ hơn", "lớn hơn", "không bằng")
+- Dấu ngoặc, dấu hai chấm: bỏ qua hoặc diễn giải bằng lời
+- Không để nhiều ký tự đặc biệt liên tiếp
+- Câu vừa phải, nhịp rõ ràng, có ngắt hơi tự nhiên
+- Viết số bằng chữ khi cần rõ ràng (ví dụ: "hai tham số" thay vì "2 tham số")
+
+### Quy tắc về từ viết tắt (ưu tiên từ trên xuống):
+1. **Viết tắt tiếng Việt → viết đầy đủ tiếng Việt:**
+   CLB → "câu lạc bộ", ĐH → "đại học", GV → "giảng viên", SV → "sinh viên", CNTT → "công nghệ thông tin", CSDL → "cơ sở dữ liệu"
+
+2. **Viết tắt tiếng Anh có nghĩa tiếng Việt tương đương → dùng tiếng Việt:**
+   EOL → "ký tự cuối dòng", EOF → "cuối tập tin", OS → "hệ điều hành", IDE → "môi trường phát triển", OOP → "lập trình hướng đối tượng"
+
+3. **Viết tắt tiếng Anh không có nghĩa tiếng Việt phổ biến → giữ nguyên cách viết:**
+   RAM → "RAM", ROM → "ROM", JSON → "JSON",... nghĩa là giữ nguyên từ viết tắt
+
+⚠️ KHÔNG bao giờ tách từng chữ cái bằng dấu cách kiểu "R A M", "E O L". Luôn viết liền hoặc phiên âm.
+
+---
+
+## Định dạng đầu ra (JSON):
+
+{
+  "speakerNotes": [
+    {
+      "slideIndex": 1,
+      "speakerNote": "Speaker note đã được kiểm duyệt, sửa ngôn ngữ, và tối ưu TTS..."
+    }
+  ]
+}
+
+⚠️ KIỂM TRA CUỐI CÙNG:
+1. Số từ output >= 95% input? Nếu không → thêm nội dung.
+2. Có câu nào bị xóa không? Nếu có → thêm lại.
+3. Có đoạn narrative nào bị chuyển thành liệt kê không? Nếu có → viết lại dạng narrative.
+Chỉ trả về JSON.`,
+        variables: ['{slides_content}', '{speaker_notes}'],
       },
       {
         slug: 'questions.interactive',

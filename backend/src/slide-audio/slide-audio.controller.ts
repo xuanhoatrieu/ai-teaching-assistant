@@ -47,6 +47,15 @@ export class SlideAudioController {
         return this.slidesService.generateSpeakerNotes(lessonId, req.user.id);
     }
 
+    // Optimize & QA speaker notes using AI (Step 4 - Button 2)
+    @Post('optimize-speaker-notes')
+    async optimizeSpeakerNotes(
+        @Param('lessonId') lessonId: string,
+        @Request() req,
+    ) {
+        return this.slidesService.optimizeSpeakerNotes(lessonId, req.user.id);
+    }
+
     // Upload recorded audio for a slide (alternative to TTS)
     @Post(':index/upload-recording')
     @UseInterceptors(FileInterceptor('audio', {

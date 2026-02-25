@@ -44,6 +44,7 @@ export function Step4GenerateAudio() {
     const [slideContents, setSlideContents] = useState<SlideContent[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+    const [isOptimizingNotes, setIsOptimizingNotes] = useState(false);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
     const [generatingSlides, setGeneratingSlides] = useState<Set<number>>(new Set());
     const [editingSlide, setEditingSlide] = useState<number | null>(null);
@@ -132,6 +133,25 @@ export function Step4GenerateAudio() {
             alert('Lỗi khi tạo lời giảng. Vui lòng thử lại.');
         } finally {
             setIsGeneratingNotes(false);
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // OPTIMIZE & QA SPEAKER NOTES (STEP 2)
+    // ═══════════════════════════════════════════════════════════════
+    const optimizeSpeakerNotes = async () => {
+        try {
+            setIsOptimizingNotes(true);
+            const response = await api.post(`/lessons/${lessonId}/slide-audios/optimize-speaker-notes`);
+            setSlideAudios(normalizeSlideAudios(response.data));
+            // Also reload slide contents to get updated speakerNote fields
+            const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
+            if (slidesRes.data) setSlideContents(slidesRes.data);
+        } catch (error) {
+            console.error('Error optimizing speaker notes:', error);
+            alert('Lỗi khi tối ưu lời giảng. Vui lòng thử lại.');
+        } finally {
+            setIsOptimizingNotes(false);
         }
     };
 
@@ -471,6 +491,19 @@ export function Step4GenerateAudio() {
                             '✨ Tạo Lời Giảng'
                         )}
                     </button>
+                    {/* Optimize & QA Speaker Notes Button */}
+                    <button
+                        className="btn-optimize-notes"
+                        onClick={optimizeSpeakerNotes}
+                        disabled={isOptimizingNotes || !hasSpeakerNotes}
+                        title={!hasSpeakerNotes ? 'Tạo lời giảng trước' : 'Kiểm duyệt + Rửa ngôn ngữ + Tối ưu TTS'}
+                    >
+                        {isOptimizingNotes ? (
+                            <><span className="spinner"></span> Đang tối ưu...</>
+                        ) : (
+                            '✅ Tối Ưu & Kiểm Duyệt'
+                        )}
+                    </button>
                     {/* Generate All Audio Button */}
                     <button
                         className="btn-generate-all"
@@ -514,7 +547,9 @@ export function Step4GenerateAudio() {
                 {slides.map((slide) => {
                     const audio = slideAudios.find(sa => sa.slideIndex === slide.slideIndex);
                     const contentItems = parseContent(slide.content);
-                    const speakerNote = audio?.speakerNote || slide.speakerNote || '';
+                    const rawNote = slide.speakerNote || '';  // From Button 1 (Slide.speakerNote)
+                    const optimizedNote = audio?.speakerNote || '';  // From Button 2 (SlideAudio.speakerNote)
+                    const activeNote = optimizedNote || rawNote;  // Best available note for audio generation
                     const hasAudio = audio?.status === 'COMPLETED' || (audio?.status === 'PENDING' && audio?.audioUrl);
                     const isEditing = editingSlide === slide.slideIndex;
                     const isGenerating = generatingSlides.has(slide.slideIndex) || audio?.status === 'GENERATING';
@@ -529,9 +564,9 @@ export function Step4GenerateAudio() {
                                 <span className="slide-type-badge">{slide.slideType}</span>
                             </div>
 
-                            {/* Card Body: 2-Column Layout */}
-                            <div className="card-body">
-                                {/* Left: Slide Content */}
+                            {/* Card Body: 3-Column Layout */}
+                            <div className="card-body card-body-3col">
+                                {/* Col 1: Slide Content */}
                                 <div className="card-content-col">
                                     <div className="col-label">📋 Nội dung Slide</div>
                                     {contentItems.length > 0 ? (
@@ -548,9 +583,21 @@ export function Step4GenerateAudio() {
                                     )}
                                 </div>
 
-                                {/* Right: Speaker Note */}
-                                <div className="card-note-col">
-                                    <div className="col-label">🎤 Lời Giảng</div>
+                                {/* Col 2: Raw Speaker Note (Button 1) */}
+                                <div className="card-note-col card-note-raw">
+                                    <div className="col-label">✨ Lời Giảng (Bước 1)</div>
+                                    {rawNote ? (
+                                        <div className="note-content">
+                                            <p>{rawNote}</p>
+                                        </div>
+                                    ) : (
+                                        <p className="empty-note">Chưa có. Nhấn "✨ Tạo Lời Giảng".</p>
+                                    )}
+                                </div>
+
+                                {/* Col 3: Optimized Speaker Note (Button 2) */}
+                                <div className="card-note-col card-note-optimized">
+                                    <div className="col-label">✅ Lời Giảng (Tối Ưu)</div>
                                     {isEditing ? (
                                         <div className="edit-mode">
                                             <textarea
@@ -564,15 +611,15 @@ export function Step4GenerateAudio() {
                                                 <button className="btn-cancel" onClick={cancelEdit}>Hủy</button>
                                             </div>
                                         </div>
-                                    ) : speakerNote ? (
+                                    ) : optimizedNote ? (
                                         <div className="note-content">
-                                            <p>{speakerNote}</p>
-                                            <button className="btn-edit-inline" onClick={() => startEdit(slide.slideIndex, speakerNote)} title="Chỉnh sửa">
+                                            <p>{optimizedNote}</p>
+                                            <button className="btn-edit-inline" onClick={() => startEdit(slide.slideIndex, optimizedNote)} title="Chỉnh sửa">
                                                 ✏️
                                             </button>
                                         </div>
                                     ) : (
-                                        <p className="empty-note">Chưa có lời giảng. Nhấn "✨ Tạo Lời Giảng" để tạo.</p>
+                                        <p className="empty-note">Chưa tối ưu. Nhấn "✅ Tối Ưu & Kiểm Duyệt".</p>
                                     )}
                                 </div>
                             </div>
@@ -584,8 +631,8 @@ export function Step4GenerateAudio() {
                                     <button
                                         className="btn-generate"
                                         onClick={() => generateSingleAudio(slide.slideIndex)}
-                                        disabled={isGenerating || !speakerNote}
-                                        title={!speakerNote ? 'Cần có lời giảng trước' : 'Tạo audio TTS'}
+                                        disabled={isGenerating || !activeNote}
+                                        title={!activeNote ? 'Cần có lời giảng trước' : 'Tạo audio TTS'}
                                     >
                                         {isGenerating ? (
                                             <><span className="spinner-small"></span> Đang tạo</>

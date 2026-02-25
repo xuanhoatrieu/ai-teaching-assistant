@@ -12,6 +12,14 @@
         "api_url": "https://api.hoclieu.id.vn",
         "description": "Hệ thống tạo bài giảng tự động sử dụng AI (Gemini, Imagen, TTS) để generate PPTX, handouts, và quizzes từ outline"
     },
+    "critical_rules": {
+        "⛔ NO_AUTO_PUSH": "TUYỆT ĐỐI không được git push khi chưa được user bảo. Chỉ commit local, chờ user xác nhận rồi mới push.",
+        "🔑 test_account": {
+            "email": "xuanhoaspt@gmail.com",
+            "password": "Hoa@123",
+            "note": "Tài khoản test trên production (ai.hoclieu.id.vn)"
+        }
+    },
     "tech_stack": {
         "frontend": {
             "framework": "React 18",
@@ -516,6 +524,8 @@
             "⭐ ViTTS API response parsing: /saved-references and /trained-voices return arrays directly, NOT nested {data:[]} objects",
             "🐳 Prisma 7 Docker: Requires Node 22+ (not 20), OpenSSL on Alpine, binaryTargets: ['native', 'linux-musl-openssl-3.0.x']",
             "🐳 Prisma 7 Docker: Remove 'url' from schema.prisma datasource - must use prisma.config.ts",
+            "🐳 Prisma Migration: Dockerfile CMD phải chạy 'npx prisma migrate deploy' TRƯỚC 'node dist/src/main'. Nếu không, enum mới (vd SPEAKER_NOTES) sẽ không có trong DB production",
+            "🐳 Prisma Migration: Mỗi khi thêm enum value vào schema.prisma, PHẢI tạo migration file (prisma migrate dev --name xxx). Nếu quên → DB production sẽ lỗi",
             "🐳 Prisma 7 Docker: Create dummy .env with DATABASE_URL during build for prisma generate",
             "🐳 NestJS Dockerfile: CMD uses 'dist/src/main' NOT 'dist/main' - check TypeScript output path",
             "🐳 Docker Compose: ports: '3001:3001' REQUIRED to expose backend - different from PORT env var in container",

@@ -452,6 +452,175 @@ export class SlidesService {
     }
 
     /**
+     * Optimize & QA speaker notes (Step 4 - Button 2)
+     * - Quality check: word count, idea coverage
+     * - Language cleanup: remove figurative/dramatic language
+     * - TTS optimization: convert code/symbols to speech
+     */
+    async optimizeSpeakerNotes(lessonId: string, userId: string) {
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+            include: { subject: true },
+        });
+
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        // Get slides from DB
+        const slides = await this.prisma.slide.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        if (slides.length === 0) {
+            throw new BadRequestException('No slides found. Complete Step 3 first.');
+        }
+
+        // Check that speaker notes exist
+        const slidesWithNotes = slides.filter(s => s.speakerNote?.trim());
+        if (slidesWithNotes.length === 0) {
+            throw new BadRequestException('No speaker notes found. Generate speaker notes first (Button 1).');
+        }
+
+        // Build slides_content string (same as generateSpeakerNotes)
+        const slidesContent = slides.map(s => {
+            let content = '';
+            if (s.content) {
+                try {
+                    const parsed = JSON.parse(s.content);
+                    content = Array.isArray(parsed) ? parsed.join(', ') : s.content;
+                } catch {
+                    content = s.content;
+                }
+            }
+            return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual: ${s.visualIdea}` : ''}`;
+        }).join('\n\n');
+
+        // Build speaker_notes string from existing notes
+        const speakerNotesContent = slides.map(s => {
+            return `--- Slide ${s.slideIndex} ---\n${s.speakerNote || '(chưa có speaker note)'}`;
+        }).join('\n\n');
+
+        // Get API key
+        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+        if (!apiKey) {
+            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
+        }
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
+
+        // Build prompt using the optimize-notes prompt
+        const prompt = await this.promptComposer.buildFullPrompt(
+            lesson.subjectId,
+            'slides.optimize-notes',
+            {
+                slides_content: slidesContent,
+                speaker_notes: speakerNotesContent,
+            },
+        );
+
+        this.logger.debug(`Generated optimize notes prompt (${prompt.length} chars)`);
+
+        // Generate using AI
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const result = aiResult.content;
+        this.logger.log(`Speaker notes optimized via ${aiResult.provider} (${aiResult.model})`);
+
+        // Parse JSON response (same logic as generateSpeakerNotes)
+        let optimizedNotes: Array<{ slideIndex: number; speakerNote: string }> = [];
+        try {
+            let jsonStr = result;
+            const jsonStartTag = result.indexOf('```json');
+            if (jsonStartTag !== -1) {
+                const contentStart = jsonStartTag + '```json'.length;
+                const lastBackticks = result.lastIndexOf('```');
+                if (lastBackticks > contentStart) {
+                    jsonStr = result.substring(contentStart, lastBackticks);
+                }
+            }
+
+            const data = JSON.parse(jsonStr.trim());
+            optimizedNotes = data.speakerNotes || data;
+
+            if (!Array.isArray(optimizedNotes)) {
+                throw new Error('Response is not an array');
+            }
+        } catch (parseError) {
+            this.logger.error(`Failed to parse optimized notes: ${parseError.message}`);
+            throw new BadRequestException(`Failed to parse AI response: ${parseError.message}`);
+        }
+
+        // Update Slide.speakerNote in DB
+        const slideAudios: any[] = [];
+        for (const note of optimizedNotes) {
+            const existingSlide = slides.find(s => s.slideIndex === note.slideIndex);
+            // NOTE: Do NOT update Slide.speakerNote here - keep it as the raw version from Button 1
+            // Only update SlideAudio.speakerNote with the optimized version
+
+            // Also update SlideAudio if exists
+            const existingAudio = await this.prisma.slideAudio.findFirst({
+                where: { lessonId, slideIndex: note.slideIndex },
+            });
+            if (existingAudio) {
+                const updated = await this.prisma.slideAudio.update({
+                    where: { id: existingAudio.id },
+                    data: {
+                        speakerNote: note.speakerNote,
+                        status: existingAudio.audioUrl ? 'stale' : 'pending',
+                    },
+                });
+                slideAudios.push(updated);
+            } else {
+                const created = await this.prisma.slideAudio.create({
+                    data: {
+                        lessonId,
+                        slideIndex: note.slideIndex,
+                        slideTitle: existingSlide?.title || `Slide ${note.slideIndex}`,
+                        speakerNote: note.speakerNote,
+                        status: 'pending',
+                    },
+                });
+                slideAudios.push(created);
+            }
+        }
+
+        // Also sync into slideScript JSON for backward compat
+        if (lesson.slideScript) {
+            try {
+                let jsonStr = lesson.slideScript;
+                const jsonStartTag = lesson.slideScript.indexOf('```json');
+                if (jsonStartTag !== -1) {
+                    const contentStart = jsonStartTag + '```json'.length;
+                    const lastBackticks = lesson.slideScript.lastIndexOf('```');
+                    if (lastBackticks > contentStart) {
+                        jsonStr = lesson.slideScript.substring(contentStart, lastBackticks);
+                    }
+                }
+                const scriptData = JSON.parse(jsonStr.trim());
+                if (scriptData.slides && Array.isArray(scriptData.slides)) {
+                    for (const note of optimizedNotes) {
+                        const slide = scriptData.slides.find((s: any) => s.slideIndex === note.slideIndex);
+                        if (slide) {
+                            slide.speakerNote = note.speakerNote;
+                        }
+                    }
+                    await this.prisma.lesson.update({
+                        where: { id: lessonId },
+                        data: { slideScript: JSON.stringify(scriptData, null, 2) },
+                    });
+                }
+            } catch (e) {
+                this.logger.warn(`Could not sync optimized notes to slideScript: ${e.message}`);
+            }
+        }
+
+        this.logger.log(`✅ Optimized ${optimizedNotes.length} speaker notes for lesson ${lessonId}`);
+
+        return slideAudios;
+    }
+
+    /**
      * Regenerate optimized content for a single slide
      */
     async regenerateSlideContent(lessonId: string, slideIndex: number, userId: string) {

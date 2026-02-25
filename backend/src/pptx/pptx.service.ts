@@ -378,6 +378,9 @@ export class PptxService {
             const imagePath = slide.imageUrl ? this.getLocalPath(slide.imageUrl) : undefined;
             this.logger.log(`[PPTX] Slide ${slide.slideIndex}: imageUrl=${slide.imageUrl || 'NULL'}, imagePath=${imagePath || 'NULL'}`);
 
+            // Use SlideAudio.speakerNote (optimized from Step 4) first, fallback to Slide.speakerNote (raw)
+            const slideAudioForNotes = slideAudios.find(a => a.slideIndex === slide.slideIndex);
+
             return {
                 slideIndex: slide.slideIndex,
                 title: slide.title,
@@ -385,7 +388,7 @@ export class PptxService {
                 bullets,  // Send structured bullets for proper rendering
                 imagePath,
                 audioPath,
-                speakerNote: slide.speakerNote || '',
+                speakerNote: slideAudioForNotes?.speakerNote || slide.speakerNote || '',
                 slideType: slide.slideType || 'content',
             };
         });

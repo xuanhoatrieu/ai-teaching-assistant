@@ -11,7 +11,7 @@ interface Slide {
     title: string;
     content: string | null;
     visualIdea: string | null;
-    speakerNote: string | null;
+
     imageUrl: string | null;
     audioUrl: string | null;
     status: string;
@@ -24,7 +24,7 @@ interface ParsedSlide {
     title: string;
     content?: string[];
     visualIdea?: string | null;
-    speakerNote?: string;
+
 }
 
 interface ParsedSlideScript {
@@ -95,12 +95,7 @@ function SlideScriptPreview({ script }: { script: ParsedSlideScript }) {
                         </div>
                     )}
 
-                    {slide.speakerNote && (
-                        <div className="slide-speaker-hint">
-                            <span className="label">🎤 Lời giảng:</span>
-                            <p>{slide.speakerNote}</p>
-                        </div>
-                    )}
+
                 </div>
             ))}
         </div>
@@ -315,8 +310,8 @@ export function Step3DesignSlides() {
             </div>
 
             <p className="step-description">
-                AI sẽ thiết kế nội dung cho từng slide bao gồm: Tiêu đề, Nội dung, Ý tưởng hình ảnh [Visual Idea],
-                và Lời giảng [Speaker Notes].
+                AI sẽ thiết kế nội dung cho từng slide bao gồm: Tiêu đề, Nội dung và Ý tưởng hình ảnh [Visual Idea].
+                Lời giảng [Speaker Notes] sẽ được tạo ở Bước 4.
             </p>
 
             {!hasOutline && (
@@ -373,7 +368,7 @@ export function Step3DesignSlides() {
                                         <th style={{ minWidth: '150px' }}>Tiêu đề</th>
                                         <th style={{ minWidth: '200px' }}>Nội dung</th>
                                         <th style={{ minWidth: '150px' }}>Visual Idea</th>
-                                        <th style={{ minWidth: '250px' }}>Lời giảng</th>
+
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -384,7 +379,7 @@ export function Step3DesignSlides() {
                                             <td className="slide-title-cell">{slide.title}</td>
                                             <td className="slide-content-cell">{slide.content || '-'}</td>
                                             <td className="slide-visual-cell">{slide.visualIdea || '-'}</td>
-                                            <td className="slide-speaker-cell">{slide.speakerNote || '-'}</td>
+
                                         </tr>
                                     ))}
                                 </tbody>
@@ -415,12 +410,7 @@ export function Step3DesignSlides() {
                                             <img src={slide.imageUrl} alt={slide.title} />
                                         </div>
                                     )}
-                                    {slide.speakerNote && (
-                                        <div className="slide-speaker-note">
-                                            <span className="label">🎤 Speaker Note:</span>
-                                            <p>{slide.speakerNote.substring(0, 200)}...</p>
-                                        </div>
-                                    )}
+
                                     <div className="slide-status">
                                         <span className={`status-badge status-${slide.status}`}>
                                             {slide.status}
