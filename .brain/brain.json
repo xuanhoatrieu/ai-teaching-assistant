@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-23T17:08:00+07:00"
+        "updated_at": "2026-02-25T06:42:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -201,7 +201,7 @@
             },
             {
                 "name": "model_configs",
-                "description": "User AI model preferences per task",
+                "description": "User AI model preferences per task (TaskType: OUTLINE, SLIDES, SPEAKER_NOTES, QUESTIONS, IMAGE, TTS)",
                 "key_fields": [
                     "id",
                     "userId",
@@ -401,7 +401,7 @@
         {
             "name": "AI Model Configuration",
             "status": "implemented",
-            "description": "Dynamic model discovery: Gemini API list + CLIProxy all models (GPT/Claude/etc). User can select per task."
+            "description": "Dynamic model discovery: Gemini API list + CLIProxy all models (GPT/Claude/etc). User can select per task. TaskTypes: OUTLINE, SLIDES, SPEAKER_NOTES, QUESTIONS, IMAGE, TTS."
         },
         {
             "name": "Structured Slides",
@@ -427,6 +427,21 @@
             "name": "Lesson Management",
             "status": "implemented",
             "description": "Edit (rename) and delete lessons with confirmation modals. Delete cascades to slides, audio, questions."
+        },
+        {
+            "name": "Speaker Notes Model Selection",
+            "status": "implemented",
+            "description": "SPEAKER_NOTES task type added to TaskType enum, ModelConfigService, and frontend ModelSelector. Users can select independent AI model for speaker note generation in Step 4."
+        },
+        {
+            "name": "Interactive Question Answer Editing",
+            "status": "implemented",
+            "description": "Edit button in Step 6 now allows modifying answer text (not just question text). Answers sent to backend via PUT with answers[] array."
+        },
+        {
+            "name": "Admin Prompt Editor UI",
+            "status": "implemented",
+            "description": "Widened prompt edit modal (50vw), monospace font for content textarea. Uses .prompt-modal class to override UserSettings.css conflicts."
         }
     ],
     "question_types": {
@@ -443,7 +458,8 @@
                 "video",
                 "audio"
             ],
-            "export_format": "18 cột (Question Type, Text, Media, Answers 1-10, Feedbacks, Points)"
+            "export_format": "11 cột (Question Type, Text, Answer 1-6, Correct Feedback, Incorrect Feedback, Points)",
+            "export_filename": "lessonTitle_interactive.xlsx"
         },
         "review_question": {
             "purpose": "Ôn tập cuối bài theo Bloom taxonomy",
@@ -455,7 +471,9 @@
             },
             "answers": "4 (A,B,C,D) - A luôn đúng",
             "question_id_format": "B{lesson}-{level}-{order} (e.g., B1-1-01)",
-            "export_format": "7 cột (ID, Question, A, B, C, D, Explanation)"
+            "export_format": "7 cột (Question ID, Question, Correct Answer (A), Option B, Option C, Option D, Explanation)",
+            "export_filename": "lessonTitle_review.xlsx",
+            "ui_note": "Mức độ column removed from both UI table and Excel export"
         }
     },
     "knowledge_items": {
@@ -510,7 +528,11 @@
             "⭐ CSS class scoping: .delete-btn in Subjects.css uses position:absolute (for subject cards). Must scope with .subject-card .delete-btn to avoid overriding lesson card .delete-btn",
             "⭐ Model Discovery (CLIProxy): Default-include ALL models for text tasks. Only skip embedding/moderation. Old code filtered by keyword (flash/pro/gemini/claude) which excluded GPT models",
             "⭐ Model Discovery (Gemini): Use fetch() to https://generativelanguage.googleapis.com/v1beta/models?key=... to dynamically list models. Merge with KNOWN_GEMINI_MODELS for display names. Fallback to static list if API fails",
-            "⭐ Review Question Prompt: Must explicitly prohibit citation phrases like 'Theo bài giảng', 'Trong bài học' etc. Add negative constraints in prompt for LLM compliance"
+            "⭐ Review Question Prompt: Must explicitly prohibit citation phrases like 'Theo bài giảng', 'Trong bài học' etc. Add negative constraints in prompt for LLM compliance",
+            "⭐ CSS class conflict: UserSettings.css defines .modal-content {max-width:420px} which overrides AdminPage.css. Solution: Add specific class (.prompt-modal) with !important",
+            "⭐ Speaker notes prompt: Avoid rhetorical questions in examples (ĐÚNG section). Use declarative transition sentences instead",
+            "⭐ Interactive question editing: answers[] array uses * prefix for correct answers. When editing, preserve prefix. Send full answers array in PUT request",
+            "⭐ Excel export filename: Use Content-Disposition header on backend + link.setAttribute('download') on frontend for custom filenames"
         ],
         "conventions": [
             "API routes: /lessons/:id/resource",
@@ -521,6 +543,7 @@
             "system.role": "Vai trò giảng viên - được kết hợp với Subject fields",
             "outline.detailed": "Step 2 - Tạo dàn bài chi tiết từ raw outline (JSON với learningGuide, situation, sections, reviewQuestions)",
             "slides.script": "Step 3 - Tạo kịch bản slide (20-30 slides, slideIndex từ 1)",
+            "slides.speaker-notes": "Step 4 - Tạo lời giảng tự nhiên cho từng slide (Hook→Explain→Bridge, TTS-optimized)",
             "slides.design": "Step 5 - Tối ưu content (2-5 bullets, emoji học thuật, description ≤12 từ)",
             "slides.image": "Step 5 - Tạo prompt cho Imagen (educational illustration style)",
             "questions.interactive": "Step 6 - 5 câu hỏi kiểm tra tập trung (MC/MR)",

@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v1.1.0] - 2026-02-25 - Speaker Notes Model & Question Bank Polish
+
+### Added
+- **Speaker Notes Model Selection (Step 4)**
+  - New `SPEAKER_NOTES` task type in Prisma `TaskType` enum
+  - Independent AI model selector for speaker note generation
+  - Updated `ModelConfigService` defaults, CLIProxy classifiers, and frontend `ModelSelector`
+
+- **Interactive Question Answer Editing (Step 6)**
+  - Edit mode now allows modifying answer text (not just question text)
+  - Inline input fields with correct-answer prefix preservation
+  - `handleUpdateInteractive` sends full `answers[]` array to backend
+
+- **Admin Prompt Editor UI**
+  - Widened modal to 50vw (from 420px) with `.prompt-modal` class
+  - Monospace font, 20 rows textarea for easier prompt editing
+
+### Changed
+- **Excel Export Filenames**: Now use lesson title (`lessonTitle_review.xlsx`, `lessonTitle_interactive.xlsx`)
+- **Review Excel Columns**: Renamed to English (`Question ID`, `Question`, `Correct Answer (A)`, `Option B`, `Option C`, `Option D`, `Explanation`) — removed `Mức độ` column
+- **Speaker Notes Prompt**: Updated rules (Hook→Explain→Bridge), fixed rhetorical questions in examples
+- **Interactive Questions Prompt**: Clarified MR answer format, added answer count limit
+
+### Fixed
+- Removed bold styling (`font-weight:500→400`) from interactive question text and correct answers — prevents bold persisting when copying to Word
+- Fixed CSS specificity conflict: `UserSettings.css` `.modal-content {max-width:420px}` was overriding `AdminPage.css`. Resolved with `.prompt-modal` class + `!important`
+
+---
+
 ## [2026-02-14] - Outline Fix & UI Polish
 
 ### Fixed
