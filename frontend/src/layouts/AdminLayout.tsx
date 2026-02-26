@@ -7,6 +7,7 @@ const menuItems = [
     { path: '/admin/prompts', label: 'Prompts', icon: '📝' },
     { path: '/admin/templates', label: 'Templates', icon: '🎨' },
     { path: '/admin/tts-providers', label: 'TTS Providers', icon: '🔊' },
+    { path: '/admin/tts-dictionary', label: 'TTS Dictionary', icon: '📖' },
     { path: '/admin/api-keys', label: 'API Keys', icon: '🔑' },
     { path: '/admin/users', label: 'Users', icon: '👥' },
     { path: '/admin/settings', label: 'Settings', icon: '⚙️' },

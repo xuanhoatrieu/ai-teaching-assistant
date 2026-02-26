@@ -542,6 +542,8 @@ export function Step4GenerateAudio() {
                 }
             }} />
 
+
+
             {/* Slide Cards */}
             <div className="slide-cards">
                 {slides.map((slide) => {

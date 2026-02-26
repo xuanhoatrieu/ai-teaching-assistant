@@ -68,11 +68,12 @@ model User {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Relations
-  subjects      Subject[]
-  ttsConfigs    UserTTSConfig[]
-  apiKeys       ApiKey[]
-  templates     PPTXTemplate[]
-  modelConfigs  ModelConfig[]
+  subjects         Subject[]
+  ttsConfigs       UserTTSConfig[]
+  apiKeys          ApiKey[]
+  templates        PPTXTemplate[]
+  modelConfigs     ModelConfig[]
+  ttsDictionaries  TTSDictionary[]
 
   @@map("users")
 }
@@ -399,6 +400,26 @@ model ReviewQuestion {
   
   @@unique([lessonId, questionId])
   @@map("review_questions")
+}
+
+// ==================== TTS DICTIONARY ====================
+
+// Dictionary entries for VietNormalizer TTS text normalization
+model TTSDictionary {
+  id          String   @id @default(uuid())
+  type        String   // 'acronym' | 'word'
+  original    String   // Source text, e.g. "CPU", "server"
+  replacement String   // TTS pronunciation, e.g. "xê pê u", "xơ-vơ"
+  scope       String   @default("system") // 'system' (admin) | 'user' (personal)
+  userId      String?  @map("user_id")    // null = system (admin-managed)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([type, original, scope, userId])
+  @@map("tts_dictionaries")
 }
 
 // ==================== SYSTEM CONFIG ====================

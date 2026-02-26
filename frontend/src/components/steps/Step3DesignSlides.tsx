@@ -74,7 +74,7 @@ function SlideScriptPreview({ script }: { script: ParsedSlideScript }) {
             {script.slides?.map((slide, idx) => (
                 <div key={idx} className={`slide-preview-card slide-type-${slide.slideType}`}>
                     <div className="slide-preview-header">
-                        <span className="slide-number">Slide {slide.slideIndex}</span>
+                        <span className="slide-number">Slide {slide.slideIndex + 1}</span>
                         <span className={`slide-type-badge ${slide.slideType}`}>{slide.slideType}</span>
                     </div>
 
@@ -374,7 +374,7 @@ export function Step3DesignSlides() {
                                 <tbody>
                                     {slidesArray.map((slide) => (
                                         <tr key={slide.id} className={`slide-row slide-type-${slide.slideType}`}>
-                                            <td className="slide-index">{slide.slideIndex}</td>
+                                            <td className="slide-index">{slide.slideIndex + 1}</td>
                                             <td><span className={`slide-type-badge ${slide.slideType}`}>{slide.slideType}</span></td>
                                             <td className="slide-title-cell">{slide.title}</td>
                                             <td className="slide-content-cell">{slide.content || '-'}</td>
@@ -390,7 +390,7 @@ export function Step3DesignSlides() {
                             {slidesArray.map((slide) => (
                                 <div key={slide.id} className={`slide-card slide-type-${slide.slideType}`}>
                                     <div className="slide-header">
-                                        <span className="slide-number">Slide {slide.slideIndex}</span>
+                                        <span className="slide-number">Slide {slide.slideIndex + 1}</span>
                                         <span className="slide-type">{slide.slideType}</span>
                                     </div>
                                     <h3 className="slide-title">{slide.title}</h3>

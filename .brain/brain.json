@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-25T06:42:00+07:00"
+        "updated_at": "2026-02-26T18:15:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -75,6 +75,18 @@
             ],
             "sdk": "@google/genai (NOT @google/generative-ai - legacy)"
         },
+        "text_normalization": {
+            "library": "vietnormalizer (local clone)",
+            "repo": "https://github.com/nghimestudio/vietnormalizer",
+            "location": "backend/utils/pptx_generator/vietnormalizer/",
+            "features": [
+                "17K+ non-Vietnamese word transliterations",
+                "Number/date/currency/unit conversion",
+                "Acronym expansion",
+                "Rule-based transliteration for unknown words"
+            ],
+            "architecture": "DB-only (all 17K+ entries in TTSDictionary table, loaded to Python cache via /reload-dictionaries)"
+        },
         "export": {
             "pptx": "Python python-pptx"
         }
@@ -135,12 +147,12 @@
             },
             {
                 "name": "slide_audios",
-                "description": "Audio per slide (DEPRECATED - merged into slides)",
+                "description": "Audio per slide - stores OPTIMIZED speaker notes (Step 4 Bước 2). Slide.speakerNote = raw, SlideAudio.speakerNote = optimized",
                 "key_fields": [
                     "id",
                     "lessonId",
                     "slideIndex",
-                    "speakerNote",
+                    "speakerNote (optimized version)",
                     "audioUrl",
                     "status"
                 ]
@@ -237,6 +249,18 @@
                     "providerId",
                     "credentialsEnc"
                 ]
+            },
+            {
+                "name": "tts_dictionaries",
+                "description": "TTS pronunciation dictionary — DB-only source of truth (17K+ entries from vietnormalizer + admin/user custom). Loaded to Python service cache on NestJS startup.",
+                "key_fields": [
+                    "id",
+                    "type (acronym|word)",
+                    "original",
+                    "replacement",
+                    "scope (system|user)",
+                    "userId"
+                ]
             }
         ],
         "relationships": [
@@ -247,7 +271,8 @@
             "Lesson 1:N InteractiveQuestion",
             "Lesson 1:N ReviewQuestion",
             "Lesson 1:1 QuestionBank (deprecated)",
-            "Lesson N:1 PPTXTemplate"
+            "Lesson N:1 PPTXTemplate",
+            "User 1:N TTSDictionary (scope=user)"
         ]
     },
     "api_endpoints": {
@@ -331,6 +356,22 @@
             "POST /user/templates/upload - Upload a personal PPTX template",
             "DELETE /user/templates/:id - Delete user's personal template"
         ],
+        "text_normalizer": [
+            "POST /normalize/test - Test normalization (admin)",
+            "GET /admin/tts-dictionary - Get system dictionary entries",
+            "POST /admin/tts-dictionary - Create system entry",
+            "PUT /admin/tts-dictionary/:id - Update entry",
+            "DELETE /admin/tts-dictionary/:id - Delete entry",
+            "POST /admin/tts-dictionary/import - Import CSV",
+            "GET /admin/tts-dictionary/export - Export CSV",
+            "GET /user/tts-dictionary - Get user's dict entries",
+            "POST /user/tts-dictionary - Create user entry"
+        ],
+        "text_normalizer_python": [
+            "POST /normalize - Normalize text (uses cached DB dicts + user overrides)",
+            "POST /reload-dictionaries - Reload all system dicts from NestJS to Python cache",
+            "GET /health - Health check (includes normalizer_available flag)"
+        ],
         "prompts": [
             "GET /admin/prompts - List all prompts",
             "POST /admin/prompts - Create prompt",
@@ -362,17 +403,23 @@
             },
             {
                 "step": 3,
-                "name": "Kịch Bản Slide",
+                "name": "Kịch Bản Slide (no speaker notes)",
                 "input": "detailedOutline",
-                "output": "slides[] (title, content, visualIdea, speakerNote)",
-                "ai": "Gemini"
+                "output": "slides[] (title, content, visualIdea)",
+                "ai": "Gemini",
+                "note": "Speaker notes removed from Step 3 UI, now exclusively in Step 4"
             },
             {
                 "step": 4,
-                "name": "Tạo Audio",
-                "input": "slides[].speakerNote",
-                "output": "slides[].audioUrl",
-                "ai": "TTS"
+                "name": "Tạo Audio (2-step speaker notes)",
+                "input": "slides[].content",
+                "output": "Slide.speakerNote (raw) + SlideAudio.speakerNote (optimized) + audioUrl",
+                "ai": "LLM (2 prompts) + TTS",
+                "sub_steps": [
+                    "Bước 1: Tạo lời giảng (slides.speaker-notes prompt) → saves to Slide.speakerNote",
+                    "Bước 2: Tối ưu & kiểm duyệt (slides.optimize-notes prompt) → saves to SlideAudio.speakerNote",
+                    "Bước 3: Tạo audio TTS từ optimized note"
+                ]
             },
             {
                 "step": 5,
@@ -450,6 +497,31 @@
             "name": "Admin Prompt Editor UI",
             "status": "implemented",
             "description": "Widened prompt edit modal (50vw), monospace font for content textarea. Uses .prompt-modal class to override UserSettings.css conflicts."
+        },
+        {
+            "name": "Two-Step Speaker Notes",
+            "status": "implemented",
+            "description": "Step 4 now has 2 buttons: (1) Tạo Lời Giảng (raw content generation, saved to Slide.speakerNote), (2) Tối Ưu & Kiểm Duyệt (QA + language cleanup + TTS optimization, saved to SlideAudio.speakerNote). 3-column UI shows raw vs optimized comparison."
+        },
+        {
+            "name": "PPTX Optimized Notes Priority",
+            "status": "implemented",
+            "description": "PPTX export now prioritizes SlideAudio.speakerNote (optimized) over Slide.speakerNote (raw). Falls back to raw if no optimized version exists."
+        },
+        {
+            "name": "Optimize Prompt v3 (Hybrid)",
+            "status": "implemented",
+            "description": "slides.optimize-notes prompt redesigned: structural preservation rules (keep narrative, no sentence deletion, >=95% word count) + pattern-based language cleanup (metaphors, hyperbole, literary). TTS NHIỆM VỤ 3 fully REMOVED - VietNormalizer handles all TTS normalization."
+        },
+        {
+            "name": "VietNormalizer TTS Integration",
+            "status": "implemented",
+            "description": "DB-only dictionary (17K+ words from vietnormalizer + custom). Python service caches dicts loaded via /reload-dictionaries on NestJS startup. Admin/User UI for dictionary CRUD. Auto-normalizes numbers, dates, units, acronyms, non-Vietnamese words before TTS."
+        },
+        {
+            "name": "Admin TTS Dictionary Page",
+            "status": "implemented",
+            "description": "Dedicated admin page at /admin/tts-dictionary with sidebar nav item. TTSDictionaryManager component with search, add/edit/delete, CSV import/export."
         }
     ],
     "question_types": {
@@ -542,7 +614,18 @@
             "⭐ CSS class conflict: UserSettings.css defines .modal-content {max-width:420px} which overrides AdminPage.css. Solution: Add specific class (.prompt-modal) with !important",
             "⭐ Speaker notes prompt: Avoid rhetorical questions in examples (ĐÚNG section). Use declarative transition sentences instead",
             "⭐ Interactive question editing: answers[] array uses * prefix for correct answers. When editing, preserve prefix. Send full answers array in PUT request",
-            "⭐ Excel export filename: Use Content-Disposition header on backend + link.setAttribute('download') on frontend for custom filenames"
+            "⭐ Excel export filename: Use Content-Disposition header on backend + link.setAttribute('download') on frontend for custom filenames",
+            "⭐ Two-step speaker notes: Slide.speakerNote = raw (Bước 1), SlideAudio.speakerNote = optimized (Bước 2). optimizeSpeakerNotes() only updates SlideAudio, preserves Slide.speakerNote",
+            "⭐ PPTX speaker note source: pptx.service.ts prioritizes SlideAudio.speakerNote (optimized) → falls back to Slide.speakerNote (raw)",
+            "⭐ Optimize prompt pitfall: Telling AI to 'viết lại' or 'rửa ngôn ngữ' causes it to compress narrative→bullet lists (30-56% content loss). Must use 'sửa cụm từ, giữ nguyên câu' approach with >=95% word count constraint",
+            "⭐ TTS abbreviation rules: VN abbr (CLB)→full VN (câu lạc bộ), EN abbr with VN meaning (EOL)→VN (ký tự cuối dòng), other EN abbr (RAM)→keep as-is. NEVER spell out letter-by-letter (R A M)",
+            "⭐ app.py encoding: Vietnamese strings in Python dicts must not be split across lines - causes SyntaxError",
+            "⭐ VietNormalizer: Clone repo locally to pptx_generator/vietnormalizer/ — use sys.path import, no pip install needed",
+            "⭐ VietNormalizer DB-only: All 17K+ entries in TTSDictionary table. Python /reload-dictionaries caches them. Per-request only sends user overrides",
+            "⭐ VietNormalizer custom dict bug: Creating new VietnameseNormalizer(custom_path=...) REPLACES built-in 17K dict. Must merge dicts instead",
+            "⭐ Uvicorn --reload with git repos: --reload-exclude flag broken on Windows with .git dirs. Use non-reload mode or exclude dir",
+            "⭐ TTSDictionary import: prisma/import-vietnormalizer-csv.ts — batch inserts of 500, parses acronyms.csv + non-vietnamese-words.csv",
+            "⭐ TextNormalizerService OnModuleInit: Pushes all system dicts to Python /reload-dictionaries on startup. Reloads after admin CRUD (create/update/delete)"
         ],
         "conventions": [
             "API routes: /lessons/:id/resource",
@@ -553,7 +636,8 @@
             "system.role": "Vai trò giảng viên - được kết hợp với Subject fields",
             "outline.detailed": "Step 2 - Tạo dàn bài chi tiết từ raw outline (JSON với learningGuide, situation, sections, reviewQuestions)",
             "slides.script": "Step 3 - Tạo kịch bản slide (20-30 slides, slideIndex từ 1)",
-            "slides.speaker-notes": "Step 4 - Tạo lời giảng tự nhiên cho từng slide (Hook→Explain→Bridge, TTS-optimized)",
+            "slides.speaker-notes": "Step 4 Bước 1 - Tạo lời giảng RAW (Hook→Explain→Bridge, tối thiểu 200 từ/slide content)",
+            "slides.optimize-notes": "Step 4 Bước 2 - Tối ưu & kiểm duyệt: giữ cấu trúc narrative, sửa ẩn dụ/cường điệu. TTS NHIỆM VỤ 3 đã bị XÓA — VietNormalizer xử lý TTS normalization ở bước sau",
             "slides.design": "Step 5 - Tối ưu content (2-5 bullets, emoji học thuật, description ≤12 từ)",
             "slides.image": "Step 5 - Tạo prompt cho Imagen (educational illustration style)",
             "questions.interactive": "Step 6 - 5 câu hỏi kiểm tra tập trung (MC/MR)",

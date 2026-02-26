@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, API_BASE_URL } from '../lib/api';
+import { UserTTSDictionary } from '../components/UserTTSDictionary';
 import './UserSettings.css';
 
 interface UserApiKey {
@@ -655,6 +656,9 @@ export function UserSettingsPage() {
 
             {/* My Templates Section */}
             <MyTemplatesSection />
+
+            {/* TTS Dictionary Section */}
+            <UserTTSDictionary />
 
             {/* Modal */}
             {showModal && (

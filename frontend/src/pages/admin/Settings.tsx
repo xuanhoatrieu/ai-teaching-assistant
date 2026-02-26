@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
+import { TTSDictionaryManager } from '../../components/admin/TTSDictionaryManager';
 import './AdminPage.css';
 
 interface SettingsData {
@@ -320,6 +321,9 @@ export function SettingsPage() {
                     {isSaving ? 'Saving...' : 'Save Settings'}
                 </button>
             </div>
+
+            {/* TTS Dictionary Section */}
+            <TTSDictionaryManager />
         </div>
     );
 }

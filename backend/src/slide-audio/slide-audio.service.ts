@@ -7,6 +7,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { TTSService } from '../tts/tts.service';
 import { ModelConfigService } from '../model-config/model-config.service';
+import { TextNormalizerService } from '../text-normalizer/text-normalizer.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as archiver from 'archiver';
@@ -27,6 +28,7 @@ export class SlideAudioService {
         private readonly prisma: PrismaService,
         private readonly ttsService: TTSService,
         private readonly modelConfigService: ModelConfigService,
+        private readonly textNormalizerService: TextNormalizerService,
     ) {
         // Ensure uploads directory exists
         this.ensureUploadsDir();
@@ -398,9 +400,11 @@ export class SlideAudioService {
 
             this.logger.log(`TTS Config: provider=${provider}, model=${modelName}, voice=${voiceName}, multilingualMode=${multilingualMode || 'none'}`);
 
+            const ttsText = slideAudio.speakerNote;
+
             // Generate audio using TTS service
             const result = await this.ttsService.generateAudio(userId, {
-                text: slideAudio.speakerNote,
+                text: ttsText,
                 voiceId: voiceName,
                 model: modelName,
                 provider: provider,

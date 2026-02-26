@@ -7,11 +7,29 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 import tempfile
 import os
+import logging
+
+logger = logging.getLogger("pptx-generator")
 
 from pptx_service import PPTXGeneratorService
+
+# VietNormalizer for TTS text normalization (local clone)
+import sys
+from pathlib import Path
+_VIETNORMALIZER_PATH = str(Path(__file__).parent / "vietnormalizer")
+if _VIETNORMALIZER_PATH not in sys.path:
+    sys.path.insert(0, _VIETNORMALIZER_PATH)
+
+try:
+    from vietnormalizer import VietnameseNormalizer
+    _default_normalizer = VietnameseNormalizer()
+    logger.info(f"VietNormalizer loaded from local clone: {_VIETNORMALIZER_PATH}")
+except ImportError as e:
+    _default_normalizer = None
+    logger.warning(f"vietnormalizer failed to load: {e}")
 
 app = FastAPI(
     title="PPTX Generator Service",
@@ -30,6 +48,26 @@ app.add_middleware(
 
 # Initialize service
 pptx_service = PPTXGeneratorService()
+
+
+# ========================
+# Text Normalization Models
+# ========================
+
+class DictEntry(BaseModel):
+    original: str
+    replacement: str
+
+class NormalizeRequest(BaseModel):
+    text: str
+    enable_transliteration: bool = True
+    custom_acronyms: Optional[List[DictEntry]] = None
+    custom_words: Optional[List[DictEntry]] = None
+
+class NormalizeResponse(BaseModel):
+    normalized_text: str
+    original_text: str
+    changes_made: bool
 
 
 class SlideContent(BaseModel):
@@ -54,7 +92,95 @@ class GeneratePPTXRequest(BaseModel):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "ok", "service": "pptx-generator"}
+    return {
+        "status": "ok",
+        "service": "pptx-generator",
+        "normalizer_available": _default_normalizer is not None,
+    }
+
+
+# In-memory dictionary cache (loaded from DB via /reload-dictionaries)
+_cached_acronyms: dict = {}
+_cached_words: dict = {}
+
+
+class ReloadDictionariesRequest(BaseModel):
+    acronyms: List[DictEntry] = []
+    words: List[DictEntry] = []
+
+
+@app.post("/reload-dictionaries")
+async def reload_dictionaries(request: ReloadDictionariesRequest):
+    """
+    Reload dictionaries from DB (called by NestJS on startup or when admin changes).
+    Replaces all cached dictionaries in memory.
+    """
+    global _cached_acronyms, _cached_words
+
+    _cached_acronyms = {e.original.lower(): e.replacement for e in request.acronyms}
+    _cached_words = {e.original.lower(): e.replacement for e in request.words}
+
+    logger.info(f"Dictionaries reloaded: {len(_cached_acronyms)} acronyms, {len(_cached_words)} words")
+    return {
+        "status": "ok",
+        "acronyms_count": len(_cached_acronyms),
+        "words_count": len(_cached_words),
+    }
+
+
+@app.post("/normalize", response_model=NormalizeResponse)
+async def normalize_text(request: NormalizeRequest):
+    """
+    Normalize Vietnamese text for TTS.
+    Uses cached DB dictionaries + optional per-request user overrides.
+    """
+    if _default_normalizer is None:
+        raise HTTPException(
+            status_code=503,
+            detail="vietnormalizer is not installed"
+        )
+
+    try:
+        normalizer = _default_normalizer
+
+        # Build merged dicts: cached system + per-request user overrides
+        merged_acronyms = dict(_cached_acronyms)
+        merged_words = dict(_cached_words)
+
+        if request.custom_acronyms:
+            for entry in request.custom_acronyms:
+                merged_acronyms[entry.original.lower()] = entry.replacement
+
+        if request.custom_words:
+            for entry in request.custom_words:
+                merged_words[entry.original.lower()] = entry.replacement
+
+        # Temporarily swap dicts on normalizer
+        original_acronym_map = normalizer.acronym_map
+        original_non_viet_map = normalizer.non_vietnamese_map
+        original_replacements = normalizer.replacements
+
+        try:
+            normalizer.acronym_map = merged_acronyms
+            normalizer.non_vietnamese_map = merged_words
+            normalizer.replacements = {k: v for k, v in merged_words.items()}
+
+            normalized = normalizer.normalize(
+                request.text,
+                enable_transliteration=request.enable_transliteration,
+            )
+        finally:
+            normalizer.acronym_map = original_acronym_map
+            normalizer.non_vietnamese_map = original_non_viet_map
+            normalizer.replacements = original_replacements
+
+        return NormalizeResponse(
+            normalized_text=normalized,
+            original_text=request.text,
+            changes_made=normalized != request.text,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Normalization failed: {str(e)}")
 
 
 @app.get("/templates")

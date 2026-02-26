@@ -27,6 +27,7 @@ import { SlideDataModule } from './slide-data/slide-data.module';
 import { QuestionsModule } from './questions/questions.module';
 import { MigrationModule } from './migration/migration.module';
 import { PptxModule } from './pptx/pptx.module';
+import { TextNormalizerModule } from './text-normalizer/text-normalizer.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { PptxModule } from './pptx/pptx.module';
     QuestionsModule,
     MigrationModule,
     PptxModule,
+    TextNormalizerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

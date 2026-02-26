@@ -14,6 +14,7 @@ import { TemplatesPage } from './pages/admin/Templates';
 import { TTSProvidersPage } from './pages/admin/TTSProviders';
 import { UsersPage } from './pages/admin/Users';
 import { SettingsPage } from './pages/admin/Settings';
+import { TTSDictionaryPage } from './pages/admin/TTSDictionary';
 import { ApiKeysPage } from './pages/admin/ApiKeys';
 
 // User (Lesson flow)
@@ -71,6 +72,7 @@ function App() {
             <Route path="api-keys" element={<ApiKeysPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="tts-dictionary" element={<TTSDictionaryPage />} />
           </Route>
 
           {/* Fallback */}

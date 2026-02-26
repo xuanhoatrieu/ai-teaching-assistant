@@ -5,7 +5,7 @@ import { SlideDataService } from '../slide-data/slide-data.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
-import { GeminiService } from '../ai/gemini.service';
+import { AiProviderService } from '../ai/ai-provider.service';
 import { APIService } from '@prisma/client';
 import * as path from 'path';
 
@@ -56,7 +56,7 @@ export class PptxService {
         private promptComposer: PromptComposerService,
         private modelConfig: ModelConfigService,
         private apiKeys: ApiKeysService,
-        private gemini: GeminiService,
+        private aiProvider: AiProviderService,
     ) {
         this.pythonServiceUrl = process.env.PPTX_SERVICE_URL || 'http://localhost:3002';
     }
@@ -237,10 +237,11 @@ export class PptxService {
             );
             this.logger.log(`[DEBUG] Prompt built: ${prompt?.length || 0} chars`);
 
-            // Call Gemini
-            this.logger.log(`[DEBUG] Calling Gemini with model ${modelName}...`);
-            const result = await this.gemini.generateTextWithModel(prompt, modelName, apiKey);
-            this.logger.log(`[DEBUG] Gemini response: ${result?.length || 0} chars, preview: ${result?.substring(0, 200) || 'null'}`);
+            // Call AI (routes through CLIProxy if enabled, falls back to Gemini SDK)
+            this.logger.log(`[DEBUG] Calling AI with model ${modelName}...`);
+            const aiResult = await this.aiProvider.generateText(prompt, modelName, apiKey);
+            const result = aiResult.content;
+            this.logger.log(`[DEBUG] AI response (${aiResult.provider}): ${result?.length || 0} chars, preview: ${result?.substring(0, 200) || 'null'}`);
 
             // Parse JSON response
             const cleaned = this.cleanJsonResponse(result);
