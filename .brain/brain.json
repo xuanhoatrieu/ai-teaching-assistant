@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-26T18:15:00+07:00"
+        "updated_at": "2026-02-26T23:10:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -85,7 +85,8 @@
                 "Acronym expansion",
                 "Rule-based transliteration for unknown words"
             ],
-            "architecture": "DB-only (all 17K+ entries in TTSDictionary table, loaded to Python cache via /reload-dictionaries)"
+            "architecture": "DB-only (all 17K+ entries in TTSDictionary table, loaded to Python cache via /reload-dictionaries)",
+            "status": "DISABLED in v1.1.1 — causes audio quality degradation (mispronounced words). TTS optimization now handled by AI prompt (NHIỆM VỤ 3 in optimize-notes). Code remains for future re-enabling after dictionary improvement."
         },
         "export": {
             "pptx": "Python python-pptx"
@@ -660,19 +661,23 @@
                     "Architecture",
                     "Scientific figure"
                 ],
-                "speakerNote_structure": "Hook → Explain → Bridge",
+                "speakerNote_structure": "Direct opening (no dramatic hooks) → Explain → Bridge",
                 "speakerNote_rules": [
-                    "Không viết từ 'Hook', 'Explain', 'Bridge' vào nội dung",
+                    "Giọng văn = giảng viên bình thường (KHÔNG MC, diễn giả, YouTuber)",
                     "Không dùng dấu * trong speakerNote",
-                    "Tránh từ 'cốt lõi'",
-                    "Dùng ngôn ngữ NÓI tự nhiên (Nào, À, Nha, Đúng không)",
-                    "Xưng hô: 'các em' cho sinh viên đại học"
+                    "Xưng hô: 'các em' cho sinh viên đại học",
+                    "Mở đầu slide: 1 câu ngắn đơn giản, nối tiếp slide trước"
                 ],
+                "optimize_tasks": {
+                    "NV1": "CHUẨN HÓA GIỌNG VĂN (ưu tiên cao nhất)",
+                    "NV2": "KIỂM DUYỆT CHẤT LƯỢNG",
+                    "NV3": "TỐI ƯU CHO TTS (code→lời nói, viết tắt, toán tử)"
+                },
                 "speakerNote_length": {
-                    "title_agenda": "30-50 từ (20-35 giây)",
-                    "objectives": "50-70 từ (35-50 giây)",
-                    "content": "100-180 từ (1-2 phút)",
-                    "summary": "60-90 từ (40-60 giây)"
+                    "title_agenda": "100 từ (40-60 giây)",
+                    "objectives": "100 từ (40-60 giây)",
+                    "content": "200+ từ (2 phút)",
+                    "summary": "100 từ (40-60 giây)"
                 }
             },
             "slides.design": {
