@@ -16,6 +16,7 @@ interface CLIProxyConfig {
     apiKey: string;
     defaultTextModel: string;
     defaultImageModel: string;
+    defaultTTSModel: string;
 }
 
 export function SettingsPage() {
@@ -36,6 +37,7 @@ export function SettingsPage() {
     const [isSavingCliproxy, setIsSavingCliproxy] = useState(false);
     const [defaultTextModel, setDefaultTextModel] = useState('');
     const [defaultImageModel, setDefaultImageModel] = useState('');
+    const [defaultTTSModel, setDefaultTTSModel] = useState('');
     const [availableModels, setAvailableModels] = useState<string[]>([]);
 
     useEffect(() => {
@@ -63,6 +65,7 @@ export function SettingsPage() {
             setCliproxyUrl(config.url || '');
             setDefaultTextModel(config.defaultTextModel || 'gemini-2.5-flash');
             setDefaultImageModel(config.defaultImageModel || 'gemini-3-pro-image-preview');
+            setDefaultTTSModel(config.defaultTTSModel || 'gemini-2.5-flash-preview-tts');
 
             // Fetch available models if enabled
             if (config.enabled) {
@@ -109,6 +112,7 @@ export function SettingsPage() {
                 apiKey: cliproxyApiKey || undefined,
                 defaultTextModel: defaultTextModel || 'gemini-2.5-flash',
                 defaultImageModel: defaultImageModel || 'gemini-3-pro-image-preview',
+                defaultTTSModel: defaultTTSModel || 'gemini-2.5-flash-preview-tts',
             };
             console.log('[Settings] Saving CLIProxy config:', payload);
             await api.put('/admin/config/cliproxy', payload);
@@ -241,6 +245,29 @@ export function SettingsPage() {
                                 )}
                             </select>
                             <p className="help-text">Model for image generation</p>
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="default-tts-model">🔊 Default TTS Model</label>
+                            <select
+                                id="default-tts-model"
+                                value={defaultTTSModel}
+                                onChange={(e) => setDefaultTTSModel(e.target.value)}
+                            >
+                                {availableModels.length === 0 ? (
+                                    <option value={defaultTTSModel}>{defaultTTSModel}</option>
+                                ) : (
+                                    availableModels
+                                        .filter(m => m.includes('tts'))
+                                        .map(model => (
+                                            <option key={model} value={model}>{model}</option>
+                                        ))
+                                )}
+                                {/* Hardcoded TTS options in case models list doesn't include them */}
+                                <option value="gemini-2.5-flash-preview-tts">gemini-2.5-flash-preview-tts</option>
+                                <option value="gemini-2.5-pro-preview-tts">gemini-2.5-pro-preview-tts</option>
+                            </select>
+                            <p className="help-text">Gemini TTS model for audio generation (ViTTS/Vbee do user tự cấu hình)</p>
                         </div>
 
                         <div className="button-group">

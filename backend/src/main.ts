@@ -4,6 +4,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { PromptsService } from './prompts/prompts.service';
+import { CLIProxyProvider } from './ai/cliproxy.provider';
 import { join } from 'path';
 
 async function bootstrap() {
@@ -34,6 +35,21 @@ async function bootstrap() {
     logger.log(`✅ Auto-seeded ${result.seeded} prompts on startup`);
   } catch (error) {
     logger.warn(`⚠️ Could not auto-seed prompts: ${error.message}`);
+  }
+
+  // Auto-detect CLIProxy models on startup (text, image, TTS) — non-blocking
+  try {
+    const cliproxy = app.get(CLIProxyProvider);
+    const detected = await cliproxy.autoDetectModels();
+    const parts: string[] = [];
+    if (detected.text) parts.push(`text=${detected.text}`);
+    if (detected.image) parts.push(`image=${detected.image}`);
+    if (detected.tts) parts.push(`tts=${detected.tts}`);
+    if (parts.length > 0) {
+      logger.log(`🖼️ Auto-detected CLIProxy models: ${parts.join(', ')}`);
+    }
+  } catch (error) {
+    logger.warn(`⚠️ CLIProxy auto-detect skipped: ${error.message}`);
   }
 }
 bootstrap();

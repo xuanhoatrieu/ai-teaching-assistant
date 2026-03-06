@@ -49,8 +49,9 @@ export class ModelConfigService {
             where: { userId },
         });
 
-        // Return merged with defaults
+        // Return merged with admin defaults (not hardcoded)
         const result: Record<string, { provider: string; modelName: string }> = {};
+        const adminDefaults = await this.getDefaults();
 
         for (const taskType of TASK_TYPES) {
             const userConfig = configs.find(c => c.taskType === taskType);
@@ -60,7 +61,7 @@ export class ModelConfigService {
                     modelName: userConfig.modelName,
                 };
             } else {
-                result[taskType] = DEFAULT_MODELS[taskType];
+                result[taskType] = adminDefaults[taskType];
             }
         }
 
@@ -104,7 +105,7 @@ export class ModelConfigService {
      * Fast method - uses cached CLIProxy config if available
      */
     private async getDefaultForTask(taskType: TaskTypeValue): Promise<{ provider: string; modelName: string }> {
-        // Check CLIProxy admin defaults
+        // Check admin defaults (stored in system_configs table)
         if (this.cliproxy) {
             try {
                 const isEnabled = await this.cliproxy.isEnabled();
@@ -118,6 +119,9 @@ export class ModelConfigService {
                     }
                     if (taskType === 'IMAGE' && cliproxyConfig.defaultImageModel) {
                         return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultImageModel };
+                    }
+                    if (taskType === 'TTS' && cliproxyConfig.defaultTTSModel) {
+                        return { provider: 'GEMINI', modelName: cliproxyConfig.defaultTTSModel };
                     }
                 }
             } catch (error: any) {
@@ -198,7 +202,20 @@ export class ModelConfigService {
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
 
         if (!apiKey) {
-            throw new Error('No Gemini API key configured. Please add your API key in Settings.');
+            // No key available — return known models list instead of throwing
+            this.logger.warn('No Gemini API key available, returning known models only');
+            const knownModels: AvailableModel[] = Object.entries(this.KNOWN_GEMINI_MODELS)
+                .map(([name, info]) => ({ name, ...info }));
+            // Also add TTS voices
+            knownModels.push(
+                { name: 'gemini-voice:Zephyr', displayName: 'Zephyr (Nữ - Tươi sáng)', description: 'Giọng nữ tươi sáng', supportedTasks: ['TTS_VOICE'] },
+                { name: 'gemini-voice:Puck', displayName: 'Puck (Nam - Rộn ràng)', description: 'Giọng nam rộn ràng', supportedTasks: ['TTS_VOICE'] },
+                { name: 'gemini-voice:Charon', displayName: 'Charon (Cung cấp nhiều thông tin)', description: 'Giọng trầm ấm', supportedTasks: ['TTS_VOICE'] },
+                { name: 'gemini-voice:Kore', displayName: 'Kore (Chắc chắn)', description: 'Giọng chắc chắn', supportedTasks: ['TTS_VOICE'] },
+                { name: 'gemini-voice:Fenrir', displayName: 'Fenrir (Dễ kích động)', description: 'Giọng sôi nổi', supportedTasks: ['TTS_VOICE'] },
+                { name: 'gemini-voice:Aoede', displayName: 'Aoede (Nhẹ nhàng)', description: 'Giọng nhẹ nhàng', supportedTasks: ['TTS_VOICE'] },
+            );
+            return knownModels;
         }
 
         try {
@@ -666,7 +683,12 @@ export class ModelConfigService {
                         defaults.IMAGE = { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultImageModel };
                     }
 
-                    this.logger.log(`Using CLIProxy admin defaults: text=${cliproxyConfig.defaultTextModel}, image=${cliproxyConfig.defaultImageModel}`);
+                    // Override TTS model default (uses GEMINI provider, not CLIProxy)
+                    if (cliproxyConfig.defaultTTSModel) {
+                        defaults.TTS = { provider: 'GEMINI', modelName: cliproxyConfig.defaultTTSModel };
+                    }
+
+                    this.logger.log(`Using admin defaults: text=${cliproxyConfig.defaultTextModel}, image=${cliproxyConfig.defaultImageModel}, tts=${cliproxyConfig.defaultTTSModel}`);
                 }
             } catch (error: any) {
                 this.logger.warn(`Failed to get CLIProxy config: ${error.message}`);

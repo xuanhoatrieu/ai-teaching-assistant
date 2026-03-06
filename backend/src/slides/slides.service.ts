@@ -82,11 +82,8 @@ export class SlidesService {
             throw new BadRequestException('Detailed outline is required before generating slide script');
         }
 
-        // Get API key
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
-        }
 
         // Get configured model for SLIDES task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
@@ -104,7 +101,7 @@ export class SlidesService {
         this.logger.debug(`Generated prompt for slides (${prompt.length} chars)`);
 
         // Use AiProviderService (CLIProxy → Gemini SDK fallback)
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
         const result = aiResult.content;
         this.logger.log(`Slides generated via ${aiResult.provider} (${aiResult.model})`);
 
@@ -323,11 +320,8 @@ export class SlidesService {
             return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual: ${s.visualIdea}` : ''}`;
         }).join('\n\n');
 
-        // Get API key
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
-        }
 
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
 
@@ -344,7 +338,7 @@ export class SlidesService {
         this.logger.debug(`Generated speaker notes prompt (${prompt.length} chars)`);
 
         // Generate using AI
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
         const result = aiResult.content;
         this.logger.log(`Speaker notes generated via ${aiResult.provider} (${aiResult.model})`);
 
@@ -502,11 +496,8 @@ export class SlidesService {
             return `--- Slide ${s.slideIndex} ---\n${s.speakerNote || '(chưa có speaker note)'}`;
         }).join('\n\n');
 
-        // Get API key
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
-        }
 
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
 
@@ -523,7 +514,7 @@ export class SlidesService {
         this.logger.debug(`Generated optimize notes prompt (${prompt.length} chars)`);
 
         // Generate using AI
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
         const result = aiResult.content;
         this.logger.log(`Speaker notes optimized via ${aiResult.provider} (${aiResult.model})`);
 
@@ -633,11 +624,8 @@ export class SlidesService {
             throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
         }
 
-        // Get API key
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured');
-        }
 
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
 
@@ -653,7 +641,7 @@ export class SlidesService {
         );
 
         // Use AiProviderService for content optimization
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
         const result = aiResult.content;
 
         // Parse JSON result
@@ -702,11 +690,8 @@ export class SlidesService {
             throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
         }
 
-        // Get API key for image generation
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured');
-        }
 
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'IMAGE');
 
@@ -724,7 +709,7 @@ export class SlidesService {
         try {
             // Note: Full image generation requires ImageGeneratorService integration
             // For text-based image prompt generation, use aiProvider
-            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
             this.logger.log(`Generated image prompt response for slide ${slideIndex} via ${aiResult.provider}`);
 
             // This is a placeholder that will be enhanced with actual image generation

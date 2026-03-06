@@ -85,6 +85,7 @@ export class SystemConfigService {
         apiKey: string;
         defaultTextModel: string;
         defaultImageModel: string;
+        defaultTTSModel: string;
     }> {
         const configs = await this.getByPrefix('cliproxy.');
         const configMap = new Map(configs.map(c => [c.key, c.value]));
@@ -94,7 +95,8 @@ export class SystemConfigService {
             url: configMap.get('cliproxy.url') || process.env.CLIPROXY_URL || 'https://cliproxy.hoclieu.id.vn',
             apiKey: configMap.get('cliproxy.apiKey') || process.env.CLIPROXY_API_KEY || '',
             defaultTextModel: configMap.get('cliproxy.defaultTextModel') || 'gemini-2.5-flash',
-            defaultImageModel: configMap.get('cliproxy.defaultImageModel') || 'gemini-3-pro-image-preview',
+            defaultImageModel: configMap.get('cliproxy.defaultImageModel') || 'gemini-3.1-flash-image',
+            defaultTTSModel: configMap.get('cliproxy.defaultTTSModel') || 'gemini-2.5-flash-preview-tts',
         };
     }
 
@@ -107,7 +109,8 @@ export class SystemConfigService {
             { key: 'cliproxy.url', value: process.env.CLIPROXY_URL || 'https://cliproxy.hoclieu.id.vn' },
             { key: 'cliproxy.apiKey', value: process.env.CLIPROXY_API_KEY || '' },
             { key: 'cliproxy.defaultTextModel', value: 'gemini-2.5-flash' },
-            { key: 'cliproxy.defaultImageModel', value: 'gemini-3-pro-image-preview' },
+            { key: 'cliproxy.defaultImageModel', value: 'gemini-3.1-flash-image' },
+            { key: 'cliproxy.defaultTTSModel', value: 'gemini-2.5-flash-preview-tts' },
         ];
 
         for (const { key, value } of defaults) {

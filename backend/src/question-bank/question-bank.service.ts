@@ -61,11 +61,8 @@ export class QuestionBankService {
             throw new BadRequestException('Detailed outline is required before generating questions');
         }
 
-        // Get API key
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
-        }
 
         // Get configured model for QUESTIONS task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
@@ -88,7 +85,7 @@ export class QuestionBankService {
         this.logger.debug(`Generated prompt for questions (${prompt.length} chars)`);
 
         // Use AiProviderService (CLIProxy → Gemini SDK fallback)
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
         const result = aiResult.content;
         this.logger.log(`Questions generated via ${aiResult.provider} (${aiResult.model})`);
 

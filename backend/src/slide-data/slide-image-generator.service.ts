@@ -64,25 +64,27 @@ export class SlideImageGeneratorService {
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'IMAGE');
         const apiKey = await this.apiKeysService.getActiveKey(userId, APIService.GEMINI);
 
-        // DEBUG: Log API key retrieval result
-        this.logger.log(`[DEBUG] Slide ${slideIndex} - userId: ${userId}`);
-        this.logger.log(`[DEBUG] Slide ${slideIndex} - modelConfig: ${modelConfig.modelName}`);
-        this.logger.log(`[DEBUG] Slide ${slideIndex} - apiKey from DB: ${apiKey ? `present (${apiKey.length} chars)` : 'NULL - will try env'}`);
+        // Prefix model name with 'cliproxy:' when provider is CLIPROXY
+        // but only if the model name doesn't already have the prefix
+        // (User's custom ModelConfig may already store 'cliproxy:model-name')
+        const effectiveModelName = (modelConfig.provider === 'CLIPROXY' && !modelConfig.modelName.startsWith('cliproxy:'))
+            ? `cliproxy:${modelConfig.modelName}`
+            : modelConfig.modelName;
+
+        this.logger.log(`Slide ${slideIndex}: provider=${modelConfig.provider}, model=${effectiveModelName}, apiKey=${apiKey ? 'present' : 'from-env'}`);
 
         // Fallback to environment variable if no user key
         let effectiveApiKey = apiKey;
         if (!effectiveApiKey) {
             effectiveApiKey = process.env.GEMINI_API_KEY || null;
-            this.logger.log(`[DEBUG] Slide ${slideIndex} - env GEMINI_API_KEY: ${effectiveApiKey ? `present (${effectiveApiKey.length} chars)` : 'NULL'}`);
         }
 
         // Generate image using Imagen with user's configured model
         // Use 1:1 square ratio to match 12cm x 12cm requirement
-        this.logger.log(`[DEBUG] Slide ${slideIndex} - Calling imagenService.generateImage with apiKey=${effectiveApiKey ? 'present' : 'NULL'}`);
         const generatedImage = await this.imagenService.generateImage(
             imagePrompt,
             '1:1',  // Square ratio (12cm x 12cm)
-            modelConfig.modelName,
+            effectiveModelName,
             effectiveApiKey || undefined
         );
 

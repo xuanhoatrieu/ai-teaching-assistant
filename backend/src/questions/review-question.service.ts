@@ -203,11 +203,8 @@ export class ReviewQuestionService {
             throw new NotFoundException(`Lesson ${lessonId} not found`);
         }
 
-        // Get API key from user settings (not from env var!)
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
-        }
 
         // Get configured model for QUESTIONS task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
@@ -230,7 +227,7 @@ export class ReviewQuestionService {
 
         try {
             // Use AiProviderService (CLIProxy → Gemini SDK fallback) with user's API key
-            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
             const response = aiResult.content;
             this.logger.log(`Review questions generated via ${aiResult.provider} (${aiResult.model})`);
 

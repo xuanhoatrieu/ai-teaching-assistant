@@ -89,11 +89,8 @@ export class OutlineService {
             throw new BadRequestException('Raw outline is required before generating detailed outline');
         }
 
-        // Get API key
+        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-        if (!apiKey) {
-            throw new BadRequestException('Gemini API key not configured. Please add it in Settings.');
-        }
 
         // Get configured model for OUTLINE task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'OUTLINE');
@@ -111,7 +108,7 @@ export class OutlineService {
         this.logger.debug(`Generated prompt for outline (${prompt.length} chars)`);
 
         // Use AiProviderService (CLIProxy → Gemini SDK fallback)
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
         const result = aiResult.content;
         this.logger.log(`Outline generated via ${aiResult.provider} (${aiResult.model})`);
 

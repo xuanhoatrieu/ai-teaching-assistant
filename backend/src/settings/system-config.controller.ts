@@ -25,6 +25,10 @@ export class UpdateCLIProxyConfigDto {
     @IsOptional()
     @IsString()
     defaultImageModel?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultTTSModel?: string;
 }
 
 @Controller('admin/config')
@@ -69,6 +73,9 @@ export class SystemConfigController {
         }
         if (dto.defaultImageModel) {
             await this.configService.set('cliproxy.defaultImageModel', dto.defaultImageModel);
+        }
+        if (dto.defaultTTSModel) {
+            await this.configService.set('cliproxy.defaultTTSModel', dto.defaultTTSModel);
         }
 
         return { success: true, message: 'CLIProxy configuration updated' };
@@ -125,6 +132,7 @@ export class SystemConfigController {
                 url: cliproxyConfig.url,
                 defaultTextModel: cliproxyConfig.defaultTextModel,
                 defaultImageModel: cliproxyConfig.defaultImageModel,
+                defaultTTSModel: cliproxyConfig.defaultTTSModel,
             },
             geminiSdk: {
                 available: !!process.env.GEMINI_API_KEY,

@@ -73,72 +73,86 @@ export class ImagenService {
      * @param modelName - Model to use (optional, defaults to gemini-2.5-flash-image)
      * @param apiKey - API key (optional, uses environment variable if not provided)
      */
+    // The default Gemini SDK model for image generation
+    private readonly GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-exp-image-generation';
+
     async generateImage(
         prompt: string,
         aspectRatio: string = '16:9',
         modelName?: string,
         apiKey?: string
     ): Promise<GeneratedImage> {
-        this.logger.log(`[DEBUG] generateImage called: model=${modelName || 'default'}, apiKey=${apiKey ? `present (${apiKey.length} chars)` : 'MISSING'}`);
-
-        // Use provided API key or environment
+        const effectiveModel = modelName || this.GEMINI_IMAGE_MODEL;
         const effectiveApiKey = apiKey || this.getApiKey();
-        this.logger.log(`[DEBUG] effectiveApiKey: ${effectiveApiKey ? `present (${effectiveApiKey.length} chars)` : 'MISSING - will use placeholder'}`);
 
-        if (!effectiveApiKey) {
-            this.logger.warn('Image generation disabled - returning placeholder');
+        // Validate API key is real (not a placeholder)
+        const hasValidApiKey = effectiveApiKey &&
+            effectiveApiKey.length > 20 &&
+            !effectiveApiKey.includes('your-') &&
+            !effectiveApiKey.includes('-here');
+
+        this.logger.log(`generateImage: model=${effectiveModel}, hasValidApiKey=${!!hasValidApiKey}`);
+
+        // Priority 1: If model has cliproxy: prefix or no valid API key, try CLIProxy
+        const isCliproxyModel = effectiveModel.startsWith('cliproxy:');
+
+        if (isCliproxyModel || (!hasValidApiKey && this.cliproxy)) {
+            this.logger.log(`Trying CLIProxy for image generation (model=${effectiveModel})`);
+            try {
+                const result = await this.generateImageViaCLIProxy(prompt, effectiveModel);
+                if (result.mimeType !== 'image/svg+xml') {
+                    return result;
+                }
+                this.logger.warn('CLIProxy returned placeholder, will try Gemini SDK fallback');
+            } catch (error) {
+                this.logger.warn(`CLIProxy image generation failed: ${error}, trying Gemini SDK fallback`);
+            }
+        }
+
+        // Priority 2: Use Gemini SDK with valid API key
+        // IMPORTANT: Always use the correct Gemini image model, not CLIProxy model name
+        if (!hasValidApiKey) {
+            this.logger.warn('Image generation disabled - no valid API key and CLIProxy failed - returning placeholder');
             return this.generatePlaceholder(prompt);
         }
 
-        // Ensure client is initialized with correct API key
         if (!this.ensureClient(effectiveApiKey)) {
             return this.generatePlaceholder(prompt);
         }
 
         try {
-            // Use provided model or default to image generation model
-            let effectiveModel = modelName || 'gemini-2.0-flash-exp-image-generation';
+            // For Gemini SDK fallback, always use the correct image generation model
+            // CLIProxy model names (e.g. gemini-3.1-flash-image) don't work with Gemini SDK
+            const sdkModel = isCliproxyModel ? this.GEMINI_IMAGE_MODEL : (
+                effectiveModel.includes(':')
+                    ? effectiveModel.split(':').pop() || this.GEMINI_IMAGE_MODEL
+                    : effectiveModel
+            );
 
-            // Strip provider prefix (cliproxy:, gemini:, etc.) - these are internal routing prefixes
-            if (effectiveModel.includes(':')) {
-                const originalModel = effectiveModel;
-                effectiveModel = effectiveModel.split(':').pop() || effectiveModel;
-                this.logger.log(`[DEBUG] Stripped prefix: ${originalModel} → ${effectiveModel}`);
-            }
+            this.logger.log(`Using Gemini SDK model: ${sdkModel}`);
 
-            this.logger.log(`[DEBUG] Using model: ${effectiveModel}`);
-
-            // Build the prompt with aspect ratio guidance
             const imagePrompt = this.buildImageGenerationPrompt(prompt, aspectRatio);
 
-            // Configure for image generation - matching Python exactly
-            // Python: types.GenerateContentConfig(response_modalities=["IMAGE", "TEXT"])
             const config: GenerateContentConfig = {
                 responseModalities: ['IMAGE', 'TEXT'],
             };
 
-            // Contents payload matching Python structure
             const contents: Content[] = [{
                 role: 'user',
                 parts: [{ text: imagePrompt }],
             }];
 
-            this.logger.log(`[DEBUG] Calling generate_content_stream with config: ${JSON.stringify(config)}`);
-
-            // Use streaming like Python does (generate_content_stream)
             const stream = await this.client!.models.generateContentStream({
-                model: effectiveModel,
+                model: sdkModel,
                 contents: contents,
                 config: config,
             });
 
-            // Process stream chunks - matching Python logic
             for await (const chunk of stream) {
-                // Check for image data in response
                 if (chunk.candidates?.[0]?.content?.parts) {
                     for (const part of chunk.candidates[0].content.parts) {
                         if (part.inlineData) {
-                            this.logger.log('✅ Image generated successfully via streaming');
+                            this.logger.log('✅ Image generated successfully via Gemini SDK');
                             return {
                                 base64: part.inlineData.data!,
                                 mimeType: part.inlineData.mimeType || 'image/png',
@@ -149,12 +163,11 @@ export class ImagenService {
                 }
             }
 
-            // No image in stream, fallback to placeholder
-            this.logger.warn('❌ No image data found in response stream, falling back to placeholder');
+            this.logger.warn('❌ No image data in Gemini SDK response, falling back to placeholder');
             return this.generatePlaceholder(prompt);
 
         } catch (error) {
-            this.logger.error(`❌ Image generation failed: ${error}`);
+            this.logger.error(`❌ Gemini SDK image generation failed: ${error}`);
             return this.generatePlaceholder(prompt);
         }
     }
@@ -312,9 +325,10 @@ Generate the image now.`;
 
     /**
      * Generate image using CLIProxy (alternative to native SDK)
-     * Uses gemini-3-pro-image-preview model via CLIProxy
+     * Uses CLIProxy image model with automatic fallback chain.
+     * If the primary model fails (502, error), tries alternative models.
      */
-    async generateImageViaCLIProxy(prompt: string): Promise<GeneratedImage> {
+    async generateImageViaCLIProxy(prompt: string, modelName?: string): Promise<GeneratedImage> {
         if (!this.cliproxy) {
             this.logger.warn('CLIProxy not available, falling back to placeholder');
             return this.generatePlaceholder(prompt);
@@ -327,32 +341,95 @@ Generate the image now.`;
                 return this.generatePlaceholder(prompt);
             }
 
-            const imagePrompt = this.buildImageGenerationPrompt(prompt, '16:9');
+            const imagePrompt = this.buildImageGenerationPrompt(prompt, '1:1');
 
-            // CLIProxy returns text response for image model
-            // The actual image bytes need to be handled differently
-            const response = await this.cliproxy.generateImage(imagePrompt);
+            // Strip cliproxy: prefix if present
+            let model = modelName;
+            if (model && model.startsWith('cliproxy:')) {
+                model = model.substring('cliproxy:'.length);
+            }
 
-            this.logger.log('✅ Image generated via CLIProxy');
+            // Try primary model first
+            const result = await this.tryGenerateWithModel(imagePrompt, model);
+            if (result) return result;
 
-            // If response contains base64 data, extract it
+            // Primary failed → try fallback models
+            this.logger.warn(`Primary model "${model}" failed, trying fallback models...`);
+            const fallbacks = await this.cliproxy.getModelFallbacks('image', model);
+            for (const fallbackModel of fallbacks) {
+                this.logger.log(`Trying fallback model: ${fallbackModel}`);
+                const fallbackResult = await this.tryGenerateWithModel(imagePrompt, fallbackModel);
+                if (fallbackResult) {
+                    this.logger.log(`✅ Fallback model "${fallbackModel}" succeeded`);
+                    return fallbackResult;
+                }
+            }
+
+            this.logger.warn('All CLIProxy image models failed, falling back to placeholder');
+            return this.generatePlaceholder(prompt);
+
+        } catch (error) {
+            this.logger.error(`CLIProxy image generation failed: ${error}`);
+            return this.generatePlaceholder(prompt);
+        }
+    }
+
+    /**
+     * Try to generate an image with a specific CLIProxy model.
+     * Returns GeneratedImage on success, null on failure.
+     */
+    private async tryGenerateWithModel(imagePrompt: string, model?: string): Promise<GeneratedImage | null> {
+        try {
+            const response = await this.cliproxy!.generateImage(imagePrompt, model);
+
+            // Handle data URI format: "data:image/png;base64,iVBORw0KGgo..."
+            if (response.startsWith('data:') && response.includes('base64,')) {
+                const commaIndex = response.indexOf(',');
+                const header = response.substring(0, commaIndex);
+                const base64Data = response.substring(commaIndex + 1);
+                const mimeMatch = header.match(/data:([^;]+)/);
+                const mimeType = mimeMatch?.[1] || 'image/png';
+                const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
+
+                this.logger.log(`✅ CLIProxy image: ${mimeType}, base64 length: ${base64Data.length}`);
+                return {
+                    base64: base64Data,
+                    mimeType,
+                    filename: `cliproxy_${Date.now()}.${ext}`,
+                };
+            }
+
+            // Legacy: base64 data URI embedded somewhere in the response
             if (response.includes('base64,')) {
-                const base64Match = response.match(/base64,([A-Za-z0-9+/=]+)/);
-                if (base64Match) {
+                const startIdx = response.indexOf('base64,') + 7;
+                const base64Data = response.substring(startIdx).replace(/[^A-Za-z0-9+/=]/g, '');
+                if (base64Data.length > 1000) {
+                    this.logger.log(`✅ CLIProxy extracted base64 from response (${base64Data.length} chars)`);
                     return {
-                        base64: base64Match[1],
+                        base64: base64Data,
                         mimeType: 'image/png',
                         filename: `cliproxy_${Date.now()}.png`,
                     };
                 }
             }
 
-            // Fallback: treat response as description and generate placeholder
-            return this.generatePlaceholder(prompt);
+            // Check if response itself is raw base64 image data
+            if (response.length > 1000 && /^[A-Za-z0-9+/=\s]+$/.test(response.trim())) {
+                this.logger.log('✅ CLIProxy returned raw base64 image data');
+                return {
+                    base64: response.trim(),
+                    mimeType: 'image/png',
+                    filename: `cliproxy_${Date.now()}.png`,
+                };
+            }
+
+            // Not an image response
+            this.logger.warn(`Model "${model}" returned non-image data (${response.length} chars)`);
+            return null;
 
         } catch (error) {
-            this.logger.error(`CLIProxy image generation failed: ${error}`);
-            return this.generatePlaceholder(prompt);
+            this.logger.warn(`Model "${model}" failed: ${error}`);
+            return null;
         }
     }
 }

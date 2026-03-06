@@ -39,6 +39,7 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingModels, setIsLoadingModels] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
+    const [adminDefaultModel, setAdminDefaultModel] = useState<string>('');
     const hasLoadedModels = useRef(false);
 
     useEffect(() => {
@@ -74,6 +75,15 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                     .replace('gemini-', 'Gemini ')
                     .replace('-', ' ');
                 setSelectedModelDisplay(displayName);
+            }
+
+            // Track admin default for badge annotation
+            if (adminDefault) {
+                let defaultName = adminDefault.modelName;
+                if (adminDefault.provider === 'CLIPROXY' && !defaultName.startsWith('cliproxy:')) {
+                    defaultName = `cliproxy:${defaultName}`;
+                }
+                setAdminDefaultModel(defaultName);
             }
         } catch (err) {
             console.error('Error fetching model config:', err);
@@ -203,7 +213,12 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                                     className={`model-option ${model.name === selectedModel ? 'selected' : ''}`}
                                     onClick={() => handleSelectModel(model)}
                                 >
-                                    <div className="model-name">{model.displayName}</div>
+                                    <div className="model-name">
+                                        {model.displayName}
+                                        {model.name === adminDefaultModel && (
+                                            <span className="admin-default-badge"> ⭐ Mặc định</span>
+                                        )}
+                                    </div>
                                     {model.description && (
                                         <div className="model-desc">{model.description}</div>
                                     )}
