@@ -82,41 +82,65 @@ export class SystemConfigController {
     }
 
     /**
-     * Test CLIProxy connection
+     * Test CLIProxy connection (with timeout and retry)
      */
     @Get('cliproxy/test')
     async testCLIProxyConnection() {
         const config = await this.configService.getCLIProxyConfig();
+        const TIMEOUT_MS = 15000; // 15 second timeout
+        const MAX_RETRIES = 2;
 
-        try {
-            const response = await fetch(`${config.url}/v1/models`, {
-                headers: {
-                    'Authorization': `Bearer ${config.apiKey}`,
-                },
-            });
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                this.logger.log(`Testing CLIProxy connection (attempt ${attempt}/${MAX_RETRIES})...`);
 
-            if (response.ok) {
-                const data = await response.json();
-                // Return all models for dropdown selection
-                const allModels = data.data?.map((m: { id: string }) => m.id) || [];
-                return {
-                    success: true,
-                    message: 'CLIProxy connection successful',
-                    modelsCount: allModels.length,
-                    models: allModels,
-                };
-            } else {
+                const response = await fetch(`${config.url}/v1/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${config.apiKey}`,
+                    },
+                    signal: AbortSignal.timeout(TIMEOUT_MS),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const allModels = data.data?.map((m: { id: string }) => m.id) || [];
+                    return {
+                        success: true,
+                        message: 'CLIProxy connection successful',
+                        modelsCount: allModels.length,
+                        models: allModels,
+                    };
+                } else {
+                    // Non-OK but got a response — don't retry, report status
+                    return {
+                        success: false,
+                        message: `CLIProxy returned HTTP ${response.status}. This may be a temporary issue — try again in a moment.`,
+                    };
+                }
+            } catch (error: any) {
+                const isTimeout = error.name === 'TimeoutError' || error.message?.includes('timeout') || error.message?.includes('aborted');
+                const isLastAttempt = attempt === MAX_RETRIES;
+
+                if (isTimeout && !isLastAttempt) {
+                    this.logger.warn(`CLIProxy test timed out (attempt ${attempt}), retrying...`);
+                    continue; // retry
+                }
+
+                if (isTimeout) {
+                    return {
+                        success: false,
+                        message: `CLIProxy connection timed out after ${TIMEOUT_MS / 1000}s (${MAX_RETRIES} attempts). The server at ${config.url} is not responding. This usually means CLIProxy is overloaded or the network connection is slow.`,
+                    };
+                }
+
                 return {
                     success: false,
-                    message: `CLIProxy returned ${response.status}`,
+                    message: `Connection failed: ${error.message || error}`,
                 };
             }
-        } catch (error) {
-            return {
-                success: false,
-                message: `Connection failed: ${error}`,
-            };
         }
+
+        return { success: false, message: 'Test failed after all retries' };
     }
 
     /**

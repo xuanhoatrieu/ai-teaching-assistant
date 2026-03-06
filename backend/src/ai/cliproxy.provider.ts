@@ -363,7 +363,7 @@ export class CLIProxyProvider {
     }
 
     /**
-     * List available models
+     * List available models (with timeout)
      */
     async listModels(): Promise<{ id: string; owned_by?: string }[]> {
         const config = await this.getConfig();
@@ -372,6 +372,7 @@ export class CLIProxyProvider {
             headers: {
                 'Authorization': `Bearer ${config.apiKey}`,
             },
+            signal: AbortSignal.timeout(15000), // 15s timeout
         });
 
         if (!response.ok) {
@@ -386,7 +387,7 @@ export class CLIProxyProvider {
     }
 
     /**
-     * Health check
+     * Health check (with timeout)
      */
     async healthCheck(): Promise<boolean> {
         try {
@@ -395,6 +396,7 @@ export class CLIProxyProvider {
                 headers: {
                     'Authorization': `Bearer ${config.apiKey}`,
                 },
+                signal: AbortSignal.timeout(10000), // 10s timeout
             });
             return response.ok;
         } catch (error) {

@@ -131,8 +131,29 @@ export function SettingsPage() {
         setIsTestingCliproxy(true);
         setCliproxyTestResult(null);
         try {
+            // Auto-save config first so the test uses the latest input values
+            const payload = {
+                enabled: cliproxyEnabled,
+                url: cliproxyUrl || undefined,
+                apiKey: cliproxyApiKey || undefined,
+                defaultTextModel: defaultTextModel || 'gemini-2.5-flash',
+                defaultImageModel: defaultImageModel || undefined,
+                defaultTTSModel: defaultTTSModel || undefined,
+            };
+            await api.put('/admin/config/cliproxy', payload);
+            setCliproxyApiKey(''); // clear API key after saving
+
+            // Now test with the saved config
             const response = await api.get('/admin/config/cliproxy/test');
             setCliproxyTestResult(response.data);
+
+            // Update available models if test succeeded
+            if (response.data.models) {
+                setAvailableModels(response.data.models);
+            }
+
+            // Refresh config display
+            await fetchCLIProxyConfig();
         } catch (err: any) {
             setCliproxyTestResult({
                 success: false,
