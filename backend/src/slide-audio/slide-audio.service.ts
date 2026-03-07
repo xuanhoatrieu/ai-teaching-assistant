@@ -376,13 +376,29 @@ export class SlideAudioService {
             // Format: "gemini-voice:VoiceName" or "vbee:voiceId" or "vitts:ref:3"
             let provider = modelConfig.provider || 'GEMINI';
             let voiceName = 'Puck';
-            let modelName = 'gemini-2.5-flash-preview-tts';
+            // Get default TTS model from system config (not hardcoded)
+            const defaultTTSConfig = await this.modelConfigService.getDefaultForTask('TTS');
+            let modelName = defaultTTSConfig.modelName;
 
             if (modelConfig.modelName?.startsWith('gemini-voice:')) {
                 // Gemini voice format: "gemini-voice:Puck"
-                provider = 'GEMINI';
                 voiceName = modelConfig.modelName.split(':')[1];
-                modelName = 'gemini-2.5-flash-preview-tts';
+
+                // Check if CLIProxy should be used for TTS
+                if (modelConfig.provider === 'CLIPROXY') {
+                    provider = 'CLIPROXY';
+                    // Get admin-configured CLIProxy TTS model
+                    const cliproxyTTSConfig = await this.prisma.systemConfig.findUnique({
+                        where: { key: 'cliproxy.defaultTTSModel' },
+                    });
+                    if (cliproxyTTSConfig?.value) {
+                        modelName = cliproxyTTSConfig.value;
+                    }
+                    this.logger.log(`Using CLIProxy TTS model: ${modelName}`);
+                } else {
+                    provider = 'GEMINI';
+                    // modelName already set from getDefaultForTask
+                }
             } else if (modelConfig.modelName?.startsWith('vbee:')) {
                 // Vbee voice format: "vbee:hn_female_thutrang_news_48k-fhg"
                 provider = 'VBEE';

@@ -224,9 +224,9 @@ export class CLIProxyProvider {
             enabled: configMap.get('cliproxy.enabled') === 'true',
             url: (configMap.get('cliproxy.url') as string) || this.baseUrl,
             apiKey: (configMap.get('cliproxy.apiKey') as string) || this.apiKey,
-            defaultTextModel: (configMap.get('cliproxy.defaultTextModel') as string) || 'gemini-2.5-flash',
-            defaultImageModel: (configMap.get('cliproxy.defaultImageModel') as string) || 'gemini-3.1-flash-image',
-            defaultTTSModel: (configMap.get('cliproxy.defaultTTSModel') as string) || 'gemini-2.5-flash-preview-tts',
+            defaultTextModel: (configMap.get('cliproxy.defaultTextModel') as string) || '',
+            defaultImageModel: (configMap.get('cliproxy.defaultImageModel') as string) || '',
+            defaultTTSModel: (configMap.get('cliproxy.defaultTTSModel') as string) || '',
         };
     }
 
@@ -360,6 +360,84 @@ export class CLIProxyProvider {
 
         // Priority 3: String content (could be base64, data URI, or text)
         return content || '';
+    }
+
+    /**
+     * Generate TTS audio via CLIProxy using a TTS model.
+     * Uses /v1/chat/completions with TTS model + audio response config.
+     * Returns raw audio Buffer (WAV format).
+     */
+    async generateTTS(
+        text: string,
+        model?: string,
+        voiceId?: string,
+    ): Promise<{ audio: Buffer; format: string }> {
+        const config = await this.getConfig();
+        const modelName = model || config.defaultTTSModel;
+        const voice = voiceId || 'Puck';
+
+        this.logger.log(`CLIProxy TTS: model=${modelName}, voice=${voice}, text=${text.substring(0, 50)}...`);
+
+        const response = await fetch(`${config.url}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: modelName,
+                messages: [{ role: 'user', content: text }],
+                modalities: ['audio'],
+                audio: {
+                    voice: voice.toLowerCase(),
+                    format: 'wav',
+                },
+            }),
+            signal: AbortSignal.timeout(60000), // 60s timeout for TTS (audio generation is slow)
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`CLIProxy TTS failed: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        const message = data.choices?.[0]?.message;
+
+        // Try to extract audio data from various response formats
+        // Format 1: message.audio.data (OpenAI audio response format)
+        if (message?.audio?.data) {
+            const audioBuffer = Buffer.from(message.audio.data, 'base64');
+            this.logger.log(`✅ CLIProxy TTS: ${audioBuffer.length} bytes from message.audio.data`);
+            return { audio: audioBuffer, format: 'wav' };
+        }
+
+        // Format 2: Inline data in content parts (Gemini-style)
+        const content = message?.content;
+        if (Array.isArray(content)) {
+            for (const part of content) {
+                if (part.inlineData?.data || part.inline_data?.data) {
+                    const b64 = part.inlineData?.data || part.inline_data?.data;
+                    const audioBuffer = Buffer.from(b64, 'base64');
+                    this.logger.log(`✅ CLIProxy TTS: ${audioBuffer.length} bytes from inline_data`);
+                    return { audio: audioBuffer, format: 'wav' };
+                }
+            }
+        }
+
+        // Format 3: Raw base64 string in content
+        if (typeof content === 'string' && content.length > 100) {
+            // Could be base64 audio data
+            try {
+                const audioBuffer = Buffer.from(content, 'base64');
+                if (audioBuffer.length > 100) {
+                    this.logger.log(`✅ CLIProxy TTS: ${audioBuffer.length} bytes from raw content`);
+                    return { audio: audioBuffer, format: 'wav' };
+                }
+            } catch { /* not base64 */ }
+        }
+
+        throw new Error('CLIProxy TTS: No audio data found in response');
     }
 
     /**

@@ -14,6 +14,7 @@ import { CreateUserTTSConfigDto, UpdateUserTTSConfigDto } from './dto/user-tts-c
 import { TTSResult, Voice, TTSCredentials } from './interfaces/tts-provider.interface';
 import { encrypt, decrypt } from '../common/crypto.util';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { CLIProxyProvider } from '../ai/cliproxy.provider';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 
@@ -26,6 +27,7 @@ export class TTSService {
         private readonly ttsFactory: TTSFactory,
         @Inject(forwardRef(() => ApiKeysService))
         private readonly apiKeysService: ApiKeysService,
+        private readonly cliproxy: CLIProxyProvider,
     ) { }
 
     // ========== ADMIN: TTS Provider Management ==========
@@ -229,6 +231,30 @@ export class TTSService {
                 } catch (parseError) {
                     throw new Error(`Invalid ViTTS credentials JSON: ${parseError.message}`);
                 }
+            }
+        } else if (dto.provider === 'CLIPROXY') {
+            // CLIProxy TTS - uses system CLIProxy config, no user API key needed
+            this.logger.log(`Using CLIProxy TTS with model: ${dto.model}, voice: ${dto.voiceId}`);
+            try {
+                const result = await this.cliproxy.generateTTS(
+                    dto.text,
+                    dto.model,
+                    dto.voiceId,
+                );
+                return {
+                    audio: result.audio,
+                    format: result.format as 'wav',
+                    provider: 'CLIProxy TTS',
+                };
+            } catch (error: any) {
+                this.logger.error(`CLIProxy TTS failed: ${error.message}`);
+                // Fallback to Gemini SDK
+                this.logger.warn('Falling back to Gemini SDK for TTS');
+                const geminiApiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+                if (!geminiApiKey) {
+                    throw new Error(`CLIProxy TTS failed and no Gemini API key configured for fallback: ${error.message}`);
+                }
+                provider = this.ttsFactory.getDefaultProvider(geminiApiKey);
             }
         } else {
             // Default to Gemini

@@ -94,9 +94,9 @@ export class SystemConfigService {
             enabled: configMap.get('cliproxy.enabled') === 'true',
             url: configMap.get('cliproxy.url') || process.env.CLIPROXY_URL || 'https://cliproxy.hoclieu.id.vn',
             apiKey: configMap.get('cliproxy.apiKey') || process.env.CLIPROXY_API_KEY || '',
-            defaultTextModel: configMap.get('cliproxy.defaultTextModel') || 'gemini-2.5-flash',
-            defaultImageModel: configMap.get('cliproxy.defaultImageModel') || 'gemini-3.1-flash-image',
-            defaultTTSModel: configMap.get('cliproxy.defaultTTSModel') || 'gemini-2.5-flash-preview-tts',
+            defaultTextModel: configMap.get('cliproxy.defaultTextModel') || '',
+            defaultImageModel: configMap.get('cliproxy.defaultImageModel') || '',
+            defaultTTSModel: configMap.get('cliproxy.defaultTTSModel') || '',
         };
     }
 
@@ -108,9 +108,9 @@ export class SystemConfigService {
             { key: 'cliproxy.enabled', value: 'false' },
             { key: 'cliproxy.url', value: process.env.CLIPROXY_URL || 'https://cliproxy.hoclieu.id.vn' },
             { key: 'cliproxy.apiKey', value: process.env.CLIPROXY_API_KEY || '' },
-            { key: 'cliproxy.defaultTextModel', value: 'gemini-2.5-flash' },
-            { key: 'cliproxy.defaultImageModel', value: 'gemini-3.1-flash-image' },
-            { key: 'cliproxy.defaultTTSModel', value: 'gemini-2.5-flash-preview-tts' },
+            { key: 'cliproxy.defaultTextModel', value: '' },
+            { key: 'cliproxy.defaultImageModel', value: '' },
+            { key: 'cliproxy.defaultTTSModel', value: '' },
         ];
 
         for (const { key, value } of defaults) {

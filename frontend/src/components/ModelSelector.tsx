@@ -9,6 +9,7 @@ interface AvailableModel {
     displayName: string;
     description?: string;
     supportedTasks: string[];
+    source?: string; // 'CLIProxy' or 'Gemini SDK'
 }
 
 interface ModelSelectorProps {
@@ -65,16 +66,15 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
 
             if (finalConfig) {
                 let modelName = finalConfig.modelName;
-                if (finalConfig.provider === 'CLIPROXY' && !modelName.startsWith('cliproxy:')) {
+                const isCliproxy = finalConfig.provider === 'CLIPROXY';
+                if (isCliproxy && !modelName.startsWith('cliproxy:')) {
                     modelName = `cliproxy:${modelName}`;
                 }
                 setSelectedModel(modelName);
-                // Create display name from model name
-                const displayName = modelName
-                    .replace('cliproxy:', '🌐 ')
-                    .replace('gemini-', 'Gemini ')
-                    .replace('-', ' ');
-                setSelectedModelDisplay(displayName);
+                // Create display name with source label
+                const sourceLabel = isCliproxy ? '[CLIProxy]' : '[Gemini SDK]';
+                const cleanName = modelName.replace('cliproxy:', '');
+                setSelectedModelDisplay(`${sourceLabel} ${cleanName}`);
             }
 
             // Track admin default for badge annotation
@@ -103,22 +103,32 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
             setIsLoadingModels(true);
             const modelsRes = await api.get('/user/model-config/discover');
 
-            // Get models from both GEMINI and CLIPROXY
-            const geminiModels = modelsRes.data.models?.GEMINI || [];
-            const cliproxyModels = modelsRes.data.models?.CLIPROXY || [];
+            // Tag each model with its source for display
+            const geminiModels = (modelsRes.data.models?.GEMINI || []).map((m: AvailableModel) => ({
+                ...m,
+                source: 'Gemini SDK',
+            }));
+            const cliproxyModels = (modelsRes.data.models?.CLIPROXY || []).map((m: AvailableModel) => ({
+                ...m,
+                source: 'CLIProxy',
+            }));
 
             // Merge and filter models that support this task
-            const allModels = [...geminiModels, ...cliproxyModels];
+            const allModels = [...cliproxyModels, ...geminiModels]; // CLIProxy first
             const filteredModels = allModels.filter((m: AvailableModel) =>
                 m.supportedTasks.includes(taskType)
             );
 
-            // Sort: put selected model first, then alphabetically
+            // Sort: CLIProxy first, then Gemini SDK, then alphabetically within each group
             const sortedModels = filteredModels.sort((a, b) => {
+                // Selected model always first
                 const aIsSelected = a.name === selectedModel;
                 const bIsSelected = b.name === selectedModel;
                 if (aIsSelected && !bIsSelected) return -1;
                 if (!aIsSelected && bIsSelected) return 1;
+                // CLIProxy before Gemini SDK
+                if (a.source === 'CLIProxy' && b.source !== 'CLIProxy') return -1;
+                if (a.source !== 'CLIProxy' && b.source === 'CLIProxy') return 1;
                 return a.displayName.localeCompare(b.displayName);
             });
 
@@ -128,7 +138,8 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
             // Update display name from discovered models
             const currentModel = sortedModels.find(m => m.name === selectedModel);
             if (currentModel) {
-                setSelectedModelDisplay(currentModel.displayName);
+                const sourceLabel = currentModel.source === 'CLIProxy' ? '[CLIProxy]' : '[Gemini SDK]';
+                setSelectedModelDisplay(`${sourceLabel} ${currentModel.displayName}`);
             }
         } catch (err) {
             console.error('Error discovering models:', err);
@@ -214,6 +225,14 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                                     onClick={() => handleSelectModel(model)}
                                 >
                                     <div className="model-name">
+                                        <span className="model-source-badge" style={{
+                                            color: model.source === 'CLIProxy' ? '#4fc3f7' : '#81c784',
+                                            fontWeight: 600,
+                                            fontSize: '0.8em',
+                                            marginRight: '6px',
+                                        }}>
+                                            [{model.source || 'Gemini SDK'}]
+                                        </span>
                                         {model.displayName}
                                         {model.name === adminDefaultModel && (
                                             <span className="admin-default-badge"> ⭐ Mặc định</span>

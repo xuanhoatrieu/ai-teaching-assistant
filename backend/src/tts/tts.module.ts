@@ -5,9 +5,10 @@ import { TTSAdminController } from './tts-admin.controller';
 import { TTSUserController } from './tts-user.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
+import { AIModule } from '../ai/ai.module';
 
 @Module({
-    imports: [PrismaModule, forwardRef(() => ApiKeysModule)],
+    imports: [PrismaModule, forwardRef(() => ApiKeysModule), AIModule],
     controllers: [TTSAdminController, TTSUserController],
     providers: [TTSService, TTSFactory],
     exports: [TTSService, TTSFactory],

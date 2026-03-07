@@ -39,6 +39,11 @@ export function SettingsPage() {
     const [defaultImageModel, setDefaultImageModel] = useState('');
     const [defaultTTSModel, setDefaultTTSModel] = useState('');
     const [availableModels, setAvailableModels] = useState<string[]>([]);
+    const [categorizedModels, setCategorizedModels] = useState<{
+        text: { id: string; source: string }[];
+        image: { id: string; source: string }[];
+        tts: { id: string; source: string }[];
+    }>({ text: [], image: [], tts: [] });
 
     useEffect(() => {
         fetchSettings();
@@ -63,9 +68,9 @@ export function SettingsPage() {
             setCliproxyConfig(config);
             setCliproxyEnabled(config.enabled);
             setCliproxyUrl(config.url || '');
-            setDefaultTextModel(config.defaultTextModel || 'gemini-2.5-flash');
-            setDefaultImageModel(config.defaultImageModel || 'gemini-3-pro-image-preview');
-            setDefaultTTSModel(config.defaultTTSModel || 'gemini-2.5-flash-preview-tts');
+            setDefaultTextModel(config.defaultTextModel || '');
+            setDefaultImageModel(config.defaultImageModel || '');
+            setDefaultTTSModel(config.defaultTTSModel || '');
 
             // Fetch available models if enabled
             if (config.enabled) {
@@ -73,6 +78,9 @@ export function SettingsPage() {
                     const testRes = await api.get('/admin/config/cliproxy/test');
                     if (testRes.data.models) {
                         setAvailableModels(testRes.data.models);
+                    }
+                    if (testRes.data.categorized) {
+                        setCategorizedModels(testRes.data.categorized);
                     }
                 } catch (e) {
                     console.log('Could not fetch models');
@@ -110,9 +118,9 @@ export function SettingsPage() {
                 enabled: cliproxyEnabled,
                 url: cliproxyUrl || undefined,
                 apiKey: cliproxyApiKey || undefined,
-                defaultTextModel: defaultTextModel || 'gemini-2.5-flash',
-                defaultImageModel: defaultImageModel || 'gemini-3-pro-image-preview',
-                defaultTTSModel: defaultTTSModel || 'gemini-2.5-flash-preview-tts',
+                defaultTextModel: defaultTextModel || undefined,
+                defaultImageModel: defaultImageModel || undefined,
+                defaultTTSModel: defaultTTSModel || undefined,
             };
             console.log('[Settings] Saving CLIProxy config:', payload);
             await api.put('/admin/config/cliproxy', payload);
@@ -136,7 +144,7 @@ export function SettingsPage() {
                 enabled: cliproxyEnabled,
                 url: cliproxyUrl || undefined,
                 apiKey: cliproxyApiKey || undefined,
-                defaultTextModel: defaultTextModel || 'gemini-2.5-flash',
+                defaultTextModel: defaultTextModel || undefined,
                 defaultImageModel: defaultImageModel || undefined,
                 defaultTTSModel: defaultTTSModel || undefined,
             };
@@ -147,9 +155,11 @@ export function SettingsPage() {
             const response = await api.get('/admin/config/cliproxy/test');
             setCliproxyTestResult(response.data);
 
-            // Update available models if test succeeded
             if (response.data.models) {
                 setAvailableModels(response.data.models);
+            }
+            if (response.data.categorized) {
+                setCategorizedModels(response.data.categorized);
             }
 
             // Refresh config display
@@ -235,17 +245,15 @@ export function SettingsPage() {
                                 value={defaultTextModel}
                                 onChange={(e) => setDefaultTextModel(e.target.value)}
                             >
-                                {availableModels.length === 0 ? (
-                                    <option value={defaultTextModel}>{defaultTextModel}</option>
+                                {categorizedModels.text.length === 0 ? (
+                                    <option value={defaultTextModel}>{defaultTextModel || '-- Test Connection để load models --'}</option>
                                 ) : (
-                                    availableModels
-                                        .filter(m => !m.includes('image') && !m.includes('imagen') && !m.includes('tts'))
-                                        .map(model => (
-                                            <option key={model} value={model}>{model}</option>
-                                        ))
+                                    categorizedModels.text.map(m => (
+                                        <option key={`${m.source}:${m.id}`} value={m.id}>[{m.source}] {m.id}</option>
+                                    ))
                                 )}
                             </select>
-                            <p className="help-text">Model for Outline, Slides, Questions generation</p>
+                            <p className="help-text">Model cho Outline, Slides, Questions</p>
                         </div>
 
                         <div className="setting-group">
@@ -255,17 +263,15 @@ export function SettingsPage() {
                                 value={defaultImageModel}
                                 onChange={(e) => setDefaultImageModel(e.target.value)}
                             >
-                                {availableModels.length === 0 ? (
-                                    <option value={defaultImageModel}>{defaultImageModel}</option>
+                                {categorizedModels.image.length === 0 ? (
+                                    <option value={defaultImageModel}>{defaultImageModel || '-- Test Connection để load models --'}</option>
                                 ) : (
-                                    availableModels
-                                        .filter(m => m.includes('image') || m.includes('imagen'))
-                                        .map(model => (
-                                            <option key={model} value={model}>{model}</option>
-                                        ))
+                                    categorizedModels.image.map(m => (
+                                        <option key={`${m.source}:${m.id}`} value={m.id}>[{m.source}] {m.id}</option>
+                                    ))
                                 )}
                             </select>
-                            <p className="help-text">Model for image generation</p>
+                            <p className="help-text">Model cho tạo ảnh minh hoạ</p>
                         </div>
 
                         <div className="setting-group">
@@ -275,20 +281,15 @@ export function SettingsPage() {
                                 value={defaultTTSModel}
                                 onChange={(e) => setDefaultTTSModel(e.target.value)}
                             >
-                                {availableModels.length === 0 ? (
-                                    <option value={defaultTTSModel}>{defaultTTSModel}</option>
+                                {categorizedModels.tts.length === 0 ? (
+                                    <option value={defaultTTSModel}>{defaultTTSModel || '-- Test Connection để load models --'}</option>
                                 ) : (
-                                    availableModels
-                                        .filter(m => m.includes('tts'))
-                                        .map(model => (
-                                            <option key={model} value={model}>{model}</option>
-                                        ))
+                                    categorizedModels.tts.map(m => (
+                                        <option key={`${m.source}:${m.id}`} value={m.id}>[{m.source}] {m.id}</option>
+                                    ))
                                 )}
-                                {/* Hardcoded TTS options in case models list doesn't include them */}
-                                <option value="gemini-2.5-flash-preview-tts">gemini-2.5-flash-preview-tts</option>
-                                <option value="gemini-2.5-pro-preview-tts">gemini-2.5-pro-preview-tts</option>
                             </select>
-                            <p className="help-text">Gemini TTS model for audio generation (ViTTS/Vbee do user tự cấu hình)</p>
+                            <p className="help-text">Model cho tạo giọng đọc TTS</p>
                         </div>
 
                         <div className="button-group">

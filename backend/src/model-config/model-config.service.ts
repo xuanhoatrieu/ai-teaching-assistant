@@ -104,7 +104,7 @@ export class ModelConfigService {
      * Get default model for a task (Admin > System)
      * Fast method - uses cached CLIProxy config if available
      */
-    private async getDefaultForTask(taskType: TaskTypeValue): Promise<{ provider: string; modelName: string }> {
+    async getDefaultForTask(taskType: TaskTypeValue): Promise<{ provider: string; modelName: string }> {
         // Check admin defaults (stored in system_configs table)
         if (this.cliproxy) {
             try {
@@ -121,7 +121,7 @@ export class ModelConfigService {
                         return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultImageModel };
                     }
                     if (taskType === 'TTS' && cliproxyConfig.defaultTTSModel) {
-                        return { provider: 'GEMINI', modelName: cliproxyConfig.defaultTTSModel };
+                        return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTTSModel };
                     }
                 }
             } catch (error: any) {

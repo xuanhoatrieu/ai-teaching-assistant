@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import './ModelSelector.css';
 
-type Provider = 'GEMINI' | 'VBEE' | 'VITTS';
+type Provider = 'GEMINI' | 'CLIPROXY' | 'VBEE' | 'VITTS';
 
 interface AvailableModel {
     name: string;
@@ -36,16 +36,25 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
 
             // Fetch available models and voices
             const modelsRes = await api.get('/user/model-config/discover');
-            const allModels = modelsRes.data.models?.GEMINI || [];
+            const geminiModels = modelsRes.data.models?.GEMINI || [];
+            const cliproxyModels = modelsRes.data.models?.CLIPROXY || [];
 
-            // Filter TTS models (gemini-2.5-*-tts)
-            const models = allModels.filter((m: AvailableModel) =>
-                m.supportedTasks.includes('TTS')
-            );
-            setTtsModels(models);
+            // Filter TTS models from Gemini - tag with source
+            const geminiTTS = geminiModels
+                .filter((m: AvailableModel) => m.supportedTasks.includes('TTS'))
+                .map((m: AvailableModel) => ({ ...m, source: 'Gemini SDK' }));
 
-            // Filter voices - both Gemini and Vbee
-            const allVoices = allModels.filter((m: AvailableModel) =>
+            // Filter TTS models from CLIProxy - tag with source
+            const cliproxyTTS = cliproxyModels
+                .filter((m: AvailableModel) => m.supportedTasks.includes('TTS'))
+                .map((m: AvailableModel) => ({ ...m, source: 'CLIProxy' }));
+
+            // Merge: CLIProxy TTS first (preferred), then Gemini TTS
+            const allTTSModels = [...cliproxyTTS, ...geminiTTS];
+            setTtsModels(allTTSModels);
+
+            // Filter voices - both Gemini, Vbee and ViTTS
+            const allVoices = geminiModels.filter((m: AvailableModel) =>
                 m.supportedTasks.includes('TTS_VOICE')
             );
             setVoices(allVoices);
@@ -64,13 +73,14 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                         setProvider('VBEE');
                         setSelectedVoice(savedVoice);
                     } else if (savedVoice.startsWith('gemini-voice:')) {
-                        setProvider('GEMINI');
+                        // Check if CLIProxy TTS models are available → use CLIPROXY provider
+                        setProvider(cliproxyTTS.length > 0 ? 'CLIPROXY' : 'GEMINI');
                         setSelectedVoice(savedVoice);
                     }
 
-                    // Set model for Gemini
-                    if (models.length > 0) {
-                        setSelectedModel(models[0].name);
+                    // Set model
+                    if (allTTSModels.length > 0) {
+                        setSelectedModel(allTTSModels[0].name);
                     }
                     return; // Use saved config, don't set defaults
                 }
@@ -79,8 +89,13 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
             }
 
             // Set defaults only if no saved config
-            if (models.length > 0) {
-                setSelectedModel(models[0].name);
+            // Prefer CLIProxy over direct Gemini
+            if (cliproxyTTS.length > 0) {
+                setProvider('CLIPROXY');
+                setSelectedModel(cliproxyTTS[0].name);
+            } else if (geminiTTS.length > 0) {
+                setProvider('GEMINI');
+                setSelectedModel(geminiTTS[0].name);
             }
 
             // Default to Puck voice for Gemini
@@ -142,9 +157,17 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         let newVoice = '';
         let newModel = selectedModel;
 
-        if (newProvider === 'GEMINI') {
+        if (newProvider === 'GEMINI' || newProvider === 'CLIPROXY') {
             const geminiVoices = voices.filter(v => v.name.startsWith('gemini-voice:'));
             newVoice = geminiVoices[0]?.name || '';
+            // Set default model for this provider
+            if (newProvider === 'CLIPROXY') {
+                const cliproxyTTS = ttsModels.filter(m => m.name.startsWith('cliproxy:'));
+                newModel = cliproxyTTS[0]?.name || selectedModel;
+            } else {
+                const geminiTTS = ttsModels.filter(m => !m.name.startsWith('cliproxy:'));
+                newModel = geminiTTS[0]?.name || selectedModel;
+            }
         } else if (newProvider === 'VBEE') {
             const vbeeVoices = voices.filter(v => v.name.startsWith('vbee:'));
             newVoice = vbeeVoices[0]?.name || '';
@@ -169,7 +192,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         saveConfig(provider, selectedModel, voiceName);
     };
 
-    const filteredVoices = provider === 'GEMINI'
+    const filteredVoices = (provider === 'GEMINI' || provider === 'CLIPROXY')
         ? voices.filter(v => v.name.startsWith('gemini-voice:'))
         : provider === 'VBEE'
             ? voices.filter(v => v.name.startsWith('vbee:'))
@@ -190,11 +213,11 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 <label className="tts-label">🎙️ Nhà cung cấp:</label>
                 <div className="provider-buttons">
                     <button
-                        className={`provider-btn ${provider === 'GEMINI' ? 'active' : ''}`}
-                        onClick={() => handleProviderChange('GEMINI')}
+                        className={`provider-btn ${(provider === 'GEMINI' || provider === 'CLIPROXY') ? 'active' : ''}`}
+                        onClick={() => handleProviderChange(ttsModels.some(m => m.name.startsWith('cliproxy:')) ? 'CLIPROXY' : 'GEMINI')}
                         disabled={isSaving}
                     >
-                        🌟 Gemini AI
+                        {ttsModels.some(m => m.name.startsWith('cliproxy:')) ? '🌐 Gemini AI (CLIProxy)' : '🌟 Gemini AI'}
                     </button>
                     <button
                         className={`provider-btn ${provider === 'VBEE' ? 'active' : ''}`}
@@ -217,7 +240,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
             </div>
 
             {/* Model Selection (Gemini only) */}
-            {provider === 'GEMINI' && ttsModels.length > 0 && (
+            {(provider === 'GEMINI' || provider === 'CLIPROXY') && ttsModels.length > 0 && (
                 <div className="tts-row">
                     <label className="tts-label">🔧 Model:</label>
                     <select
@@ -228,7 +251,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                     >
                         {ttsModels.map((model) => (
                             <option key={model.name} value={model.name}>
-                                {model.displayName}
+                                [{(model as any).source || 'Gemini SDK'}] {model.displayName}
                             </option>
                         ))}
                     </select>
