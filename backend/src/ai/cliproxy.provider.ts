@@ -373,7 +373,9 @@ export class CLIProxyProvider {
         voiceId?: string,
     ): Promise<{ audio: Buffer; format: string }> {
         const config = await this.getConfig();
-        const modelName = model || config.defaultTTSModel;
+        // Strip 'cliproxy:' prefix if present (user/admin config may include it)
+        const cleanModel = model?.replace(/^cliproxy:/, '') || '';
+        const modelName = cleanModel || config.defaultTTSModel;
         const voice = voiceId || 'Puck';
 
         this.logger.log(`CLIProxy TTS: model=${modelName}, voice=${voice}, text=${text.substring(0, 50)}...`);
@@ -387,24 +389,35 @@ export class CLIProxyProvider {
             body: JSON.stringify({
                 model: modelName,
                 messages: [{ role: 'user', content: text }],
-                modalities: ['audio'],
+                modalities: ['AUDIO'],
                 audio: {
                     voice: voice.toLowerCase(),
                     format: 'wav',
                 },
+                // Gemini-native fields that CLIProxy may forward directly
+                generationConfig: {
+                    responseModalities: ['AUDIO'],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: {
+                                voiceName: voice,
+                            },
+                        },
+                    },
+                },
             }),
-            signal: AbortSignal.timeout(60000), // 60s timeout for TTS (audio generation is slow)
+            signal: AbortSignal.timeout(60000), // 60s timeout for TTS
         });
 
         if (!response.ok) {
             const errorText = await response.text();
+            this.logger.error(`CLIProxy TTS error: ${response.status} - ${errorText}`);
             throw new Error(`CLIProxy TTS failed: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json();
         const message = data.choices?.[0]?.message;
 
-        // Try to extract audio data from various response formats
         // Format 1: message.audio.data (OpenAI audio response format)
         if (message?.audio?.data) {
             const audioBuffer = Buffer.from(message.audio.data, 'base64');
@@ -427,7 +440,6 @@ export class CLIProxyProvider {
 
         // Format 3: Raw base64 string in content
         if (typeof content === 'string' && content.length > 100) {
-            // Could be base64 audio data
             try {
                 const audioBuffer = Buffer.from(content, 'base64');
                 if (audioBuffer.length > 100) {
@@ -435,6 +447,21 @@ export class CLIProxyProvider {
                     return { audio: audioBuffer, format: 'wav' };
                 }
             } catch { /* not base64 */ }
+        }
+
+        // Format 4: CLIProxy images[] with data URI (data:audio/...;base64,...)
+        if (Array.isArray(message?.images)) {
+            for (const img of message.images) {
+                const dataUrl = img?.image_url?.url || img?.url || '';
+                if (dataUrl.startsWith('data:audio/')) {
+                    const base64Part = dataUrl.split(',')[1];
+                    if (base64Part) {
+                        const audioBuffer = Buffer.from(base64Part, 'base64');
+                        this.logger.log(`✅ CLIProxy TTS: ${audioBuffer.length} bytes from images[] data URI`);
+                        return { audio: audioBuffer, format: 'wav' };
+                    }
+                }
+            }
         }
 
         throw new Error('CLIProxy TTS: No audio data found in response');

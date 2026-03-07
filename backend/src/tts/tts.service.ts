@@ -255,6 +255,8 @@ export class TTSService {
                     throw new Error(`CLIProxy TTS failed and no Gemini API key configured for fallback: ${error.message}`);
                 }
                 provider = this.ttsFactory.getDefaultProvider(geminiApiKey);
+                // Override model to use Gemini default TTS model (CLIProxy model name is not valid for Gemini SDK)
+                dto.model = 'gemini-2.5-flash-preview-tts';
             }
         } else {
             // Default to Gemini
