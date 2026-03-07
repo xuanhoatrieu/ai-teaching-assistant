@@ -38,7 +38,6 @@ export function SettingsPage() {
     const [defaultTextModel, setDefaultTextModel] = useState('');
     const [defaultImageModel, setDefaultImageModel] = useState('');
     const [defaultTTSModel, setDefaultTTSModel] = useState('');
-    const [availableModels, setAvailableModels] = useState<string[]>([]);
     const [categorizedModels, setCategorizedModels] = useState<{
         text: { id: string; source: string }[];
         image: { id: string; source: string }[];
@@ -76,9 +75,6 @@ export function SettingsPage() {
             if (config.enabled) {
                 try {
                     const testRes = await api.get('/admin/config/cliproxy/test');
-                    if (testRes.data.models) {
-                        setAvailableModels(testRes.data.models);
-                    }
                     if (testRes.data.categorized) {
                         setCategorizedModels(testRes.data.categorized);
                     }
@@ -155,9 +151,6 @@ export function SettingsPage() {
             const response = await api.get('/admin/config/cliproxy/test');
             setCliproxyTestResult(response.data);
 
-            if (response.data.models) {
-                setAvailableModels(response.data.models);
-            }
             if (response.data.categorized) {
                 setCategorizedModels(response.data.categorized);
             }
