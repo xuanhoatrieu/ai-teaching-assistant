@@ -10,7 +10,8 @@ import { ModelConfigService } from '../model-config/model-config.service';
 import { TextNormalizerService } from '../text-normalizer/text-normalizer.service';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as archiver from 'archiver';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const archiver = require('archiver');
 
 // Interface for parsed slide data
 interface ParsedSlide {
@@ -894,7 +895,7 @@ export class SlideAudioService {
                 if (fs.existsSync(audioPath)) {
                     // Use same extension as source file
                     const ext = path.extname(audio.audioFileName);
-                    const downloadName = `${safeTitle}_slide_${audio.slideIndex + 1}${ext}`;
+                    const downloadName = `${safeTitle}_slide_${audio.slideIndex}${ext}`;
                     archive.file(audioPath, { name: downloadName });
                     addedCount++;
                     this.logger.debug(`Added to ZIP: ${audio.audioFileName} -> ${downloadName}`);

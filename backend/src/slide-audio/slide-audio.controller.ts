@@ -11,9 +11,13 @@ import {
     Request,
     UploadedFile,
     UseInterceptors,
+    StreamableFile,
+    NotFoundException,
+    BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
+import * as fs from 'fs';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SlideAudioService } from './slide-audio.service';
 import { SlidesService } from '../slides/slides.service';
@@ -131,84 +135,21 @@ export class SlideAudioController {
         @Param('lessonId') lessonId: string,
         @Res({ passthrough: true }) res: Response,
     ) {
-        console.log(`[DEBUG] downloadAllAudios called for lesson: ${lessonId}`);
+        try {
+            const { filePath, fileName } = await this.slideAudioService.downloadAllAudios(lessonId);
 
-        const fs = require('fs');
-        const path = require('path');
-        const archiver = require('archiver');
-        const { StreamableFile, NotFoundException, BadRequestException } = require('@nestjs/common');
-
-        // Get lesson info
-        const lesson = await this.slideAudioService.getLessonForDownload(lessonId);
-        if (!lesson) {
-            throw new NotFoundException(`Lesson ${lessonId} not found`);
-        }
-
-        // Get audio files with status 'done'
-        const slideAudios = await this.slideAudioService.getAudioFilesForDownload(lessonId);
-        if (slideAudios.length === 0) {
-            throw new BadRequestException('No audio files available for download');
-        }
-
-        console.log(`[DEBUG] Found ${slideAudios.length} audio files`);
-
-        // Sanitize title
-        const safeTitle = lesson.title
-            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
-            .replace(/\s+/g, '_')
-            .substring(0, 50);
-
-        const audioDir = path.join(process.cwd(), 'uploads', 'lessons', lessonId, 'audio');
-        const zipPath = path.join(audioDir, `${safeTitle}_audio.zip`);
-
-        console.log(`[DEBUG] Creating ZIP at: ${zipPath}`);
-
-        // Delete existing ZIP
-        if (fs.existsSync(zipPath)) {
-            fs.unlinkSync(zipPath);
-        }
-
-        // Create ZIP synchronously like debug endpoint
-        await new Promise<void>((resolve, reject) => {
-            const output = fs.createWriteStream(zipPath);
-            const archive = archiver('zip', { zlib: { level: 9 } });
-
-            output.on('close', () => {
-                console.log(`[DEBUG] ZIP created: ${archive.pointer()} bytes`);
-                resolve();
+            res.set({
+                'Content-Type': 'application/zip',
+                'Content-Disposition': `attachment; filename="${encodeURIComponent(fileName)}"`,
             });
 
-            output.on('error', reject);
-            archive.on('error', reject);
-
-            archive.pipe(output);
-
-            // Add all audio files
-            for (const audio of slideAudios) {
-                if (!audio.audioFileName) continue;
-
-                const audioPath = path.join(audioDir, audio.audioFileName);
-                if (fs.existsSync(audioPath)) {
-                    const ext = path.extname(audio.audioFileName);
-                    const downloadName = `${safeTitle}_slide_${audio.slideIndex + 1}${ext}`;
-                    archive.file(audioPath, { name: downloadName });
-                    console.log(`[DEBUG] Added: ${audio.audioFileName} -> ${downloadName}`);
-                }
-            }
-
-            archive.finalize();
-        });
-
-        console.log(`[DEBUG] Sending ZIP file: ${zipPath}`);
-
-        res.set({
-            'Content-Type': 'application/zip',
-            'Content-Disposition': `attachment; filename="${safeTitle}_audio.zip"`,
-        });
-
-        return new StreamableFile(fs.createReadStream(zipPath));
+            return new StreamableFile(fs.createReadStream(filePath));
+        } catch (error) {
+            console.error('[downloadAllAudios] ERROR:', error?.message || error);
+            throw error;
+        }
     }
-    // Download single slide audio
+
     @Get(':index/download')
     async downloadSingleAudio(
         @Param('lessonId') lessonId: string,
