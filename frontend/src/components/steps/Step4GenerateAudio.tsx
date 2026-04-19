@@ -53,6 +53,9 @@ export function Step4GenerateAudio() {
     const [playbackProgress, setPlaybackProgress] = useState<Record<number, number>>({});
     const [currentTime, setCurrentTime] = useState<Record<number, number>>({});
     const [multilingualMode, setMultilingualMode] = useState<string>('');
+    const [vittsMode, setVittsMode] = useState<string>('');
+    const [vittsDesignInstruct, setVittsDesignInstruct] = useState<string>('');
+    const [vittsNormalize, setVittsNormalize] = useState<boolean>(true);
     const [recordingSlide, setRecordingSlide] = useState<number | null>(null);
     const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
     const shouldStopGenerating = useRef(false);
@@ -221,6 +224,9 @@ export function Step4GenerateAudio() {
 
             const response = await api.post(`/lessons/${lessonId}/slide-audios/${slideIndex}/generate`, {
                 multilingualMode: multilingualMode || undefined,
+                vittsMode: vittsMode || undefined,
+                vittsDesignInstruct: vittsDesignInstruct || undefined,
+                vittsNormalize,
             });
             const normalizedData = { ...response.data, status: normalizeStatus(response.data.status) };
             setSlideAudios(prev => prev.map(sa =>
@@ -263,6 +269,9 @@ export function Step4GenerateAudio() {
                 try {
                     const response = await api.post(`/lessons/${lessonId}/slide-audios/${slideIndex}/generate`, {
                         multilingualMode: multilingualMode || undefined,
+                        vittsMode: vittsMode || undefined,
+                        vittsDesignInstruct: vittsDesignInstruct || undefined,
+                        vittsNormalize,
                     });
                     const normalizedData = { ...response.data, status: normalizeStatus(response.data.status) };
                     setSlideAudios(prev => prev.map(sa =>
@@ -539,6 +548,15 @@ export function Step4GenerateAudio() {
             <TTSSelector onChange={(config) => {
                 if (config.multilingualMode !== undefined) {
                     setMultilingualMode(config.multilingualMode || '');
+                }
+                if (config.vittsMode !== undefined) {
+                    setVittsMode(config.vittsMode || '');
+                }
+                if (config.vittsDesignInstruct !== undefined) {
+                    setVittsDesignInstruct(config.vittsDesignInstruct || '');
+                }
+                if (config.vittsNormalize !== undefined) {
+                    setVittsNormalize(config.vittsNormalize);
                 }
             }} />
 

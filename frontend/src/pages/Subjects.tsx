@@ -4,6 +4,11 @@ import { subjectsApi, type Subject, type CreateSubjectData } from '../lib/subjec
 import './Subjects.css';
 
 const INSTITUTION_TYPES = ['Đại học', 'Cao đẳng', 'THPT', 'Doanh nghiệp', 'Khác'];
+const LANGUAGE_OPTIONS = [
+    { value: 'vi', label: '🇻🇳 Tiếng Việt', desc: 'Toàn bộ nội dung bằng tiếng Việt' },
+    { value: 'en', label: '🇬🇧 English', desc: 'All content in English' },
+    { value: 'vi-en', label: '🌐 Song ngữ (Bilingual)', desc: 'Slide EN, Speaker Notes VI' },
+];
 
 export function SubjectsPage() {
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -21,6 +26,7 @@ export function SubjectsPage() {
         targetAudience: '',
         majorName: '',
         additionalContext: '',
+        language: 'vi',
     });
 
     useEffect(() => {
@@ -48,6 +54,7 @@ export function SubjectsPage() {
             targetAudience: '',
             majorName: '',
             additionalContext: '',
+            language: 'vi',
         });
     };
 
@@ -180,6 +187,21 @@ export function SubjectsPage() {
                                     placeholder="VD: Công nghệ thông tin"
                                 />
                             </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label>🌐 Ngôn ngữ đầu ra</label>
+                            <select
+                                value={formData.language || 'vi'}
+                                onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                            >
+                                {LANGUAGE_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                            <small className="form-hint">
+                                {LANGUAGE_OPTIONS.find(o => o.value === (formData.language || 'vi'))?.desc}
+                            </small>
                         </div>
 
                         <div className="form-group">

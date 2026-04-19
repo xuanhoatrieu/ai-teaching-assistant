@@ -4,9 +4,10 @@ import { ModelConfigController } from './model-config.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { AIModule } from '../ai/ai.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-    imports: [PrismaModule, ApiKeysModule, AIModule],
+    imports: [PrismaModule, ApiKeysModule, AIModule, SettingsModule],
     controllers: [ModelConfigController],
     providers: [ModelConfigService],
     exports: [ModelConfigService],

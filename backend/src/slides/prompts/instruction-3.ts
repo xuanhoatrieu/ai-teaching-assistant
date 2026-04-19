@@ -1,90 +1,99 @@
 /**
- * Instruction 3: Design Presentation Slides & Transcript
- * Output: JSON format for easy parsing and display
+ * Instruction 3: Design Presentation Slides & Transcript (English version)
+ * Output language controlled by {output_language_instruction} from PromptComposerService
+ * This file is a REFERENCE — runtime prompts are loaded from the database
  */
 
 export const INSTRUCTION_3_DESIGN_SLIDES = `
-**ROLE:** Bạn là một chuyên gia Thiết kế Nội dung Giảng dạy (Instructional Designer).
-
-**TASK:** Chuyển hóa outline chi tiết thành kịch bản cho từng slide trong bài giảng PowerPoint.
+**TASK:** Transform the detailed outline into a slide-by-slide script for a PowerPoint presentation.
 
 **INPUT:**
-- Tiêu đề bài học: {title}
-- Outline chi tiết:
+- Lesson title: {title}
+- Detailed outline:
 {detailed_outline}
 
-**OUTPUT FORMAT:** Trả về JSON với cấu trúc sau (QUAN TRỌNG: CHỈ trả về JSON, không có text nào khác):
+---
+
+## ⚠️ MANDATORY CONSTRAINTS
+
+> **CRITICAL:** You MUST NOT add or remove content.
+
+1. **EACH SECTION** in the outline → **AT LEAST 1 SLIDE**
+2. **DO NOT CREATE SLIDES** about content not in the outline
+3. **SPEAKER NOTES** must only explain existing content, do not add new knowledge
+4. **EXAMPLES** only illustrate knowledge from the outline
+
+---
+
+{output_language_instruction}
+
+---
+
+## REQUIREMENTS:
+
+1. **Minimal text, rich meaning:** Slides should only contain a title and max 2-3 concise key points.
+2. **Visual First:** Every content slide MUST have a specific visualIdea.
+3. **Detailed Speaker Notes:** Natural lecturing style, as if speaking in class.
+4. **Duration:** Each slide approximately 1-3 minutes.
+
+---
+
+## SLIDE TYPES:
+- "title" - Opening slide introducing the lesson
+- "agenda" - Table of contents / lesson overview
+- "objectives" - Learning objectives
+- "content" - Main content slides (majority of slides)
+- "summary" - Closing summary slide
+
+---
+
+## OUTPUT FORMAT (JSON):
 
 \`\`\`json
 {
-  "title": "Tên bài học",
-  "totalSlides": 10,
+  "title": "{title}",
+  "totalSlides": 15,
   "slides": [
     {
-      "slideIndex": 1,
+      "slideIndex": 0,
       "slideType": "title",
-      "title": "Tên bài học",
-      "content": ["Phụ đề hoặc tên môn học"],
+      "title": "Lesson Title",
+      "subtitle": "Course Name",
+      "content": [],
       "visualIdea": null,
-      "speakerNote": "Chào mừng các em đến với bài học hôm nay..."
+      "speakerNote": "Welcome to today's lesson..."
+    },
+    {
+      "slideIndex": 1,
+      "slideType": "agenda",
+      "title": "Lesson Agenda",
+      "content": ["Topic 1", "Topic 2", "Topic 3"],
+      "visualIdea": null,
+      "speakerNote": "Today we will explore..."
     },
     {
       "slideIndex": 2,
-      "slideType": "agenda",
-      "title": "Nội dung bài học",
-      "content": ["Nội dung 1", "Nội dung 2", "Nội dung 3"],
-      "visualIdea": null,
-      "speakerNote": "Hôm nay chúng ta sẽ tìm hiểu về..."
+      "slideType": "objectives",
+      "title": "Learning Objectives",
+      "content": ["Objective 1", "Objective 2"],
+      "visualIdea": "Icons: target, lightbulb, ascending steps",
+      "speakerNote": "By the end of this lesson, you will be able to..."
     },
     {
       "slideIndex": 3,
-      "slideType": "objectives",
-      "title": "Mục tiêu bài học",
-      "content": ["Mục tiêu 1", "Mục tiêu 2", "Mục tiêu 3"],
-      "visualIdea": "Icon target, lightbulb, stairs",
-      "speakerNote": "Sau bài học này, các em sẽ có thể..."
-    },
-    {
-      "slideIndex": 4,
       "slideType": "content",
-      "title": "Tiêu đề nội dung",
-      "content": ["Điểm chính 1", "Điểm chính 2"],
-      "visualIdea": "Mô tả chi tiết hình ảnh/biểu đồ/infographic cần tạo",
-      "speakerNote": "Lời giảng chi tiết, tự nhiên như đang nói chuyện..."
+      "title": "Section title from outline",
+      "content": ["Key point 1", "Key point 2"],
+      "visualIdea": "Mind map / Chart / Infographic describing the concept",
+      "speakerNote": "Detailed explanation in natural lecturing style..."
     }
-  ]
+  ],
+  "coverageCheck": {
+    "inputSections": ["Section 1", "Section 2"],
+    "mappedSlides": {"Section 1": [3, 4], "Section 2": [5, 6, 7]}
+  }
 }
 \`\`\`
 
-**SLIDE TYPES:**
-- "title" - Slide đầu tiên, giới thiệu bài học
-- "agenda" - Nội dung/mục lục bài học  
-- "objectives" - Mục tiêu học tập
-- "content" - Slide nội dung chính (phần lớn slides)
-- "summary" - Slide tổng kết cuối cùng
-
-**YÊU CẦU QUAN TRỌNG:**
-
-1. **Ít chữ, giàu ý:** Mỗi slide tối đa 2-4 bullet points ngắn gọn trong mảng "content"
-
-2. **Visual First:** Với MỖI slide content, BẮT BUỘC có "visualIdea" mô tả:
-   - Sơ đồ tư duy, biểu đồ, infographic
-   - Icon minh họa cụ thể
-   - Hình ảnh thực tế liên quan
-   - Mô tả đủ chi tiết để AI có thể tạo hình
-
-3. **Speaker Notes chi tiết (speakerNote):**
-   - Văn phong tự nhiên như giảng trực tiếp
-   - Mỗi slide 1-3 phút giảng
-   - Có câu hỏi gợi mở, ví dụ minh họa
-   - KHÔNG đọc nguyên văn bullet points
-
-4. **Cấu trúc hoàn chỉnh:**
-   - Slide 1: Title
-   - Slide 2: Agenda/Nội dung
-   - Slide 3: Objectives/Mục tiêu
-   - Slides 4-N: Content slides theo outline
-   - Slide cuối: Summary/Tổng kết
-
-**CHÚ Ý:** CHỈ trả về JSON hợp lệ, KHÔNG có text giải thích trước hoặc sau JSON.
+Return ONLY valid JSON, no other text.
 `;

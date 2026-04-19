@@ -9,6 +9,12 @@ export interface TTSOptions {
     volume?: number; // -96 to 16 dB
     languageCode?: string; // e.g., 'vi-VN', 'en-US'
     multilingualMode?: string; // ViTTS: 'auto', 'syllable', 'english'
+    // ViTTS OmniVoice fields
+    vittsMode?: 'auto' | 'clone' | 'design'; // OmniVoice synthesis mode
+    vittsDesignInstruct?: string; // Voice Design: "A young female with high pitch..."
+    vittsSpeed?: number; // 0.5-2.0, default 1.0
+    vittsNumStep?: number; // 4-64, default 32
+    vittsNormalize?: boolean; // SEA-G2P Normalize, default true
 }
 
 /**

@@ -1,0 +1,129 @@
+{
+    "meta": {
+        "schema_version": "2.0.0",
+        "awf_version": "4.1.0",
+        "last_saved": "2026-04-19T09:19:00+07:00",
+        "save_count": 2,
+        "project_status": "PRODUCTION"
+    },
+    "project": {
+        "name": "AI Teaching Assistant",
+        "type": "fullstack-web",
+        "status": "production",
+        "production_url": "https://ai.hoclieu.id.vn",
+        "api_url": "https://api.hoclieu.id.vn",
+        "description": "Hệ thống tạo bài giảng tự động sử dụng AI (Gemini, Imagen, TTS) để generate PPTX, handouts, và quizzes từ outline — 6-step workflow"
+    },
+    "critical_rules": {
+        "⛔ NO_AUTO_PUSH": "TUYỆT ĐỐI không được git push khi chưa được user bảo. Chỉ commit local, chờ user xác nhận rồi mới push.",
+        "🔑 test_account": {
+            "⛔ DO_NOT_DELETE": true,
+            "email": "xuanhoaspt@gmail.com",
+            "password": "Hoa@123",
+            "role": "ADMIN",
+            "note": "Tài khoản admin test trên cả local (localhost:5173) và production (ai.hoclieu.id.vn). LUÔN recap thông tin này."
+        },
+        "🚀 startup_commands": {
+            "_note": "DO NOT DELETE. Lệnh khởi động các dịch vụ",
+            "pptx_service": "cd f:/pptx_create_antigravity/ai-teaching-assistant/backend/utils/pptx_generator && uvicorn main:app --port 3002",
+            "backend": "cd f:/pptx_create_antigravity/ai-teaching-assistant/backend && npm run start:dev",
+            "frontend": "cd f:/pptx_create_antigravity/ai-teaching-assistant/frontend && npm run dev"
+        }
+    },
+    "tech_stack": {
+        "frontend": {
+            "framework": "React 19",
+            "language": "TypeScript",
+            "bundler": "Vite",
+            "ui_library": "Ant Design 6",
+            "styling": "CSS Modules",
+            "routing": "react-router-dom 7",
+            "state": "TanStack React Query 5 + React Context",
+            "http": "axios"
+        },
+        "backend": {
+            "framework": "NestJS 11",
+            "language": "TypeScript",
+            "orm": "Prisma 7",
+            "auth": "JWT (passport-jwt)",
+            "validation": "class-validator",
+            "sdk": "@google/genai (NOT @google/generative-ai - legacy)"
+        },
+        "database": {
+            "type": "PostgreSQL 15",
+            "cache": "Redis 7",
+            "orm": "Prisma",
+            "migrations": true
+        },
+        "ai_services": {
+            "primary_provider": "CLIProxyAPI (Priority 1 - VPS Self-hosted)",
+            "cliproxy": {
+                "description": "OpenAI-compatible proxy for free AI tier access",
+                "vps_domain": "https://cliproxy.hoclieu.id.vn",
+                "docker_image": "eceasy/cli-proxy-api:latest",
+                "config_path": "/home/trieuhoa/cliproxy/config.yaml",
+                "models": {
+                    "text": ["gemini-2.5-flash", "gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-claude-sonnet-4-5"],
+                    "image": ["gemini-3-pro-image-preview"],
+                    "tts": ["gemini-2.5-flash-preview-tts"]
+                },
+                "features": [
+                    "Multi-account rotation (quota exceeded → switch project)",
+                    "OAuth login via docker exec --antigravity-login",
+                    "Round-robin routing strategy",
+                    "Cloudflare Tunnel for public access"
+                ],
+                "admin_config": "system_configs table (cliproxy.enabled, cliproxy.url, cliproxy.apiKey, cliproxy.defaultTextModel, cliproxy.defaultImageModel, cliproxy.defaultTTSModel)"
+            },
+            "fallback_provider": "Gemini SDK (@google/genai)",
+            "llm": "Google Gemini (2.5 Pro/Flash, 2.0 Flash)",
+            "image": ["Gemini Image Generation", "Flux.1-dev via ImageGen API (OpenAI-compatible, self-hosted ComfyUI)"],
+            "imagegen": {
+                "description": "Self-hosted Flux.1-dev FP8 image gen via OpenAI-compatible API",
+                "endpoint": "http://117.0.36.6:8000/v1/images/generations",
+                "model": "flux-image",
+                "api_key": "sk-my-super-secret-key-123",
+                "admin_config": "system_configs table (imageGen.enabled, imageGen.url, imageGen.apiKey, imageGen.defaultModel, imageGen.steps)",
+                "gotcha": "API returns localhost URLs for generated images — backend rewrites to actual host"
+            },
+            "tts": ["Gemini 2.5 Flash Preview TTS", "Vbee", "ViTTS (Local/Self-hosted Vietnamese TTS with voice cloning)"],
+            "model_discovery": "Dynamic via API (Gemini + CLIProxy /v1/models + ImageGen)"
+        },
+        "text_normalization": {
+            "status": "REMOVED in 2026-04-19 — TTS Dictionary and TextNormalizerService completely removed. External TTS providers handle normalization natively."
+        },
+        "prompt_system": {
+            "architecture": "English prompts + {output_language_instruction} placeholder",
+            "prompts_rewritten": ["slides.design", "slides.speaker-notes", "slides.optimize-notes"],
+            "auto_seed": "Prompts auto-seeded on backend startup via seedV2()"
+        },
+        "export": {
+            "pptx": "Python python-pptx",
+            "docx": "docx",
+            "excel": "exceljs"
+        }
+    },
+    "infrastructure": {
+        "containerization": "Docker",
+        "orchestration": "docker-compose",
+        "storage": "MinIO (S3-compatible)",
+        "reverse_proxy": "nginx (proxy_timeout: 180s)",
+        "ci_cd": "GitHub Actions → GHCR → VPS docker compose pull",
+        "domain": "ai.hoclieu.id.vn",
+        "cliproxy_domain": "cliproxy.hoclieu.id.vn",
+        "services": ["postgres", "redis", "minio", "backend", "frontend", "cliproxy"]
+    },
+    "github": {
+        "repo_url": "https://github.com/xuanhoatrieu/ai-teaching-assistant",
+        "default_branch": "main",
+        "commit_rule": "⛔ LUÔN HỎI TRƯỚC KHI COMMIT/PUSH",
+        "latest_tag": "v1.2.6",
+        "ci_cd": "GitHub Actions builds Docker images on tag push"
+    },
+    "security": {
+        "auth": "JWT + refresh token + Passport",
+        "encryption": "AES-256-GCM for API keys",
+        "roles": ["USER", "ADMIN"],
+        "api_key_storage": "Encrypted in DB (api_keys table)"
+    }
+}

@@ -323,222 +323,199 @@ Chỉ trả về JSON.`,
       {
         slug: 'slides.speaker-notes',
         name: 'Generate Speaker Notes',
-        content: `**Generate Speaker Notes (Lời Giảng) - Bước 1: Tạo Nội Dung**
+        content: `**Generate Speaker Notes (Lecture Transcript) — Step 1: Create Content**
 
-**Mục tiêu:** Soạn lời giảng (transcript/speaker notes) cho từng slide dựa trên nội dung slide đã có. Tập trung vào NỘI DUNG đầy đủ, chính xác. Văn phong và tối ưu TTS sẽ được xử lý ở bước sau.
+Act as a professional university lecturer and presenter.
+Rewrite the slide content below into a natural, spoken lecture transcript (speaker notes) for each slide.
+
+{output_language_instruction}
 
 **Input:**
-- Tiêu đề bài học: {title}
-- Nội dung các slides:
+- Lesson title: {title}
+- Slide content:
 {slides_content}
 
 ---
 
-## ⚠️ YÊU CẦU BẮT BUỘC VỀ ĐỘ DÀI (CRITICAL):
+## ⚠️ MANDATORY LENGTH REQUIREMENTS (CRITICAL):
 
-| Loại slide | Số từ TỐI THIỂU | Thời lượng nói |
-|-----------|-----------------|----------------|
-| title/agenda | 100 từ | 40-60 giây |
-| objectives | 100 từ | 40-60 giây |
-| **content** | **200 từ** | **1.5-2 phút** |
-| summary | 100 từ | 40-60 giây |
+| Slide type | MINIMUM word count | Speaking duration |
+|-----------|-------------------|-------------------|
+| title/agenda | 100 words | 40-60 seconds |
+| objectives | 100 words | 40-60 seconds |
+| **content** | **200 words** | **1.5-2 minutes** |
+| summary | 100 words | 40-60 seconds |
 
-⛔ NẾU SPEAKERNOTE CỦA SLIDE CONTENT DƯỚI 200 TỪ → BẠN ĐÃ LÀM SAI. PHẢI VIẾT LẠI DÀI HƠN.
-⛔ Mỗi slide content phải có ĐỦ 3 phần: mở đầu + giảng giải chi tiết + chuyển tiếp.
-
----
-
-## 🎤 QUY TẮC VIẾT SPEAKERNOTE:
-
-### Cấu trúc bắt buộc: Mở đầu → Giảng giải → Chuyển tiếp
-1. **Mở đầu (1-2 câu):** Nối tiếp slide trước bằng 1 câu ngắn, ĐƠN GIẢN. Ví dụ: "Tiếp theo, chúng ta xem...", "Phần này nói về...", "Bây giờ đến phần...". KHÔNG mở đầu phóng đại kiểu "Hãy bắt đầu bằng tình huống rất thực tế" hay "Để cảm nhận sức mạnh của".
-2. **Giảng giải (phần chính, chiếm 70-80% nội dung):** Diễn giải từng ý trong slide - KHÔNG đọc lại bullet points mà phải GIẢI THÍCH, cho ví dụ, phân tích
-3. **Chuyển tiếp (1-2 câu):** Tóm ý chính và dẫn sang slide tiếp theo
-
-**Đặc biệt chú ý: Không được viết các từ "Mở đầu", "Giảng giải", "Chuyển tiếp" và dấu * vào nội dung speakerNote. Viết liền mạch tự nhiên.**
-
-### Phần giảng giải PHẢI bao gồm:
-- Giải thích rõ ràng từng ý trong slide (không bỏ sót)
-- Ít nhất 1-2 ví dụ minh họa cụ thể
-- Phân tích ngắn để làm rõ ý nghĩa
-- Kết nối logic giữa các ý với nhau
-- Nhấn mạnh điểm quan trọng cần ghi nhớ
-
-## 🗣️ VĂN PHONG:
-- Viết như transcript bài giảng đại học — giọng BÌNH THƯỜNG, tự nhiên
-- Giọng văn = giảng viên đang nói chuyện bình thường với sinh viên trong lớp
-- KHÔNG phải: MC event, diễn giả truyền cảm hứng, YouTuber, quảng cáo, bài văn nghị luận
-- Trực tiếp, rõ ràng, đi thẳng vào nội dung chuyên môn
-- KHÔNG dùng tính từ nhấn mạnh thừa ("rất thực tế", "vô cùng quan trọng", "cực kỳ cần thiết")
-- KHÔNG dùng ẩn dụ, hình tượng, so sánh văn chương, cường điệu hóa
-
-### TRÁNH:
-- ❌ Đọc nguyên văn bullet points
-- ❌ Viết quá ngắn gọn, thiếu giải thích
-- ❌ Bắt đầu mọi câu giống nhau
-- ❌ Dùng quá nhiều câu hỏi tu từ
-- ❌ Câu mở đầu phóng đại: "Hãy bắt đầu bằng...", "Để thấy động lực...", "Một điều không thể phủ nhận..."
+⛔ IF a content slide's speaker note is under 200 words → YOU HAVE FAILED. Rewrite it longer.
+⛔ Each content slide MUST have all 3 parts: opening + detailed explanation + transition.
 
 ---
 
-## VÍ DỤ SPEAKERNOTE CHO SLIDE CONTENT (~220 từ):
+## 🎤 WRITING RULES:
 
-❌ **SAI (Quá ngắn, chỉ ~50 từ):**
-"Deep Learning là một phương pháp học sâu trong trí tuệ nhân tạo. Nó có 3 đặc tính quan trọng: khả năng xấp xỉ, tối ưu hóa, và khái quát hóa."
+### Required structure: Opening → Explanation → Transition
+1. **Opening (1-2 sentences):** Connect from the previous slide with a SHORT, SIMPLE sentence. Example: "Next, let's look at...", "This section covers...", "Now we move to...". DO NOT start with exaggerated openers like "Let's begin with a very real scenario" or "To feel the power of".
+2. **Explanation (main body, 70-80% of content):** Explain each point from the slide — DO NOT read bullet points verbatim. Instead, EXPLAIN, provide EXAMPLES, and ANALYZE.
+3. **Transition (1-2 sentences):** Summarize the key point and lead into the next slide.
 
-✅ **ĐÚNG (Đủ dài, ~220 từ):**
-"Tiếp theo là Deep Learning. Giới nghiên cứu vẫn chưa hiểu hoàn toàn tại sao Deep Learning hoạt động tốt, nhưng có 3 góc nhìn chính giúp giải thích được phần nào.
+**Important: Do NOT write the labels "Opening", "Explanation", "Transition" in the speakerNote. Write as a continuous, flowing narrative.**
 
-Đầu tiên là khả năng xấp xỉ. Nói đơn giản, một mạng neural đủ lớn có thể xấp xỉ bất kỳ hàm số nào. Điều này có nghĩa là về mặt lý thuyết, Deep Learning có thể học được mọi mối quan hệ trong dữ liệu.
+### The explanation section MUST include:
+- Clear explanation of every point in the slide (do not skip any)
+- At least 1-2 concrete illustrative examples
+- Brief analysis to clarify meaning
+- Logical connections between points
+- Emphasis on key takeaways
 
-Thứ hai là khả năng tối ưu. Mặc dù bài toán tối ưu trong Deep Learning phức tạp với hàng triệu tham số, nhưng các thuật toán gradient descent vẫn tìm được lời giải tốt. Ví dụ như khi huấn luyện mô hình nhận diện hình ảnh, dù có hàng triệu trọng số cần điều chỉnh, quá trình training vẫn hội tụ được.
+## 🗣️ TONE & STYLE:
+- Write as a university lecture transcript — NORMAL, natural tone
+- Tone = a lecturer talking normally to students in class
+- NOT: event MC, motivational speaker, YouTuber, advertisement, literary essay
+- Direct, clear, straight to the technical content
+- DO NOT use excessive intensifiers ("very practical", "extremely important", "absolutely essential")
+- DO NOT use metaphors, imagery, literary comparisons, or hyperbole
+- **Format: PLAIN TEXT ONLY.** Do NOT use Markdown, lists, bullet points, asterisks (*), hashtags (#), or emojis. TTS engines do not read these well.
+- Do not just read the text. Explain and expand on the points naturally.
 
-Cuối cùng là khả năng khái quát hóa. Mô hình có thể hoạt động tốt trên dữ liệu chưa từng thấy, không chỉ dữ liệu đã dùng để huấn luyện. Chúng ta sẽ đi sâu vào từng phần ở các slide tiếp theo."
+### AVOID:
+- ❌ Reading bullet points verbatim
+- ❌ Writing too briefly without explanation
+- ❌ Starting every sentence the same way
+- ❌ Using too many rhetorical questions
+- ❌ Exaggerated openings
 
 ---
 
-## Định dạng đầu ra (JSON):
+## Output format (JSON):
 
 {
   "speakerNotes": [
     {
       "slideIndex": 1,
-      "speakerNote": "Xin chào các em. Hôm nay chúng ta sẽ cùng tìm hiểu về..."
+      "speakerNote": "Welcome everyone. Today we will explore..."
     },
     {
       "slideIndex": 2,
-      "speakerNote": "Bài học hôm nay gồm các phần chính. Đầu tiên là..."
+      "speakerNote": "Today's lesson covers the following topics. First..."
     }
   ]
 }
 
-⚠️ NHẮC LẠI: Mỗi speakerNote cho slide content phải TỐI THIỂU 200 từ. Giải thích đầy đủ tất cả các ý trong slide. Kiểm tra lại trước khi trả kết quả.
+⚠️ REMINDER: Each speakerNote for content slides must be AT LEAST 200 words. Explain all points in the slide fully. Review before returning.
 
-Chỉ trả về JSON.`,
-        variables: ['{title}', '{slides_content}'],
+Return JSON only.`,
+        variables: ['{title}', '{slides_content}', '{output_language_instruction}'],
       },
       {
         slug: 'slides.optimize-notes',
         name: 'Optimize & QA Speaker Notes',
-        content: `**Tối Ưu & Kiểm Duyệt Speaker Notes - Bước 2**
+        content: `**Optimize & QA Speaker Notes — Step 2**
 
-**Mục tiêu:** Kiểm duyệt chất lượng, sửa ngôn ngữ cường điệu/ẩn dụ và tối ưu từ cho tts.
+Act as a professional university lecturer and TTS content optimizer.
+Review, improve, and optimize the existing speaker notes for text-to-speech quality.
+
+{output_language_instruction}
 
 **Input:**
-- Nội dung các slides gốc (để cross-check):
+- Original slide content (for cross-checking):
 {slides_content}
 
-- Speaker notes hiện tại (từ Bước 1):
+- Current speaker notes (from Step 1):
 {speaker_notes}
 
 ---
 
-## ⛔ NGUYÊN TẮC BẮT BUỘC — ĐỌC KỸ TRƯỚC KHI LÀM
+## ⛔ MANDATORY PRINCIPLES — READ CAREFULLY BEFORE STARTING
 
-1. **GIỮ NGUYÊN cấu trúc đoạn văn:** Giữ nguyên số đoạn, số câu, thứ tự câu, cách dẫn dắt narrative
-2. **CHỈ ĐƯỢC THÊM, KHÔNG ĐƯỢC BỚT:** Nếu phát hiện thiếu nội dung → thêm câu mới
-3. **SỐ TỪ OUTPUT >= 95% SỐ TỪ INPUT:** Vi phạm quy tắc này = THẤT BẠI
-4. **Tất cả các câu có sử dụng phép so sánh, ẩn dụ, cường điệu, tính từ nhấn mạnh,.. phải được thay thế bằng từ ngữ trực tiếp, tự nhiên, phù hợp với văn phong giảng viên đại học.**
-5. **GIỌNG VĂN = GIẢNG VIÊN BÌNH THƯỜNG:** Mọi câu phải nghe như giảng viên đang giải thích, KHÔNG phải diễn giả/MC/quảng cáo. Thay ẩn dụ, cường điệu, tính từ nhấn mạnh thừa bằng từ trực tiếp (xem chi tiết Nhiệm vụ 1).
----
-
-## ✅ NHIỆM VỤ 1 (ƯU TIÊN CAO NHẤT): CHUẨN HÓA GIỌNG VĂN
-
-⚠️ ĐÂY LÀ NHIỆM VỤ QUAN TRỌNG NHẤT. Nếu output vẫn còn giọng phóng đại = THẤT BẠI.
-
-**Tiêu chuẩn:** Giọng giảng viên đại học nói chuyện BÌNH THƯỜNG trong lớp.
-
-**Đọc TỪNG CÂU và tự hỏi:** "Câu này nghe như giảng viên bình thường hay như diễn giả/MC/quảng cáo?"
-- Nếu nghe như **diễn giả truyền cảm hứng, MC event, quảng cáo, bài văn nghị luận** → viết lại bằng giọng bình thường
-- Nếu nghe như **giảng viên đang giải thích** → giữ nguyên
-
-**Các dấu hiệu cần sửa (KHÔNG cần nhớ hết — dùng nguyên tắc trên để tự nhận biết):**
-- Câu mở đầu slide dài dòng, phóng đại → rút gọn thành 1 câu ngắn trực tiếp
-- Ẩn dụ, hình tượng, so sánh văn chương (giải phẫu, mổ xẻ, chinh phục, chìa khóa vàng, cánh cửa...)
-- Tính từ nhấn mạnh thừa (rất, vô cùng, cực kỳ, thực sự...)
-- Giọng quảng cáo (không thể thiếu, không ai phủ nhận, đáng kinh ngạc...)
-- Cường điệu (hack não, thần kỳ, bùng nổ, kinh điển, muôn thuở...)
-- Suồng sã liên tiếp (Nào, À, Nha, nhé dùng quá nhiều)
-
-**Ví dụ (trước → sau):**
-❌ "Hãy bắt đầu bằng một tình huống rất thực tế để thấy động lực của chủ đề hôm nay. Khi lắp một chiếc PC..."
-✅ "Chúng ta xem xét tình huống sau. Khi lắp một chiếc PC..."
-
-❌ "Đây chính là chìa khóa vàng để mở ra cánh cửa của môn Cấu trúc dữ liệu."
-✅ "Đây là nền tảng cho môn Cấu trúc dữ liệu."
-
-❌ "Code sẽ rối rắm như một mớ dây điện, và việc debug sẽ là cơn ác mộng."
-✅ "Code sẽ khó đọc, khó bảo trì, và việc tìm lỗi sẽ khó khăn."
-
-**Lưu ý:** Chỉ sửa cách diễn đạt, GIỮ NGUYÊN ý nghĩa và cấu trúc đoạn văn.
+1. **PRESERVE paragraph structure:** Keep the same number of paragraphs, sentence order, and narrative flow.
+2. **ADD ONLY, DO NOT REMOVE:** If you find missing content → add new sentences.
+3. **OUTPUT word count >= 95% of INPUT word count.** Violating this = FAILURE.
+4. **Replace ALL metaphors, hyperbole, and excessive intensifiers** with direct, natural language appropriate for a university lecturer.
+5. **TONE = NORMAL LECTURER.** Every sentence should sound like a lecturer explaining, NOT a motivational speaker/MC/advertisement.
+6. **Format: PLAIN TEXT ONLY.** Remove any Markdown formatting, bullet points, asterisks (*), hashtags (#), or emojis from speaker notes. TTS engines do not read these well.
 
 ---
 
-## ✅ NHIỆM VỤ 2: KIỂM DUYỆT CHẤT LƯỢNG
+## ✅ TASK 1 (HIGHEST PRIORITY): NORMALIZE TONE
 
-So khớp speaker notes với slide content gốc để phát hiện và sửa lỗi:
+⚠️ THIS IS THE MOST IMPORTANT TASK. If output still has exaggerated tone = FAILURE.
 
-| Vấn đề | Cách xử lý |
-|--------|------------|
-| Slide content có 4 ý, speaker note chỉ giải thích 2 | Bổ sung giải thích cho 2 ý còn thiếu |
-| Speaker note < 200 từ (slide content) | Viết bổ sung thêm ví dụ, giải thích chi tiết hơn |
-| Speaker note < 100 từ (slide title/agenda/summary) | Viết bổ sung |
-| Thiếu ví dụ minh họa | Thêm ít nhất 1 ví dụ |
-| Giải thích sai hoặc mâu thuẫn với slide | Sửa cho đúng |
+**Standard:** A university lecturer speaking NORMALLY in class.
+
+**Read EACH SENTENCE and ask:** "Does this sound like a normal lecturer or like a motivational speaker/MC/advertisement?"
+- If it sounds like **a motivational speaker, event MC, advertisement, or literary essay** → rewrite in normal tone
+- If it sounds like **a lecturer explaining** → keep as-is
+
+**Signs to fix:**
+- Long-winded, exaggerated slide openers → shorten to 1 direct sentence
+- Metaphors, imagery, literary comparisons ("golden key", "open the door", "nightmare")
+- Excessive intensifiers ("very", "extremely", "absolutely", "incredibly")
+- Advertising language ("indispensable", "undeniable", "amazing")
+- Hyperbole ("mind-blowing", "magical", "explosive", "legendary")
+
+**Note:** Only fix the wording. PRESERVE the meaning and paragraph structure.
 
 ---
 
-## ✅ NHIỆM VỤ 3: TỐI ƯU CHO ĐỌC THÀNH LỜI (TTS)
+## ✅ TASK 2: QUALITY AUDIT
 
-Speaker notes sẽ được đọc thành lời bằng TTS. Chuyển đổi MỌI nội dung kỹ thuật sang dạng đọc thành tiếng tự nhiên.
+Cross-check speaker notes against original slide content to find and fix issues:
 
-### Quy tắc chuyển đổi mã nguồn sang lời nói:
-- Tên hàm/biến tiếng Việt có dấu gạch dưới → đọc bằng lời, KHÔNG giữ nguyên tên code
-- Tên hàm/biến tiếng Anh dài hoặc có dấu gạch dưới → diễn giải bằng lời
-- Toán tử → viết bằng từ ("bằng", "nhỏ hơn", "lớn hơn", "không bằng")
-- Câu lệnh code → diễn giải thành câu tiếng Việt tự nhiên
+| Issue | Action |
+|-------|--------|
+| Slide has 4 points, speaker note only explains 2 | Add explanation for the 2 missing points |
+| Speaker note < 200 words (content slide) | Add more examples and detailed explanation |
+| Speaker note < 100 words (title/agenda/summary slide) | Add more content |
+| Missing illustrative examples | Add at least 1 example |
+| Incorrect or contradictory explanation | Fix to match slide content |
 
-**Ví dụ:**
-❌ \`tinh_tong(a, b)\` → ✅ "hàm tính tổng, nhận hai tham số a và b"
-❌ \`*args\` và \`**kwargs\` → ✅ "star args" và "double star kwargs" hoặc "tham số vị trí động" và "tham số từ khóa động"
-❌ \`tao_hinh_chu_nhat(chieu_dai=10, chieu_rong=20)\` → ✅ "hàm tạo hình chữ nhật, với chiều dài bằng 10 và chiều rộng bằng 20"
-❌ \`if n <= 1: return 1\` → ✅ "nếu n nhỏ hơn hoặc bằng 1 thì trả về 1"
-❌ \`factorial(n-1)\` → ✅ "gọi lại hàm factorial với tham số n trừ 1"
+---
 
-### Quy tắc về từ viết tắt (ưu tiên từ trên xuống):
-1. **Viết tắt tiếng Việt → viết đầy đủ tiếng Việt:**
-   CLB → "câu lạc bộ", ĐH → "đại học", GV → "giảng viên", SV → "sinh viên", CNTT → "công nghệ thông tin", CSDL → "cơ sở dữ liệu"
+## ✅ TASK 3: TTS OPTIMIZATION
 
-2. **Viết tắt tiếng Anh có nghĩa tiếng Việt tương đương → dùng tiếng Việt:**
-   EOL → "ký tự cuối dòng", EOF → "cuối tập tin", OS → "hệ điều hành", IDE → "môi trường phát triển", OOP → "lập trình hướng đối tượng"
+Speaker notes will be read aloud by TTS. Convert ALL technical content to natural spoken form.
 
-3. **Viết tắt tiếng Anh phổ biến trong ngành → giữ nguyên (TTS tự đọc):**
+### Code-to-speech conversion rules:
+- Function/variable names with underscores → describe in words, DO NOT keep raw code names
+- Operators → write as words ("equals", "less than", "greater than", "not equal to")
+- Code statements → paraphrase as natural sentences
+
+**Examples:**
+❌ \`calculate_sum(a, b)\` → ✅ "the calculate sum function, which takes two parameters a and b"
+❌ \`if n <= 1: return 1\` → ✅ "if n is less than or equal to 1, then return 1"
+❌ \`factorial(n-1)\` → ✅ "call the factorial function with the parameter n minus 1"
+
+### Abbreviation rules (priority order):
+1. **Domain abbreviations with well-known expansions → expand in the output language:**
+   EOL → "end of line character", EOF → "end of file", OS → "operating system", IDE → "integrated development environment", OOP → "object-oriented programming"
+
+2. **Common tech abbreviations → keep as-is (TTS reads them automatically):**
    CPU, RAM, SSD, API, HTML, CSS, SQL, HTTP, JSON, XML
 
-### ⚠️ KHÔNG TÁCH TỪ VIẾT TẮT THÀNH TỪNG KÝ TỰ:
-- ❌ KHÔNG viết: "p y" (tách py thành p y)
-- ✅ GIỮ NGUYÊN: "py", "js", "ts", "cpp", "exe", "dll"
-- Từ viết tắt 2-4 ký tự KHÔNG có trong danh sách mở rộng → giữ nguyên, KHÔNG tách
+### ⚠️ DO NOT SPLIT short abbreviations into individual letters:
+- ❌ DO NOT write: "p y" (splitting py into p y)
+- ✅ KEEP AS-IS: "py", "js", "ts", "cpp", "exe", "dll"
+- Abbreviations of 2-4 characters NOT in the expansion list → keep as-is, DO NOT split
 
 ---
 
-## Định dạng đầu ra (JSON):
+## Output format (JSON):
 
 {
   "speakerNotes": [
     {
       "slideIndex": 1,
-      "speakerNote": "Speaker note đã được kiểm duyệt, sửa ngôn ngữ, và tối ưu cho TTS..."
+      "speakerNote": "Reviewed, tone-corrected, and TTS-optimized speaker note..."
     }
   ]
 }
 
-⚠️ KIỂM TRA CUỐI CÙNG:
-1. Số từ output >= 95% input? Nếu không → thêm nội dung.
-2. Có câu nào bị xóa không? Nếu có → thêm lại.
-3. Có đoạn narrative nào bị chuyển thành liệt kê không? Nếu có → viết lại dạng narrative.
-Chỉ trả về JSON.`,
-        variables: ['{slides_content}', '{speaker_notes}'],
+⚠️ FINAL CHECK:
+1. Output word count >= 95% of input? If not → add content.
+2. Were any sentences deleted? If yes → add them back.
+3. Were any narrative paragraphs turned into lists? If yes → rewrite as narrative.
+Return JSON only.`,
+        variables: ['{slides_content}', '{speaker_notes}', '{output_language_instruction}'],
       },
       {
         slug: 'questions.interactive',
@@ -723,38 +700,40 @@ Chỉ trả về JSON.`,
       {
         slug: 'slides.design',
         name: 'Design Slide Content',
-        content: `## NHIỆM VỤ
-Format nội dung thô thành JSON bullets cho PowerPoint slide.
+        content: `## TASK
+Format raw content into JSON bullets for a PowerPoint slide.
 
-## ⚠️ RÀNG BUỘC TUYỆT ĐỐI
-- CHỈ ĐƯỢC sử dụng thông tin từ NỘI DUNG được cung cấp bên dưới
-- KHÔNG ĐƯỢC thêm kiến thức mới, số liệu mới, hoặc ý tưởng mới
-- KHÔNG ĐƯỢC sáng tạo nội dung ngoài phạm vi INPUT
-- Giữ nguyên tiêu đề được cung cấp
+{output_language_instruction}
 
-## QUY TẮC FORMAT
-1. Tạo 3-5 bullets từ nội dung được cung cấp
-2. Mỗi bullet gồm:
-   - emoji: biểu tượng phù hợp (�🔬🎯⚙️🧠📝)
-   - point: Tối ưu ngắn gọn từ các nội dung
-   - description: giải thích ngắn gọn, dễ hiểu DỰA TRÊN NỘI DUNG
-3. Nếu là định nghĩa/khái niệm: emoji="" point="" description=nội dung đầy đủ
+## ⚠️ STRICT CONSTRAINTS
+- Use ONLY information from the PROVIDED CONTENT below
+- Do NOT add new knowledge, new data, or new ideas
+- Do NOT create content outside the scope of INPUT
+- Keep the title exactly as provided
+
+## FORMAT RULES
+1. Create 3-5 bullets from the provided content
+2. Each bullet consists of:
+   - emoji: an appropriate icon (💡🔬🎯⚙️🧠📝)
+   - point: A concise keyword/phrase extracted from the content
+   - description: A brief, clear explanation BASED ON THE CONTENT
+3. For definitions/concepts: emoji="" point="" description=full content text
 
 ## INPUT
 ---
-**Tiêu đề:** {title}
-**Nội dung cần format:**
+**Title:** {title}
+**Content to format:**
 {content}
 ---
 
 ## OUTPUT (JSON only)
 {
-  "title": "Giữ nguyên tiêu đề từ input",
+  "title": "Keep the title from input exactly",
   "bullets": [
-    {"emoji": "💡", "point": "Từ khóa từ input", "description": "Giải thích từ input"}
+    {"emoji": "💡", "point": "Keyword from input", "description": "Explanation from input"}
   ]
 }`,
-        variables: ['{title}', '{content}'],
+        variables: ['{title}', '{content}', '{output_language_instruction}'],
       },
       {
         slug: 'slides.image',

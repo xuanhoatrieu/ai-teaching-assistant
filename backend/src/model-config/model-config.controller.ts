@@ -85,4 +85,20 @@ export class ModelConfigController {
             );
         }
     }
+
+    /**
+     * Discover ViTTS OmniVoice options (modes, voice library, design attributes)
+     */
+    @Get('vitts-options')
+    async getViTTSOptions(@Request() req: any) {
+        try {
+            const options = await this.modelConfigService.discoverViTTSOptions(req.user.id);
+            return options;
+        } catch (error: any) {
+            throw new HttpException(
+                error.message || 'Failed to get ViTTS options',
+                HttpStatus.BAD_REQUEST,
+            );
+        }
+    }
 }

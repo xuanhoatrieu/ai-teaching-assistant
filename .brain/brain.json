@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-02-26T23:10:00+07:00"
+        "updated_at": "2026-04-09T23:11:00+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -55,6 +55,9 @@
                     ],
                     "image": [
                         "gemini-3-pro-image-preview"
+                    ],
+                    "tts": [
+                        "gemini-2.5-flash-preview-tts"
                     ]
                 },
                 "features": [
@@ -63,15 +66,16 @@
                     "Round-robin routing strategy",
                     "Cloudflare Tunnel for public access"
                 ],
-                "admin_config": "system_configs table (cliproxy.enabled, cliproxy.url, cliproxy.apiKey, cliproxy.defaultTextModel, cliproxy.defaultImageModel)"
+                "admin_config": "system_configs table (cliproxy.enabled, cliproxy.url, cliproxy.apiKey, cliproxy.defaultTextModel, cliproxy.defaultImageModel, cliproxy.defaultTTSModel)"
             },
             "fallback_provider": "Gemini SDK (@google/genai)",
             "llm": "Google Gemini (2.5 Pro/Flash, 2.0 Flash)",
             "image": "Gemini Image Generation",
             "tts": [
-                "Gemini 2.5 Flash Preview TTS",
+                "Gemini TTS",
+                "Google Cloud TTS",
                 "Vbee",
-                "ViTTS (Local/Self-hosted Vietnamese TTS with voice cloning)"
+                "ViTTS OmniVoice (3 modes: auto/clone/design, async job polling)"
             ],
             "sdk": "@google/genai (NOT @google/generative-ai - legacy)"
         },
@@ -284,18 +288,14 @@
             "POST /auth/refresh"
         ],
         "subjects": [
-            "GET /subjects",
-            "POST /subjects",
-            "GET /subjects/:id",
-            "PUT /subjects/:id",
-            "DELETE /subjects/:id",
+            "GET/POST /subjects",
+            "GET/PUT/DELETE /subjects/:id",
             "GET /subjects/:id/lessons",
             "POST /subjects/:id/lessons"
         ],
         "lessons": [
-            "GET /lessons/:id",
-            "PUT /lessons/:id",
-            "DELETE /lessons/:id"
+            "GET/POST /subjects/:id/lessons",
+            "GET/PUT/DELETE/POST /lessons/:id"
         ],
         "outline": [
             "GET /lessons/:id/outline",
@@ -309,11 +309,9 @@
             "PUT /lessons/:id/slides/script"
         ],
         "slide_audio": [
-            "GET /lessons/:id/slide-audio",
-            "POST /lessons/:id/slide-audio/initialize",
-            "POST /lessons/:id/slide-audio/:idx/generate",
-            "POST /lessons/:id/slide-audio/generate-all",
-            "GET /lessons/:id/slide-audio/download-all"
+            "POST /lessons/:id/slide-audios/:index/generate (+ vittsMode, vittsDesignInstruct params)",
+            "GET /lessons/:id/slide-audios/:index/download",
+            "POST /lessons/:id/slide-audios/download-all"
         ],
         "questions_planned": [
             "GET /lessons/:id/interactive-questions",
@@ -349,8 +347,19 @@
         "settings": [
             "GET /user/settings",
             "PUT /user/settings",
-            "GET /user/model-config",
-            "PUT /user/model-config/:taskType"
+            "GET/POST /admin/tts-providers",
+            "GET /tts/providers",
+            "POST /tts/generate-audio"
+        ],
+        "model_config": [
+            "GET /user/model-config/vitts-options",
+            "POST /user/model-config/bulk",
+            "GET /user/model-config/defaults"
+        ],
+        "templates": [
+            "GET /templates",
+            "GET /templates/:id",
+            "GET/POST/PUT/DELETE /admin/templates"
         ],
         "user_templates": [
             "GET /user/templates - Get user's personal PPTX templates",
@@ -450,6 +459,16 @@
             "description": "CRUD for subjects/courses"
         },
         {
+            "name": "TTS Integration",
+            "status": "complete",
+            "notes": "Gemini + Google Cloud + Vbee + ViTTS OmniVoice (3 modes: auto/clone/design)"
+        },
+        {
+            "name": "ViTTS OmniVoice Rewrite",
+            "status": "in-progress",
+            "notes": "Rewrote vitts-tts.provider.ts to use OmniVoice async API with job polling. 3 modes: auto (no voice needed), clone (ref_id from voice library), design (instruct text like 'female, young adult, high pitch'). Frontend TTSSelector has mode tabs UI. Uncommitted changes."
+        },
+        {
             "name": "Lesson Workflow (6 steps)",
             "status": "implemented",
             "description": "All 6 steps working with DB prompts and PromptComposer integration"
@@ -457,7 +476,7 @@
         {
             "name": "AI Model Configuration",
             "status": "implemented",
-            "description": "Dynamic model discovery: Gemini API list + CLIProxy all models (GPT/Claude/etc). User can select per task. TaskTypes: OUTLINE, SLIDES, SPEAKER_NOTES, QUESTIONS, IMAGE, TTS."
+            "description": "Multi-source model discovery: Admin test endpoint fetches models from BOTH CLIProxy (/v1/models) AND Gemini SDK (generativelanguage.googleapis.com/v1beta/models). Uses DB system API key (ApiKeysService) for Gemini, not .env. Models categorized by type (text/image/tts) and source (CLIProxy/Gemini SDK). Frontend displays [Source] model_name format. CLIProxy models listed first. No hardcoded model defaults anywhere — all auto-detected. TaskTypes: OUTLINE, SLIDES, SPEAKER_NOTES, QUESTIONS, IMAGE, TTS."
         },
         {
             "name": "Structured Slides",
@@ -523,6 +542,16 @@
             "name": "Admin TTS Dictionary Page",
             "status": "implemented",
             "description": "Dedicated admin page at /admin/tts-dictionary with sidebar nav item. TTSDictionaryManager component with search, add/edit/delete, CSV import/export."
+        },
+        {
+            "name": "Multi-Source Model Discovery (Admin)",
+            "status": "implemented",
+            "description": "Admin Settings Test Connection discovers models from CLIProxy AND Gemini SDK simultaneously. Returns categorized {text, image, tts} with {id, source} objects. Gemini API key fetched from DB (isSystem=true) via ApiKeysService, not process.env. Deduplicates models across sources."
+        },
+        {
+            "name": "Synchronized [Source] Model Labels",
+            "status": "implemented",
+            "description": "All model selectors (admin Settings, user Steps 2-6, TTSSelector) display models in [Source] model_name format. CLIProxy models shown first (blue badge), Gemini SDK second (green badge). No hardcoded model names anywhere in frontend or backend."
         }
     ],
     "question_types": {
@@ -564,7 +593,18 @@
             "React Context for lesson editor state",
             "6-step workflow with step tracking",
             "⭐ PromptComposer: Role (system.role + Subject) + Task (from DB slug)",
-            "⭐ seedV2() in prompts.service.ts keeps DB and code in sync"
+            "⭐ seedV2() in prompts.service.ts keeps DB and code in sync",
+            "Factory pattern for TTS providers",
+            "Multi-stage Docker builds",
+            "JWT with refresh token rotation",
+            "AES-256-GCM credential encryption",
+            "Prisma 7 with pg adapter pattern",
+            "Type-only imports in TypeScript (verbatimModuleSyntax)",
+            "Dynamic model discovery with API classification",
+            "refreshLessonDataOnly() pattern - refresh data without overwriting step state",
+            "Async job polling pattern: submit job → poll status endpoint → download result (ViTTS OmniVoice)",
+            "Mode-based TTS synthesis: switch/case on vittsMode(auto/clone/design) in provider.synthesize()",
+            "Auto-detect ViTTS mode from modelName format: vitts:ref:UUID→clone, vitts:design→design, vitts:auto→auto"
         ],
         "gotchas": [
             "Gemini output format: **Slide N: Title** with **[Speaker Notes]:**",
@@ -626,7 +666,17 @@
             "⭐ VietNormalizer custom dict bug: Creating new VietnameseNormalizer(custom_path=...) REPLACES built-in 17K dict. Must merge dicts instead",
             "⭐ Uvicorn --reload with git repos: --reload-exclude flag broken on Windows with .git dirs. Use non-reload mode or exclude dir",
             "⭐ TTSDictionary import: prisma/import-vietnormalizer-csv.ts — batch inserts of 500, parses acronyms.csv + non-vietnamese-words.csv",
-            "⭐ TextNormalizerService OnModuleInit: Pushes all system dicts to Python /reload-dictionaries on startup. Reloads after admin CRUD (create/update/delete)"
+            "⭐ TextNormalizerService OnModuleInit: Pushes all system dicts to Python /reload-dictionaries on startup. Reloads after admin CRUD (create/update/delete)",
+            "⭐ Admin model discovery: Do NOT use process.env.GEMINI_API_KEY for Gemini model listing — key is stored encrypted in DB (api_keys table, isSystem=true). Use ApiKeysService.getActiveKey('__system__', 'GEMINI') to decrypt",
+            "⭐ Model defaults: system-config.service.ts and cliproxy.provider.ts use '' (empty string) as fallback, NOT hardcoded model names. If admin hasn't configured, getDefaultForTask() provides dynamic defaults from CLIProxy config or DEFAULT_MODELS constant",
+            "⭐ Admin test endpoint categorization: CLIProxy models from /v1/models (OpenAI format: data[].id), Gemini SDK models from /v1beta/models (Google format: models[].name with 'models/' prefix to strip). Skip embedding/retrieval/aqa/moderation models",
+            "⭐ ModelSelector.tsx source tagging: Tag models with source='CLIProxy' or source='Gemini SDK' DURING fetch, not from backend. Backend discover endpoint returns {GEMINI:[], CLIPROXY:[]}, frontend maps to source field",
+            "⭐ Settings.tsx categorizedModels state: Admin dropdowns use { text: {id,source}[], image: {id,source}[], tts: {id,source}[] } from /admin/config/cliproxy/test endpoint. Format: [Source] model_id in <select> options",
+            "⭐ CLIProxy TTS modalities: Must use UPPERCASE 'AUDIO' in modalities array AND generationConfig.responseModalities. Lowercase 'audio' causes Gemini to default to TEXT modality → 400 error",
+            "⭐ CLIProxy TTS response format: Audio data returned in message.images[].image_url.url as data URI (data:audio/L16;codec=pcm;rate=24000;base64,...). NOT in message.audio.data (OpenAI format) or inline_data (Gemini format)",
+            "⭐ CLIProxy TTS model name: CLIProxy /v1/models returns ALIASES (display names like 'Gemini 2.5 Flash Preview TTS'). Config must use actual model ID 'gemini-2.5-flash-preview-tts'. User/admin config may have 'cliproxy:' prefix — strip before API call",
+            "⭐ CLIProxy TTS fallback: When CLIProxy TTS fails, tts.service.ts falls back to Gemini SDK. MUST override dto.model to 'gemini-2.5-flash-preview-tts' — CLIProxy display name is invalid for Gemini SDK",
+            "⭐ CLIProxy TTS generationConfig: Add speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName alongside OpenAI-format audio.voice to ensure CLIProxy forwards voice config correctly to Gemini API"
         ],
         "conventions": [
             "API routes: /lessons/:id/resource",

@@ -13,6 +13,7 @@ export interface Subject {
     targetAudience?: string;
     majorName?: string;
     additionalContext?: string;
+    language?: string;
     createdAt: string;
     _count?: { lessons: number };
 }
@@ -26,6 +27,7 @@ export interface CreateSubjectData {
     targetAudience?: string;
     majorName?: string;
     additionalContext?: string;
+    language?: string;
 }
 
 export interface Lesson {

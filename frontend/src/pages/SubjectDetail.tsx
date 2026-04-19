@@ -4,6 +4,11 @@ import { subjectsApi, lessonsApi, type Subject, type Lesson, type CreateSubjectD
 import './SubjectDetail.css';
 
 const INSTITUTION_TYPES = ['Đại học', 'Cao đẳng', 'THPT', 'Doanh nghiệp', 'Khác'];
+const LANGUAGE_OPTIONS = [
+    { value: 'vi', label: '🇻🇳 Tiếng Việt', desc: 'Toàn bộ nội dung bằng tiếng Việt' },
+    { value: 'en', label: '🇬🇧 English', desc: 'All content in English' },
+    { value: 'vi-en', label: '🌐 Song ngữ (Bilingual)', desc: 'Slide EN, Speaker Notes VI' },
+];
 
 export function SubjectDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -40,6 +45,7 @@ export function SubjectDetailPage() {
         targetAudience: '',
         majorName: '',
         additionalContext: '',
+        language: 'vi',
     });
 
     useEffect(() => {
@@ -131,6 +137,7 @@ export function SubjectDetailPage() {
                 targetAudience: subject.targetAudience || '',
                 majorName: subject.majorName || '',
                 additionalContext: subject.additionalContext || '',
+                language: subject.language || 'vi',
             });
             setShowEditModal(true);
         }
@@ -204,6 +211,9 @@ export function SubjectDetailPage() {
                         <span>AI Role Context</span>
                     </div>
                     <p className="role-preview-text">{getRolePreview()}</p>
+                    <div className="role-language-badge">
+                        {LANGUAGE_OPTIONS.find(o => o.value === (subject.language || 'vi'))?.label || '🇻🇳 Tiếng Việt'}
+                    </div>
                     {subject.additionalContext && (
                         <p className="role-additional">📝 {subject.additionalContext}</p>
                     )}
@@ -335,6 +345,21 @@ export function SubjectDetailPage() {
                                     placeholder="VD: Công nghệ thông tin"
                                 />
                             </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label>🌐 Ngôn ngữ đầu ra</label>
+                            <select
+                                value={editForm.language || 'vi'}
+                                onChange={(e) => setEditForm({ ...editForm, language: e.target.value })}
+                            >
+                                {LANGUAGE_OPTIONS.map((opt) => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                            <small className="form-hint">
+                                {LANGUAGE_OPTIONS.find(o => o.value === (editForm.language || 'vi'))?.desc}
+                            </small>
                         </div>
 
                         <div className="form-group">

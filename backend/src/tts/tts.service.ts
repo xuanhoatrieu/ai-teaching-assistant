@@ -275,6 +275,9 @@ export class TTSService {
             pitch: dto.pitch,
             languageCode: dto.languageCode,
             multilingualMode: dto.multilingualMode,
+            vittsMode: dto.vittsMode as any,
+            vittsDesignInstruct: dto.vittsDesignInstruct,
+            vittsNormalize: dto.vittsNormalize,
         });
     }
 

@@ -267,3 +267,122 @@
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+/* ViTTS OmniVoice Controls */
+.vitts-omnivoice {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: 10px;
+}
+
+.vitts-mode-buttons {
+    flex-wrap: wrap;
+}
+
+.vitts-mode-buttons .provider-btn {
+    font-size: 12px;
+    padding: 6px 14px;
+}
+
+.vitts-design-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.vitts-design-form .tts-row {
+    gap: 8px;
+}
+
+.vitts-design-form .tts-label {
+    min-width: 100px;
+    font-size: 12px;
+}
+
+.vitts-design-form .tts-select {
+    max-width: 200px;
+    font-size: 12px;
+    padding: 6px 10px;
+}
+
+.vitts-design-preview {
+    font-size: 12px;
+    color: #94a3b8;
+    padding: 6px 10px;
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 6px;
+    margin-top: 4px;
+}
+
+.vitts-design-preview em {
+    color: #a5b4fc;
+}
+
+.btn-apply-design {
+    align-self: flex-end;
+    padding: 6px 16px;
+    font-size: 12px;
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    border-radius: 6px;
+    color: #e2e8f0;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-apply-design:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.35);
+}
+
+.btn-apply-design:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.tts-error {
+    font-size: 12px;
+    color: #f87171;
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border-radius: 6px;
+}
+
+/* SEA-G2P Normalize Toggle */
+.vitts-normalize-row {
+    margin-top: 6px;
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 4px !important;
+}
+
+.vitts-normalize-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #e2e8f0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.vitts-normalize-label input[type="checkbox"] {
+    display: none;
+}
+
+.normalize-checkbox-icon {
+    font-size: 16px;
+}
+
+.normalize-hint {
+    font-size: 11px;
+    color: #64748b;
+    padding-left: 26px;
+}

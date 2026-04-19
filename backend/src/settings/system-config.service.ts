@@ -122,4 +122,52 @@ export class SystemConfigService {
 
         this.logger.log('CLIProxy defaults initialized');
     }
+
+    // ========================
+    // Image Generation Provider (OpenAI Images API compatible — Flux/ComfyUI)
+    // ========================
+
+    /**
+     * Get Image Generation provider configs
+     */
+    async getImageGenConfig(): Promise<{
+        enabled: boolean;
+        url: string;
+        apiKey: string;
+        defaultModel: string;
+        steps: number;
+    }> {
+        const configs = await this.getByPrefix('imageGen.');
+        const configMap = new Map(configs.map(c => [c.key, c.value]));
+
+        return {
+            enabled: configMap.get('imageGen.enabled') === 'true',
+            url: configMap.get('imageGen.url') || process.env.IMAGE_GEN_URL || '',
+            apiKey: configMap.get('imageGen.apiKey') || process.env.IMAGE_GEN_API_KEY || '',
+            defaultModel: configMap.get('imageGen.defaultModel') || 'flux-image',
+            steps: parseInt(configMap.get('imageGen.steps') || '20', 10),
+        };
+    }
+
+    /**
+     * Initialize default Image Gen config
+     */
+    async initializeImageGenDefaults(): Promise<void> {
+        const defaults = [
+            { key: 'imageGen.enabled', value: 'false' },
+            { key: 'imageGen.url', value: process.env.IMAGE_GEN_URL || '' },
+            { key: 'imageGen.apiKey', value: process.env.IMAGE_GEN_API_KEY || '' },
+            { key: 'imageGen.defaultModel', value: 'flux-image' },
+            { key: 'imageGen.steps', value: '20' },
+        ];
+
+        for (const { key, value } of defaults) {
+            const existing = await this.get(key);
+            if (existing === null) {
+                await this.set(key, value);
+            }
+        }
+
+        this.logger.log('ImageGen defaults initialized');
+    }
 }

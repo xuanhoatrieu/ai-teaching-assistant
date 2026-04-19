@@ -7,6 +7,7 @@ import { ModelConfigService } from '../model-config/model-config.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { AiProviderService } from '../ai/ai-provider.service';
 import { APIService } from '@prisma/client';
+import { getOutputLanguageInstruction } from '../ai/language-instruction';
 import * as path from 'path';
 
 interface SlideContent {
@@ -159,11 +160,14 @@ export class PptxService {
             this.logger.log(`[DEBUG] Optimizing slide ${i + 1}: title="${slide.title}", hasContent=${!!slide.content}, apiKey=${apiKey ? 'present' : 'MISSING'}, model=${contentModel.modelName}`);
 
             try {
+                const subjectLanguage = lesson.subject?.language || 'vi';
                 const optimizedContent = await this.optimizeSlideContent(
                     slide.title,
                     slide.content || '',
                     apiKey || '',
-                    contentModel.modelName
+                    contentModel.modelName,
+                    lesson.subjectId,
+                    subjectLanguage
                 );
                 this.logger.log(`[DEBUG] Slide ${i + 1} optimized: ${optimizedContent.length} bullets`);
                 progress.slides[i].optimizedContent = optimizedContent;
@@ -219,9 +223,11 @@ export class PptxService {
         title: string,
         rawContent: string,
         apiKey: string,
-        modelName: string
+        modelName: string,
+        subjectId?: string,
+        subjectLanguage?: string
     ): Promise<OptimizedBullet[]> {
-        this.logger.log(`[DEBUG] optimizeSlideContent called: title="${title.substring(0, 50)}", rawContent=${rawContent?.length || 0} chars, apiKey=${apiKey?.length || 0} chars, model=${modelName}`);
+        this.logger.log(`[DEBUG] optimizeSlideContent called: title="${title.substring(0, 50)}", rawContent=${rawContent?.length || 0} chars, apiKey=${apiKey?.length || 0} chars, model=${modelName}, lang=${subjectLanguage}`);
 
         if (!rawContent || !apiKey) {
             this.logger.warn(`[SKIP] Content optimization skipped: rawContent=${!!rawContent}, apiKey=${!!apiKey}`);
@@ -229,12 +235,25 @@ export class PptxService {
         }
 
         try {
-            // Build prompt using slides.design template
-            this.logger.log(`[DEBUG] Building prompt with slides.design template...`);
-            const prompt = await this.promptComposer.buildTaskOnlyPrompt(
-                'slides.design',
-                { title, content: rawContent }
-            );
+            // Build prompt using slides.design template with language context
+            this.logger.log(`[DEBUG] Building prompt with slides.design template (lang=${subjectLanguage})...`);
+            const languageInstruction = getOutputLanguageInstruction(subjectLanguage || 'vi');
+            let prompt: string;
+            if (subjectId) {
+                // Use buildFullPrompt so Role + Language are injected
+                prompt = await this.promptComposer.buildFullPrompt(
+                    subjectId,
+                    'slides.design',
+                    { title, content: rawContent }
+                );
+            } else {
+                // Fallback: buildTaskOnlyPrompt + manually prepend language instruction
+                const taskPrompt = await this.promptComposer.buildTaskOnlyPrompt(
+                    'slides.design',
+                    { title, content: rawContent }
+                );
+                prompt = `${languageInstruction}\n\n${taskPrompt}`;
+            }
             this.logger.log(`[DEBUG] Prompt built: ${prompt?.length || 0} chars`);
 
             // Call AI (routes through CLIProxy if enabled, falls back to Gemini SDK)

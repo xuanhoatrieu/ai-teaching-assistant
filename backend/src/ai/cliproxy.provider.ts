@@ -270,14 +270,45 @@ export class CLIProxyProvider {
         }
 
         this.logger.log(`CLIProxy response: tokens=${data.usage?.total_tokens || 'unknown'}`);
-        return data.choices[0].message.content;
+        const message = data.choices[0].message;
+        let content = message.content;
+        
+        // Some models (GPT-5, o-series) return content in alternative fields
+        if (content === null || content === undefined) {
+            // Try reasoning_content (o1, o3, etc.)
+            const alt = message as any;
+            if (alt.reasoning_content) {
+                this.logger.warn(`CLIProxy: content null but found reasoning_content (${String(alt.reasoning_content).length} chars)`);
+                content = alt.reasoning_content;
+            }
+            // Try content as array (multimodal response)
+            else if (Array.isArray(alt.content)) {
+                const textParts = alt.content.filter((p: any) => p.type === 'text').map((p: any) => p.text);
+                if (textParts.length > 0) {
+                    this.logger.warn(`CLIProxy: content was array, extracted ${textParts.length} text parts`);
+                    content = textParts.join('\n');
+                }
+            }
+            // Try tool_calls content 
+            else if (alt.tool_calls && alt.tool_calls.length > 0) {
+                this.logger.warn(`CLIProxy: content null, found ${alt.tool_calls.length} tool_calls`);
+                content = alt.tool_calls.map((tc: any) => tc.function?.arguments || '').join('\n');
+            }
+            
+            if (content === null || content === undefined) {
+                // Log the full message keys for debugging
+                this.logger.error(`CLIProxy: content is null. Message keys: ${Object.keys(message).join(', ')}`);
+                this.logger.error(`CLIProxy: finish_reason: ${data.choices[0].finish_reason}, raw message: ${JSON.stringify(message).substring(0, 500)}`);
+            }
+        }
+        return content || '';
     }
 
     /**
      * Simple text generation (wraps chat with single user message)
      */
-    async generateText(prompt: string, model?: string): Promise<string> {
-        return this.chat([{ role: 'user', content: prompt }], model);
+    async generateText(prompt: string, model?: string, options?: { maxTokens?: number }): Promise<string> {
+        return this.chat([{ role: 'user', content: prompt }], model, { maxTokens: options?.maxTokens });
     }
 
     /**

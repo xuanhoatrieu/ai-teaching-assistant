@@ -227,7 +227,7 @@ export class ReviewQuestionService {
 
         try {
             // Use AiProviderService (CLIProxy → Gemini SDK fallback) with user's API key
-            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined, { maxTokens: 32768 });
             const response = aiResult.content;
             this.logger.log(`Review questions generated via ${aiResult.provider} (${aiResult.model})`);
 

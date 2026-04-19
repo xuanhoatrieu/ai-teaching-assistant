@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import './ModelSelector.css';
 
 type Provider = 'GEMINI' | 'CLIPROXY' | 'VBEE' | 'VITTS';
+type ViTTSMode = 'auto' | 'clone' | 'design';
 
 interface AvailableModel {
     name: string;
@@ -11,8 +12,40 @@ interface AvailableModel {
     supportedTasks: string[];
 }
 
+interface VoiceLibEntry {
+    ref_id: string;
+    name: string;
+    language: string;
+    ref_text?: string;
+    duration_sec?: number;
+}
+
+interface DesignAttributes {
+    gender: string[];
+    age: string[];
+    pitch: string[];
+    style: string[];
+    accent: string[];
+}
+
+interface ViTTSOptions {
+    modes?: { id: string; name: string; description: string; params: string[] }[];
+    voice_library?: VoiceLibEntry[];
+    design_attributes?: DesignAttributes;
+    defaults?: { speed: number; num_step: number; normalize: boolean };
+    error?: string;
+}
+
 interface TTSSelectorProps {
-    onChange?: (config: { provider: string; model: string; voice: string; multilingualMode?: string }) => void;
+    onChange?: (config: {
+        provider: string;
+        model: string;
+        voice: string;
+        multilingualMode?: string;
+        vittsMode?: string;
+        vittsDesignInstruct?: string;
+        vittsNormalize?: boolean;
+    }) => void;
 }
 
 export function TTSSelector({ onChange }: TTSSelectorProps) {
@@ -21,75 +54,104 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
     const [voices, setVoices] = useState<AvailableModel[]>([]);
     const [selectedModel, setSelectedModel] = useState('');
     const [selectedVoice, setSelectedVoice] = useState('');
-    const [multilingualMode, setMultilingualMode] = useState<string>('');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle');
+
+    // ViTTS OmniVoice state
+    const [vittsMode, setVittsMode] = useState<ViTTSMode>('auto');
+    const [vittsOptions, setVittsOptions] = useState<ViTTSOptions | null>(null);
+    const [vittsLoading, setVittsLoading] = useState(false);
+    // Voice Design form
+    const [designGender, setDesignGender] = useState('female');
+    const [designAge, setDesignAge] = useState('young');
+    const [designPitch, setDesignPitch] = useState('normal');
+    const [designStyle, setDesignStyle] = useState('normal');
+    const [designAccent, setDesignAccent] = useState('');
+    const [vittsNormalize, setVittsNormalize] = useState(true); // SEA-G2P Normalize, default ON
 
     useEffect(() => {
         fetchModels();
     }, []);
 
+    // Fetch ViTTS options when provider changes to VITTS
+    useEffect(() => {
+        if (provider === 'VITTS') {
+            fetchViTTSOptions();
+        }
+    }, [provider]);
+
+    const fetchViTTSOptions = async () => {
+        try {
+            setVittsLoading(true);
+            const res = await api.get('/user/model-config/vitts-options');
+            setVittsOptions(res.data);
+        } catch (err) {
+            console.error('Error fetching ViTTS options:', err);
+            setVittsOptions(null);
+        } finally {
+            setVittsLoading(false);
+        }
+    };
+
     const fetchModels = async () => {
         try {
             setIsLoading(true);
 
-            // Fetch available models and voices
             const modelsRes = await api.get('/user/model-config/discover');
             const geminiModels = modelsRes.data.models?.GEMINI || [];
             const cliproxyModels = modelsRes.data.models?.CLIPROXY || [];
 
-            // Filter TTS models from Gemini - tag with source
             const geminiTTS = geminiModels
                 .filter((m: AvailableModel) => m.supportedTasks.includes('TTS'))
                 .map((m: AvailableModel) => ({ ...m, source: 'Gemini SDK' }));
 
-            // Filter TTS models from CLIProxy - tag with source
             const cliproxyTTS = cliproxyModels
                 .filter((m: AvailableModel) => m.supportedTasks.includes('TTS'))
                 .map((m: AvailableModel) => ({ ...m, source: 'CLIProxy' }));
 
-            // Merge: CLIProxy TTS first (preferred), then Gemini TTS
             const allTTSModels = [...cliproxyTTS, ...geminiTTS];
             setTtsModels(allTTSModels);
 
-            // Filter voices - both Gemini, Vbee and ViTTS
             const allVoices = geminiModels.filter((m: AvailableModel) =>
                 m.supportedTasks.includes('TTS_VOICE')
             );
             setVoices(allVoices);
 
-            // Try to load saved TTS config from backend
+            // Try to load saved TTS config
             try {
                 const configRes = await api.get('/user/model-config');
                 const savedConfigs = configRes.data || [];
                 const ttsConfig = savedConfigs.find((c: any) => c.taskType === 'TTS');
 
                 if (ttsConfig && ttsConfig.modelName) {
-                    // Parse saved voice format: "gemini-voice:VoiceName" or "vbee:voiceId"
                     const savedVoice = ttsConfig.modelName;
 
                     if (savedVoice.startsWith('vbee:')) {
                         setProvider('VBEE');
                         setSelectedVoice(savedVoice);
+                    } else if (savedVoice.startsWith('vitts:')) {
+                        setProvider('VITTS');
+                        setSelectedVoice(savedVoice);
+                        // Auto-detect mode
+                        if (savedVoice.startsWith('vitts:ref:')) setVittsMode('clone');
+                        else if (savedVoice === 'vitts:design') setVittsMode('design');
+                        else if (savedVoice === 'vitts:auto') setVittsMode('auto');
                     } else if (savedVoice.startsWith('gemini-voice:')) {
-                        // Check if CLIProxy TTS models are available → use CLIPROXY provider
                         setProvider(cliproxyTTS.length > 0 ? 'CLIPROXY' : 'GEMINI');
                         setSelectedVoice(savedVoice);
                     }
 
-                    // Set model
                     if (allTTSModels.length > 0) {
                         setSelectedModel(allTTSModels[0].name);
                     }
-                    return; // Use saved config, don't set defaults
+                    return;
                 }
             } catch (configErr) {
                 console.log('No saved TTS config found, using defaults');
             }
 
-            // Set defaults only if no saved config
-            // Prefer CLIProxy over direct Gemini
+            // Set defaults
             if (cliproxyTTS.length > 0) {
                 setProvider('CLIPROXY');
                 setSelectedModel(cliproxyTTS[0].name);
@@ -98,7 +160,6 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 setSelectedModel(geminiTTS[0].name);
             }
 
-            // Default to Puck voice for Gemini
             const defaultVoice = allVoices.find((v: AvailableModel) => v.name.includes('Puck'));
             if (defaultVoice) {
                 setSelectedVoice(defaultVoice.name);
@@ -112,35 +173,63 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         }
     };
 
-    // Auto-save TTS config when selection changes
-    const saveConfig = useCallback(async (currentProvider: Provider, model: string, voice: string) => {
+    // Build Voice Design instruct text from form fields
+    // API expects exact items: "female, young adult, high pitch, whisper, american accent"
+    const buildDesignInstruct = useCallback(() => {
+        const parts: string[] = [];
+        // Gender: "male" or "female" — exact match
+        if (designGender) parts.push(designGender);
+        // Age: map to valid API values
+        const ageMap: Record<string, string> = { child: 'child', young: 'young adult', 'middle-aged': 'middle-aged', elderly: 'elderly' };
+        if (designAge && ageMap[designAge]) parts.push(ageMap[designAge]);
+        // Pitch: must include "pitch" suffix — "high pitch", "low pitch", etc. Skip "normal"
+        const pitchMap: Record<string, string> = { 'very low': 'very low pitch', low: 'low pitch', normal: '', high: 'high pitch', 'very high': 'very high pitch' };
+        if (designPitch && pitchMap[designPitch]) parts.push(pitchMap[designPitch]);
+        // Style: "whisper" only (skip "normal")
+        if (designStyle && designStyle !== 'normal') parts.push(designStyle);
+        // Accent: already exact values like "american accent"
+        if (designAccent) parts.push(designAccent);
+        return parts.join(', ');
+    }, [designGender, designAge, designPitch, designStyle, designAccent]);
+
+    // Save TTS config
+    const saveConfig = useCallback(async (currentProvider: Provider, model: string, voice: string, mode?: ViTTSMode) => {
         try {
             setIsSaving(true);
             setSaveStatus('idle');
 
-            // For TTS, we save the VOICE as modelName since that's what determines the audio
-            // Format: "gemini-voice:Puck" or "vbee:voice_id"
-            // The actual TTS model is derived from provider
-            const modelNameToSave = voice || (currentProvider === 'GEMINI' ? 'gemini-voice:Puck' : 'vbee:hn_female_thutrang_news_48k-fhg');
+            let modelNameToSave = voice || (currentProvider === 'GEMINI' ? 'gemini-voice:Puck' : 'vbee:hn_female_thutrang_news_48k-fhg');
 
-            // Save model config for TTS task
+            // For ViTTS, encode mode in modelName
+            if (currentProvider === 'VITTS') {
+                const m = mode || vittsMode;
+                if (m === 'auto') modelNameToSave = 'vitts:auto';
+                else if (m === 'design') modelNameToSave = 'vitts:design';
+                // clone mode: keep the voice (vitts:ref:UUID)
+            }
+
             await api.post('/user/model-config/bulk', {
                 configs: [{
                     taskType: 'TTS',
                     provider: currentProvider,
-                    modelName: modelNameToSave,  // Save voice as modelName
+                    modelName: modelNameToSave,
                 }]
             });
 
             setSaveStatus('success');
             setTimeout(() => setSaveStatus('idle'), 2000);
 
-            // Extract voice ID for callback
-            const voiceId = voice.includes(':') ? voice.split(':')[1] : voice;
-
-            // Notify parent if callback provided
+            // Notify parent
             if (onChange) {
-                onChange({ provider: currentProvider, model, voice: voiceId });
+                const voiceId = voice.includes(':') ? voice.split(':').slice(1).join(':') : voice;
+                onChange({
+                    provider: currentProvider,
+                    model,
+                    voice: voiceId,
+                    vittsMode: currentProvider === 'VITTS' ? (mode || vittsMode) : undefined,
+                    vittsDesignInstruct: currentProvider === 'VITTS' && (mode || vittsMode) === 'design' ? buildDesignInstruct() : undefined,
+                    vittsNormalize: currentProvider === 'VITTS' ? vittsNormalize : undefined,
+                });
             }
         } catch (err) {
             console.error('Error saving TTS config:', err);
@@ -149,18 +238,16 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         } finally {
             setIsSaving(false);
         }
-    }, [onChange]);
+    }, [onChange, vittsMode, vittsNormalize, buildDesignInstruct]);
 
     const handleProviderChange = (newProvider: Provider) => {
         setProvider(newProvider);
-        // Reset voice selection when provider changes
         let newVoice = '';
         let newModel = selectedModel;
 
         if (newProvider === 'GEMINI' || newProvider === 'CLIPROXY') {
             const geminiVoices = voices.filter(v => v.name.startsWith('gemini-voice:'));
             newVoice = geminiVoices[0]?.name || '';
-            // Set default model for this provider
             if (newProvider === 'CLIPROXY') {
                 const cliproxyTTS = ttsModels.filter(m => m.name.startsWith('cliproxy:'));
                 newModel = cliproxyTTS[0]?.name || selectedModel;
@@ -173,8 +260,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
             newVoice = vbeeVoices[0]?.name || '';
             newModel = 'vbee-tts';
         } else if (newProvider === 'VITTS') {
-            const vittsVoices = voices.filter(v => v.name.startsWith('vitts:'));
-            newVoice = vittsVoices[0]?.name || 'vitts:male';
+            newVoice = 'vitts:auto';
             newModel = 'vitts';
         }
 
@@ -190,6 +276,29 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
     const handleVoiceChange = (voiceName: string) => {
         setSelectedVoice(voiceName);
         saveConfig(provider, selectedModel, voiceName);
+    };
+
+    const handleVittsModeChange = (mode: ViTTSMode) => {
+        setVittsMode(mode);
+        let voice = selectedVoice;
+        if (mode === 'auto') voice = 'vitts:auto';
+        else if (mode === 'design') voice = 'vitts:design';
+        else if (mode === 'clone' && vittsOptions?.voice_library?.length) {
+            voice = `vitts:ref:${vittsOptions.voice_library[0].ref_id}`;
+        }
+        setSelectedVoice(voice);
+        saveConfig('VITTS', 'vitts', voice, mode);
+    };
+
+    const handleRefChange = (refId: string) => {
+        const voice = `vitts:ref:${refId}`;
+        setSelectedVoice(voice);
+        saveConfig('VITTS', 'vitts', voice, 'clone');
+    };
+
+    const handleDesignChange = () => {
+        // Re-save with updated design instruct
+        saveConfig('VITTS', 'vitts', 'vitts:design', 'design');
     };
 
     const filteredVoices = (provider === 'GEMINI' || provider === 'CLIPROXY')
@@ -258,49 +367,192 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 </div>
             )}
 
-            {/* Voice Selection */}
-            <div className="tts-row">
-                <label className="tts-label">🎤 Giọng đọc:</label>
-                <select
-                    className="tts-select voice-select"
-                    value={selectedVoice}
-                    onChange={(e) => handleVoiceChange(e.target.value)}
-                    disabled={isSaving}
-                >
-                    {filteredVoices.length === 0 ? (
-                        <option value="">-- Không có giọng đọc --</option>
-                    ) : (
-                        filteredVoices.map((voice) => (
-                            <option key={voice.name} value={voice.name}>
-                                {voice.displayName}
-                            </option>
-                        ))
-                    )}
-                </select>
-            </div>
-
-            {/* Multilingual Mode (ViTTS only) */}
-            {provider === 'VITTS' && (
+            {/* Gemini/Vbee Voice Selection */}
+            {provider !== 'VITTS' && (
                 <div className="tts-row">
-                    <label className="tts-label">🌐 Đa ngôn ngữ:</label>
+                    <label className="tts-label">🎤 Giọng đọc:</label>
                     <select
-                        className="tts-select"
-                        value={multilingualMode}
-                        onChange={(e) => {
-                            setMultilingualMode(e.target.value);
-                            if (onChange) {
-                                onChange({ provider, model: selectedModel, voice: selectedVoice, multilingualMode: e.target.value || undefined });
-                            }
-                        }}
+                        className="tts-select voice-select"
+                        value={selectedVoice}
+                        onChange={(e) => handleVoiceChange(e.target.value)}
                         disabled={isSaving}
                     >
-                        <option value="">Không sử dụng</option>
-                        <option value="auto">🔄 Tự động (auto)</option>
-                        <option value="syllable">🔤 Âm tiết (syllable)</option>
-                        <option value="english">🇬🇧 Tiếng Anh (english)</option>
+                        {filteredVoices.length === 0 ? (
+                            <option value="">-- Không có giọng đọc --</option>
+                        ) : (
+                            filteredVoices.map((voice) => (
+                                <option key={voice.name} value={voice.name}>
+                                    {voice.displayName}
+                                </option>
+                            ))
+                        )}
                     </select>
                 </div>
             )}
+
+            {/* ═══════════════════════════════════════════════════════ */}
+            {/* ViTTS OmniVoice Controls */}
+            {/* ═══════════════════════════════════════════════════════ */}
+            {provider === 'VITTS' && (
+                <div className="vitts-omnivoice">
+                    {vittsLoading ? (
+                        <div className="tts-loading">⏳ Đang tải ViTTS options...</div>
+                    ) : vittsOptions?.error ? (
+                        <div className="tts-error">⚠️ {vittsOptions.error}</div>
+                    ) : (
+                        <>
+                            {/* Mode Selector */}
+                            <div className="tts-row">
+                                <label className="tts-label">🎛️ Chế độ:</label>
+                                <div className="provider-buttons vitts-mode-buttons">
+                                    <button
+                                        className={`provider-btn ${vittsMode === 'auto' ? 'active' : ''}`}
+                                        onClick={() => handleVittsModeChange('auto')}
+                                        disabled={isSaving}
+                                        title="Model tự chọn giọng phù hợp"
+                                    >
+                                        🤖 Auto Voice
+                                    </button>
+                                    <button
+                                        className={`provider-btn ${vittsMode === 'design' ? 'active' : ''}`}
+                                        onClick={() => handleVittsModeChange('design')}
+                                        disabled={isSaving}
+                                        title="Thiết kế giọng theo thuộc tính"
+                                    >
+                                        🎨 Voice Design
+                                    </button>
+                                    <button
+                                        className={`provider-btn ${vittsMode === 'clone' ? 'active' : ''}`}
+                                        onClick={() => handleVittsModeChange('clone')}
+                                        disabled={isSaving}
+                                        title="Clone giọng từ Voice Library"
+                                    >
+                                        🎤 Voice Cloning
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Mode: Voice Design — attribute dropdowns */}
+                            {vittsMode === 'design' && vittsOptions?.design_attributes && (
+                                <div className="vitts-design-form">
+                                    <div className="tts-row">
+                                        <label className="tts-label">👤 Giới tính:</label>
+                                        <select className="tts-select" value={designGender}
+                                            onChange={(e) => { setDesignGender(e.target.value); }}
+                                        >
+                                            {vittsOptions.design_attributes.gender.map(g => (
+                                                <option key={g} value={g}>{g === 'male' ? '👨 Nam' : '👩 Nữ'}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="tts-row">
+                                        <label className="tts-label">🎂 Độ tuổi:</label>
+                                        <select className="tts-select" value={designAge}
+                                            onChange={(e) => { setDesignAge(e.target.value); }}
+                                        >
+                                            {vittsOptions.design_attributes.age.map(a => (
+                                                <option key={a} value={a}>
+                                                    {a === 'child' ? '👶 Trẻ em' : a === 'young' ? '🧑 Trẻ' : a === 'middle-aged' ? '🧔 Trung niên' : '👴 Lớn tuổi'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="tts-row">
+                                        <label className="tts-label">🎵 Cao độ:</label>
+                                        <select className="tts-select" value={designPitch}
+                                            onChange={(e) => { setDesignPitch(e.target.value); }}
+                                        >
+                                            {vittsOptions.design_attributes.pitch.map(p => (
+                                                <option key={p} value={p}>{p}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="tts-row">
+                                        <label className="tts-label">💬 Phong cách:</label>
+                                        <select className="tts-select" value={designStyle}
+                                            onChange={(e) => { setDesignStyle(e.target.value); }}
+                                        >
+                                            {vittsOptions.design_attributes.style.map(s => (
+                                                <option key={s} value={s}>{s === 'whisper' ? '🤫 Thì thầm' : '🗣️ Bình thường'}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {vittsOptions.design_attributes.accent.filter(a => a).length > 0 && (
+                                        <div className="tts-row">
+                                            <label className="tts-label">🌍 Giọng vùng:</label>
+                                            <select className="tts-select" value={designAccent}
+                                                onChange={(e) => { setDesignAccent(e.target.value); }}
+                                            >
+                                                <option value="">Không có</option>
+                                                {vittsOptions.design_attributes.accent.filter(a => a).map(a => (
+                                                    <option key={a} value={a}>{a}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                    <div className="vitts-design-preview">
+                                        💡 Instruct: <em>{buildDesignInstruct()}</em>
+                                    </div>
+                                    <button className="btn-apply-design" onClick={handleDesignChange} disabled={isSaving}>
+                                        ✅ Áp dụng
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Mode: Voice Cloning — ref selector */}
+                            {vittsMode === 'clone' && (
+                                <div className="tts-row">
+                                    <label className="tts-label">📎 Giọng mẫu:</label>
+                                    <select
+                                        className="tts-select voice-select"
+                                        value={selectedVoice.replace('vitts:ref:', '')}
+                                        onChange={(e) => handleRefChange(e.target.value)}
+                                        disabled={isSaving}
+                                    >
+                                        {!vittsOptions?.voice_library?.length ? (
+                                            <option value="">-- Chưa có giọng mẫu --</option>
+                                        ) : (
+                                            vittsOptions.voice_library.map((ref) => (
+                                                <option key={ref.ref_id} value={ref.ref_id}>
+                                                    {ref.name} ({ref.language}) {ref.duration_sec ? `• ${ref.duration_sec.toFixed(1)}s` : ''}
+                                                </option>
+                                            ))
+                                        )}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Mode: Auto — no extra controls needed */}
+                            {vittsMode === 'auto' && (
+                                <div className="tts-info">
+                                    🤖 Model sẽ tự động chọn giọng phù hợp nhất cho nội dung
+                                </div>
+                            )}
+
+                            {/* SEA-G2P Normalize toggle — visible in all modes */}
+                            <div className="tts-row vitts-normalize-row">
+                                <label className="vitts-normalize-label">
+                                    <input
+                                        type="checkbox"
+                                        checked={vittsNormalize}
+                                        onChange={(e) => {
+                                            setVittsNormalize(e.target.checked);
+                                            saveConfig('VITTS', 'vitts', selectedVoice, vittsMode);
+                                        }}
+                                        disabled={isSaving}
+                                    />
+                                    <span className="normalize-checkbox-icon">{vittsNormalize ? '☑️' : '☐'}</span>
+                                    SEA-G2P Normalize
+                                </label>
+                                <span className="normalize-hint">
+                                    Chuẩn hóa phát âm tiếng Việt (khuyến nghị bật)
+                                </span>
+                            </div>
+                        </>
+                    )}
+                </div>
+            )}
+
 
             {/* Info text */}
             <div className="tts-info">

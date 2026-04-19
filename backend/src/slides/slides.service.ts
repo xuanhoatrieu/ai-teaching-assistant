@@ -629,14 +629,13 @@ export class SlidesService {
 
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
 
-        // Build prompt for content optimization
+        // Build prompt for content optimization (same prompt as Step 5 generation)
         const prompt = await this.promptComposer.buildFullPrompt(
             slide.lesson.subjectId,
-            'slides.optimize_content',
+            'slides.design',
             {
                 title: slide.title,
                 content: slide.content || '',
-                lesson_title: slide.lesson.title,
             },
         );
 
@@ -644,16 +643,20 @@ export class SlidesService {
         const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
         const result = aiResult.content;
 
-        // Parse JSON result
+        // Parse JSON result (same cleaning logic as PptxService)
         let optimizedContent;
         try {
-            // Try to extract JSON from response
-            const jsonMatch = result.match(/\[[\s\S]*\]/);
-            if (jsonMatch) {
-                optimizedContent = JSON.parse(jsonMatch[0]);
-            } else {
-                throw new Error('No JSON array found in response');
+            let cleaned = result.trim();
+            const jsonStartTag = cleaned.indexOf('```json');
+            if (jsonStartTag !== -1) {
+                const contentStart = jsonStartTag + '```json'.length;
+                const lastBackticks = cleaned.lastIndexOf('```');
+                if (lastBackticks > contentStart) {
+                    cleaned = cleaned.substring(contentStart, lastBackticks).trim();
+                }
             }
+            const parsed = JSON.parse(cleaned);
+            optimizedContent = parsed.bullets || parsed;
         } catch {
             this.logger.warn('Failed to parse optimized content JSON, using raw bullets');
             optimizedContent = slide.content?.split('\n').filter(b => b.trim()).map(b => ({

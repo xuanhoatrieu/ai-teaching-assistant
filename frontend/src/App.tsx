@@ -14,7 +14,6 @@ import { TemplatesPage } from './pages/admin/Templates';
 import { TTSProvidersPage } from './pages/admin/TTSProviders';
 import { UsersPage } from './pages/admin/Users';
 import { SettingsPage } from './pages/admin/Settings';
-import { TTSDictionaryPage } from './pages/admin/TTSDictionary';
 import { ApiKeysPage } from './pages/admin/ApiKeys';
 
 // User (Lesson flow)
@@ -26,6 +25,7 @@ import { LessonEditorPageV2 } from './pages/LessonEditorV2';
 import { LessonProgressPage } from './pages/LessonProgress';
 import { LessonPreviewPage } from './pages/LessonPreview';
 import { UserSettingsPage } from './pages/UserSettings';
+import { PptxAudioToolPage } from './pages/PptxAudioTool';
 
 import './index.css';
 
@@ -54,6 +54,8 @@ function App() {
             <Route path="lessons/:id/progress" element={<LessonProgressPage />} />
             <Route path="lessons/:id/preview" element={<LessonPreviewPage />} />
             <Route path="settings" element={<UserSettingsPage />} />
+            <Route path="pptx-audio-tool" element={<PptxAudioToolPage />} />
+            <Route path="pptx-audio-tool/:sessionId" element={<PptxAudioToolPage />} />
           </Route>
 
           {/* Admin Routes */}
@@ -72,7 +74,6 @@ function App() {
             <Route path="api-keys" element={<ApiKeysPage />} />
             <Route path="users" element={<UsersPage />} />
             <Route path="settings" element={<SettingsPage />} />
-            <Route path="tts-dictionary" element={<TTSDictionaryPage />} />
           </Route>
 
           {/* Fallback */}

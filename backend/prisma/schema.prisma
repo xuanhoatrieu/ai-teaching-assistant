@@ -68,12 +68,12 @@ model User {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   // Relations
-  subjects         Subject[]
-  ttsConfigs       UserTTSConfig[]
-  apiKeys          ApiKey[]
-  templates        PPTXTemplate[]
-  modelConfigs     ModelConfig[]
-  ttsDictionaries  TTSDictionary[]
+  subjects           Subject[]
+  ttsConfigs         UserTTSConfig[]
+  apiKeys            ApiKey[]
+  templates          PPTXTemplate[]
+  modelConfigs       ModelConfig[]
+  pptxAudioSessions  PptxAudioSession[]
 
   @@map("users")
 }
@@ -91,6 +91,9 @@ model Subject {
   targetAudience    String?  @map("target_audience")    // Đối tượng học viên
   majorName         String?  @map("major_name")         // Ngành học
   additionalContext String?  @map("additional_context") @db.Text // Yêu cầu bổ sung
+
+  // Language setting for AI output
+  language          String   @default("vi")  // "vi" | "en" | "vi-en" (bilingual: slides EN, speaker notes VI)
 
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -402,26 +405,6 @@ model ReviewQuestion {
   @@map("review_questions")
 }
 
-// ==================== TTS DICTIONARY ====================
-
-// Dictionary entries for VietNormalizer TTS text normalization
-model TTSDictionary {
-  id          String   @id @default(uuid())
-  type        String   // 'acronym' | 'word'
-  original    String   // Source text, e.g. "CPU", "server"
-  replacement String   // TTS pronunciation, e.g. "xê pê u", "xơ-vơ"
-  scope       String   @default("system") // 'system' (admin) | 'user' (personal)
-  userId      String?  @map("user_id")    // null = system (admin-managed)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([type, original, scope, userId])
-  @@map("tts_dictionaries")
-}
-
 // ==================== SYSTEM CONFIG ====================
 
 model SystemConfig {
@@ -432,4 +415,26 @@ model SystemConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
   
   @@map("system_configs")
+}
+
+// ==================== PPTX AUDIO TOOL ====================
+
+// Standalone session for PPTX Audio Tool (no Lesson/Subject dependency)
+model PptxAudioSession {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  fileName      String   @map("file_name")           // Original PPTX filename
+  filePath      String   @map("file_path")            // Server path to uploaded PPTX
+  slidesJson    String?  @map("slides_json") @db.Text // [{index, title, noteFull, noteEN, noteVN, hasDual, audioUrl, audioDuration, audioStatus}]
+  contentJson   String?  @map("content_json") @db.Text // [{index, title, content[]}]
+  questionsJson String?  @map("questions_json") @db.Text // Generated questions JSON
+  language      String   @default("vi")                // "vi" or "en" — active language for TTS
+  status        String   @default("uploaded")          // uploaded | notes_extracted | audio_done | completed
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("pptx_audio_sessions")
 }

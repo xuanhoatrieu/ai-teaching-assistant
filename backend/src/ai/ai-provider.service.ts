@@ -42,6 +42,7 @@ export class AiProviderService {
         prompt: string,
         modelName: string,
         userApiKey?: string,
+        options?: { maxTokens?: number },
     ): Promise<AIProviderResult> {
         // Normalize model name (strip provider prefix)
         const normalizedModel = this.normalizeModelName(modelName);
@@ -50,7 +51,28 @@ export class AiProviderService {
         if (await this.cliproxy.isEnabled()) {
             try {
                 this.logger.log(`Attempting CLIProxy with model: ${normalizedModel}`);
-                const content = await this.cliproxy.generateText(prompt, normalizedModel);
+                const content = await this.cliproxy.generateText(prompt, normalizedModel, { maxTokens: options?.maxTokens });
+                if (!content || content.trim().length === 0) {
+                    this.logger.warn(`CLIProxy returned empty content with model ${normalizedModel}, trying fallback models...`);
+                    // Try fallback models from the same category
+                    const fallbacks = await this.cliproxy.getModelFallbacks('text', normalizedModel);
+                    for (const fbModel of fallbacks.slice(0, 3)) {
+                        try {
+                            this.logger.log(`Retrying CLIProxy with fallback model: ${fbModel}`);
+                            const fbContent = await this.cliproxy.generateText(prompt, fbModel, { maxTokens: options?.maxTokens });
+                            if (fbContent && fbContent.trim().length > 0) {
+                                return {
+                                    content: fbContent,
+                                    provider: 'cliproxy',
+                                    model: fbModel,
+                                };
+                            }
+                        } catch (fbError) {
+                            this.logger.warn(`Fallback model ${fbModel} also failed: ${fbError}`);
+                        }
+                    }
+                    throw new Error(`CLIProxy returned empty content for model ${normalizedModel} and all fallbacks`);
+                }
                 return {
                     content,
                     provider: 'cliproxy',

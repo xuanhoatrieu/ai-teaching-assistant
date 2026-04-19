@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenAI, Part, Content, GenerateContentConfig } from '@google/genai';
 import { CLIProxyProvider } from './cliproxy.provider';
+import { SystemConfigService } from '../settings/system-config.service';
 
 export interface GeneratedImage {
     base64: string;
@@ -21,6 +22,7 @@ export class ImagenService {
 
     constructor(
         private readonly cliproxy?: CLIProxyProvider,
+        private readonly systemConfigService?: SystemConfigService,
     ) {
         // Check at startup but will re-check on each call
         const apiKey = this.getApiKey();
@@ -95,6 +97,21 @@ export class ImagenService {
 
         // Priority 1: If model has cliproxy: prefix or no valid API key, try CLIProxy
         const isCliproxyModel = effectiveModel.startsWith('cliproxy:');
+        const isImageGenModel = effectiveModel.toLowerCase().includes('flux') || effectiveModel.startsWith('imagegen:');
+
+        // Priority 0: If model is IMAGE_GEN provider (Flux/ComfyUI), route immediately
+        if (isImageGenModel) {
+            this.logger.log(`Routing to OpenAI Images API for model=${effectiveModel}`);
+            try {
+                const result = await this.generateImageWithOpenAIImages(prompt, aspectRatio, effectiveModel);
+                if (result.mimeType !== 'image/svg+xml') {
+                    return result;
+                }
+                this.logger.warn('ImageGen returned placeholder, trying fallback...');
+            } catch (error) {
+                this.logger.warn(`ImageGen failed: ${error}, trying fallback providers...`);
+            }
+        }
 
         if (isCliproxyModel || (!hasValidApiKey && this.cliproxy)) {
             this.logger.log(`Trying CLIProxy for image generation (model=${effectiveModel})`);
@@ -122,10 +139,11 @@ export class ImagenService {
 
         try {
             // For Gemini SDK fallback, always use the correct image generation model
-            // CLIProxy model names (e.g. gemini-3.1-flash-image) don't work with Gemini SDK
-            const sdkModel = isCliproxyModel ? this.GEMINI_IMAGE_MODEL : (
+            // CLIProxy model names (e.g. gemini-3.1-flash-image) and ImageGen model names (e.g. flux-image)
+            // don't work with Gemini SDK - must use a real Gemini model
+            const sdkModel = (isCliproxyModel || isImageGenModel) ? this.GEMINI_IMAGE_MODEL : (
                 effectiveModel.includes(':')
-                    ? effectiveModel.split(':').pop() || this.GEMINI_IMAGE_MODEL
+                    ? this.GEMINI_IMAGE_MODEL  // Any prefixed model → use default
                     : effectiveModel
             );
 
@@ -321,6 +339,141 @@ Generate the image now.`;
      */
     isEnabled(): boolean {
         return !!this.getApiKey();
+    }
+
+    // ========================
+    // OpenAI Images API (Flux/ComfyUI)
+    // ========================
+
+    /**
+     * Convert aspect ratio to pixel size for OpenAI Images API
+     */
+    private aspectRatioToSize(aspectRatio: string): string {
+        const sizeMap: Record<string, string> = {
+            '1:1': '1024x1024',
+            '16:9': '1024x768',
+            '9:16': '768x1024',
+            '4:3': '1024x768',
+            '3:4': '768x1024',
+        };
+        return sizeMap[aspectRatio] || '1024x768';
+    }
+
+    /**
+     * Generate image using OpenAI Images API compatible endpoint (Flux/ComfyUI)
+     * POST {model, prompt, size, steps} → response.data[0].url → download → base64
+     */
+    async generateImageWithOpenAIImages(
+        prompt: string,
+        aspectRatio: string = '1:1',
+        modelName?: string,
+    ): Promise<GeneratedImage> {
+        if (!this.systemConfigService) {
+            this.logger.warn('SystemConfigService not available for ImageGen');
+            return this.generatePlaceholder(prompt);
+        }
+
+        const config = await this.systemConfigService.getImageGenConfig();
+
+        if (!config.enabled || !config.url || !config.apiKey) {
+            this.logger.warn('ImageGen provider not configured or disabled');
+            return this.generatePlaceholder(prompt);
+        }
+
+        // Strip imagegen: prefix if present
+        let model = modelName || config.defaultModel;
+        if (model.startsWith('imagegen:')) {
+            model = model.substring('imagegen:'.length);
+        }
+
+        const size = this.aspectRatioToSize(aspectRatio);
+
+        this.logger.log(`ImageGen API: model=${model}, size=${size}, steps=${config.steps}`);
+
+        try {
+            const response = await fetch(config.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.apiKey}`,
+                },
+                body: JSON.stringify({
+                    model,
+                    prompt,
+                    size,
+                    steps: config.steps,
+                }),
+                signal: AbortSignal.timeout(180000), // 180s timeout (Flux can be slow)
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`ImageGen API HTTP ${response.status}: ${errorText.substring(0, 300)}`);
+            }
+
+            const data = await response.json();
+
+            // Format 1: { data: [{ url: "http://..." }] }
+            if (data?.data?.[0]?.url) {
+                let imageUrl = data.data[0].url;
+                this.logger.log(`ImageGen returned URL: ${imageUrl.substring(0, 80)}...`);
+
+                // FIX: ImageGen API often returns URLs with localhost even when hosted remotely.
+                // Rewrite the URL origin to match the configured API URL so downloads succeed.
+                try {
+                    const imageUrlParsed = new URL(imageUrl);
+                    const configUrlParsed = new URL(config.url);
+                    if (imageUrlParsed.hostname === 'localhost' || imageUrlParsed.hostname === '127.0.0.1') {
+                        // Replace origin but keep the path
+                        imageUrlParsed.protocol = configUrlParsed.protocol;
+                        imageUrlParsed.hostname = configUrlParsed.hostname;
+                        imageUrlParsed.port = configUrlParsed.port;
+                        const rewrittenUrl = imageUrlParsed.toString();
+                        this.logger.log(`Rewrote ImageGen URL: ${imageUrl.substring(0, 60)} → ${rewrittenUrl.substring(0, 60)}`);
+                        imageUrl = rewrittenUrl;
+                    }
+                } catch (urlError) {
+                    this.logger.warn(`Failed to parse ImageGen URL for rewriting: ${urlError}`);
+                }
+
+                // Download the image and convert to base64
+                const imageResponse = await fetch(imageUrl, {
+                    signal: AbortSignal.timeout(30000),
+                });
+
+                if (!imageResponse.ok) {
+                    throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imageResponse.status}`);
+                }
+
+                const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+                const contentType = imageResponse.headers.get('content-type') || 'image/png';
+                const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png';
+
+                this.logger.log(`✅ ImageGen: Downloaded ${imageBuffer.length} bytes (${contentType})`);
+                return {
+                    base64: imageBuffer.toString('base64'),
+                    mimeType: contentType,
+                    filename: `imagegen_${Date.now()}.${ext}`,
+                };
+            }
+
+            // Format 2: { data: [{ b64_json: "..." }] }
+            if (data?.data?.[0]?.b64_json) {
+                this.logger.log('✅ ImageGen: Received base64 directly');
+                return {
+                    base64: data.data[0].b64_json,
+                    mimeType: 'image/png',
+                    filename: `imagegen_${Date.now()}.png`,
+                };
+            }
+
+            this.logger.warn('ImageGen: No image data in response');
+            return this.generatePlaceholder(prompt);
+
+        } catch (error) {
+            this.logger.error(`❌ ImageGen API failed: ${error}`);
+            throw error; // Let caller handle fallback
+        }
     }
 
     /**

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PromptsService } from './prompts.service';
+import { getOutputLanguageInstruction, getLanguageLabel } from '../ai/language-instruction';
 
 /**
  * PromptComposerService
@@ -48,11 +49,20 @@ export class PromptComposerService {
         // 2. Build Role Prompt from Subject fields
         const rolePrompt = await this.buildRolePrompt(subject);
 
-        // 3. Render Task Prompt with variables
-        const taskPrompt = await this.promptsService.renderPrompt(taskSlug, variables);
+        // 3. Get language instruction based on Subject's language setting
+        const subjectLanguage = subject.language || 'vi';
+        const languageInstruction = getOutputLanguageInstruction(subjectLanguage);
+        this.logger.debug(`Language: ${getLanguageLabel(subjectLanguage)}`);
 
-        // 4. Combine: Role + Separator + Task
-        const fullPrompt = `${rolePrompt}\n\n---\n\n${taskPrompt}`;
+        // 4. Render Task Prompt with variables (include language in variables)
+        const enrichedVariables = {
+            ...variables,
+            output_language_instruction: languageInstruction,
+        };
+        const taskPrompt = await this.promptsService.renderPrompt(taskSlug, enrichedVariables);
+
+        // 5. Combine: Role + Language + Separator + Task
+        const fullPrompt = `${rolePrompt}\n\n${languageInstruction}\n\n---\n\n${taskPrompt}`;
 
         this.logger.debug(`Full prompt length: ${fullPrompt.length} chars`);
         return fullPrompt;
@@ -89,14 +99,14 @@ export class PromptComposerService {
     }
 
     /**
-     * Fallback role prompt if system.role not in database
+     * Fallback role prompt if system.role not in database (English)
      */
     private buildFallbackRolePrompt(vars: Record<string, string>): string {
-        return `**ROLE:** Bạn là một Giảng viên ${vars.institution_type} giàu kinh nghiệm, chuyên gia trong lĩnh vực ${vars.expertise_area}.
+        return `**ROLE:** You are an experienced ${vars.institution_type} lecturer and expert in ${vars.expertise_area}.
 
-Nhiệm vụ của bạn là soạn thảo giáo án và bài giảng chi tiết, hấp dẫn và dễ hiểu cho môn học ${vars.course_name}.
+Your task is to create detailed, engaging, and easy-to-understand lesson plans and lecture materials for the course ${vars.course_name}.
 
-Đối tượng là ${vars.target_audience}${vars.major_name ? ` ngành ${vars.major_name}` : ''}.
+Target audience: ${vars.target_audience}${vars.major_name ? ` majoring in ${vars.major_name}` : ''}.
 
 ${vars.additional_context}`.trim();
     }

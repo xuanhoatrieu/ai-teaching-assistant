@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
-import { TTSDictionaryManager } from '../../components/admin/TTSDictionaryManager';
 import './AdminPage.css';
 
 interface SettingsData {
@@ -17,6 +16,14 @@ interface CLIProxyConfig {
     defaultTextModel: string;
     defaultImageModel: string;
     defaultTTSModel: string;
+}
+
+interface ImageGenConfig {
+    enabled: boolean;
+    url: string;
+    apiKey: string;
+    defaultModel: string;
+    steps: number;
 }
 
 export function SettingsPage() {
@@ -44,9 +51,21 @@ export function SettingsPage() {
         tts: { id: string; source: string }[];
     }>({ text: [], image: [], tts: [] });
 
+    // ImageGen state
+    const [imageGenConfig, setImageGenConfig] = useState<ImageGenConfig | null>(null);
+    const [imageGenEnabled, setImageGenEnabled] = useState(false);
+    const [imageGenUrl, setImageGenUrl] = useState('');
+    const [imageGenApiKey, setImageGenApiKey] = useState('');
+    const [imageGenModel, setImageGenModel] = useState('flux-image');
+    const [imageGenSteps, setImageGenSteps] = useState(20);
+    const [imageGenTestResult, setImageGenTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isTestingImageGen, setIsTestingImageGen] = useState(false);
+    const [isSavingImageGen, setIsSavingImageGen] = useState(false);
+
     useEffect(() => {
         fetchSettings();
         fetchCLIProxyConfig();
+        fetchImageGenConfig();
     }, []);
 
     const fetchSettings = async () => {
@@ -164,6 +183,71 @@ export function SettingsPage() {
             });
         } finally {
             setIsTestingCliproxy(false);
+        }
+    };
+
+    // ========================
+    // ImageGen handlers
+    // ========================
+
+    const fetchImageGenConfig = async () => {
+        try {
+            const response = await api.get('/admin/config/image-gen');
+            const config = response.data;
+            setImageGenConfig(config);
+            setImageGenEnabled(config.enabled);
+            setImageGenUrl(config.url || '');
+            setImageGenModel(config.defaultModel || 'flux-image');
+            setImageGenSteps(config.steps || 20);
+        } catch (err) {
+            console.error('Failed to fetch ImageGen config:', err);
+        }
+    };
+
+    const handleSaveImageGen = async () => {
+        setIsSavingImageGen(true);
+        try {
+            await api.put('/admin/config/image-gen', {
+                enabled: imageGenEnabled,
+                url: imageGenUrl || undefined,
+                apiKey: imageGenApiKey || undefined,
+                defaultModel: imageGenModel || undefined,
+                steps: imageGenSteps,
+            });
+            setMessage('Image Gen configuration saved');
+            setImageGenApiKey('');
+            await fetchImageGenConfig();
+        } catch (err: any) {
+            setMessage(err.response?.data?.message || 'Failed to save Image Gen config');
+        } finally {
+            setIsSavingImageGen(false);
+        }
+    };
+
+    const handleTestImageGen = async () => {
+        setIsTestingImageGen(true);
+        setImageGenTestResult(null);
+        try {
+            // Auto-save first
+            await api.put('/admin/config/image-gen', {
+                enabled: imageGenEnabled,
+                url: imageGenUrl || undefined,
+                apiKey: imageGenApiKey || undefined,
+                defaultModel: imageGenModel || undefined,
+                steps: imageGenSteps,
+            });
+            setImageGenApiKey('');
+
+            const response = await api.get('/admin/config/image-gen/test');
+            setImageGenTestResult(response.data);
+            await fetchImageGenConfig();
+        } catch (err: any) {
+            setImageGenTestResult({
+                success: false,
+                message: err.response?.data?.message || 'Connection test failed',
+            });
+        } finally {
+            setIsTestingImageGen(false);
         }
     };
 
@@ -311,6 +395,108 @@ export function SettingsPage() {
                 )}
             </div>
 
+            {/* Image Gen (Flux/ComfyUI) Section */}
+            <div className="settings-section cliproxy-section">
+                <h2>🎨 Image Generation (Flux/ComfyUI)</h2>
+                <p className="section-desc">
+                    Configure a local or remote image generation provider using OpenAI Images API compatible endpoints.
+                </p>
+
+                <div className="setting-group">
+                    <label className="toggle-label">
+                        <input
+                            type="checkbox"
+                            checked={imageGenEnabled}
+                            onChange={(e) => setImageGenEnabled(e.target.checked)}
+                        />
+                        <span>Enable Image Gen</span>
+                        {imageGenEnabled && <span className="status-badge enabled">Active</span>}
+                        {!imageGenEnabled && <span className="status-badge disabled">Disabled</span>}
+                    </label>
+                    <p className="help-text">
+                        When enabled, image generation will use this provider (Flux, ComfyUI)
+                    </p>
+                </div>
+
+                {imageGenEnabled && (
+                    <>
+                        <div className="setting-group">
+                            <label htmlFor="imagegen-url">API URL</label>
+                            <input
+                                id="imagegen-url"
+                                type="text"
+                                value={imageGenUrl}
+                                onChange={(e) => setImageGenUrl(e.target.value)}
+                                placeholder="http://117.0.36.6:8000/v1/images/generations"
+                            />
+                            <p className="help-text">Current: {imageGenConfig?.url || 'Not set'}</p>
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="imagegen-apikey">API Key</label>
+                            <input
+                                id="imagegen-apikey"
+                                type="password"
+                                value={imageGenApiKey}
+                                onChange={(e) => setImageGenApiKey(e.target.value)}
+                                placeholder="Enter new API key to update"
+                            />
+                            <p className="help-text">
+                                Current: {imageGenConfig?.apiKey || 'Not set'}
+                            </p>
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="imagegen-model">🧠 Model Name</label>
+                            <input
+                                id="imagegen-model"
+                                type="text"
+                                value={imageGenModel}
+                                onChange={(e) => setImageGenModel(e.target.value)}
+                                placeholder="flux-image"
+                            />
+                            <p className="help-text">Tên model gửi trong request (ví dụ: flux-image, flux-dev, flux-schnell)</p>
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="imagegen-steps">⚡ Steps</label>
+                            <input
+                                id="imagegen-steps"
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={imageGenSteps}
+                                onChange={(e) => setImageGenSteps(Number(e.target.value))}
+                            />
+                            <p className="help-text">Số bước diffusion (20 là mặc định, nhiều hơn = chất lượng cao hơn nhưng chậm hơn)</p>
+                        </div>
+
+                        <div className="button-group">
+                            <button
+                                className="secondary-btn"
+                                onClick={handleTestImageGen}
+                                disabled={isTestingImageGen}
+                            >
+                                {isTestingImageGen ? '⏳ Testing...' : '🔍 Test Connection'}
+                            </button>
+                            <button
+                                className="primary-btn"
+                                onClick={handleSaveImageGen}
+                                disabled={isSavingImageGen}
+                            >
+                                {isSavingImageGen ? 'Saving...' : 'Save Image Gen Settings'}
+                            </button>
+                        </div>
+
+                        {imageGenTestResult && (
+                            <div className={`test-result ${imageGenTestResult.success ? 'success' : 'error'}`}>
+                                {imageGenTestResult.success ? '✅' : '❌'} {imageGenTestResult.message}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
             {/* API Keys Section */}
             <div className="settings-section">
                 <h2>🔑 API Keys</h2>
@@ -363,9 +549,6 @@ export function SettingsPage() {
                     {isSaving ? 'Saving...' : 'Save Settings'}
                 </button>
             </div>
-
-            {/* TTS Dictionary Section */}
-            <TTSDictionaryManager />
         </div>
     );
 }

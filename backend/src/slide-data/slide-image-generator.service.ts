@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImagenService, GeneratedImage } from '../ai/imagen.service';
+import { GeminiService } from '../ai/gemini.service';
 import { FileStorageService } from '../file-storage/file-storage.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
@@ -22,6 +23,7 @@ export class SlideImageGeneratorService {
     constructor(
         private prisma: PrismaService,
         private imagenService: ImagenService,
+        private geminiService: GeminiService,
         private fileStorageService: FileStorageService,
         private modelConfigService: ModelConfigService,
         private apiKeysService: ApiKeysService,
@@ -56,7 +58,7 @@ export class SlideImageGeneratorService {
         }
 
         // Build image prompt from visualSource and title
-        const imagePrompt = visualSource
+        let imagePrompt = visualSource
             ? this.buildImagePrompt(visualSource, slide.title)
             : `Educational slide illustration for "${slide.title}". Style: Clean, professional, suitable for academic presentation.`;
 
@@ -64,12 +66,44 @@ export class SlideImageGeneratorService {
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'IMAGE');
         const apiKey = await this.apiKeysService.getActiveKey(userId, APIService.GEMINI);
 
+        // Check if this is an ImageGen (Flux/ComfyUI) model
+        const isImageGenProvider = modelConfig.provider === 'IMAGE_GEN'
+            || modelConfig.modelName.toLowerCase().includes('flux')
+            || modelConfig.modelName.startsWith('imagegen:');
+
+        // Prompt Enhancement: translate VI→EN for Flux when subject language is Vietnamese
+        if (isImageGenProvider && visualSource) {
+            try {
+                // Get subject language from lesson→subject relation
+                const lesson = await this.prisma.lesson.findUnique({
+                    where: { id: lessonId },
+                    include: { subject: { select: { language: true } } },
+                });
+                const subjectLanguage = lesson?.subject?.language || 'vi';
+
+                if (subjectLanguage === 'vi' || subjectLanguage === 'vi-en') {
+                    // VisualIdea is in Vietnamese → translate + restructure for Flux
+                    this.logger.log(`Enhancing prompt for Flux (subject language=${subjectLanguage})`);
+                    imagePrompt = await this.geminiService.optimizeFluxPrompt(visualSource, slide.title);
+                } else {
+                    // VisualIdea is already in English → use directly (no LLM call)
+                    this.logger.log(`Using English visualIdea directly for Flux`);
+                    imagePrompt = visualSource;
+                }
+            } catch (error) {
+                this.logger.warn(`Flux prompt enhancement failed, using standard prompt: ${error}`);
+            }
+        }
+
         // Prefix model name with 'cliproxy:' when provider is CLIPROXY
         // but only if the model name doesn't already have the prefix
         // (User's custom ModelConfig may already store 'cliproxy:model-name')
-        const effectiveModelName = (modelConfig.provider === 'CLIPROXY' && !modelConfig.modelName.startsWith('cliproxy:'))
-            ? `cliproxy:${modelConfig.modelName}`
-            : modelConfig.modelName;
+        let effectiveModelName = modelConfig.modelName;
+        if (modelConfig.provider === 'CLIPROXY' && !modelConfig.modelName.startsWith('cliproxy:')) {
+            effectiveModelName = `cliproxy:${modelConfig.modelName}`;
+        } else if (isImageGenProvider && !modelConfig.modelName.startsWith('imagegen:') && !modelConfig.modelName.toLowerCase().includes('flux')) {
+            effectiveModelName = `imagegen:${modelConfig.modelName}`;
+        }
 
         this.logger.log(`Slide ${slideIndex}: provider=${modelConfig.provider}, model=${effectiveModelName}, apiKey=${apiKey ? 'present' : 'from-env'}`);
 

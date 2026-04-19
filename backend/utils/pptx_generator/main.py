@@ -249,6 +249,203 @@ async def generate_pptx_buffer(request: GeneratePPTXRequest):
         raise HTTPException(status_code=500, detail=f"Failed to generate PPTX: {str(e)}")
 
 
+# ========================
+# PPTX Audio Tool Endpoints
+# ========================
+
+import re
+import base64
+from pptx import Presentation as PptxPresentation
+
+
+# Vietnamese character detection for bilingual note splitting
+VN_CHARS = set("àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ"
+               "ÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸĐ")
+
+
+def _detect_vietnamese(text: str) -> bool:
+    """Check if text contains Vietnamese-specific characters."""
+    return any(c in VN_CHARS for c in text)
+
+
+def _split_bilingual_notes(note_text: str) -> dict:
+    """
+    Split bilingual speaker notes.
+    Separator: blank line (\\n\\n)
+    Detection: Vietnamese chars → VN part, ASCII-only → EN part
+    """
+    if not note_text or not note_text.strip():
+        return {"full": "", "en": "", "vi": "", "has_dual": False}
+
+    # Split by double newline
+    parts = [p.strip() for p in note_text.strip().split('\n\n') if p.strip()]
+
+    if len(parts) < 2:
+        # Single block — assign to both
+        return {
+            "full": note_text.strip(),
+            "en": note_text.strip(),
+            "vi": note_text.strip(),
+            "has_dual": False,
+        }
+
+    # Try to detect which is Vietnamese and which is English
+    part1_is_vn = _detect_vietnamese(parts[0])
+    part2_is_vn = _detect_vietnamese(parts[1])
+
+    if part1_is_vn and not part2_is_vn:
+        return {
+            "full": note_text.strip(),
+            "vi": parts[0],
+            "en": parts[1],
+            "has_dual": True,
+        }
+    elif part2_is_vn and not part1_is_vn:
+        return {
+            "full": note_text.strip(),
+            "en": parts[0],
+            "vi": parts[1],
+            "has_dual": True,
+        }
+    else:
+        # Both same language or can't determine
+        return {
+            "full": note_text.strip(),
+            "en": note_text.strip(),
+            "vi": note_text.strip(),
+            "has_dual": False,
+        }
+
+
+@app.post("/parse-pptx")
+async def parse_pptx(file: UploadFile = File(...)):
+    """
+    Parse uploaded PPTX → extract slides with speaker notes + content.
+    Supports bilingual notes (EN/VN separated by blank line).
+    """
+    try:
+        # Save uploaded file to temp
+        tmp_path = tempfile.mktemp(suffix='.pptx')
+        content = await file.read()
+        with open(tmp_path, 'wb') as f:
+            f.write(content)
+
+        prs = PptxPresentation(tmp_path)
+        slides_data = []
+
+        for i, slide in enumerate(prs.slides):
+            # Extract title (first text shape or placeholder title)
+            title = ""
+            if slide.shapes.title and slide.shapes.title.has_text_frame:
+                title = slide.shapes.title.text_frame.text.strip()
+
+            if not title:
+                # Fallback: find first text shape
+                for shape in slide.shapes:
+                    if shape.has_text_frame and shape.text_frame.text.strip():
+                        title = shape.text_frame.text.strip()
+                        break
+
+            # Extract content (all non-title text shapes)
+            slide_content = []
+            for shape in slide.shapes:
+                if not shape.has_text_frame:
+                    continue
+                # Skip if this is the title shape
+                if shape == slide.shapes.title:
+                    continue
+                for para in shape.text_frame.paragraphs:
+                    text = para.text.strip()
+                    if text and text != title:
+                        slide_content.append(text)
+
+            # Extract speaker notes
+            note_full = ""
+            if slide.has_notes_slide:
+                notes_frame = slide.notes_slide.notes_text_frame
+                if notes_frame:
+                    note_full = notes_frame.text.strip()
+
+            # Split bilingual notes
+            note_data = _split_bilingual_notes(note_full)
+
+            slides_data.append({
+                "index": i,
+                "title": title or f"Slide {i + 1}",
+                "content": slide_content,
+                "noteFull": note_data["full"],
+                "noteEN": note_data["en"],
+                "noteVN": note_data["vi"],
+                "hasDual": note_data["has_dual"],
+            })
+
+        # Cleanup temp file
+        os.unlink(tmp_path)
+
+        logger.info(f"Parsed PPTX: {len(slides_data)} slides from {file.filename}")
+        return {"slides": slides_data, "totalSlides": len(slides_data)}
+
+    except Exception as e:
+        logger.error(f"Failed to parse PPTX: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse PPTX: {str(e)}")
+
+
+class InjectAudioRequest(BaseModel):
+    pptxPath: str
+    audioFiles: List[Dict]  # [{slideIndex: 0, audioPath: "/path/to/audio.wav"}]
+
+
+@app.post("/inject-audio")
+async def inject_audio(request: InjectAudioRequest):
+    """
+    Open original PPTX, inject audio into each slide with auto-play.
+    Uses same _add_audio_with_autoplay() method from pptx_service.
+    """
+    try:
+        if not os.path.exists(request.pptxPath):
+            raise HTTPException(status_code=404, detail=f"PPTX file not found: {request.pptxPath}")
+
+        prs = PptxPresentation(request.pptxPath)
+
+        injected_count = 0
+        for audio_info in request.audioFiles:
+            slide_idx = audio_info.get("slideIndex", -1)
+            audio_path = audio_info.get("audioPath", "")
+
+            if slide_idx < 0 or slide_idx >= len(prs.slides):
+                logger.warning(f"Invalid slide index: {slide_idx}")
+                continue
+
+            if not audio_path or not os.path.exists(audio_path):
+                logger.warning(f"Audio not found: {audio_path}")
+                continue
+
+            slide = prs.slides[slide_idx]
+            pptx_service._add_audio_with_autoplay(slide, audio_path)
+            injected_count += 1
+            logger.info(f"Injected audio into slide {slide_idx}: {audio_path}")
+
+        # Save to temp file
+        output_path = tempfile.mktemp(suffix='.pptx')
+        prs.save(output_path)
+
+        # Read and encode as base64
+        with open(output_path, 'rb') as f:
+            buffer = base64.b64encode(f.read()).decode('utf-8')
+
+        # Cleanup
+        os.unlink(output_path)
+
+        logger.info(f"Injected audio into {injected_count} slides")
+        return {"buffer": buffer, "injectedCount": injected_count}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to inject audio: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to inject audio: {str(e)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=3002)

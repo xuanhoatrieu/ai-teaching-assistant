@@ -7,7 +7,6 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { TTSService } from '../tts/tts.service';
 import { ModelConfigService } from '../model-config/model-config.service';
-import { TextNormalizerService } from '../text-normalizer/text-normalizer.service';
 import * as fs from 'fs';
 import * as path from 'path';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -29,7 +28,6 @@ export class SlideAudioService {
         private readonly prisma: PrismaService,
         private readonly ttsService: TTSService,
         private readonly modelConfigService: ModelConfigService,
-        private readonly textNormalizerService: TextNormalizerService,
     ) {
         // Ensure uploads directory exists
         this.ensureUploadsDir();
@@ -348,7 +346,7 @@ export class SlideAudioService {
     }
 
     // Generate audio for a single slide
-    async generateSingleAudio(lessonId: string, slideIndex: number, userId: string, multilingualMode?: string) {
+    async generateSingleAudio(lessonId: string, slideIndex: number, userId: string, multilingualMode?: string, vittsMode?: string, vittsDesignInstruct?: string, vittsNormalize?: boolean) {
         const slideAudio = await this.prisma.slideAudio.findUnique({
             where: {
                 lessonId_slideIndex: { lessonId, slideIndex },
@@ -406,10 +404,19 @@ export class SlideAudioService {
                 voiceName = modelConfig.modelName.split(':')[1];
                 modelName = 'vbee-tts';
             } else if (modelConfig.modelName?.startsWith('vitts:')) {
-                // ViTTS voice format: "vitts:ref:3" or "vitts:trained_xxx" or "vitts:male"
+                // ViTTS voice format: "vitts:clone:UUID" or "vitts:design" or "vitts:auto"
                 provider = 'VITTS';
                 voiceName = modelConfig.modelName; // Keep full format, provider will strip prefix
                 modelName = 'vitts';
+                // Auto-detect mode from modelName if not explicitly set
+                if (!vittsMode) {
+                    if (modelConfig.modelName.startsWith('vitts:ref:')) vittsMode = 'clone';
+                    else if (modelConfig.modelName === 'vitts:design') vittsMode = 'design';
+                    else vittsMode = 'auto'; // default to auto (safe, no ref_id needed)
+                    this.logger.log(`ViTTS auto-detected mode: ${vittsMode} from modelName: ${modelConfig.modelName}`);
+                } else {
+                    this.logger.log(`ViTTS mode from request: ${vittsMode}, modelName: ${modelConfig.modelName}`);
+                }
             } else if (modelConfig.modelName) {
                 // Fallback: treat as voice name directly
                 voiceName = modelConfig.modelName;
@@ -426,6 +433,9 @@ export class SlideAudioService {
                 model: modelName,
                 provider: provider,
                 multilingualMode: multilingualMode,
+                vittsMode: vittsMode as any,
+                vittsDesignInstruct: vittsDesignInstruct,
+                vittsNormalize: vittsNormalize,
             });
 
             // Save audio file - Gemini TTS returns WAV format

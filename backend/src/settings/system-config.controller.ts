@@ -32,6 +32,27 @@ export class UpdateCLIProxyConfigDto {
     defaultTTSModel?: string;
 }
 
+export class UpdateImageGenConfigDto {
+    @IsOptional()
+    @IsBoolean()
+    enabled?: boolean;
+
+    @IsOptional()
+    @IsString()
+    url?: string;
+
+    @IsOptional()
+    @IsString()
+    apiKey?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultModel?: string;
+
+    @IsOptional()
+    steps?: number;
+}
+
 @Controller('admin/config')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
@@ -245,6 +266,7 @@ export class SystemConfigController {
     @Get('ai-provider/status')
     async getAIProviderStatus() {
         const cliproxyConfig = await this.configService.getCLIProxyConfig();
+        const imageGenConfig = await this.configService.getImageGenConfig();
 
         return {
             cliproxy: {
@@ -254,10 +276,112 @@ export class SystemConfigController {
                 defaultImageModel: cliproxyConfig.defaultImageModel,
                 defaultTTSModel: cliproxyConfig.defaultTTSModel,
             },
+            imageGen: {
+                enabled: imageGenConfig.enabled,
+                url: imageGenConfig.url,
+                defaultModel: imageGenConfig.defaultModel,
+                steps: imageGenConfig.steps,
+            },
             geminiSdk: {
                 available: !!process.env.GEMINI_API_KEY,
             },
             activeProvider: cliproxyConfig.enabled ? 'cliproxy' : 'gemini-sdk',
         };
+    }
+
+    // ========================
+    // Image Generation Provider Config
+    // ========================
+
+    /**
+     * Get Image Gen configuration
+     */
+    @Get('image-gen')
+    async getImageGenConfig() {
+        const config = await this.configService.getImageGenConfig();
+        return {
+            ...config,
+            apiKey: config.apiKey ? '***' + config.apiKey.slice(-4) : '',
+        };
+    }
+
+    /**
+     * Update Image Gen configuration
+     */
+    @Put('image-gen')
+    async updateImageGenConfig(@Body() dto: UpdateImageGenConfigDto) {
+        this.logger.log(`Updating ImageGen config: ${JSON.stringify({ ...dto, apiKey: dto.apiKey ? '***' : undefined })}`);
+
+        if (dto.enabled !== undefined) {
+            await this.configService.set('imageGen.enabled', String(dto.enabled));
+        }
+        if (dto.url) {
+            await this.configService.set('imageGen.url', dto.url);
+        }
+        if (dto.apiKey) {
+            await this.configService.set('imageGen.apiKey', dto.apiKey);
+        }
+        if (dto.defaultModel) {
+            await this.configService.set('imageGen.defaultModel', dto.defaultModel);
+        }
+        if (dto.steps !== undefined) {
+            await this.configService.set('imageGen.steps', String(dto.steps));
+        }
+
+        return { success: true, message: 'Image Gen configuration updated' };
+    }
+
+    /**
+     * Test Image Gen connection
+     */
+    @Get('image-gen/test')
+    async testImageGenConnection() {
+        const config = await this.configService.getImageGenConfig();
+
+        if (!config.enabled || !config.url || !config.apiKey) {
+            return { success: false, message: 'Image Gen provider not configured' };
+        }
+
+        try {
+            // Send a minimal test request to see if the API responds
+            const response = await fetch(config.url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.apiKey}`,
+                },
+                body: JSON.stringify({
+                    model: config.defaultModel,
+                    prompt: 'A simple test image: a white circle on a blue background. Minimal flat design.',
+                    size: '1024x768',
+                    steps: config.steps || 20,
+                }),
+                signal: AbortSignal.timeout(180000), // 180s timeout for full generation
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const hasImage = data?.data?.[0]?.url || data?.data?.[0]?.b64_json;
+                return {
+                    success: true,
+                    message: `✅ Image Gen API connected! Model: ${config.defaultModel}${hasImage ? ' — Test image generated' : ''}`,
+                    model: config.defaultModel,
+                };
+            } else {
+                const errorText = await response.text();
+                return {
+                    success: false,
+                    message: `❌ Image Gen API returned HTTP ${response.status}: ${errorText.substring(0, 200)}`,
+                };
+            }
+        } catch (error: any) {
+            const isTimeout = error.name === 'TimeoutError' || error.message?.includes('timeout');
+            return {
+                success: false,
+                message: isTimeout
+                    ? '❌ Image Gen API timed out (60s)'
+                    : `❌ Image Gen API error: ${error.message}`,
+            };
+        }
     }
 }

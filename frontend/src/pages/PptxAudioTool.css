@@ -1,0 +1,1033 @@
+/* ═══════════════════════════════════════════════════════════════
+   PPTX Audio Tool — Dark Mode Styles
+   Matches existing app theme (bg: #0f172a, text: #f1f5f9)
+   ═══════════════════════════════════════════════════════════════ */
+
+.pptx-audio-tool {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.page-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 4px 0;
+    color: #f1f5f9;
+}
+
+.page-subtitle {
+    color: #94a3b8;
+    margin: 0 0 24px 0;
+    font-size: 14px;
+}
+
+/* ═══════ STEPPER ═══════ */
+
+.stepper {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 24px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 12px;
+    padding: 4px;
+}
+
+.step-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: #94a3b8;
+    transition: all 0.2s ease;
+}
+
+.step-btn:hover:not(:disabled) {
+    background: rgba(148, 163, 184, 0.1);
+    color: #e2e8f0;
+}
+
+.step-btn.active {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    font-weight: 600;
+}
+
+.step-btn.completed {
+    color: #4ade80;
+}
+
+.step-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.step-icon {
+    font-size: 16px;
+}
+
+.step-label {
+    display: inline;
+}
+
+/* ═══════ STEP CONTENT ═══════ */
+
+.step-content {
+    min-height: 400px;
+}
+
+/* ═══════ STEP 1: UPLOAD ═══════ */
+
+.drop-zone {
+    border: 2px dashed rgba(148, 163, 184, 0.3);
+    border-radius: 16px;
+    padding: 60px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    background: rgba(30, 41, 59, 0.5);
+}
+
+.drop-zone:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.drop-zone.drag-over {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.1);
+    transform: scale(1.01);
+}
+
+.drop-zone.uploading {
+    border-color: #eab308;
+    background: rgba(234, 179, 8, 0.05);
+    cursor: wait;
+}
+
+.drop-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 12px;
+}
+
+.drop-zone h3 {
+    margin: 0 0 8px 0;
+    color: #e2e8f0;
+}
+
+.drop-zone p {
+    margin: 0;
+    color: #94a3b8;
+    font-size: 14px;
+}
+
+.file-input-hidden {
+    display: none;
+}
+
+.btn-choose-file {
+    display: inline-block;
+    margin-top: 16px;
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-choose-file:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+}
+
+.upload-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(99, 102, 241, 0.2);
+    border-top-color: #6366f1;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+}
+
+.progress-bar-upload {
+    max-width: 300px;
+    margin: 16px auto 0;
+    height: 6px;
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #22c55e);
+    border-radius: 3px;
+    transition: width 0.3s ease;
+}
+
+.upload-result {
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    border-radius: 10px;
+    text-align: center;
+    color: #e2e8f0;
+}
+
+.btn-next-step {
+    margin-top: 12px;
+    padding: 10px 24px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.btn-next-step:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
+}
+
+/* ═══════ SESSION HISTORY ═══════ */
+
+.session-history {
+    margin-top: 24px;
+}
+
+.history-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 0 0 12px 0;
+}
+
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.history-item:hover {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.2);
+}
+
+.history-item.active {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.3);
+    border-left: 3px solid #6366f1;
+}
+
+.history-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.history-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: #e2e8f0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-meta {
+    font-size: 12px;
+    color: #64748b;
+}
+
+.history-delete {
+    flex-shrink: 0;
+    padding: 6px 8px;
+    background: rgba(239, 68, 68, 0.1);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+    color: #ef4444;
+}
+
+.history-delete:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.25);
+}
+
+.history-delete:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ═══════ STEP 2: AUDIO HEADER ═══════ */
+
+.audio-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.audio-header h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #f1f5f9;
+}
+
+.audio-stats {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    color: #94a3b8;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* Language Toggle */
+.language-toggle {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.lang-btn {
+    padding: 6px 14px;
+    border: none;
+    background: rgba(30, 41, 59, 0.7);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: #94a3b8;
+    transition: all 0.2s;
+}
+
+.lang-btn.active {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: #fff;
+}
+
+.lang-btn:hover:not(.active) {
+    background: rgba(148, 163, 184, 0.15);
+}
+
+/* Buttons */
+.pptx-audio-tool .btn-generate-all,
+.btn-generate-questions,
+.btn-download-pptx {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: #fff;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pptx-audio-tool .btn-generate-all:hover:not(:disabled),
+.btn-generate-questions:hover:not(:disabled),
+.btn-download-pptx:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.4);
+}
+
+.pptx-audio-tool .btn-generate-all:disabled,
+.btn-generate-questions:disabled,
+.btn-download-pptx:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pptx-audio-tool .btn-stop {
+    padding: 10px 16px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    border: none;
+    border-radius: 10px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.2s;
+}
+
+.pptx-audio-tool .btn-stop:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+/* ═══════ SLIDE CARDS ═══════ */
+
+.pptx-audio-tool .slide-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.pptx-audio-tool .slide-card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pptx-audio-tool .slide-card:hover {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.pptx-audio-tool .slide-card.done {
+    border-left: 4px solid #22c55e;
+}
+
+.pptx-audio-tool .slide-card.generating {
+    border-left: 4px solid #eab308;
+}
+
+.pptx-audio-tool .slide-card.error {
+    border-left: 4px solid #ef4444;
+}
+
+.pptx-audio-tool .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: rgba(15, 23, 42, 0.5);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.pptx-audio-tool .slide-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.pptx-audio-tool .slide-title {
+    flex: 1;
+    margin: 0;
+    font-size: 15px;
+    color: #e2e8f0;
+    font-weight: 600;
+}
+
+.dual-badge {
+    font-size: 14px;
+}
+
+.pptx-audio-tool .card-body {
+    padding: 16px 18px;
+}
+
+.pptx-audio-tool .col-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+}
+
+.pptx-audio-tool .note-content {
+    position: relative;
+}
+
+.pptx-audio-tool .note-content p {
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.7;
+    margin: 0;
+    padding-right: 32px;
+    white-space: pre-wrap;
+}
+
+.pptx-audio-tool .btn-edit-inline {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    padding: 4px;
+}
+
+.pptx-audio-tool .btn-edit-inline:hover {
+    opacity: 1;
+}
+
+.pptx-audio-tool .edit-mode textarea {
+    width: 100%;
+    padding: 10px 12px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 8px;
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.6;
+    resize: vertical;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.pptx-audio-tool .edit-mode textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.pptx-audio-tool .edit-buttons {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.pptx-audio-tool .btn-save {
+    padding: 6px 14px;
+    background: #22c55e;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.pptx-audio-tool .btn-cancel {
+    padding: 6px 14px;
+    background: rgba(148, 163, 184, 0.2);
+    border: none;
+    border-radius: 6px;
+    color: #94a3b8;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+/* Card Footer */
+.pptx-audio-tool .card-footer {
+    padding: 12px 18px;
+    border-top: 1px solid rgba(148, 163, 184, 0.08);
+    background: rgba(15, 23, 42, 0.3);
+}
+
+.pptx-audio-tool .audio-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.pptx-audio-tool .btn-generate {
+    padding: 7px 14px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.2s;
+}
+
+.pptx-audio-tool .btn-generate:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 10px rgba(34, 197, 94, 0.3);
+}
+
+.pptx-audio-tool .btn-generate:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Playback */
+.pptx-audio-tool .playback-section {
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-top: 8px;
+}
+
+.pptx-audio-tool .progress-bar-container {
+    width: 100%;
+    height: 5px;
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 3px;
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+
+.pptx-audio-tool .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6);
+    border-radius: 3px;
+    transition: width 0.2s linear;
+}
+
+.pptx-audio-tool .playback-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.pptx-audio-tool .btn-play,
+.pptx-audio-tool .btn-stop-play {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: none;
+}
+
+.pptx-audio-tool .btn-play {
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+}
+
+.pptx-audio-tool .btn-play:hover {
+    background: rgba(99, 102, 241, 0.35);
+}
+
+.pptx-audio-tool .btn-stop-play {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.pptx-audio-tool .btn-stop-play:hover {
+    background: rgba(239, 68, 68, 0.35);
+}
+
+.pptx-audio-tool .btn-download {
+    text-decoration: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(99, 102, 241, 0.1);
+    color: #a5b4fc;
+    font-size: 12px;
+    transition: all 0.2s;
+}
+
+.pptx-audio-tool .btn-download:hover {
+    background: rgba(99, 102, 241, 0.2);
+}
+
+.pptx-audio-tool .btn-delete-small {
+    background: rgba(239, 68, 68, 0.1);
+    border: none;
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: #ef4444;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.pptx-audio-tool .btn-delete-small:hover {
+    background: rgba(239, 68, 68, 0.25);
+}
+
+.pptx-audio-tool .time-display {
+    color: #e2e8f0;
+    font-size: 12px;
+    font-family: 'SF Mono', 'Monaco', monospace;
+    min-width: 70px;
+}
+
+.pptx-audio-tool .error-message {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #fca5a5;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+/* ═══════ STEP 3: DOWNLOAD ═══════ */
+
+.step-download h2 {
+    margin: 0 0 16px 0;
+    color: #f1f5f9;
+}
+
+.summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-size: 13px;
+}
+
+.summary-table th {
+    text-align: left;
+    padding: 10px 14px;
+    background: rgba(15, 23, 42, 0.5);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 12px;
+}
+
+.summary-table td {
+    padding: 10px 14px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+    color: #e2e8f0;
+}
+
+.status-done { color: #4ade80; }
+.status-pending { color: #fbbf24; }
+.status-skip { color: #64748b; }
+
+.download-actions {
+    text-align: center;
+    margin: 24px 0;
+}
+
+.btn-download-pptx {
+    padding: 14px 32px;
+    font-size: 16px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+}
+
+.btn-download-pptx:hover:not(:disabled) {
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+}
+
+/* ═══════ STEP 4: CONTENT ═══════ */
+
+.step-content-view h2 {
+    margin: 0 0 16px 0;
+    color: #f1f5f9;
+}
+
+.content-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.content-card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.content-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.5);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.content-card-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.content-card-body {
+    padding: 12px 16px;
+}
+
+.content-bullets {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.content-bullets li {
+    position: relative;
+    padding-left: 18px;
+    margin: 4px 0;
+    font-size: 13px;
+    line-height: 1.6;
+    color: #cbd5e1;
+}
+
+.content-bullets li::before {
+    content: '•';
+    position: absolute;
+    left: 4px;
+    color: #6366f1;
+}
+
+.empty-content {
+    color: #475569;
+    font-size: 13px;
+    font-style: italic;
+}
+
+/* ═══════ STEP 5: QUESTIONS ═══════ */
+
+.step-questions h2 {
+    margin: 0 0 16px 0;
+    color: #f1f5f9;
+}
+
+.question-config {
+    display: flex;
+    gap: 16px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    padding: 16px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.config-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.config-row label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.config-row input {
+    width: 70px;
+    padding: 6px 10px;
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: center;
+    color: #e2e8f0;
+}
+
+.config-row input:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.btn-generate-questions {
+    background: linear-gradient(135deg, #8b5cf6, #6366f1);
+}
+
+.questions-count {
+    font-size: 14px;
+    color: #94a3b8;
+    margin-bottom: 16px;
+}
+
+.questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.question-card {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 10px;
+    padding: 14px 18px;
+}
+
+.question-card.level-1 { border-left: 4px solid #22c55e; }
+.question-card.level-2 { border-left: 4px solid #eab308; }
+.question-card.level-3 { border-left: 4px solid #ef4444; }
+
+.question-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.q-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: #a5b4fc;
+}
+
+.q-level {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(148, 163, 184, 0.15);
+    color: #94a3b8;
+}
+
+.q-text {
+    font-size: 14px;
+    font-weight: 500;
+    margin: 0 0 8px 0;
+    color: #e2e8f0;
+}
+
+.q-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.q-option {
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    color: #cbd5e1;
+}
+
+.q-option.correct {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    color: #4ade80;
+    font-weight: 600;
+}
+
+.q-explanation {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+    padding: 8px 10px;
+    background: rgba(234, 179, 8, 0.06);
+    border: 1px solid rgba(234, 179, 8, 0.15);
+    border-radius: 6px;
+}
+
+/* ═══════ EMPTY STATE ═══════ */
+
+.pptx-audio-tool .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #94a3b8;
+}
+
+.pptx-audio-tool .empty-icon {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 16px;
+}
+
+.pptx-audio-tool .empty-state h3 {
+    color: #f1f5f9;
+    margin: 0 0 8px 0;
+}
+
+.pptx-audio-tool .empty-state p {
+    margin: 0;
+    max-width: 400px;
+    margin-inline: auto;
+}
+
+.btn-go-audio, .btn-go-upload {
+    margin-top: 12px;
+    padding: 8px 20px;
+    background: rgba(148, 163, 184, 0.15);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #e2e8f0;
+    transition: all 0.2s;
+}
+
+.btn-go-audio:hover, .btn-go-upload:hover {
+    background: rgba(148, 163, 184, 0.25);
+}
+
+/* ═══════ ANIMATIONS ═══════ */
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.pptx-audio-tool .spinner,
+.pptx-audio-tool .spinner-small {
+    display: inline-block;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+}
+
+.pptx-audio-tool .spinner {
+    width: 16px;
+    height: 16px;
+}
+
+.pptx-audio-tool .spinner-small {
+    width: 12px;
+    height: 12px;
+}
+
+/* ═══════ RESPONSIVE ═══════ */
+
+@media (max-width: 768px) {
+    .step-label { display: none; }
+    .step-btn { padding: 8px 10px; }
+    .audio-header { flex-direction: column; }
+    .header-actions { width: 100%; }
+    .question-config { flex-direction: column; }
+}

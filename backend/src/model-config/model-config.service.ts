@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { CLIProxyProvider } from '../ai/cliproxy.provider';
+import { SystemConfigService } from '../settings/system-config.service';
 
 // Task types for model configuration - must match Prisma TaskType enum
 export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'IMAGE', 'TTS'] as const;
@@ -39,6 +40,7 @@ export class ModelConfigService {
         private prisma: PrismaService,
         private apiKeysService: ApiKeysService,
         private cliproxy?: CLIProxyProvider,
+        private systemConfigService?: SystemConfigService,
     ) { }
 
     /**
@@ -126,6 +128,18 @@ export class ModelConfigService {
                 }
             } catch (error: any) {
                 this.logger.warn(`Failed to get CLIProxy config: ${error.message}`);
+            }
+        }
+
+        // Priority 3: Check ImageGen config (for IMAGE task)
+        if (taskType === 'IMAGE' && this.systemConfigService) {
+            try {
+                const imageGenConfig = await this.systemConfigService.getImageGenConfig();
+                if (imageGenConfig.enabled && imageGenConfig.defaultModel) {
+                    return { provider: 'IMAGE_GEN', modelName: imageGenConfig.defaultModel };
+                }
+            } catch (error: any) {
+                this.logger.warn(`Failed to get ImageGen config: ${error.message}`);
             }
         }
 
@@ -510,8 +524,8 @@ export class ModelConfigService {
         try {
             const credentials = JSON.parse(vittsCredentialsJson);
             const apiKey = credentials.apiKey;
-            // Use direct IP instead of Cloudflare tunnel to avoid 530 errors
-            const baseUrl = 'http://117.0.36.6:8000';
+            // Use user-configured baseUrl, fall back to default if not set
+            const baseUrl = credentials.baseUrl || 'http://117.0.36.6:8000';
 
             this.logger.log(`ViTTS credentials: baseUrl=${baseUrl}, apiKey=${apiKey?.substring(0, 8)}...`);
 
@@ -545,7 +559,7 @@ export class ModelConfigService {
 
             // 2. Fetch trained voices (second priority)
             try {
-                const voicesResponse = await fetch(`${baseUrl}/api/v1/users/voices`, {
+                const voicesResponse = await fetch(`${baseUrl}/api/v1/tts/trained-voices`, {
                     headers: { 'x-api-key': apiKey },
                 });
                 if (voicesResponse.ok) {
@@ -648,7 +662,41 @@ export class ModelConfigService {
             this.logger.warn(`ViTTS voice discovery failed: ${error.message}`);
         }
 
+        // Discover ImageGen models (Flux/ComfyUI) if enabled
+        try {
+            const imageGenModels = await this.discoverImageGenModels();
+            if (imageGenModels.length > 0) {
+                // Add as a separate category so frontend can show [ImageGen] label
+                (models as any).IMAGE_GEN = imageGenModels;
+                this.logger.log(`Added ${imageGenModels.length} ImageGen models`);
+            }
+        } catch (error: any) {
+            this.logger.warn(`ImageGen model discovery failed: ${error.message}`);
+        }
+
         return models;
+    }
+
+    /**
+     * Discover ImageGen models (Flux/ComfyUI) from admin config
+     */
+    async discoverImageGenModels(): Promise<AvailableModel[]> {
+        if (!this.systemConfigService) return [];
+
+        try {
+            const config = await this.systemConfigService.getImageGenConfig();
+            if (!config.enabled || !config.defaultModel) return [];
+
+            return [{
+                name: `imagegen:${config.defaultModel}`,
+                displayName: `🎨 ${config.defaultModel} (ImageGen)`,
+                description: `via Image Gen API (${config.url?.split('/')[2] || 'local'})`,
+                supportedTasks: ['IMAGE'],
+            }];
+        } catch (error: any) {
+            this.logger.warn(`ImageGen model discovery failed: ${error.message}`);
+            return [];
+        }
     }
 
     /**
@@ -697,5 +745,54 @@ export class ModelConfigService {
 
         this.logger.debug(`getDefaults: returning = ${JSON.stringify(defaults)}`);
         return defaults;
+    }
+
+    /**
+     * Get defaults — with ImageGen priority for IMAGE task
+     * Priority: CLIProxy admin > ImageGen admin > system defaults
+     */
+    private async getImageGenDefault(): Promise<{ provider: string; modelName: string } | null> {
+        if (!this.systemConfigService) return null;
+        try {
+            const config = await this.systemConfigService.getImageGenConfig();
+            if (config.enabled && config.defaultModel) {
+                return { provider: 'IMAGE_GEN', modelName: config.defaultModel };
+            }
+        } catch { /* ignore */ }
+        return null;
+    }
+
+    /**
+     * Discover ViTTS options from the server's /api/v1/tts/options endpoint.
+     * Returns modes, voice library, design attributes, and defaults.
+     */
+    async discoverViTTSOptions(userId: string): Promise<any> {
+        const vittsCredentialsJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
+
+        if (!vittsCredentialsJson) {
+            return { error: 'No ViTTS credentials configured' };
+        }
+
+        try {
+            const credentials = JSON.parse(vittsCredentialsJson);
+            const apiKey = credentials.apiKey;
+            const baseUrl = credentials.baseUrl || 'http://117.0.36.6:8000';
+
+            const response = await fetch(`${baseUrl}/api/v1/tts/options`, {
+                headers: { 'X-API-Key': apiKey },
+            });
+
+            if (!response.ok) {
+                this.logger.warn(`ViTTS options API returned ${response.status}`);
+                return { error: `ViTTS options API returned ${response.status}` };
+            }
+
+            const data = await response.json();
+            this.logger.log(`ViTTS options: ${data.modes?.length || 0} modes, ${data.voice_library?.length || 0} voices`);
+            return data;
+        } catch (error: any) {
+            this.logger.error(`Failed to discover ViTTS options: ${error.message}`);
+            return { error: error.message };
+        }
     }
 }

@@ -143,6 +143,46 @@ export class GeminiService {
     }
 
     /**
+     * Optimize a visual idea prompt for Flux.1-dev image generation
+     * Translates Vietnamese -> English and restructures according to Flux formula:
+     * [Genre/Style] + [Subject] + [Context/Colors] + [Lighting/Style]
+     * Only called when subject language is Vietnamese (vi/vi-en)
+     */
+    async optimizeFluxPrompt(visualIdea: string, slideTitle: string): Promise<string> {
+        this.logger.log(`Optimizing prompt for Flux: "${visualIdea.substring(0, 60)}..."`);
+
+        const systemPrompt = `You are an expert prompt engineer for the Flux.1-dev image generation model.
+Your task: translate the Vietnamese visual description into a well-structured English prompt.
+
+RULES:
+1. Write in natural English prose, describing the scene as a paragraph.
+2. Follow this structure: [Style/Genre] + [Main Subject] + [Context/Setting/Colors] + [Lighting/Atmosphere]
+3. DO NOT use comma-separated SD1.5 tags (e.g., "masterpiece, 8k, best quality").
+4. DO NOT include any text/quote elements in the prompt (Flux handles text poorly).
+5. Keep the prompt concise (50-120 words).
+6. Make it educational/professional since this is for academic presentation slides.
+7. Return ONLY the English prompt text, nothing else. No explanation, no preamble.
+
+SLIDE CONTEXT: "${slideTitle}"
+
+INPUT (Vietnamese visual idea):
+"${visualIdea}"
+
+OUTPUT (English Flux prompt):`;
+
+        try {
+            const result = await this.generateWithRetry(systemPrompt);
+            const cleaned = result.trim().replace(/^["']|["']$/g, ''); // Remove wrapping quotes
+            this.logger.log(`Flux prompt: "${cleaned.substring(0, 80)}..."`);
+            return cleaned;
+        } catch (error) {
+            this.logger.warn(`Failed to optimize Flux prompt, using original: ${error}`);
+            // Fallback: return original visual idea as-is
+            return visualIdea;
+        }
+    }
+
+    /**
      * Generate with retry logic
      */
     private async generateWithRetry(prompt: string, maxRetries: number = 3): Promise<string> {

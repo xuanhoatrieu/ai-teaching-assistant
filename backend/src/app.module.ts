@@ -27,7 +27,7 @@ import { SlideDataModule } from './slide-data/slide-data.module';
 import { QuestionsModule } from './questions/questions.module';
 import { MigrationModule } from './migration/migration.module';
 import { PptxModule } from './pptx/pptx.module';
-import { TextNormalizerModule } from './text-normalizer/text-normalizer.module';
+import { PptxAudioToolModule } from './pptx-audio-tool/pptx-audio-tool.module';
 
 @Module({
   imports: [
@@ -70,7 +70,7 @@ import { TextNormalizerModule } from './text-normalizer/text-normalizer.module';
     QuestionsModule,
     MigrationModule,
     PptxModule,
-    TextNormalizerModule,
+    PptxAudioToolModule,
   ],
   controllers: [AppController],
   providers: [AppService],

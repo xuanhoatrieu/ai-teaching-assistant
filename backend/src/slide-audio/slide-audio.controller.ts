@@ -93,6 +93,9 @@ export class SlideAudioController {
         @Param('lessonId') lessonId: string,
         @Param('index') index: string,
         @Body('multilingualMode') multilingualMode: string,
+        @Body('vittsMode') vittsMode: string,
+        @Body('vittsDesignInstruct') vittsDesignInstruct: string,
+        @Body('vittsNormalize') vittsNormalize: boolean,
         @Request() req,
     ) {
         return this.slideAudioService.generateSingleAudio(
@@ -100,6 +103,9 @@ export class SlideAudioController {
             parseInt(index, 10),
             req.user.id,
             multilingualMode,
+            vittsMode,
+            vittsDesignInstruct,
+            vittsNormalize,
         );
     }
 

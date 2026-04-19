@@ -1,0 +1,90 @@
+{
+    "meta": {
+        "last_updated": "2026-04-03T22:10:00+07:00"
+    },
+    "modules": {
+        "auth": {
+            "status": "implemented",
+            "features": [
+                {"name": "User Authentication", "description": "JWT-based login/register with role support"},
+                {"name": "Admin Role Guard", "description": "Route protection for admin-only endpoints"}
+            ]
+        },
+        "subjects": {
+            "status": "implemented",
+            "features": [
+                {"name": "Subject CRUD", "description": "Create/Read/Update/Delete subjects/courses"},
+                {"name": "Lesson Management", "description": "Edit (rename) and delete lessons with cascade confirmation"}
+            ]
+        },
+        "lesson_workflow": {
+            "status": "implemented",
+            "features": [
+                {"name": "Step 1: Outline Input", "description": "Raw text/PDF input"},
+                {"name": "Step 2: Detailed Outline", "description": "AI-generated detailed outline with JSON editing"},
+                {"name": "Step 3: Slide Script", "description": "AI-generated slide content (20-30 slides)"},
+                {"name": "Step 4: Audio Generation", "description": "2-step speaker notes (raw → optimized) + TTS audio"},
+                {"name": "Step 5: PPTX Generation", "description": "Template selection, image generation, PPTX export"},
+                {"name": "Step 6: Question Bank", "description": "Interactive (MC/MR) + Review (Bloom taxonomy) questions + Excel export"}
+            ]
+        },
+        "ai_models": {
+            "status": "implemented",
+            "features": [
+                {"name": "Dynamic Model Discovery", "description": "Auto-detect from CLIProxy + Gemini SDK simultaneously"},
+                {"name": "Per-Task Model Selection", "description": "Users pick independent models for OUTLINE, SLIDES, SPEAKER_NOTES, QUESTIONS, IMAGE, TTS"},
+                {"name": "Synchronized [Source] Labels", "description": "All selectors display [Source] model_name format, CLIProxy first"}
+            ]
+        },
+        "tts": {
+            "status": "implemented",
+            "features": [
+                {"name": "Multi-Provider TTS", "description": "Gemini TTS + Vbee + ViTTS (voice cloning)"},
+                {"name": "CLIProxy TTS", "description": "4-format audio parser for CLIProxy responses"},
+                {"name": "Speaker Notes Model Selection", "description": "Independent AI model for speaker note generation"},
+                {"name": "ViTTS OmniVoice Multi-Mode", "description": "3 modes: Auto Voice, Voice Design (gender/age/pitch/style/accent), Voice Cloning (ref library). Async job polling."},
+                {"name": "ViTTS Options Discovery", "description": "GET /user/model-config/vitts-options endpoint fetches modes, voice library, design attributes from ViTTS server"}
+            ]
+        },
+        "prompts": {
+            "status": "implemented",
+            "features": [
+                {"name": "DB-Driven Prompts", "description": "Database prompts with seedV2() sync"},
+                {"name": "PromptComposer", "description": "Role + Task prompt combination"},
+                {"name": "Admin Prompt Editor", "description": "Widened modal with monospace font"}
+            ]
+        },
+        "export": {
+            "status": "implemented",
+            "features": [
+                {"name": "PPTX Export", "description": "Python python-pptx with template selection"},
+                {"name": "Question Excel Export", "description": "Review + Interactive question export"},
+                {"name": "Audio ZIP Download", "description": "Download all slide audio as ZIP (archiver)"}
+            ]
+        },
+        "images": {
+            "status": "implemented",
+            "features": [
+                {"name": "Flux Image Gen API", "description": "Integrates ComfyUI Flux endpoint via ImagenService. Native compatibility with AI parameters."}
+            ]
+        },
+        "text_normalization": {
+            "status": "removed",
+            "features": [
+                {"name": "VietNormalizer Integration", "description": "Removed by user. Functionality moved native to TTS provider"}
+            ]
+        },
+        "templates": {
+            "status": "implemented",
+            "features": [
+                {"name": "System Templates", "description": "Admin-managed PPTX templates"},
+                {"name": "User Templates", "description": "Personal PPTX template upload/management"}
+            ]
+        }
+    },
+    "pages": {
+        "public": ["Login", "Register"],
+        "user": ["Dashboard", "SubjectDetail", "LessonEditorV2 (6 steps)"],
+        "admin": ["AdminPage (Prompts, Settings, Users)"]
+    }
+}

@@ -41,4 +41,9 @@ export class CreateSubjectDto {
     @IsString()
     @MaxLength(2000)
     additionalContext?: string; // Yêu cầu bổ sung
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(10)
+    language?: string; // "vi" | "en" | "vi-en"
 }

@@ -112,23 +112,29 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                 ...m,
                 source: 'CLIProxy',
             }));
+            const imageGenModels = (modelsRes.data.models?.IMAGE_GEN || []).map((m: AvailableModel) => ({
+                ...m,
+                source: 'ImageGen',
+            }));
 
             // Merge and filter models that support this task
-            const allModels = [...cliproxyModels, ...geminiModels]; // CLIProxy first
+            const allModels = [...imageGenModels, ...cliproxyModels, ...geminiModels]; // ImageGen first
             const filteredModels = allModels.filter((m: AvailableModel) =>
                 m.supportedTasks.includes(taskType)
             );
 
-            // Sort: CLIProxy first, then Gemini SDK, then alphabetically within each group
+            // Sort: ImageGen first (for IMAGE task), then CLIProxy, then Gemini SDK
             const sortedModels = filteredModels.sort((a, b) => {
                 // Selected model always first
                 const aIsSelected = a.name === selectedModel;
                 const bIsSelected = b.name === selectedModel;
                 if (aIsSelected && !bIsSelected) return -1;
                 if (!aIsSelected && bIsSelected) return 1;
-                // CLIProxy before Gemini SDK
-                if (a.source === 'CLIProxy' && b.source !== 'CLIProxy') return -1;
-                if (a.source !== 'CLIProxy' && b.source === 'CLIProxy') return 1;
+                // ImageGen before CLIProxy before Gemini SDK
+                const sourceOrder = { 'ImageGen': 0, 'CLIProxy': 1, 'Gemini SDK': 2 };
+                const aOrder = sourceOrder[a.source as keyof typeof sourceOrder] ?? 3;
+                const bOrder = sourceOrder[b.source as keyof typeof sourceOrder] ?? 3;
+                if (aOrder !== bOrder) return aOrder - bOrder;
                 return a.displayName.localeCompare(b.displayName);
             });
 
@@ -166,7 +172,8 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
         setIsOpen(false);
 
         // Determine provider from model name
-        const provider = model.name.startsWith('cliproxy:') ? 'CLIPROXY' :
+        const provider = model.name.startsWith('imagegen:') ? 'IMAGE_GEN' :
+            model.name.startsWith('cliproxy:') ? 'CLIPROXY' :
             model.name.startsWith('vbee:') ? 'VBEE' :
                 model.name.startsWith('google-tts:') ? 'GOOGLE_TTS' : 'GEMINI';
 
@@ -226,7 +233,7 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                                 >
                                     <div className="model-name">
                                         <span className="model-source-badge" style={{
-                                            color: model.source === 'CLIProxy' ? '#4fc3f7' : '#81c784',
+                                            color: model.source === 'ImageGen' ? '#ffb74d' : model.source === 'CLIProxy' ? '#4fc3f7' : '#81c784',
                                             fontWeight: 600,
                                             fontSize: '0.8em',
                                             marginRight: '6px',

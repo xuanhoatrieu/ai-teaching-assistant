@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, Min, Max, MinLength, MaxLength, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean, Min, Max, MinLength, MaxLength, IsIn } from 'class-validator';
 
 export class GenerateAudioDto {
     @IsString()
@@ -38,4 +38,18 @@ export class GenerateAudioDto {
     @IsString()
     @IsIn(['auto', 'syllable', 'english', null])
     multilingualMode?: string; // ViTTS multilingual: 'auto', 'syllable', 'english'
+
+    @IsOptional()
+    @IsString()
+    @IsIn(['auto', 'clone', 'design', null])
+    vittsMode?: string; // OmniVoice mode: 'auto', 'clone', 'design'
+
+    @IsOptional()
+    @IsString()
+    @MaxLength(500)
+    vittsDesignInstruct?: string; // Voice Design instruct text
+
+    @IsOptional()
+    @IsBoolean()
+    vittsNormalize?: boolean; // SEA-G2P Normalize, default true
 }

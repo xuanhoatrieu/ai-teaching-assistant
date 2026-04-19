@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { api, API_BASE_URL } from '../lib/api';
-import { UserTTSDictionary } from '../components/UserTTSDictionary';
 import './UserSettings.css';
 
 interface UserApiKey {
@@ -319,6 +318,7 @@ function ModelConfigSection({ serviceStatus }: { serviceStatus: Record<string, b
         // Determine provider based on model name prefix
         let provider = 'GEMINI';
         if (modelName.startsWith('cliproxy:')) provider = 'CLIPROXY';
+        else if (modelName.startsWith('imagegen:')) provider = 'IMAGE_GEN';
         else if (modelName.startsWith('vitts:')) provider = 'VITTS';
         else if (modelName.startsWith('vbee:')) provider = 'VBEE';
         else if (modelName.includes('imagen')) provider = 'IMAGEN';
@@ -349,10 +349,11 @@ function ModelConfigSection({ serviceStatus }: { serviceStatus: Record<string, b
     };
 
     const getModelsForTask = (taskType: string): AvailableModel[] => {
-        // Merge models from ALL providers: GEMINI, CLIPROXY, VITTS, VBEE
+        // Merge models from ALL providers: GEMINI, CLIPROXY, IMAGE_GEN, VITTS, VBEE
         const allModels: AvailableModel[] = [
             ...(availableModels.GEMINI || []),
             ...(availableModels.CLIPROXY || []),
+            ...(availableModels.IMAGE_GEN || []),
             ...(availableModels.VITTS || []),
             ...(availableModels.VBEE || []),
         ];
@@ -657,8 +658,6 @@ export function UserSettingsPage() {
             {/* My Templates Section */}
             <MyTemplatesSection />
 
-            {/* TTS Dictionary Section */}
-            <UserTTSDictionary />
 
             {/* Modal */}
             {showModal && (

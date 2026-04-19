@@ -1,0 +1,60 @@
+{
+    "meta": {
+        "last_updated": "2026-04-03T10:29:00+07:00"
+    },
+    "organization": {
+        "name": "TUAF (Thai Nguyen University of Agriculture and Forestry)",
+        "domain": "Giáo dục đại học"
+    },
+    "domain_terms": {
+        "Bài giảng": "Lesson — đơn vị bài học trong hệ thống",
+        "Môn học": "Subject — nhóm nhiều bài giảng",
+        "Dàn bài": "Outline — cấu trúc nội dung bài giảng",
+        "Kịch bản slide": "Slide Script — nội dung chi tiết từng slide",
+        "Lời giảng": "Speaker Notes — nội dung giảng viên đọc khi trình chiếu",
+        "Ngân hàng câu hỏi": "Question Bank — câu hỏi ôn tập theo Bloom taxonomy"
+    },
+    "workflow": {
+        "name": "6-Step Lesson Creation",
+        "steps": [
+            {"step": 1, "name": "Nhập Outline", "input": "Raw text/PDF", "output": "outlineRaw", "ai": false},
+            {"step": 2, "name": "Tạo Outline Chi Tiết", "input": "outlineRaw", "output": "detailedOutline", "ai": "Gemini"},
+            {"step": 3, "name": "Kịch Bản Slide", "input": "detailedOutline", "output": "slides[] (title, content, visualIdea)", "ai": "Gemini", "note": "Speaker notes removed from Step 3 UI, now exclusively in Step 4"},
+            {"step": 4, "name": "Tạo Audio (2-step speaker notes)", "input": "slides[].content", "output": "Slide.speakerNote (raw) + SlideAudio.speakerNote (optimized) + audioUrl", "ai": "LLM + TTS"},
+            {"step": 5, "name": "Tạo PPTX", "input": "slides[], template", "output": "PPTX file", "ai": "Imagen + Python"},
+            {"step": 6, "name": "Ngân Hàng Câu Hỏi", "input": "slides[]", "output": "interactiveQuestions[], reviewQuestions[]", "ai": "Gemini"}
+        ]
+    },
+    "validation_rules": {
+        "speaker_notes": {
+            "title_agenda": "100 từ (40-60 giây)",
+            "objectives": "100 từ (40-60 giây)",
+            "content": "200+ từ (2 phút)",
+            "summary": "100 từ (40-60 giây)"
+        },
+        "slides": {
+            "count": "20-30 slides per lesson",
+            "slideIndex": "BẮT ĐẦU TỪ 1, KHÔNG phải 0",
+            "bullet_count": "2-5 bullets (3-4 lý tưởng)",
+            "point_max_words": 5,
+            "description_max_words": 12
+        },
+        "questions": {
+            "interactive": "5 câu/bài (MC/MR, tối đa 10 đáp án)",
+            "review": "5-15 câu/bài, 3 levels: Biết/Hiểu/Vận dụng",
+            "review_answer": "4 options (A,B,C,D) — A luôn đúng"
+        }
+    },
+    "prompt_slugs": {
+        "system.role": "Vai trò giảng viên — kết hợp với Subject fields",
+        "outline.detailed": "Step 2 — Tạo dàn bài chi tiết từ raw outline",
+        "slides.script": "Step 3 — Tạo kịch bản slide (20-30 slides)",
+        "slides.speaker-notes": "Step 4 Bước 1 — Tạo lời giảng RAW",
+        "slides.optimize-notes": "Step 4 Bước 2 — Tối ưu & kiểm duyệt",
+        "slides.design": "Step 5 — Tối ưu content cho PPTX",
+        "slides.image": "Step 5 — Tạo prompt cho Imagen",
+        "questions.interactive": "Step 6 — 5 câu hỏi kiểm tra tập trung",
+        "questions.review": "Step 6 — 15 câu Bloom taxonomy",
+        "handout.generate": "Tạo tài liệu handout"
+    }
+}

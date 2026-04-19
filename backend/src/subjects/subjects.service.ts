@@ -28,6 +28,8 @@ export class SubjectsService {
                 targetAudience: dto.targetAudience,
                 majorName: dto.majorName,
                 additionalContext: dto.additionalContext,
+                // Language setting (default: Vietnamese)
+                language: dto.language || 'vi',
             },
         });
     }

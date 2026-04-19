@@ -4,9 +4,10 @@ import { ImagenService } from './imagen.service';
 import { CLIProxyProvider } from './cliproxy.provider';
 import { AiProviderService } from './ai-provider.service';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SettingsModule } from '../settings/settings.module';
 
 @Module({
-    imports: [PrismaModule],
+    imports: [PrismaModule, SettingsModule],
     providers: [GeminiService, ImagenService, CLIProxyProvider, AiProviderService],
     exports: [GeminiService, ImagenService, CLIProxyProvider, AiProviderService],
 })

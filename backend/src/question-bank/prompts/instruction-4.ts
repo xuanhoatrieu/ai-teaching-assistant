@@ -1,53 +1,60 @@
 /**
- * Instruction 4: Create Question Bank
- * Source: prompt_gemini.md
+ * Instruction 4: Create Question Bank (English version)
+ * Output language controlled by {output_language_instruction} from PromptComposerService
+ * This file is a REFERENCE — runtime prompts are loaded from the database
  */
 
 export const INSTRUCTION_4_QUESTIONS = `
-**ROLE:** Bạn là một chuyên gia giáo dục và biên soạn câu hỏi trắc nghiệm giàu kinh nghiệm.
-
-**TASK:** Tạo bộ câu hỏi trắc nghiệm chất lượng cao dựa trên nội dung bài học.
+**TASK:** Create a comprehensive set of review multiple-choice questions following Bloom's Taxonomy.
 
 **INPUT:**
-- Tiêu đề bài học: {title}
-- Nội dung chi tiết:
+- Lesson title: {title}
+- Detailed content:
 {detailed_outline}
 
-**SỐ LƯỢNG CÂU HỎI:**
-- Mức độ **Biết** (Độ khó 1): {level1_count} câu
-- Mức độ **Hiểu** (Độ khó 2): {level2_count} câu
-- Mức độ **Vận dụng** (Độ khó 3): {level3_count} câu
+**NUMBER OF QUESTIONS:**
+- **Knowledge** level (Level 1): {level1_count} questions
+- **Comprehension** level (Level 2): {level2_count} questions
+- **Application** level (Level 3): {level3_count} questions
 
-**YÊU CẦU:**
+---
 
-1. **Câu hỏi Mức độ BIẾT (Độ khó 1):**
-   - Kiểm tra trí nhớ về khái niệm, định nghĩa, thuật ngữ
-   - Từ khóa: ai, cái gì, ở đâu, khi nào, định nghĩa, liệt kê, nhận biết
+## REQUIREMENTS BY LEVEL:
 
-2. **Câu hỏi Mức độ HIỂU (Độ khó 2):**
-   - Kiểm tra khả năng giải thích, so sánh, phân biệt
-   - Từ khóa: so sánh, giải thích, vì sao, tóm tắt, phân biệt
+1. **KNOWLEDGE Level (Level 1):**
+   - Tests recall of concepts, definitions, terminology
+   - Keywords: who, what, where, when, define, list, identify
 
-3. **Câu hỏi Mức độ VẬN DỤNG (Độ khó 3):**
-   - Kiểm tra khả năng áp dụng vào tình huống mới
-   - Từ khóa: áp dụng, sử dụng, giải quyết, dự đoán
+2. **COMPREHENSION Level (Level 2):**
+   - Tests ability to explain, compare, distinguish
+   - Keywords: compare, explain, why, summarize, differentiate
 
-**QUY TẮC:**
-- Mỗi câu hỏi chỉ có MỘT đáp án đúng
-- Các phương án sai phải có tính hợp lý, thuyết phục
-- Tránh từ phủ định (KHÔNG, NGOẠI TRỪ)
-- Các phương án có độ dài tương tự nhau
+3. **APPLICATION Level (Level 3):**
+   - Tests ability to apply knowledge to new situations
+   - Keywords: apply, use, solve, predict, demonstrate
 
-**FORMAT ĐẦU RA (Bảng Markdown):**
+---
+
+{output_language_instruction}
+
+---
+
+## RULES:
+- Each question has EXACTLY ONE correct answer
+- Wrong options must be plausible and convincing
+- Avoid negative phrasing (NOT, EXCEPT)
+- Options should be similar in length
+
+## FORMAT (Markdown Table):
 
 | Question ID | Question | Correct Answer (A) | Option B | Option C | Option D | Explanation |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 
-**QUY TẮC Question ID:**
-- Format: [Bài]-[Độ khó]-[Số thứ tự]
-- Ví dụ: B1-1-01, B1-1-02 (Bài 1, độ khó 1, câu 1, 2)
-- Ví dụ: B1-2-01 (Bài 1, độ khó 2, câu 1)
-- Ví dụ: B1-3-01 (Bài 1, độ khó 3, câu 1)
+**Question ID Convention:**
+- Format: [Lesson]-[Level]-[Order]
+- Example: B1-1-01, B1-1-02 (Lesson 1, Level 1, Questions 1, 2)
+- Example: B1-2-01 (Lesson 1, Level 2, Question 1)
+- Example: B1-3-01 (Lesson 1, Level 3, Question 1)
 
-**Đáp án đúng LUÔN đặt ở cột "Correct Answer (A)".**
+**The correct answer is ALWAYS placed in the "Correct Answer (A)" column.**
 `;

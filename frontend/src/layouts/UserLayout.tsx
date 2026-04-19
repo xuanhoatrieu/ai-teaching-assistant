@@ -4,6 +4,7 @@ import './UserLayout.css';
 
 const menuItems = [
     { path: '/', label: 'Subjects', icon: '📚' },
+    { path: '/pptx-audio-tool', label: 'PPTX Audio', icon: '🎙️' },
     { path: '/settings', label: 'Settings', icon: '⚙️' },
 ];
 
