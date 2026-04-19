@@ -418,22 +418,8 @@ export class SlideAudioService {
                     this.logger.log(`ViTTS mode from request: ${vittsMode}, modelName: ${modelConfig.modelName}`);
                 }
             } else if (modelConfig.modelName) {
-                // Fallback: This might be a raw default model name from CLIProxy auto-detect
-                if (modelConfig.modelName.includes('vbee')) {
-                    provider = 'CLIPROXY';
-                    voiceName = 'hn_female_ngochuyen_news_48k-fhg';
-                    modelName = modelConfig.modelName;
-                } else if (modelConfig.modelName.includes('vitts')) {
-                    provider = 'CLIPROXY';
-                    voiceName = 'vitts:auto';
-                    modelName = modelConfig.modelName;
-                } else if (modelConfig.modelName.includes('gemini') || modelConfig.modelName.includes('tts')) {
-                    provider = 'CLIPROXY';
-                    voiceName = 'Puck';
-                    modelName = modelConfig.modelName;
-                } else {
-                    voiceName = modelConfig.modelName;
-                }
+                // Fallback: treat as voice name directly
+                voiceName = modelConfig.modelName;
             }
 
             this.logger.log(`TTS Config: provider=${provider}, model=${modelName}, voice=${voiceName}, multilingualMode=${multilingualMode || 'none'}`);

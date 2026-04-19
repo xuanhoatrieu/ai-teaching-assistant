@@ -522,21 +522,41 @@ export class ModelConfigService {
         }
 
         try {
-            const credentials = JSON.parse(vittsCredentialsJson);
-            const apiKey = credentials.apiKey;
-            // Use user-configured baseUrl, fall back to default if not set
-            const baseUrl = credentials.baseUrl || 'http://117.0.36.6:8000';
+            this.logger.log(`[ViTTS debug] raw credential type: ${typeof vittsCredentialsJson}, length: ${vittsCredentialsJson?.length}, preview: ${vittsCredentialsJson?.substring(0, 80)}`);
+            
+            let apiKey: string;
+            let baseUrl: string;
+            
+            // Handle both formats: JSON object or plain API key string
+            try {
+                const parsed = JSON.parse(vittsCredentialsJson);
+                if (typeof parsed === 'object' && parsed !== null) {
+                    apiKey = parsed.apiKey || '';
+                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8000';
+                } else {
+                    // JSON.parse returned a primitive (string/number)
+                    apiKey = String(parsed);
+                    baseUrl = 'http://117.0.36.6:8000';
+                }
+            } catch {
+                // Not valid JSON — treat as plain API key
+                apiKey = vittsCredentialsJson;
+                baseUrl = 'http://117.0.36.6:8000';
+            }
 
-            this.logger.log(`ViTTS credentials: baseUrl=${baseUrl}, apiKey=${apiKey?.substring(0, 8)}...`);
+            this.logger.log(`[ViTTS debug] resolved: baseUrl=${baseUrl}, apiKey=${apiKey?.substring(0, 8)}..., apiKey length=${apiKey?.length}`);
 
             const savedRefs: AvailableModel[] = [];
             const trainedVoices: AvailableModel[] = [];
 
             // 1. Fetch saved references (top priority)
             try {
+                this.logger.log(`[ViTTS debug] fetching refs from ${baseUrl}/api/v1/refs`);
                 const refsResponse = await fetch(`${baseUrl}/api/v1/refs`, {
-                    headers: { 'x-api-key': apiKey },
+                    headers: { 'X-API-Key': apiKey },
+                    signal: AbortSignal.timeout(15000),
                 });
+                this.logger.log(`[ViTTS debug] refs response: ${refsResponse.status} ${refsResponse.statusText}`);
                 if (refsResponse.ok) {
                     const refsData = await refsResponse.json();
                     // API returns array directly, not {refs: [...]}
@@ -551,7 +571,8 @@ export class ModelConfigService {
                     }
                     this.logger.log(`ViTTS refs response: ${refsArray.length} items`);
                 } else {
-                    this.logger.warn(`ViTTS refs API returned ${refsResponse.status}`);
+                    const errBody = await refsResponse.text().catch(() => '');
+                    this.logger.warn(`ViTTS refs API returned ${refsResponse.status}: ${errBody.substring(0, 200)}`);
                 }
             } catch (refError: any) {
                 this.logger.warn(`Failed to fetch ViTTS saved refs: ${refError.message}`);
@@ -774,9 +795,23 @@ export class ModelConfigService {
         }
 
         try {
-            const credentials = JSON.parse(vittsCredentialsJson);
-            const apiKey = credentials.apiKey;
-            const baseUrl = credentials.baseUrl || 'http://117.0.36.6:8000';
+            let apiKey: string;
+            let baseUrl: string;
+            
+            // Handle both formats: JSON object or plain API key string
+            try {
+                const parsed = JSON.parse(vittsCredentialsJson);
+                if (typeof parsed === 'object' && parsed !== null) {
+                    apiKey = parsed.apiKey || '';
+                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8000';
+                } else {
+                    apiKey = String(parsed);
+                    baseUrl = 'http://117.0.36.6:8000';
+                }
+            } catch {
+                apiKey = vittsCredentialsJson;
+                baseUrl = 'http://117.0.36.6:8000';
+            }
 
             const response = await fetch(`${baseUrl}/api/v1/tts/options`, {
                 headers: { 'X-API-Key': apiKey },
