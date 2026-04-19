@@ -252,7 +252,7 @@ export class CLIProxyProvider {
             body: JSON.stringify({
                 model: modelName,
                 messages,
-                stream: options?.stream ?? false,
+                stream: true, // Force streaming to bypass Cloudflare 100s timeout
                 max_tokens: options?.maxTokens,
             }),
         });
@@ -263,45 +263,53 @@ export class CLIProxyProvider {
             throw new Error(`CLIProxy request failed: ${response.status} - ${errorText}`);
         }
 
-        const data: ChatCompletionResponse = await response.json();
+        // Consume SSE to bypass Cloudflare timeout
+        let fullContent = "";
+        let reasoningContent = "";
+        const decoder = new TextDecoder("utf-8");
 
-        if (!data.choices || data.choices.length === 0) {
-            throw new Error('CLIProxy returned empty response');
-        }
-
-        this.logger.log(`CLIProxy response: tokens=${data.usage?.total_tokens || 'unknown'}`);
-        const message = data.choices[0].message;
-        let content = message.content;
-        
-        // Some models (GPT-5, o-series) return content in alternative fields
-        if (content === null || content === undefined) {
-            // Try reasoning_content (o1, o3, etc.)
-            const alt = message as any;
-            if (alt.reasoning_content) {
-                this.logger.warn(`CLIProxy: content null but found reasoning_content (${String(alt.reasoning_content).length} chars)`);
-                content = alt.reasoning_content;
-            }
-            // Try content as array (multimodal response)
-            else if (Array.isArray(alt.content)) {
-                const textParts = alt.content.filter((p: any) => p.type === 'text').map((p: any) => p.text);
-                if (textParts.length > 0) {
-                    this.logger.warn(`CLIProxy: content was array, extracted ${textParts.length} text parts`);
-                    content = textParts.join('\n');
+        if (response.body && typeof (response.body as any)[Symbol.asyncIterator] === 'function') {
+            let buffer = "";
+            for await (const chunk of response.body as any) {
+                buffer += decoder.decode(chunk, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || "";
+                
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed === '') continue;
+                    if (trimmed === 'data: [DONE]') continue;
+                    if (trimmed.startsWith('data: ')) {
+                        try {
+                            const parsed = JSON.parse(trimmed.slice(6));
+                            const delta = parsed.choices?.[0]?.delta;
+                            if (delta?.content) fullContent += delta.content;
+                            if (delta?.reasoning_content) reasoningContent += delta.reasoning_content;
+                        } catch (e) {
+                             // Ignore incomplete JSON chunks
+                        }
+                    }
                 }
             }
-            // Try tool_calls content 
-            else if (alt.tool_calls && alt.tool_calls.length > 0) {
-                this.logger.warn(`CLIProxy: content null, found ${alt.tool_calls.length} tool_calls`);
-                content = alt.tool_calls.map((tc: any) => tc.function?.arguments || '').join('\n');
-            }
-            
-            if (content === null || content === undefined) {
-                // Log the full message keys for debugging
-                this.logger.error(`CLIProxy: content is null. Message keys: ${Object.keys(message).join(', ')}`);
-                this.logger.error(`CLIProxy: finish_reason: ${data.choices[0].finish_reason}, raw message: ${JSON.stringify(message).substring(0, 500)}`);
+        } else {
+            // Fallback
+            const text = await response.text();
+            try {
+                const data = JSON.parse(text);
+                if (data.choices && data.choices.length > 0) {
+                    fullContent = data.choices[0].message?.content || "";
+                }
+            } catch (e) {
+                fullContent = text;
             }
         }
-        return content || '';
+
+        if (!fullContent && reasoningContent) {
+            this.logger.warn(`CLIProxy: content null but found reasoning_content`);
+            fullContent = reasoningContent;
+        }
+
+        return fullContent || '';
     }
 
     /**
