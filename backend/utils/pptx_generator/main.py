@@ -317,6 +317,57 @@ def _split_bilingual_notes(note_text: str) -> dict:
         }
 
 
+def _extract_slides_from_pptx(prs) -> list:
+    slides_data = []
+
+    for i, slide in enumerate(prs.slides):
+        # Extract title (first text shape or placeholder title)
+        title = ""
+        if slide.shapes.title and slide.shapes.title.has_text_frame:
+            title = slide.shapes.title.text_frame.text.strip()
+
+        if not title:
+            # Fallback: find first text shape
+            for shape in slide.shapes:
+                if shape.has_text_frame and shape.text_frame.text.strip():
+                    title = shape.text_frame.text.strip()
+                    break
+
+        # Extract content (all non-title text shapes)
+        slide_content = []
+        for shape in slide.shapes:
+            if not shape.has_text_frame:
+                continue
+            # Skip if this is the title shape
+            if shape == slide.shapes.title:
+                continue
+            for para in shape.text_frame.paragraphs:
+                text = para.text.strip()
+                if text and text != title:
+                    slide_content.append(text)
+
+        # Extract speaker notes
+        note_full = ""
+        if slide.has_notes_slide:
+            notes_frame = slide.notes_slide.notes_text_frame
+            if notes_frame:
+                note_full = notes_frame.text.strip()
+
+        # Split bilingual notes
+        note_data = _split_bilingual_notes(note_full)
+
+        slides_data.append({
+            "index": i,
+            "title": title or f"Slide {i + 1}",
+            "content": slide_content,
+            "noteFull": note_data["full"],
+            "noteEN": note_data["en"],
+            "noteVN": note_data["vi"],
+            "hasDual": note_data["has_dual"],
+        })
+    return slides_data
+
+
 @app.post("/parse-pptx")
 async def parse_pptx(file: UploadFile = File(...)):
     """
@@ -331,53 +382,7 @@ async def parse_pptx(file: UploadFile = File(...)):
             f.write(content)
 
         prs = PptxPresentation(tmp_path)
-        slides_data = []
-
-        for i, slide in enumerate(prs.slides):
-            # Extract title (first text shape or placeholder title)
-            title = ""
-            if slide.shapes.title and slide.shapes.title.has_text_frame:
-                title = slide.shapes.title.text_frame.text.strip()
-
-            if not title:
-                # Fallback: find first text shape
-                for shape in slide.shapes:
-                    if shape.has_text_frame and shape.text_frame.text.strip():
-                        title = shape.text_frame.text.strip()
-                        break
-
-            # Extract content (all non-title text shapes)
-            slide_content = []
-            for shape in slide.shapes:
-                if not shape.has_text_frame:
-                    continue
-                # Skip if this is the title shape
-                if shape == slide.shapes.title:
-                    continue
-                for para in shape.text_frame.paragraphs:
-                    text = para.text.strip()
-                    if text and text != title:
-                        slide_content.append(text)
-
-            # Extract speaker notes
-            note_full = ""
-            if slide.has_notes_slide:
-                notes_frame = slide.notes_slide.notes_text_frame
-                if notes_frame:
-                    note_full = notes_frame.text.strip()
-
-            # Split bilingual notes
-            note_data = _split_bilingual_notes(note_full)
-
-            slides_data.append({
-                "index": i,
-                "title": title or f"Slide {i + 1}",
-                "content": slide_content,
-                "noteFull": note_data["full"],
-                "noteEN": note_data["en"],
-                "noteVN": note_data["vi"],
-                "hasDual": note_data["has_dual"],
-            })
+        slides_data = _extract_slides_from_pptx(prs)
 
         # Cleanup temp file
         os.unlink(tmp_path)
@@ -388,6 +393,31 @@ async def parse_pptx(file: UploadFile = File(...)):
     except Exception as e:
         logger.error(f"Failed to parse PPTX: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to parse PPTX: {str(e)}")
+
+
+class ParseLocalRequest(BaseModel):
+    file_path: str
+
+
+@app.post("/parse-pptx-local")
+async def parse_pptx_local(request: ParseLocalRequest):
+    """
+    Parse PPTX directly from a local shared volume path.
+    Saves massive memory and network overhead on VPS.
+    """
+    try:
+        if not os.path.exists(request.file_path):
+            raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
+
+        prs = PptxPresentation(request.file_path)
+        slides_data = _extract_slides_from_pptx(prs)
+
+        logger.info(f"Parsed Local PPTX: {len(slides_data)} slides from {request.file_path}")
+        return {"slides": slides_data, "totalSlides": len(slides_data)}
+
+    except Exception as e:
+        logger.error(f"Failed to parse local PPTX: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse local PPTX: {str(e)}")
 
 
 class InjectAudioRequest(BaseModel):

@@ -155,16 +155,14 @@ export class PptxAudioToolService {
 
         // Call Python service to parse PPTX
         try {
-            const formData = new FormData();
-            const fileBuffer = fs.readFileSync(destPath);
-            const blob = new Blob([fileBuffer], {
-                type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            });
-            formData.append('file', blob, file.originalname);
+            // Since the python service mounts the same /uploads volume,
+            // we can just pass the path to save memory and avoid Nginx bottlenecks!
+            const reqBody = { file_path: destPath };
 
-            const response = await fetch(`${this.pythonServiceUrl}/parse-pptx`, {
+            const response = await fetch(`${this.pythonServiceUrl}/parse-pptx-local`, {
                 method: 'POST',
-                body: formData,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(reqBody),
             });
 
             if (!response.ok) {
