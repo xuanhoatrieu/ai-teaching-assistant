@@ -198,22 +198,29 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
             setIsSaving(true);
             setSaveStatus('idle');
 
-            let modelNameToSave = voice || (currentProvider === 'GEMINI' ? 'gemini-voice:Puck' : 'vbee:hn_female_thutrang_news_48k-fhg');
+            const payload: any = {
+                taskType: 'TTS',
+                provider: currentProvider,
+            };
 
-            // For ViTTS, encode mode in modelName
+            // Voice logic handling
             if (currentProvider === 'VITTS') {
-                const m = mode || vittsMode;
-                if (m === 'auto') modelNameToSave = 'vitts:auto';
-                else if (m === 'design') modelNameToSave = 'vitts:design';
-                // clone mode: keep the voice (vitts:ref:UUID)
+                if (mode === 'design') {
+                    payload.modelName = 'vitts:design';
+                    payload.voiceDesignInstruct = buildDesignInstruct();
+                } else if (mode === 'clone' && voice.includes('ref:')) {
+                    // voice is either "ref:UUID" or "vitts:ref:UUID"
+                    const refId = voice.replace('vitts:', '').replace('ref:', '');
+                    payload.modelName = `vitts:ref:${refId}`;
+                } else if (mode === 'auto') {
+                    payload.modelName = 'vitts:auto';
+                }
+            } else {
+                payload.modelName = voice || (currentProvider === 'GEMINI' ? 'gemini-voice:Puck' : 'vbee:hn_female_thutrang_news_48k-fhg');
             }
 
             await api.post('/user/model-config/bulk', {
-                configs: [{
-                    taskType: 'TTS',
-                    provider: currentProvider,
-                    modelName: modelNameToSave,
-                }]
+                configs: [payload]
             });
 
             setSaveStatus('success');

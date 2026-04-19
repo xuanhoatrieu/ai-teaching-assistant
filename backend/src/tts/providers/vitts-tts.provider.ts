@@ -128,18 +128,13 @@ export class ViTTSTTSProvider implements ITTSProvider {
         formData.append('num_step', numStep.toString());
         formData.append('normalize', normalize.toString());
 
-        const body = formData.toString();
-        // DEBUG: write exact request to file
-        const fs = require('fs');
-        const debugInfo = `[${new Date().toISOString()}] omniCloneRef\nrefId param: "${refId}"\nbody length: ${body.length}\nbody (first 500): ${body.substring(0, 500)}\nfull ref_id in body: ${body.match(/ref_id=([^&]*)/)?.[1] || 'NOT FOUND'}\n---\n`;
-        fs.appendFileSync('f:/pptx_create_antigravity/ai-teaching-assistant/backend/vitts_debug.log', debugInfo);
-        this.logger.log(`DEBUG omniCloneRef: refId="${refId}", body length=${body.length}`);
+        this.logger.log(`DEBUG omniCloneRef: refId="${refId}", body keys: ${[...formData.keys()].join(',')}`);
 
         const resp = await axios.post(
             `${this.baseUrl}/api/v1/omnivoice/generate-clone-ref`,
-            body,
+            formData,
             {
-                headers: { ...this.headers, 'Content-Type': 'application/x-www-form-urlencoded' },
+                headers: this.headers,
                 timeout: 30000,
             },
         );
