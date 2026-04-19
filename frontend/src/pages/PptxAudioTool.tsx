@@ -51,7 +51,6 @@ export function PptxAudioToolPage() {
     const [sessionId, setSessionId] = useState<string | null>(paramSessionId || null);
     const [session, setSession] = useState<SessionData | null>(null);
     const [slides, setSlides] = useState<ParsedSlide[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
 
     // Upload state
     const [isUploading, setIsUploading] = useState(false);
@@ -115,7 +114,6 @@ export function PptxAudioToolPage() {
 
     const loadSession = async (sid: string) => {
         try {
-            setIsLoading(true);
             const res = await api.get(`/pptx-audio-tool/${sid}`);
             setSession(res.data);
             setSlides(res.data.slides || []);
@@ -130,20 +128,10 @@ export function PptxAudioToolPage() {
             }
         } catch (error) {
             console.error('Error loading session:', error);
-        } finally {
-            setIsLoading(false);
         }
     };
 
-    const refreshSlides = async () => {
-        if (!sessionId) return;
-        try {
-            const res = await api.get(`/pptx-audio-tool/${sessionId}/slides`);
-            setSlides(res.data);
-        } catch (error) {
-            console.error('Error refreshing slides:', error);
-        }
-    };
+
 
     // ═══════════════════════════════════════════════════════════════
     // STEP 1: UPLOAD
