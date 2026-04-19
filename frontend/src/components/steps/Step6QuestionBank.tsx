@@ -375,7 +375,7 @@ export function Step6QuestionBank() {
             {/* ========== REVIEW QUESTIONS TAB ========== */}
             {activeTab === 'review' && hasOutline && (
                 <div className="question-section">
-                    <div className="question-config">
+                    <div className="question-config review-config-row">
                         <h3>📝 Câu hỏi Ôn tập (Bloom Taxonomy)</h3>
                         <div className="level-inputs">
                             <div className="level-input">
@@ -418,7 +418,7 @@ export function Step6QuestionBank() {
                                 />
                             </div>
                         </div>
-                        <div className="button-group" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div className="review-actions">
                             <button
                                 className="btn-primary"
                                 onClick={handleGenerateReview}
