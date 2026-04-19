@@ -8,7 +8,7 @@ import {
     Voice,
 } from '../interfaces/tts-provider.interface';
 
-const DEFAULT_VITTS_BASE_URL = 'http://117.0.36.6:8000';
+const DEFAULT_VITTS_BASE_URL = 'http://117.0.36.6:8888';
 
 // Poll config for async OmniVoice jobs
 const POLL_INTERVAL_MS = 2000;

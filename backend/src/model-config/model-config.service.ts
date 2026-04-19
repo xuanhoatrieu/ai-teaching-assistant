@@ -532,16 +532,16 @@ export class ModelConfigService {
                 const parsed = JSON.parse(vittsCredentialsJson);
                 if (typeof parsed === 'object' && parsed !== null) {
                     apiKey = parsed.apiKey || '';
-                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8000';
+                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8888';
                 } else {
                     // JSON.parse returned a primitive (string/number)
                     apiKey = String(parsed);
-                    baseUrl = 'http://117.0.36.6:8000';
+                    baseUrl = 'http://117.0.36.6:8888';
                 }
             } catch {
                 // Not valid JSON — treat as plain API key
                 apiKey = vittsCredentialsJson;
-                baseUrl = 'http://117.0.36.6:8000';
+                baseUrl = 'http://117.0.36.6:8888';
             }
 
             this.logger.log(`[ViTTS debug] resolved: baseUrl=${baseUrl}, apiKey=${apiKey?.substring(0, 8)}..., apiKey length=${apiKey?.length}`);
@@ -803,14 +803,14 @@ export class ModelConfigService {
                 const parsed = JSON.parse(vittsCredentialsJson);
                 if (typeof parsed === 'object' && parsed !== null) {
                     apiKey = parsed.apiKey || '';
-                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8000';
+                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8888';
                 } else {
                     apiKey = String(parsed);
-                    baseUrl = 'http://117.0.36.6:8000';
+                    baseUrl = 'http://117.0.36.6:8888';
                 }
             } catch {
                 apiKey = vittsCredentialsJson;
-                baseUrl = 'http://117.0.36.6:8000';
+                baseUrl = 'http://117.0.36.6:8888';
             }
 
             const response = await fetch(`${baseUrl}/api/v1/tts/options`, {
