@@ -662,61 +662,157 @@ class PPTXGeneratorService:
     def _add_audio_with_autoplay(self, slide, audio_path: str):
         """
         Add audio to slide with auto-play on slide transition.
-        Audio icon is placed OUTSIDE the visible slide area (top-left corner)
-        so students don't see it during presentation.
+        Uses direct XML/relationship manipulation instead of add_movie()
+        which is broken in python-pptx 1.0.x for audio files.
         """
         try:
-            # Get file extension
+            from pptx.opc.package import Part
+            from pptx.opc.packuri import PackURI
+            
             ext = os.path.splitext(audio_path)[1].lower()
             
-            # Supported audio formats
-            if ext not in ['.mp3', '.wav', '.m4a', '.wma']:
+            mime_map = {
+                '.wav': 'audio/wav',
+                '.mp3': 'audio/mpeg',
+                '.m4a': 'audio/mp4',
+                '.wma': 'audio/x-ms-wma',
+            }
+            
+            if ext not in mime_map:
                 print(f"Warning: Unsupported audio format: {ext}")
                 return
             
-            # Position audio icon OUTSIDE visible slide area
-            # On the LEFT side, starting from TOP edge down
-            left = Inches(-0.6)   # Off-screen to the left
-            top = Inches(0.0)     # From top edge of slide
-            width = Inches(0.4)
-            height = Inches(0.4)
+            content_type = mime_map[ext]
             
-            # Add media shape
-            movie = slide.shapes.add_movie(
-                audio_path,
-                left, top, width, height,
-                mime_type=self._get_audio_mime_type(ext)
+            # Read audio file
+            with open(audio_path, 'rb') as f:
+                audio_data = f.read()
+            
+            # Get slide index from its partname (e.g., /ppt/slides/slide3.xml → index 2)
+            slide_part = slide.part
+            slide_partname = str(slide_part.partname)  # e.g., '/ppt/slides/slide3.xml'
+            import re
+            match = re.search(r'slide(\d+)', slide_partname)
+            slide_idx = int(match.group(1)) - 1 if match else 0
+            
+            # Collect ALL existing media partnames across the entire package to avoid duplicates
+            existing_media = set()
+            try:
+                for part in slide_part.package.iter_parts():
+                    existing_media.add(str(part.partname))
+            except Exception:
+                # Fallback: scan only this slide's relationships
+                for rel in slide_part.rels.values():
+                    if hasattr(rel, 'target_partname') and rel.target_partname:
+                        existing_media.add(str(rel.target_partname))
+            
+            media_idx = 1
+            while True:
+                partname = f"/ppt/media/audio_s{slide_idx}_{media_idx}{ext}"
+                if partname not in existing_media:
+                    break
+                media_idx += 1
+            
+            # Create the media part (arg order: partname, content_type, package, blob)
+            audio_part = Part(
+                PackURI(partname),
+                content_type,
+                slide_part.package,
+                audio_data,
             )
             
-            print(f"[PPTX] Audio added (hidden): {audio_path}")
+            # Add relationship from slide to audio
+            rId_audio = slide_part.relate_to(audio_part, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio')
+            rId_media = slide_part.relate_to(audio_part, 'http://schemas.microsoft.com/office/2007/relationships/media')
             
-            # Set auto-play using XML manipulation
-            self._set_audio_autoplay(movie, slide)
+            # Generate a unique shape ID
+            max_id = 0
+            for shape in slide.shapes:
+                if shape.shape_id > max_id:
+                    max_id = shape.shape_id
+            shape_id = max_id + 1
+            
+            # Position: off-screen (hidden from students)
+            left_emu = int(-0.6 * 914400)  # -0.6 inches in EMU
+            top_emu = 0
+            width_emu = int(0.4 * 914400)   # 0.4 inches
+            height_emu = int(0.4 * 914400)
+            
+            # Create speaker icon image part for the audio frame visual
+            icon_path = os.path.join(os.path.dirname(__file__), 'speaker_icon.png')
+            if os.path.exists(icon_path):
+                with open(icon_path, 'rb') as f:
+                    icon_data = f.read()
+                icon_partname = f"/ppt/media/speaker_s{slide_idx}{media_idx}.png"
+                icon_part = Part(
+                    PackURI(icon_partname),
+                    'image/png',
+                    slide_part.package,
+                    icon_data,
+                )
+                rId_icon = slide_part.relate_to(icon_part, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image')
+            else:
+                rId_icon = ""
+            
+            # Build audio frame XML (p:pic with audioFile)
+            audio_xml = f'''
+            <p:pic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                   xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                   xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                   xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main">
+                <p:nvPicPr>
+                    <p:cNvPr id="{shape_id}" name="Audio {shape_id}">
+                        <a:hlinkClick r:id="" action="ppaction://media"/>
+                    </p:cNvPr>
+                    <p:cNvPicPr>
+                        <a:picLocks noChangeAspect="1"/>
+                    </p:cNvPicPr>
+                    <p:nvPr>
+                        <a:audioFile r:link="{rId_audio}"/>
+                        <p:extLst>
+                            <p:ext uri="{{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}}">
+                                <p14:media r:embed="{rId_media}"/>
+                            </p:ext>
+                        </p:extLst>
+                    </p:nvPr>
+                </p:nvPicPr>
+                <p:blipFill>
+                    <a:blip r:embed="{rId_icon}"/>
+                    <a:stretch>
+                        <a:fillRect/>
+                    </a:stretch>
+                </p:blipFill>
+                <p:spPr>
+                    <a:xfrm>
+                        <a:off x="{left_emu}" y="{top_emu}"/>
+                        <a:ext cx="{width_emu}" cy="{height_emu}"/>
+                    </a:xfrm>
+                    <a:prstGeom prst="rect">
+                        <a:avLst/>
+                    </a:prstGeom>
+                </p:spPr>
+            </p:pic>
+            '''
+            
+            # Parse and add audio element to slide
+            audio_elem = etree.fromstring(audio_xml.strip().encode('utf-8'))
+            slide._element.find(qn('p:cSld')).find(qn('p:spTree')).append(audio_elem)
+            
+            print(f"[PPTX] Audio injected (XML): slide {slide_idx} <- {audio_path}")
+            
+            # Set auto-play timing
+            self._set_audio_autoplay_xml(slide, shape_id)
             
         except Exception as e:
+            import traceback
             print(f"Warning: Could not add audio: {e}")
+            traceback.print_exc()
     
-    def _get_audio_mime_type(self, ext: str) -> str:
-        """Get MIME type for audio format"""
-        mime_map = {
-            '.mp3': 'audio/mpeg',
-            '.wav': 'audio/wav',
-            '.m4a': 'audio/mp4',
-            '.wma': 'audio/x-ms-wma',
-        }
-        return mime_map.get(ext, 'audio/mpeg')
-    
-    def _set_audio_autoplay(self, movie_shape, slide):
+    def _set_audio_autoplay_xml(self, slide, shape_id: int):
         """
-        Set audio to auto-play when slide appears
-        This requires XML manipulation of the slide timing
+        Set audio to auto-play when slide appears using XML timing
         """
         try:
-            # Get the shape id
-            shape_id = movie_shape.shape_id
-            
-            # Create timing XML for auto-play
-            # This sets the audio to play automatically when the slide loads
             timing_xml = f'''
             <p:timing xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
                 <p:tnLst>
@@ -771,10 +867,8 @@ class PPTXGeneratorService:
             </p:timing>
             '''
             
-            # Parse and add timing element
             timing_elem = parse_xml(timing_xml)
             
-            # Find existing timing or add new
             slide_elem = slide._element
             existing_timing = slide_elem.find(qn('p:timing'))
             

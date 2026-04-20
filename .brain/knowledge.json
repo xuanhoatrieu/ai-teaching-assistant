@@ -1,6 +1,6 @@
 {
     "meta": {
-        "last_updated": "2026-04-19T09:19:00+07:00"
+        "last_updated": "2026-04-20T11:19:00+07:00"
     },
     "decisions": [
         {"decision": "CLIProxy as Priority 1, Gemini SDK as fallback", "reason": "CLIProxy provides free multi-model access (GPT, Claude, Gemini) via self-hosted proxy"},
@@ -12,7 +12,7 @@
         {"decision": "Support 4 response formats in CLIProxy TTS parser", "reason": "CLIProxy returns audio in non-standard format — future-proofing"},
         {"decision": "Always override fallback model to hardcoded 'gemini-2.5-flash-preview-tts'", "reason": "CLIProxy display name is invalid for Gemini SDK"},
         {"decision": "VietNormalizer DISABLED in v1.1.1", "reason": "Causes audio quality degradation (mispronounced words). TTS optimization handled by AI prompt instead"},
-        {"decision": "Nginx timeout set to 180s", "reason": "AI generation can take 60-120s, 180s gives comfortable buffer"},
+        {"decision": "Nginx timeout set to 600s", "reason": "AI generation (questions, speaker notes) can take 2-5 minutes. 180s was too short, causing false-negative errors on VPS."},
         {"decision": "SVG favicon instead of PNG", "reason": "Scalable, crisp at all sizes, no generation dependency"},
         {"decision": "Use file-based debug logging for TTS debugging", "reason": "Terminal logs could not be read via tools — file-based logging effective for remote debugging"},
         {"decision": "ViTTS OmniVoice: default mode = 'auto' (not 'clone')", "reason": "Clone requires UUID ref_id. 'auto' is safe fallback that needs no extra params"},
@@ -24,7 +24,9 @@
         {"decision": "Rewrite ALL system prompts from Vietnamese to English", "reason": "English prompts produce higher quality AI output. Language control via injected {output_language_instruction} placeholder ensures correct output language regardless of prompt language."},
         {"decision": "ImageGen URL rewrite pattern (localhost → configured API host)", "reason": "Remote ImageGen APIs commonly return localhost URLs. Transparent URL rewriting more robust than requiring server-side config changes."},
         {"decision": "SDK fallback always uses GEMINI_IMAGE_MODEL constant for ImageGen models", "reason": "ImageGen model names (flux-image) don't exist in Gemini SDK. isImageGenModel flag must force correct fallback model."},
-        {"decision": "Speaker notes 'PLAIN TEXT ONLY' TTS rule + 'Act as professional lecturer' persona", "reason": "Combining user's reference prompt style (natural presenter tone, no markdown) with existing quality requirements produces better TTS-ready output."}
+        {"decision": "Speaker notes 'PLAIN TEXT ONLY' TTS rule + 'Act as professional lecturer' persona", "reason": "Combining user's reference prompt style (natural presenter tone, no markdown) with existing quality requirements produces better TTS-ready output."},
+        {"decision": "Rewrite _add_audio_with_autoplay using direct XML/Part instead of add_movie()", "reason": "python-pptx 1.0.2 add_movie() throws 'Part has no attribute sha1' for WAV/MP3 audio. Direct XML manipulation with Part+PackURI+relationship bypasses this limitation."},
+        {"decision": "ViTTS base URL 8888 (not 8000)", "reason": "Port 8000 is used by ImageGen/Flux API. ViTTS OmniVoice production server runs on port 8888."}
     ],
     "patterns": [
         "NestJS module structure with controller/service/module",
@@ -42,7 +44,8 @@
         "Type-only imports in TypeScript (verbatimModuleSyntax)",
         "OmniVoice async job polling pattern: POST → job_id → poll → download audio_url",
         "ViTTS mode detection from saved modelName: vitts:ref:UUID → clone, vitts:design → design, else → auto",
-        "ImageGen URL rewrite: detect localhost in response URL → replace origin with config URL"
+        "ImageGen URL rewrite: detect localhost in response URL → replace origin with config URL",
+        "PPTX audio injection via XML: Part+PackURI+audioFile XML element + relationship (bypasses broken add_movie)"
     ],
     "gotchas": [
         "⭐ Image model name: 'gemini-2.5-flash-image' NOT 'gemini-2.5-flash-preview-image-generation' (404 error)",
@@ -77,7 +80,7 @@
         "JwtStrategy.validate() returns {id, email, role} — use user.id NOT user.userId",
         "Frontend default API_URL port 3000 — need VITE_API_URL=http://localhost:3001",
         "CSS class conflict: UserSettings.css .modal-content {max-width:420px} overrides AdminPage — use specific class with !important",
-        "Nginx default proxy_read_timeout is 60s — AI requests need 180s",
+        "Nginx default proxy_read_timeout is 60s — AI requests need 600s (not 180s — questions/speaker notes can take 2-5 min)",
         "⭐ OmniVoice generate-clone-ref: MUST use application/x-www-form-urlencoded (URLSearchParams), NOT JSON.",
         "⭐ OmniVoice Voice Design instruct format: 'female, young adult, high pitch' — NOT 'A female, young speaker'.",
         "⭐ ViTTS vittsMode detection: saved modelName 'vitts:auto' — ALWAYS default to 'auto' mode, not 'clone'.",
@@ -89,7 +92,12 @@
         "🆕 Gemini SDK fallback: When isImageGenModel=true, MUST use GEMINI_IMAGE_MODEL constant — NOT the ImageGen model name (flux-image → 404).",
         "🆕 regenerateSlideContent: Must use 'slides.design' slug — 'slides.optimize_content' does NOT exist.",
         "🆕 Speaker notes prompts: MUST include 'PLAIN TEXT ONLY' rule — TTS engines cannot read Markdown, bullets, emojis.",
-        "🆕 GeminiService.optimizeFluxPrompt() uses process.env.GEMINI_API_KEY directly (not DB key). If key invalid, falls back to original prompt (non-critical warning)."
+        "🆕 GeminiService.optimizeFluxPrompt() uses process.env.GEMINI_API_KEY directly (not DB key). If key invalid, falls back to original prompt (non-critical warning).",
+        "⭐⭐ python-pptx 1.0.2 add_movie() BROKEN for audio: 'Part object has no attribute sha1'. Must use direct Part+PackURI+XML to inject audio.",
+        "⭐ PPTX audio injection: audio frame uses a:audioFile (not a:videoFile). Must create TWO relationships: officeDocument/audio + microsoft/media.",
+        "⭐ ViTTS production: baseUrl must use port 8888. Port 8000 is Flux/ImageGen.",
+        "⭐ ViTTS omniCloneRef: Use FormData directly, NOT stringified body. Hardcoded local paths (f:/...) crash on Linux VPS.",
+        "⭐ VPS false-negative errors: Backend completes but frontend shows error due to nginx proxy_read_timeout being too short. Set to 600s minimum."
     ],
     "conventions": [
         "API routes: /lessons/:id/resource",
