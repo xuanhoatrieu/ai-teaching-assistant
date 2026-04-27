@@ -334,12 +334,19 @@ export class CLIProxyProvider {
     }
 
     /**
+     * Check if a model requires the OpenAI Images API endpoint
+     * (e.g. gpt-image-1, gpt-image-2, dall-e-3)
+     */
+    private isOpenAIImageModel(model: string): boolean {
+        const lower = model.toLowerCase();
+        return lower.startsWith('gpt-image') || lower.startsWith('dall-e');
+    }
+
+    /**
      * Generate image using image model
-     * Note: This uses the multimodal endpoint, image is returned as base64 in response
-     * Response format varies by CLIProxy implementation:
-     * - String content with base64 data
-     * - Array content with image_url parts (OpenAI multimodal format)
-     * - Raw base64 string
+     * Routes to the correct endpoint based on model type:
+     * - gpt-image-* / dall-e-* → /v1/images/generations (OpenAI Images API)
+     * - Other models → /v1/chat/completions (multimodal chat)
      */
     async generateImage(prompt: string, model?: string): Promise<string> {
         const config = await this.getConfig();
@@ -347,6 +354,82 @@ export class CLIProxyProvider {
 
         this.logger.log(`CLIProxy image generation: model=${modelName}`);
 
+        // Route gpt-image-* and dall-e-* to /v1/images/generations
+        if (this.isOpenAIImageModel(modelName)) {
+            return this.generateImageViaImagesAPI(prompt, modelName, config);
+        }
+
+        // All other models use /v1/chat/completions (multimodal)
+        return this.generateImageViaChatCompletions(prompt, modelName, config);
+    }
+
+    /**
+     * Generate image via /v1/images/generations endpoint (OpenAI Images API)
+     * Used for gpt-image-*, dall-e-* models
+     */
+    private async generateImageViaImagesAPI(
+        prompt: string,
+        modelName: string,
+        config: CLIProxyConfig,
+    ): Promise<string> {
+        this.logger.log(`Using /v1/images/generations for model=${modelName}`);
+
+        const response = await fetch(`${config.url}/v1/images/generations`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: modelName,
+                prompt,
+                size: '1024x1024',
+                quality: 'high',
+            }),
+            signal: AbortSignal.timeout(120000), // 120s timeout for image gen
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`CLIProxy image generation failed: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+
+        // Format 1: { data: [{ url: "http://..." }] }
+        if (data?.data?.[0]?.url) {
+            const imageUrl = data.data[0].url;
+            this.logger.log(`✅ Images API returned URL (${imageUrl.substring(0, 60)}...)`);
+            // Download the image and return as data URI
+            const imageResponse = await fetch(imageUrl, {
+                signal: AbortSignal.timeout(30000),
+            });
+            if (!imageResponse.ok) {
+                throw new Error(`Failed to download image: HTTP ${imageResponse.status}`);
+            }
+            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+            const contentType = imageResponse.headers.get('content-type') || 'image/png';
+            return `data:${contentType};base64,${imageBuffer.toString('base64')}`;
+        }
+
+        // Format 2: { data: [{ b64_json: "..." }] }
+        if (data?.data?.[0]?.b64_json) {
+            this.logger.log(`✅ Images API returned b64_json`);
+            return `data:image/png;base64,${data.data[0].b64_json}`;
+        }
+
+        throw new Error('CLIProxy Images API: No image data in response');
+    }
+
+    /**
+     * Generate image via /v1/chat/completions endpoint (multimodal chat)
+     * Used for Gemini image models and other multimodal models
+     */
+    private async generateImageViaChatCompletions(
+        prompt: string,
+        modelName: string,
+        config: CLIProxyConfig,
+    ): Promise<string> {
         const response = await fetch(`${config.url}/v1/chat/completions`, {
             method: 'POST',
             headers: {

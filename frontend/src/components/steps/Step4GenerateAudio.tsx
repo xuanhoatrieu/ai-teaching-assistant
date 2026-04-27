@@ -126,13 +126,33 @@ export function Step4GenerateAudio() {
     const generateSpeakerNotes = async () => {
         try {
             setIsGeneratingNotes(true);
-            const response = await api.post(`/lessons/${lessonId}/slide-audios/generate-speaker-notes`);
+            const response = await api.post(
+                `/lessons/${lessonId}/slide-audios/generate-speaker-notes`,
+                {},
+                { timeout: 600000 }, // 10 min — AI generation for many slides can be slow
+            );
             setSlideAudios(normalizeSlideAudios(response.data));
             // Also reload slide contents to get updated speakerNote fields
             const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
             if (slidesRes.data) setSlideContents(slidesRes.data);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error generating speaker notes:', error);
+            // Timeout or network error — data may have been saved in DB
+            // Reload to check before showing error
+            try {
+                const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
+                if (slidesRes.data) setSlideContents(slidesRes.data);
+                const audioRes = await api.get(`/lessons/${lessonId}/slide-audios`);
+                if (audioRes.data?.length > 0) {
+                    setSlideAudios(normalizeSlideAudios(audioRes.data));
+                    const hasNotes = audioRes.data.some((sa: any) => sa.speakerNote?.trim());
+                    if (hasNotes) {
+                        // Data was saved! Just the response didn't make it back
+                        alert('⚠️ Kết nối bị gián đoạn nhưng lời giảng đã được tạo thành công! Dữ liệu đã được tải lại.');
+                        return;
+                    }
+                }
+            } catch { /* reload failed, show original error */ }
             alert('Lỗi khi tạo lời giảng. Vui lòng thử lại.');
         } finally {
             setIsGeneratingNotes(false);
@@ -145,13 +165,29 @@ export function Step4GenerateAudio() {
     const optimizeSpeakerNotes = async () => {
         try {
             setIsOptimizingNotes(true);
-            const response = await api.post(`/lessons/${lessonId}/slide-audios/optimize-speaker-notes`);
+            const response = await api.post(
+                `/lessons/${lessonId}/slide-audios/optimize-speaker-notes`,
+                {},
+                { timeout: 600000 }, // 10 min — AI optimization for many slides can be slow
+            );
             setSlideAudios(normalizeSlideAudios(response.data));
             // Also reload slide contents to get updated speakerNote fields
             const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
             if (slidesRes.data) setSlideContents(slidesRes.data);
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error optimizing speaker notes:', error);
+            // Timeout or network error — data may have been saved in DB
+            try {
+                const audioRes = await api.get(`/lessons/${lessonId}/slide-audios`);
+                if (audioRes.data?.length > 0) {
+                    setSlideAudios(normalizeSlideAudios(audioRes.data));
+                    const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
+                    if (slidesRes.data) setSlideContents(slidesRes.data);
+                    // Check if optimization actually happened (notes updated recently)
+                    alert('⚠️ Kết nối bị gián đoạn nhưng dữ liệu đã được tải lại. Vui lòng kiểm tra lời giảng bên dưới.');
+                    return;
+                }
+            } catch { /* reload failed, show original error */ }
             alert('Lỗi khi tối ưu lời giảng. Vui lòng thử lại.');
         } finally {
             setIsOptimizingNotes(false);

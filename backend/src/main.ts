@@ -5,6 +5,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { PromptsService } from './prompts/prompts.service';
 import { CLIProxyProvider } from './ai/cliproxy.provider';
+import { ModelConfigService } from './model-config/model-config.service';
 import { join } from 'path';
 
 async function bootstrap() {
@@ -50,6 +51,20 @@ async function bootstrap() {
     }
   } catch (error) {
     logger.warn(`⚠️ CLIProxy auto-detect skipped: ${error.message}`);
+  }
+
+  // Auto-discover Gemini SDK models on startup — saves best model per category to DB
+  // This ensures ImagenService and other services always have up-to-date model names
+  try {
+    const modelConfigService = app.get(ModelConfigService);
+    // Pass sentinel userId — discoverGeminiModels internally calls getActiveKey
+    // which falls back to system key when no user key exists
+    const models = await modelConfigService.discoverGeminiModels('system-startup');
+    const imageModels = models.filter(m => m.supportedTasks.includes('IMAGE'));
+    const ttsModels = models.filter(m => m.supportedTasks.includes('TTS'));
+    logger.log(`🔍 Gemini SDK discovery: ${models.length} models (${imageModels.length} image, ${ttsModels.length} TTS)`);
+  } catch (error) {
+    logger.warn(`⚠️ Gemini SDK discovery skipped: ${error.message}`);
   }
 }
 bootstrap();

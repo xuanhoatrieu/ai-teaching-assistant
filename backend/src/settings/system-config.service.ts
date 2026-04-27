@@ -149,6 +149,39 @@ export class SystemConfigService {
         };
     }
 
+    // ========================
+    // Discovered Model Registry (Gemini SDK)
+    // ========================
+
+    /**
+     * Get the best discovered Gemini model for a category.
+     * Returns null if no model has been discovered yet.
+     */
+    async getDiscoveredGeminiModel(category: 'text' | 'image' | 'tts'): Promise<string | null> {
+        return this.get(`gemini.discovered.${category}`);
+    }
+
+    /**
+     * Save the best discovered Gemini model for a category.
+     * Called during discovery flows (startup, user Discover button, admin Test Connection).
+     */
+    async setDiscoveredGeminiModel(category: 'text' | 'image' | 'tts', modelName: string): Promise<void> {
+        await this.set(`gemini.discovered.${category}`, modelName);
+        this.logger.log(`Saved discovered Gemini ${category} model: ${modelName}`);
+    }
+
+    /**
+     * Get all discovered Gemini models.
+     */
+    async getDiscoveredGeminiModels(): Promise<{ text: string | null; image: string | null; tts: string | null }> {
+        const [text, image, tts] = await Promise.all([
+            this.get('gemini.discovered.text'),
+            this.get('gemini.discovered.image'),
+            this.get('gemini.discovered.tts'),
+        ]);
+        return { text, image, tts };
+    }
+
     /**
      * Initialize default Image Gen config
      */

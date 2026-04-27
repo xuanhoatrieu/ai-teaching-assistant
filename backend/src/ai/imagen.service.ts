@@ -75,8 +75,22 @@ export class ImagenService {
      * @param modelName - Model to use (optional, defaults to gemini-2.5-flash-image)
      * @param apiKey - API key (optional, uses environment variable if not provided)
      */
-    // The default Gemini SDK model for image generation
-    private readonly GEMINI_IMAGE_MODEL = 'gemini-2.0-flash-exp-image-generation';
+    // Last-resort fallback — only used if DB has no discovered model
+    private static readonly FALLBACK_IMAGE_MODEL = 'gemini-2.0-flash-image-generation';
+
+    /**
+     * Get the best Gemini image model dynamically from DB.
+     * Priority: DB discovered model > static fallback
+     */
+    private async getGeminiImageModel(): Promise<string> {
+        if (this.systemConfigService) {
+            const discovered = await this.systemConfigService.getDiscoveredGeminiModel('image');
+            if (discovered) {
+                return discovered;
+            }
+        }
+        return ImagenService.FALLBACK_IMAGE_MODEL;
+    }
 
     async generateImage(
         prompt: string,
@@ -84,7 +98,8 @@ export class ImagenService {
         modelName?: string,
         apiKey?: string
     ): Promise<GeneratedImage> {
-        const effectiveModel = modelName || this.GEMINI_IMAGE_MODEL;
+        const geminiImageModel = await this.getGeminiImageModel();
+        const effectiveModel = modelName || geminiImageModel;
         const effectiveApiKey = apiKey || this.getApiKey();
 
         // Validate API key is real (not a placeholder)
@@ -141,9 +156,9 @@ export class ImagenService {
             // For Gemini SDK fallback, always use the correct image generation model
             // CLIProxy model names (e.g. gemini-3.1-flash-image) and ImageGen model names (e.g. flux-image)
             // don't work with Gemini SDK - must use a real Gemini model
-            const sdkModel = (isCliproxyModel || isImageGenModel) ? this.GEMINI_IMAGE_MODEL : (
+            const sdkModel = (isCliproxyModel || isImageGenModel) ? geminiImageModel : (
                 effectiveModel.includes(':')
-                    ? this.GEMINI_IMAGE_MODEL  // Any prefixed model → use default
+                    ? geminiImageModel  // Any prefixed model → use default
                     : effectiveModel
             );
 

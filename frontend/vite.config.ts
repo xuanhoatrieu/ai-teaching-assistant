@@ -11,6 +11,10 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
+        // Increase proxy timeout for long-running AI requests (speaker notes, optimization)
+        // Default is 120s which causes false timeout errors on multi-slide generation
+        timeout: 600000,       // 10 minutes — outgoing socket timeout
+        proxyTimeout: 600000,  // 10 minutes — incoming proxy timeout
         // SSE requires these settings to prevent buffering
         configure: (proxy, _options) => {
           proxy.on('proxyRes', (proxyRes, _req, res) => {

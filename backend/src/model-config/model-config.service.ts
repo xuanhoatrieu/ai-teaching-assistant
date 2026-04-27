@@ -266,6 +266,26 @@ export class ModelConfigService {
                 }
 
                 this.logger.log(`Discovered ${discoveredModels.length} Gemini models from API`);
+
+                // Save best models per category to DB for other services to use dynamically
+                if (this.systemConfigService) {
+                    const bestImage = discoveredModels.find(m => m.supportedTasks.includes('IMAGE'));
+                    const bestTTS = discoveredModels.find(m => m.supportedTasks.includes('TTS'));
+                    const bestText = discoveredModels.find(m =>
+                        m.supportedTasks.includes('OUTLINE') && m.name.includes('pro'),
+                    ) || discoveredModels.find(m => m.supportedTasks.includes('OUTLINE'));
+
+                    if (bestImage) {
+                        await this.systemConfigService.setDiscoveredGeminiModel('image', bestImage.name);
+                    }
+                    if (bestTTS) {
+                        await this.systemConfigService.setDiscoveredGeminiModel('tts', bestTTS.name);
+                    }
+                    if (bestText) {
+                        await this.systemConfigService.setDiscoveredGeminiModel('text', bestText.name);
+                    }
+                    this.logger.log(`Saved discovered Gemini models: text=${bestText?.name}, image=${bestImage?.name}, tts=${bestTTS?.name}`);
+                }
             } else {
                 this.logger.warn(`Gemini API listModels returned ${response.status}, falling back to known models`);
             }
@@ -626,7 +646,16 @@ export class ModelConfigService {
         try {
             models.GEMINI = await this.discoverGeminiModels(userId);
         } catch (error) {
-            // Return default list if discovery fails
+            // Return default list if discovery fails — try DB-discovered names first
+            let imageModelName = 'gemini-2.0-flash-image-generation';
+            let ttsModelName = 'gemini-2.5-flash-preview-tts';
+            if (this.systemConfigService) {
+                try {
+                    const discovered = await this.systemConfigService.getDiscoveredGeminiModels();
+                    if (discovered.image) imageModelName = discovered.image;
+                    if (discovered.tts) ttsModelName = discovered.tts;
+                } catch { /* use fallback */ }
+            }
             models.GEMINI = [
                 {
                     name: 'gemini-2.5-pro',
@@ -635,14 +664,14 @@ export class ModelConfigService {
                     supportedTasks: ['OUTLINE', 'SLIDES', 'QUESTIONS'],
                 },
                 {
-                    name: 'gemini-2.0-flash-exp-image-generation',
-                    displayName: 'Gemini 2.0 Flash Image Gen (Default)',
+                    name: imageModelName,
+                    displayName: `${imageModelName} (Default)`,
                     description: 'Image generation',
                     supportedTasks: ['IMAGE'],
                 },
                 {
-                    name: 'gemini-2.5-flash-preview-tts',
-                    displayName: 'Gemini 2.5 TTS (Default)',
+                    name: ttsModelName,
+                    displayName: `${ttsModelName} (Default)`,
                     description: 'Text-to-speech',
                     supportedTasks: ['TTS'],
                 },
@@ -724,8 +753,29 @@ export class ModelConfigService {
      * Get default models - uses CLIProxy admin defaults if enabled
      */
     async getDefaults(): Promise<Record<TaskTypeValue, { provider: string; modelName: string }>> {
-        // Start with hardcoded defaults
+        // Start with hardcoded defaults (last resort)
         const defaults = { ...DEFAULT_MODELS };
+
+        // Override with dynamically discovered Gemini models from DB (if available)
+        if (this.systemConfigService) {
+            try {
+                const discovered = await this.systemConfigService.getDiscoveredGeminiModels();
+                if (discovered.text) {
+                    defaults.OUTLINE = { provider: 'GEMINI', modelName: discovered.text };
+                    defaults.SLIDES = { provider: 'GEMINI', modelName: discovered.text };
+                    defaults.SPEAKER_NOTES = { provider: 'GEMINI', modelName: discovered.text };
+                    defaults.QUESTIONS = { provider: 'GEMINI', modelName: discovered.text };
+                }
+                if (discovered.image) {
+                    defaults.IMAGE = { provider: 'GEMINI', modelName: discovered.image };
+                }
+                if (discovered.tts) {
+                    defaults.TTS = { provider: 'GEMINI', modelName: discovered.tts };
+                }
+            } catch (error: any) {
+                this.logger.warn(`Failed to load discovered Gemini models: ${error.message}`);
+            }
+        }
 
         this.logger.debug(`getDefaults: cliproxy injected = ${!!this.cliproxy}`);
 
