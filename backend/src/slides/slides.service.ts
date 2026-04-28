@@ -6,6 +6,7 @@ import { SlideDataService } from '../slide-data/slide-data.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { FidelityValidatorService } from '../prompts/fidelity-validator.service';
 import { AiProviderService } from '../ai/ai-provider.service';
+import { SlideImageGeneratorService } from '../slide-data/slide-image-generator.service';
 import { Lesson } from '@prisma/client';
 
 export interface GenerateSlideResult {
@@ -26,6 +27,7 @@ export class SlidesService {
         private promptComposer: PromptComposerService,
         private fidelityValidator: FidelityValidatorService,
         private aiProvider: AiProviderService,
+        private slideImageGenerator: SlideImageGeneratorService,
     ) { }
     // Get all Slide entities from database (for Step 5)
     async getSlides(lessonId: string) {
@@ -693,38 +695,134 @@ export class SlidesService {
             throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
         }
 
-        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
-        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-
-        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'IMAGE');
-
-        // Build image prompt
-        const prompt = await this.promptComposer.buildFullPrompt(
-            slide.lesson.subjectId,
-            'slides.image_prompt',
-            {
-                title: slide.title,
-                content: slide.content || '',
-                lesson_title: slide.lesson.title,
-            },
-        );
-
         try {
-            // Note: Full image generation requires ImageGeneratorService integration
-            // For text-based image prompt generation, use aiProvider
-            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
-            this.logger.log(`Generated image prompt response for slide ${slideIndex} via ${aiResult.provider}`);
-
-            // This is a placeholder that will be enhanced with actual image generation
-            return {
-                ...slide,
-                imageUrl: slide.imageUrl, // Keep existing for now
-                message: 'Image regeneration requires ImageGeneratorService integration',
-            };
+            // Call the actual image generator service
+            const updatedSlide = await this.slideImageGenerator.generateImageForSlide(
+                lessonId,
+                slideIndex,
+                userId
+            );
+            
+            this.logger.log(`Successfully regenerated image for slide ${slideIndex}`);
+            return updatedSlide;
         } catch (error) {
             this.logger.error(`Failed to regenerate image for slide ${slideIndex}: ${error.message}`);
             throw new BadRequestException(`Failed to regenerate image: ${error.message}`);
         }
+    }
+    /**
+     * Generate optimized content AND image for a single slide (combined operation).
+     * Used by the new sequential frontend pattern (like audio generation).
+     */
+    async generateContentAndImage(lessonId: string, slideIndex: number, userId: string) {
+        const slide = await this.prisma.slide.findFirst({
+            where: { lessonId, slideIndex },
+            include: { lesson: { include: { subject: true } } },
+        });
+
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
+        }
+
+        const result: {
+            slideIndex: number;
+            optimizedContent: any[] | null;
+            imageUrl: string | null;
+            title: string;
+            contentError?: string;
+            imageError?: string;
+        } = {
+            slideIndex,
+            optimizedContent: null,
+            imageUrl: slide.imageUrl,
+            title: slide.title,
+        };
+
+        // Phase 1: Optimize content
+        try {
+            const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+            const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
+
+            const prompt = await this.promptComposer.buildFullPrompt(
+                slide.lesson.subjectId,
+                'slides.design',
+                {
+                    title: slide.title,
+                    content: slide.content || '',
+                },
+            );
+
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
+            const rawResult = aiResult.content;
+
+            // Parse JSON
+            let optimizedContent;
+            let cleaned = rawResult.trim();
+            const jsonStartTag = cleaned.indexOf('```json');
+            if (jsonStartTag !== -1) {
+                const contentStart = jsonStartTag + '```json'.length;
+                const lastBackticks = cleaned.lastIndexOf('```');
+                if (lastBackticks > contentStart) {
+                    cleaned = cleaned.substring(contentStart, lastBackticks).trim();
+                }
+            } else {
+                const plainStart = cleaned.indexOf('```');
+                if (plainStart !== -1 && plainStart < 10) {
+                    const contentStart = cleaned.indexOf('\n', plainStart) + 1;
+                    const lastBackticks = cleaned.lastIndexOf('```');
+                    if (lastBackticks > contentStart) {
+                        cleaned = cleaned.substring(contentStart, lastBackticks).trim();
+                    }
+                }
+            }
+            const parsed = JSON.parse(cleaned);
+            optimizedContent = parsed.bullets || parsed;
+
+            // Save to DB
+            await this.prisma.slide.update({
+                where: { lessonId_slideIndex: { lessonId, slideIndex } },
+                data: { optimizedContentJson: JSON.stringify(optimizedContent) },
+            });
+
+            result.optimizedContent = optimizedContent;
+            this.logger.log(`[generateContentAndImage] Slide ${slideIndex}: optimized ${optimizedContent.length} bullets`);
+        } catch (error) {
+            this.logger.error(`[generateContentAndImage] Content optimization failed for slide ${slideIndex}: ${error.message}`);
+            result.contentError = error.message;
+        }
+
+        // Phase 2: Generate image
+        try {
+            const updatedSlide = await this.slideImageGenerator.generateImageForSlide(
+                lessonId,
+                slideIndex,
+                userId,
+            );
+            result.imageUrl = updatedSlide.imageUrl || null;
+            this.logger.log(`[generateContentAndImage] Slide ${slideIndex}: image generated`);
+        } catch (error) {
+            this.logger.error(`[generateContentAndImage] Image generation failed for slide ${slideIndex}: ${error.message}`);
+            result.imageError = error.message;
+        }
+
+        return result;
+    }
+
+    /**
+     * Clear generated content (optimizedContentJson + imageUrl) for all slides in a lesson.
+     * Used when user wants to regenerate everything from scratch.
+     */
+    async clearGeneratedContent(lessonId: string) {
+        const result = await this.prisma.slide.updateMany({
+            where: { lessonId },
+            data: {
+                optimizedContentJson: null,
+                imageUrl: null,
+            },
+        });
+
+        this.logger.log(`[clearGeneratedContent] Cleared content for ${result.count} slides in lesson ${lessonId}`);
+        return { cleared: result.count };
     }
 }
 

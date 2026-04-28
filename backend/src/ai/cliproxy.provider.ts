@@ -386,7 +386,7 @@ export class CLIProxyProvider {
                 size: '1024x1024',
                 quality: 'high',
             }),
-            signal: AbortSignal.timeout(120000), // 120s timeout for image gen
+            // No timeout - image generation can take 2-5 minutes for complex prompts
         });
 
         if (!response.ok) {
@@ -401,9 +401,7 @@ export class CLIProxyProvider {
             const imageUrl = data.data[0].url;
             this.logger.log(`✅ Images API returned URL (${imageUrl.substring(0, 60)}...)`);
             // Download the image and return as data URI
-            const imageResponse = await fetch(imageUrl, {
-                signal: AbortSignal.timeout(30000),
-            });
+            const imageResponse = await fetch(imageUrl);
             if (!imageResponse.ok) {
                 throw new Error(`Failed to download image: HTTP ${imageResponse.status}`);
             }

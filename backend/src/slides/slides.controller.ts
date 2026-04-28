@@ -3,6 +3,7 @@ import {
     Get,
     Put,
     Post,
+    Delete,
     Body,
     Param,
     UseGuards,
@@ -84,5 +85,29 @@ export class SlidesController {
             parseInt(slideIndex, 10),
             req.user.id,
         );
+    }
+
+    // POST /lessons/:lessonId/slides/:slideIndex/generate-content-image
+    // Generate optimized content + image for a single slide (sequential pattern like audio)
+    @Post(':slideIndex/generate-content-image')
+    async generateContentAndImage(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+        @Request() req,
+    ) {
+        return this.slidesService.generateContentAndImage(
+            lessonId,
+            parseInt(slideIndex, 10),
+            req.user.id,
+        );
+    }
+
+    // DELETE /lessons/:lessonId/slides/generated-content
+    // Reset all optimizedContentJson + imageUrl so slides can be regenerated from scratch
+    @Delete('generated-content')
+    async clearGeneratedContent(
+        @Param('lessonId') lessonId: string,
+    ) {
+        return this.slidesService.clearGeneratedContent(lessonId);
     }
 }

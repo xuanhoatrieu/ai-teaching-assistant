@@ -114,13 +114,42 @@ export class SlideImageGeneratorService {
         }
 
         // Generate image using Imagen with user's configured model
-        // Use 1:1 square ratio to match 12cm x 12cm requirement
-        const generatedImage = await this.imagenService.generateImage(
-            imagePrompt,
-            '1:1',  // Square ratio (12cm x 12cm)
-            effectiveModelName,
-            effectiveApiKey || undefined
-        );
+        // Add robust retry logic because AI providers occasionally timeout or return 503
+        let generatedImage: GeneratedImage | null = null;
+        let lastError: any = null;
+        const maxRetries = 2; // Total 3 attempts
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                if (attempt > 0) {
+                    this.logger.log(`Retry attempt ${attempt}/${maxRetries} for slide ${slideIndex} image generation`);
+                    // Wait a bit before retrying to let the provider recover
+                    await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+                }
+
+                generatedImage = await this.imagenService.generateImage(
+                    imagePrompt,
+                    '1:1',  // Square ratio (12cm x 12cm)
+                    effectiveModelName,
+                    effectiveApiKey || undefined
+                );
+                
+                // If it successfully returned a real image (not a placeholder SVG), break the loop
+                if (generatedImage && generatedImage.mimeType !== 'image/svg+xml') {
+                    break;
+                } else if (generatedImage && generatedImage.mimeType === 'image/svg+xml') {
+                    this.logger.warn(`Attempt ${attempt} returned placeholder SVG, treating as failure for retry logic`);
+                    lastError = new Error('Provider returned placeholder');
+                }
+            } catch (error) {
+                this.logger.warn(`Image generation attempt ${attempt} failed for slide ${slideIndex}: ${error.message}`);
+                lastError = error;
+            }
+        }
+
+        if (!generatedImage) {
+            throw new Error(`Failed to generate image after ${maxRetries} retries: ${lastError?.message || 'Unknown error'}`);
+        }
 
         // Convert base64 to Buffer
         const imageBuffer = Buffer.from(generatedImage.base64, 'base64');

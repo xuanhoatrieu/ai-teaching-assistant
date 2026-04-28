@@ -41,3 +41,9 @@ temp/
 
 # Brain (session is local)
 .brain/session.json
+
+# Local Data and Cache
+__pycache__/
+backend/uploads/
+backend/datauser/
+

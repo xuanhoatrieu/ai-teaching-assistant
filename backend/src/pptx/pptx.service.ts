@@ -146,6 +146,21 @@ export class PptxService {
         yield progress;
 
         // Process each slide: content optimization → image generation
+        // Heartbeat: send periodic progress to keep SSE alive during long AI operations
+        let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+        const startHeartbeat = () => {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            heartbeatInterval = setInterval(() => {
+                this.generationProgress.set(lessonId, progress);
+            }, 15000); // Every 15 seconds
+        };
+        const stopHeartbeat = () => {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+        };
+
         for (let i = 0; i < slides.length; i++) {
             const slide = slides[i];
             progress.currentSlide = i + 1;
@@ -159,6 +174,8 @@ export class PptxService {
             // Debug logging
             this.logger.log(`[DEBUG] Optimizing slide ${i + 1}: title="${slide.title}", hasContent=${!!slide.content}, apiKey=${apiKey ? 'present' : 'MISSING'}, model=${contentModel.modelName}`);
 
+            // Start heartbeat during AI call
+            startHeartbeat();
             try {
                 const subjectLanguage = lesson.subject?.language || 'vi';
                 const optimizedContent = await this.optimizeSlideContent(
@@ -184,6 +201,7 @@ export class PptxService {
                 this.logger.error(`Failed to optimize content for slide ${slide.slideIndex}: ${error.message}`);
                 // Continue with original content if optimization fails
             }
+            stopHeartbeat();
 
             // Phase 2: Generate image
             progress.slides[i].phase = 'generating_image';
@@ -192,6 +210,7 @@ export class PptxService {
             this.generationProgress.set(lessonId, progress);
             yield progress;
 
+            startHeartbeat();
             try {
                 // Always generate image - slide-image-generator will use title as fallback if no visualIdea
                 const updatedSlide = await this.slideImageGenerator.generateImageForSlide(
@@ -205,10 +224,13 @@ export class PptxService {
                 this.logger.error(`Failed to generate image for slide ${slide.slideIndex}: ${error.message}`);
                 progress.slides[i].phase = 'error';
             }
+            stopHeartbeat();
 
             this.generationProgress.set(lessonId, progress);
             yield progress;
         }
+
+        stopHeartbeat(); // Ensure cleanup
 
         progress.status = 'complete';
         progress.message = '✅ Đã tạo xong nội dung và hình ảnh!';

@@ -139,17 +139,36 @@ export class PptxController {
         const generator = this.pptxService.generateImagesStream(lessonId, req.user.id);
 
         // Stream each item as it's generated (real-time progress)
+        // Includes heartbeat to prevent proxy/browser from closing idle SSE connection
         return new Observable<MessageEvent>((subscriber) => {
+            let lastProgress: any = null;
+            let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+
+            // Send heartbeat every 15 seconds to keep SSE connection alive
+            heartbeatInterval = setInterval(() => {
+                if (lastProgress) {
+                    subscriber.next({ data: lastProgress });
+                }
+            }, 15000);
+
             (async () => {
                 try {
                     for await (const progress of generator) {
+                        lastProgress = progress;
                         subscriber.next({ data: progress });
                     }
+                    if (heartbeatInterval) clearInterval(heartbeatInterval);
                     subscriber.complete();
                 } catch (error) {
+                    if (heartbeatInterval) clearInterval(heartbeatInterval);
                     subscriber.error(error);
                 }
             })();
+
+            // Cleanup on unsubscribe
+            return () => {
+                if (heartbeatInterval) clearInterval(heartbeatInterval);
+            };
         });
     }
 

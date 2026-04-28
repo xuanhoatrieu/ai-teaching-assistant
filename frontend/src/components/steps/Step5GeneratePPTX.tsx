@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { ModelSelector } from '../ModelSelector';
 import { api } from '../../lib/api';
@@ -30,14 +30,6 @@ interface SlideProgress {
     isRegenerating?: boolean;
 }
 
-interface GenerationProgress {
-    lessonId: string;
-    status: string;
-    currentSlide: number;
-    totalSlides: number;
-    message: string;
-    slides: SlideProgress[];
-}
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -53,6 +45,8 @@ export function Step5GeneratePPTX() {
     const [totalSlides, setTotalSlides] = useState(0);
     const [pptxBlob, setPptxBlob] = useState<Blob | null>(null);
     const [contentGenerated, setContentGenerated] = useState(false);
+    const [pendingCount, setPendingCount] = useState(0);
+    const shouldStopGenerating = useRef(false);
 
     const hasSlideScript = !!lessonData?.slideScript;
 
@@ -90,41 +84,58 @@ export function Step5GeneratePPTX() {
                 }
 
                 // Check if any slides have optimizedContentJson OR imageUrl
-                const hasContent = slides.some(
+                const completedSlides = slides.filter(
+                    (s: any) => {
+                        // A slide is complete if it has an image AND either:
+                        // - has optimized content, OR
+                        // - is a title/special slide that doesn't need content (no raw content)
+                        const hasImage = !!s.imageUrl;
+                        const hasOptContent = !!s.optimizedContentJson;
+                        const isTitleSlide = !s.content || s.content.trim() === '';
+                        return hasImage && (hasOptContent || isTitleSlide);
+                    }
+                );
+                const hasAnyContent = slides.some(
                     (s: any) => (s.optimizedContentJson && s.optimizedContentJson.length > 0) || s.imageUrl
                 );
-                console.log('[Step5] hasContent (optimizedContentJson or imageUrl):', hasContent);
+                const remaining = slides.length - completedSlides.length;
+                console.log('[Step5] completedSlides:', completedSlides.length, '/', slides.length, 'pending:', remaining);
 
-                if (hasContent) {
-                    const loadedSlideProgress: SlideProgress[] = slides.map((s: any) => ({
-                        slideIndex: s.slideIndex,
-                        phase: (s.optimizedContentJson || s.imageUrl) ? 'complete' : 'pending',
-                        imageUrl: s.imageUrl,
-                        optimizedContent: s.optimizedContentJson
-                            ? (typeof s.optimizedContentJson === 'string'
-                                ? JSON.parse(s.optimizedContentJson)
-                                : s.optimizedContentJson)
-                            : undefined,
-                        title: s.title,
-                    }));
-
-                    console.log('[Step5] loadedSlideProgress:', loadedSlideProgress.length, 'items');
-                    console.log('[Step5] First slide:', JSON.stringify(loadedSlideProgress[0], null, 2));
+                if (hasAnyContent) {
+                    const loadedSlideProgress: SlideProgress[] = slides.map((s: any) => {
+                        const hasImage = !!s.imageUrl;
+                        const hasOptContent = !!s.optimizedContentJson;
+                        const isTitleSlide = !s.content || s.content.trim() === '';
+                        const isComplete = hasImage && (hasOptContent || isTitleSlide);
+                        return {
+                            slideIndex: s.slideIndex,
+                            phase: isComplete ? 'complete' as const :
+                                   (hasOptContent || hasImage) ? 'error' as const : 'pending' as const,
+                            imageUrl: s.imageUrl,
+                            optimizedContent: s.optimizedContentJson
+                                ? (typeof s.optimizedContentJson === 'string'
+                                    ? JSON.parse(s.optimizedContentJson)
+                                    : s.optimizedContentJson)
+                                : undefined,
+                            title: s.title,
+                        };
+                    });
 
                     setSlideProgress(loadedSlideProgress);
                     setTotalSlides(slides.length);
                     setContentGenerated(true);
+                    setPendingCount(remaining);
+                    setProgress((completedSlides.length / slides.length) * 100);
 
-                    // If we have both content and images, show completed state
-                    const allComplete = loadedSlideProgress.every(s => s.phase === 'complete');
-                    console.log('[Step5] allComplete:', allComplete);
-                    if (allComplete && loadedSlideProgress.length > 0) {
+                    if (remaining === 0) {
                         setStatus('completed');
                         setProgress(100);
+                    } else {
+                        // Partial progress — show completed state so buttons appear
+                        setStatus('completed');
                     }
                 } else {
-                    console.log('[Step5] No content found in slides, checking raw slide data...');
-                    console.log('[Step5] Sample slide:', JSON.stringify(slides[0], null, 2));
+                    console.log('[Step5] No content found in slides');
                 }
             } catch (err) {
                 console.error('[Step5] Failed to load saved content:', err);
@@ -134,7 +145,7 @@ export function Step5GeneratePPTX() {
         if (lessonId) {
             loadSavedContent();
         }
-    }, [lessonId, stepMountCounter]); // stepMountCounter changes when user navigates between steps
+    }, [lessonId, stepMountCounter]);
 
     const handleGeneratePptx = useCallback(async () => {
         setStatus('generating_pptx');
@@ -167,42 +178,131 @@ export function Step5GeneratePPTX() {
         }
     }, [lessonId, selectedTemplate]);
 
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     const handleGenerateContent = useCallback(async () => {
         setStatus('generating_images');
         setProgress(0);
         setError(null);
-        setSlideProgress([]);
         setContentGenerated(false);
+        shouldStopGenerating.current = false;
 
         try {
-            const token = localStorage.getItem('accessToken');
-            const eventSource = new EventSource(`/api/lessons/${lessonId}/pptx/generate-images?token=${token}`);
+            // Load all slides from DB
+            const response = await api.get(`/lessons/${lessonId}/slides`);
+            const slides = Array.isArray(response.data) ? response.data : [];
 
-            eventSource.onmessage = (event) => {
-                const data: GenerationProgress = JSON.parse(event.data);
-                setCurrentSlide(data.currentSlide);
-                setTotalSlides(data.totalSlides);
-                setSlideProgress(data.slides);
-                setProgress((data.currentSlide / data.totalSlides) * 100);
-
-                if (data.status === 'complete') {
-                    eventSource.close();
-                    setContentGenerated(true);
-                    setStatus('completed');
-                    setProgress(100);
-                }
-            };
-
-            eventSource.onerror = () => {
-                eventSource.close();
+            if (slides.length === 0) {
+                setError('Không tìm thấy slides');
                 setStatus('error');
-                setError('Mất kết nối khi tạo nội dung');
-            };
+                return;
+            }
+
+            setTotalSlides(slides.length);
+
+            // Initialize slide progress
+            const initialProgress: SlideProgress[] = slides.map((s: any) => ({
+                slideIndex: s.slideIndex,
+                phase: 'pending' as const,
+                title: s.title,
+                // Keep existing data if available
+                optimizedContent: s.optimizedContentJson
+                    ? (typeof s.optimizedContentJson === 'string'
+                        ? JSON.parse(s.optimizedContentJson)
+                        : s.optimizedContentJson)
+                    : undefined,
+                imageUrl: s.imageUrl,
+            }));
+            setSlideProgress(initialProgress);
+
+            // Determine which slides need processing
+            // (skip slides that already have BOTH content and image)
+            const slidesToProcess = slides.filter((s: any) => {
+                const hasImage = !!s.imageUrl;
+                const hasOptContent = !!s.optimizedContentJson;
+                const isTitleSlide = !s.content || s.content.trim() === '';
+                return !(hasImage && (hasOptContent || isTitleSlide));
+            });
+
+            let completedCount = slides.length - slidesToProcess.length;
+            let isFirstSlide = true;
+
+            for (const slide of slidesToProcess) {
+                if (shouldStopGenerating.current) {
+                    setError(`⏸️ Đã dừng. Hoàn thành ${completedCount}/${slides.length} slides.`);
+                    break;
+                }
+
+                const idx = slide.slideIndex;
+                setCurrentSlide(idx + 1);
+
+                // Mark as processing
+                setSlideProgress(prev => prev.map(s =>
+                    s.slideIndex === idx ? { ...s, phase: 'optimizing_content' } : s
+                ));
+
+                try {
+                    const result = await api.post(
+                        `/lessons/${lessonId}/slides/${idx}/generate-content-image`
+                    );
+
+                    // Update progress with result
+                    setSlideProgress(prev => prev.map(s =>
+                        s.slideIndex === idx ? {
+                            ...s,
+                            phase: (result.data.imageError ? 'error' : 'complete') as any,
+                            optimizedContent: result.data.optimizedContent || s.optimizedContent,
+                            imageUrl: result.data.imageUrl || s.imageUrl,
+                            title: result.data.title || s.title,
+                        } : s
+                    ));
+
+                    if (!result.data.imageError) {
+                        completedCount++;
+                    }
+                } catch (err: any) {
+                    console.error(`Error processing slide ${idx}:`, err);
+                    setSlideProgress(prev => prev.map(s =>
+                        s.slideIndex === idx ? { ...s, phase: 'error' } : s
+                    ));
+                }
+
+                setProgress((completedCount / slides.length) * 100);
+
+                // Delay between slides (like audio generation)
+                if (isFirstSlide) {
+                    await delay(8000);
+                    isFirstSlide = false;
+                } else {
+                    await delay(5000);
+                }
+            }
+
+            setContentGenerated(true);
+            setPendingCount(0);
+            setStatus('completed');
+            setProgress(100);
         } catch (err: any) {
             setStatus('error');
             setError(err.message || 'Không thể tạo nội dung');
         }
     }, [lessonId]);
+
+    const stopGenerating = () => {
+        shouldStopGenerating.current = true;
+    };
+
+    // Regenerate ALL slides from scratch (clear existing data first)
+    const handleRegenerateAll = useCallback(async () => {
+        try {
+            // Bulk clear all optimizedContent + imageUrl
+            await api.delete(`/lessons/${lessonId}/slides/generated-content`);
+        } catch (err) {
+            console.warn('Failed to clear existing content, will regenerate anyway:', err);
+        }
+        // Now call normal generate which will process all slides (none will be skipped)
+        handleGenerateContent();
+    }, [lessonId, handleGenerateContent]);
 
     // Regenerate content for a single slide
     const handleRegenerateContent = async (slideIndex: number) => {
@@ -342,12 +442,26 @@ export function Step5GeneratePPTX() {
             {/* Main Action Buttons */}
             {hasSlideScript && (status === 'idle' || status === 'completed') && (
                 <div className="action-buttons-row">
+                    {/* Show Continue button when there are pending slides */}
+                    {pendingCount > 0 && contentGenerated && (
+                        <button
+                            className="btn-primary"
+                            onClick={handleGenerateContent}
+                            disabled={status !== 'idle' && status !== 'completed'}
+                        >
+                            ▶️ Tiếp tục tạo ({pendingCount} slide còn lại)
+                        </button>
+                    )}
+
                     <button
-                        className="btn-primary"
-                        onClick={handleGenerateContent}
+                        className={pendingCount > 0 && contentGenerated ? 'btn-secondary' : 'btn-primary'}
+                        onClick={handleRegenerateAll}
                         disabled={status !== 'idle' && status !== 'completed'}
                     >
-                        🚀 {contentGenerated ? 'Tạo lại nội dung' : 'Tạo nội dung PPTX'}
+                        {contentGenerated
+                            ? (pendingCount > 0 ? '🔄 Tạo lại từ đầu' : '🔄 Tạo lại nội dung')
+                            : '🚀 Tạo nội dung PPTX'
+                        }
                     </button>
 
                     {contentGenerated && (
@@ -358,6 +472,14 @@ export function Step5GeneratePPTX() {
                             {pptxBlob ? '📥 Tải PPTX' : '📦 Tạo file PPTX'}
                         </button>
                     )}
+                </div>
+            )}
+
+            {/* Progress summary when partially complete */}
+            {contentGenerated && pendingCount > 0 && status === 'completed' && (
+                <div className="partial-progress-banner">
+                    ⚠️ Đã hoàn thành {totalSlides - pendingCount}/{totalSlides} slides.
+                    Nhấn "▶️ Tiếp tục tạo" để hoàn thành {pendingCount} slide còn lại.
                 </div>
             )}
 
@@ -380,6 +502,11 @@ export function Step5GeneratePPTX() {
                         {status === 'generating_images' && `🖼️ Đang tạo slide ${currentSlide}/${totalSlides}...`}
                         {status === 'generating_pptx' && '📦 Đang đóng gói PowerPoint...'}
                     </p>
+                    {status === 'generating_images' && (
+                        <button className="btn-stop" onClick={stopGenerating}>
+                            ⏹️ Dừng tạo
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -391,7 +518,7 @@ export function Step5GeneratePPTX() {
                         {slideProgress.map((slide) => (
                             <div key={slide.slideIndex} className={`slide-card ${slide.phase} ${slide.isRegenerating ? 'regenerating' : ''}`}>
                                 <div className="slide-card-header">
-                                    <span className="slide-number">Slide {slide.slideIndex + 1}</span>
+                                    <span className="slide-number">Slide {slide.slideIndex}</span>
                                     <span className="slide-title">{slide.title}</span>
                                     <span className="slide-status">
                                         {slide.phase === 'pending' && '⏳'}
@@ -425,7 +552,7 @@ export function Step5GeneratePPTX() {
                                     {/* Image side */}
                                     <div className="slide-image-col">
                                         {slide.imageUrl ? (
-                                            <img src={slide.imageUrl} alt={`Slide ${slide.slideIndex + 1}`} />
+                                            <img src={slide.imageUrl} alt={`Slide ${slide.slideIndex}`} />
                                         ) : (
                                             <div className="image-placeholder">🖼️</div>
                                         )}

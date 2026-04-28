@@ -418,7 +418,7 @@ Generate the image now.`;
                     size,
                     steps: config.steps,
                 }),
-                signal: AbortSignal.timeout(180000), // 180s timeout (Flux can be slow)
+                // No timeout - image generation can take several minutes
             });
 
             if (!response.ok) {
@@ -452,9 +452,7 @@ Generate the image now.`;
                 }
 
                 // Download the image and convert to base64
-                const imageResponse = await fetch(imageUrl, {
-                    signal: AbortSignal.timeout(30000),
-                });
+                const imageResponse = await fetch(imageUrl);
 
                 if (!imageResponse.ok) {
                     throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imageResponse.status}`);
