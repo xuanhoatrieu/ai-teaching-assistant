@@ -207,6 +207,23 @@ export function Step6QuestionBank() {
         }
     };
 
+    const handleExportMoodleXml = async () => {
+        try {
+            const response = await api.get(`/lessons/${lessonId}/review-questions/export/moodle-xml`, {
+                responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/xml' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `${lessonData?.title || 'lesson'}_moodle.xml`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Không thể xuất Moodle XML' });
+        }
+    };
+
 
     // Parse answers from array with * prefix for correct
     const parseAnswers = (answers: string[]) => {
@@ -229,6 +246,11 @@ export function Step6QuestionBank() {
                     {reviewQuestions.length > 0 && (
                         <button className="btn-secondary" onClick={handleExportReviewExcel}>
                             📊 Xuất Excel Ôn tập
+                        </button>
+                    )}
+                    {reviewQuestions.length > 0 && (
+                        <button className="btn-secondary" onClick={handleExportMoodleXml}>
+                            📋 Xuất Moodle XML
                         </button>
                     )}
                 </div>

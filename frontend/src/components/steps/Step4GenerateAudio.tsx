@@ -129,7 +129,7 @@ export function Step4GenerateAudio() {
             const response = await api.post(
                 `/lessons/${lessonId}/slide-audios/generate-speaker-notes`,
                 {},
-                { timeout: 600000 }, // 10 min — AI generation for many slides can be slow
+                { timeout: 0 }, // no timeout — AI generation for many slides can be slow
             );
             setSlideAudios(normalizeSlideAudios(response.data));
             // Also reload slide contents to get updated speakerNote fields
@@ -168,7 +168,7 @@ export function Step4GenerateAudio() {
             const response = await api.post(
                 `/lessons/${lessonId}/slide-audios/optimize-speaker-notes`,
                 {},
-                { timeout: 600000 }, // 10 min — AI optimization for many slides can be slow
+                { timeout: 0 }, // no timeout — AI optimization for many slides can be slow
             );
             setSlideAudios(normalizeSlideAudios(response.data));
             // Also reload slide contents to get updated speakerNote fields

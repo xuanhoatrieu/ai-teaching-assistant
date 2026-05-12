@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { subjectsApi, lessonsApi, type Subject, type Lesson, type CreateSubjectData } from '../lib/subjects-api';
+import { VideoListPanel } from '../components/VideoListPanel';
+import { SyllabusPanel } from '../components/syllabus/SyllabusPanel';
+import { syllabusApi, type Syllabus } from '../lib/syllabus-api';
 import './SubjectDetail.css';
 
 const INSTITUTION_TYPES = ['Đại học', 'Cao đẳng', 'THPT', 'Doanh nghiệp', 'Khác'];
@@ -17,10 +20,13 @@ export function SubjectDetailPage() {
     const [lessons, setLessons] = useState<Lesson[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
+    const [activeTab, setActiveTab] = useState<'lessons' | 'videos' | 'syllabus'>('lessons');
 
     // Create lesson modal
     const [showModal, setShowModal] = useState(false);
     const [newTitle, setNewTitle] = useState('');
+    const [syllabusForDropdown, setSyllabusForDropdown] = useState<Syllabus | null>(null);
+    const [selectedSyllabusLessonId, setSelectedSyllabusLessonId] = useState<string>('');
 
     // Edit lesson modal
     const [showEditLessonModal, setShowEditLessonModal] = useState(false);
@@ -67,14 +73,38 @@ export function SubjectDetailPage() {
         }
     };
 
+    const handleOpenCreateModal = async () => {
+        setShowModal(true);
+        setNewTitle('');
+        setSelectedSyllabusLessonId('');
+        try {
+            const res = await syllabusApi.get(id!);
+            setSyllabusForDropdown(res.data);
+        } catch (err) {
+            // Syllabus might not exist, ignore
+            setSyllabusForDropdown(null);
+        }
+    };
+
     const handleCreateLesson = async () => {
-        if (!newTitle.trim()) return;
+        if (!newTitle.trim() && !selectedSyllabusLessonId) return;
 
         try {
-            const response = await lessonsApi.create(id!, { title: newTitle });
-            setShowModal(false);
-            setNewTitle('');
-            navigate(`/lessons/${response.data.id}`);
+            if (selectedSyllabusLessonId && syllabusForDropdown) {
+                // Create from syllabus bridge
+                const response = await syllabusApi.createLessonBridge(syllabusForDropdown.id, selectedSyllabusLessonId);
+                setShowModal(false);
+                setNewTitle('');
+                setSelectedSyllabusLessonId('');
+                const lessonData = response.data as any;
+                navigate(`/lessons/${lessonData.lesson.id}`);
+            } else {
+                // Create manual lesson
+                const response = await lessonsApi.create(id!, { title: newTitle });
+                setShowModal(false);
+                setNewTitle('');
+                navigate(`/lessons/${response.data.id}`);
+            }
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to create lesson');
         }
@@ -197,9 +227,6 @@ export function SubjectDetailPage() {
                     <button className="secondary-btn" onClick={openEditModal}>
                         ✏️ Sửa
                     </button>
-                    <button className="primary-btn" onClick={() => setShowModal(true)}>
-                        + New Lesson
-                    </button>
                 </div>
             </div>
 
@@ -222,72 +249,143 @@ export function SubjectDetailPage() {
 
             {error && <div className="error-banner">{error}</div>}
 
-            {lessons.length === 0 ? (
-                <div className="empty-state">
-                    <span className="empty-icon">📝</span>
-                    <h3>No lessons yet</h3>
-                    <p>Create your first lesson for this subject</p>
-                    <button className="primary-btn" onClick={() => setShowModal(true)}>
-                        Create Lesson
-                    </button>
-                </div>
-            ) : (
-                <div className="lessons-list">
-                    {lessons.map((lesson) => (
-                        <div key={lesson.id} className="lesson-card">
-                            <Link to={`/lessons/${lesson.id}`} className="lesson-link">
-                                <div className="lesson-info">
-                                    <h3>{lesson.title}</h3>
-                                    <div className="lesson-meta">
-                                        {getStatusBadge(lesson.status)}
-                                        <span className="created-date">
-                                            {new Date(lesson.createdAt).toLocaleDateString('vi-VN')}
-                                        </span>
+            {/* Tabs */}
+            <div className="subject-tabs">
+                <button
+                    className={`tab-btn ${activeTab === 'lessons' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('lessons')}
+                >
+                    📚 Bài giảng
+                    <span className="tab-count">{lessons.length}</span>
+                </button>
+                <button
+                    className={`tab-btn ${activeTab === 'videos' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('videos')}
+                >
+                    🎬 Video
+                </button>
+                <button
+                    className={`tab-btn ${activeTab === 'syllabus' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('syllabus')}
+                >
+                    📋 Đề cương
+                </button>
+            </div>
+
+            {/* Tab: Lessons */}
+            {activeTab === 'lessons' && (
+                <>
+                    <div className="tab-header">
+                        <button className="primary-btn" onClick={handleOpenCreateModal}>
+                            + Tạo bài giảng
+                        </button>
+                    </div>
+                    {lessons.length === 0 ? (
+                        <div className="empty-state">
+                            <span className="empty-icon">📝</span>
+                            <h3>Chưa có bài giảng</h3>
+                            <p>Tạo bài giảng đầu tiên cho môn học này</p>
+                            <button className="primary-btn" onClick={handleOpenCreateModal}>
+                                Tạo bài giảng
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="lessons-list">
+                            {lessons.map((lesson) => (
+                                <div key={lesson.id} className="lesson-card">
+                                    <Link to={`/lessons/${lesson.id}`} className="lesson-link">
+                                        <div className="lesson-info">
+                                            <h3>{lesson.title}</h3>
+                                            <div className="lesson-meta">
+                                                {getStatusBadge(lesson.status)}
+                                                <span className="created-date">
+                                                    {new Date(lesson.createdAt).toLocaleDateString('vi-VN')}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                    <div className="lesson-actions">
+                                        <button
+                                            className="edit-lesson-btn"
+                                            onClick={(e) => { e.preventDefault(); openEditLessonModal(lesson); }}
+                                            title="Đổi tên bài giảng"
+                                        >
+                                            ✏️
+                                        </button>
+                                        <button
+                                            className="delete-btn"
+                                            onClick={(e) => { e.preventDefault(); openDeleteModal(lesson); }}
+                                            title="Xóa bài giảng"
+                                        >
+                                            🗑️
+                                        </button>
                                     </div>
                                 </div>
-                            </Link>
-                            <div className="lesson-actions">
-                                <button
-                                    className="edit-lesson-btn"
-                                    onClick={(e) => { e.preventDefault(); openEditLessonModal(lesson); }}
-                                    title="Đổi tên bài giảng"
-                                >
-                                    ✏️
-                                </button>
-                                <button
-                                    className="delete-btn"
-                                    onClick={(e) => { e.preventDefault(); openDeleteModal(lesson); }}
-                                    title="Xóa bài giảng"
-                                >
-                                    🗑️
-                                </button>
-                            </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
+                    )}
+                </>
+            )}
+
+            {/* Tab: Videos */}
+            {activeTab === 'videos' && (
+                <VideoListPanel subjectId={id!} lessons={lessons} />
+            )}
+
+            {/* Tab: Syllabus */}
+            {activeTab === 'syllabus' && (
+                <SyllabusPanel subjectId={id!} />
             )}
 
             {/* Create Lesson Modal */}
             {showModal && (
                 <div className="modal-overlay" onClick={() => setShowModal(false)}>
                     <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <h2>Create New Lesson</h2>
+                        <h2>Tạo bài giảng mới</h2>
+                        
+                        {syllabusForDropdown && syllabusForDropdown.lessons.filter(l => !l.lessonId).length > 0 && (
+                            <div className="form-group" style={{ marginBottom: '1rem' }}>
+                                <label>Chọn bài giảng từ Đề cương (Tùy chọn)</label>
+                                <select 
+                                    value={selectedSyllabusLessonId}
+                                    onChange={(e) => {
+                                        setSelectedSyllabusLessonId(e.target.value);
+                                        if (e.target.value) {
+                                            const sl = syllabusForDropdown.lessons.find(l => l.id === e.target.value);
+                                            if (sl) setNewTitle(sl.title);
+                                        } else {
+                                            setNewTitle('');
+                                        }
+                                    }}
+                                    style={{ width: '100%', padding: '0.5rem 0.75rem', borderRadius: '8px', background: 'rgba(15, 23, 42, 0.6)', color: '#f1f5f9', border: '1px solid rgba(59, 130, 246, 0.2)', fontSize: '14px' }}
+                                >
+                                    <option value="" style={{ background: '#1e293b', color: '#f1f5f9' }}>-- Tạo bài giảng thủ công --</option>
+                                    {syllabusForDropdown.lessons.filter(l => !l.lessonId).map(sl => (
+                                        <option key={sl.id} value={sl.id} style={{ background: '#1e293b', color: '#f1f5f9' }}>Bài {sl.sortOrder + 1}: {sl.title}</option>
+                                    ))}
+                                </select>
+                                <small style={{ color: '#94a3b8', marginTop: '4px', display: 'block' }}>
+                                    Nếu chọn, bài giảng sẽ tự động lấy nội dung từ đề cương.
+                                </small>
+                            </div>
+                        )}
+
                         <div className="form-group">
-                            <label>Lesson Title</label>
+                            <label>Tên bài giảng</label>
                             <input
                                 type="text"
                                 value={newTitle}
                                 onChange={(e) => setNewTitle(e.target.value)}
-                                placeholder="e.g., Introduction to Calculus"
+                                placeholder="VD: Chương 1: Giới thiệu chung"
                                 autoFocus
                             />
                         </div>
                         <div className="modal-actions">
                             <button className="secondary-btn" onClick={() => setShowModal(false)}>
-                                Cancel
+                                Hủy
                             </button>
-                            <button className="primary-btn" onClick={handleCreateLesson}>
-                                Create & Edit
+                            <button className="primary-btn" onClick={handleCreateLesson} disabled={!newTitle.trim()}>
+                                Tạo & Bắt đầu sửa
                             </button>
                         </div>
                     </div>

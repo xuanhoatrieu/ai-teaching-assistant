@@ -1,6 +1,6 @@
 {
     "meta": {
-        "last_updated": "2026-04-03T22:10:00+07:00"
+        "last_updated": "2026-05-12T15:39:00+07:00"
     },
     "modules": {
         "auth": {
@@ -80,11 +80,84 @@
                 {"name": "System Templates", "description": "Admin-managed PPTX templates"},
                 {"name": "User Templates", "description": "Personal PPTX template upload/management"}
             ]
+        },
+        "video_gen": {
+            "status": "in_progress",
+            "features": [
+                {"name": "Video Generation Pipeline", "description": "NestJS → Redis → Python worker. Centralized credentials via JobConfig."},
+                {"name": "Manim Renderer", "description": "ManimGL v1.7.2 (3b1b/manim) with manim-render for headless. Auto-fix MathTex→Tex, Create→ShowCreation."},
+                {"name": "Multi-Renderer Architecture", "description": "Manim (math animations), Imagen (AI images), Playwright (code demos), Static (fallback with title cards)."},
+                {"name": "AI Script Generation", "description": "CLIProxy/Gemini generates scene scripts with visual descriptions, narrations, and code hints."},
+                {"name": "OmniVoice TTS Integration", "description": "Reads user's saved TTS voice (vitts:ref:UUID clone, vitts:auto, vitts:design) from ModelConfigService."},
+                {"name": "5-Step Video Wizard", "description": "Step 1: Input → Step 2: Script → Step 3: Render & Review → Step 4: Compose → Step 5: Done."},
+                {"name": "Video Storage", "description": "MinIO storage with streaming playback support."},
+                {"name": "Force Approach", "description": "Backend sends forcedApproach in job payload. Worker respects it — no silent fallback to static. Script gen has dedicated Manim-only prompt."},
+                {"name": "Scene-by-Scene Render", "description": "Step 3 redesigned: per-scene render/preview/code-edit/approve workflow. 5 new API endpoints. Worker modes: render-scene, regenerate-code, compose-only."},
+                {"name": "Clip Streaming", "description": "Backend proxies MinIO clip streaming via GET /scenes/:idx/stream/clip. Frontend <video> tag uses JWT-authenticated URL."},
+                {"name": "Manim Code Persistence", "description": "render-scene worker returns manimCode in done payload → processor saves to DB → UI shows editable code per scene."},
+                {"name": "Vertical Scene Layout", "description": "Step 3 cards use vertical stack: Narration → Visual Desc → Error → Manim Code → Video Preview. No 2-column grid."},
+                {"name": "Manim Reference Dictionary", "description": "50 patterns from 4,915 3b1b scenes (10 categories). Keyword-matched and injected into AI prompt as few-shot examples."},
+                {"name": "Self-Healing AI Code Gen", "description": "Generate → AST validate → dry-run (xvfb) → if fail: send error+code to AI → fix → retry (max 2x)."},
+                {"name": "Manim Code Validator", "description": "AST-based validator checks syntax, forbidden imports (os/sys/subprocess), class structure, infinite loops, animation count."},
+                {"name": "Audio-Video Independence", "description": "Render produces visual-only clip. Audio TTS runs separately. FFmpeg compose_scene() merges at compose step using tpad freeze-frame."},
+                {"name": "Zombie Worker Protection", "description": "start.sh kills ALL stale worker.py processes via pgrep on stop. Prevents old workers from consuming queue jobs."},
+                {"name": "Regenerate Code Flow", "description": "Editable visualDesc in UI. Backend injects updated visualDesc into AI script. Sets status=rendering to trigger polling."},
+                {"name": "Stuck Scene Self-Healing", "description": "Polling endpoint auto-detects and recovers scenes stuck in 'rendering' > 5m due to missed Redis messages (e.g., during backend hot-reloads)."}
+            ]
         }
     },
     "pages": {
         "public": ["Login", "Register"],
-        "user": ["Dashboard", "SubjectDetail", "LessonEditorV2 (6 steps)"],
-        "admin": ["AdminPage (Prompts, Settings, Users)"]
+        "user": ["Dashboard", "SubjectDetail", "LessonEditorV2 (6 steps)", "VideoStudio (5-step wizard with scene-by-scene render)", "PptxAudioTool", "UserSettings"],
+        "admin": ["AdminPage (Prompts, Settings, Users)"],
+        "planned": ["LessonStudioPro (7-step skill-powered wizard)"]
+    },
+    "planned_modules": {
+        "syllabus_pipeline": {
+            "status": "complete",
+            "description": "Syllabus → Textbook → Lesson Pipeline. ALL phases complete + Multi-Phase PRO mode (5-step AI agent). CSS fixes.",
+            "features": [
+                {"name": "Block-based Syllabus Form", "description": "10 editable blocks matching TUAF 2026 template with CRUD per block"},
+                {"name": "DOCX Import", "description": "Upload existing syllabus DOCX → MarkItDown → AI parse → auto-fill blocks"},
+                {"name": "DOCX Export", "description": "Export syllabus to DOCX matching template (portrait+landscape sections via docx.js OOXML)"},
+                {"name": "Reference Upload", "description": "Upload textbooks/references (PDF/DOCX/PPTX) → MarkItDown → markdown context for AI"},
+                {"name": "AI Lesson Splitting", "description": "AI analyzes syllabus content_detail block → splits into N lessons with outlines"},
+                {"name": "Create Lesson Bridge", "description": "Create Lesson in workflow with pre-filled title+outline from SyllabusLesson. 1:1 link via lessonId"},
+                {"name": "AI Textbook Generation", "description": "Generate 2000-4000 word academic chapter using Backward Design + Anti-AI phrasing. Status: none→generating→done/error"},
+                {"name": "Textbook Preview/Edit", "description": "Collapsible preview, editable textarea with Save/Cancel, status badges (📗/⏳/⚠️)"},
+                {"name": "Textbook DOCX Export", "description": "Combined DOCX with title page + chapter per lesson. Markdown→OOXML (headers, bullets, bold/italic). Pandoc reference.docx for consistent formatting."},
+                {"name": "Moodle XML Export", "description": "Export ReviewQuestions as Moodle-compatible XML (categories by Bloom level)"},
+                {"name": "AWF Textbook Prompt", "description": "TEXTBOOK_SYSTEM_PROMPT upgraded: Backward Design, Harvard narrative, Anti-AI vocab, formula derivation chains, paragraph expansion ≥3 sentences, running examples"},
+                {"name": "Academic DOCX Formatting", "description": "Times New Roman 13pt, justified, A4 (2/2/3/2cm margins), 1.3x spacing. Applied to syllabus + textbook export"},
+                {"name": "ModelSelector Integration", "description": "SyllabusPanel includes AI model selector for OUTLINE and IMAGE task types"},
+                {"name": "Multi-Phase Textbook PRO", "description": "5-step AI agent pipeline: EXTRACT refs → PLAN (Backward Design) → WRITE (Harvard+Anti-AI) → ILLUSTRATE (Mermaid+AI Image) → REVIEW+FIX (40-item checklist)"},
+                {"name": "MermaidService", "description": "Render Mermaid diagrams to PNG via mmdc CLI or mermaid.ink API fallback. Registered in SyllabusModule."},
+                {"name": "Textbook Progress Polling", "description": "GET /textbook-status returns phase/progress/message. Frontend polls every 3s with animated progress bar."},
+                {"name": "Textbook Asset Storage", "description": "Illustrations saved to uploads/syllabus-textbook/<syllabusId>/<lessonId>/assets/. Public route serves images in markdown."},
+                {"name": "DB Fields: textbookPlan/textbookPhase/textbookImages", "description": "SyllabusLesson extended with plan JSON, phase tracking, and image metadata for multi-phase pipeline."}
+            ],
+            "db_models": ["Syllabus", "SyllabusBlock", "SyllabusReference", "SyllabusLesson"],
+            "api_prefix": "/api/subjects/:id/syllabus/*, /api/syllabus/:id/*",
+            "estimated_effort": "21-30 days"
+        },
+        "lesson_studio_pro": {
+            "status": "deferred",
+            "description": "Independent 7-step lesson editor using Backward Design, academic standards, and Anti-AI quality gates. DEFERRED — focus on syllabus pipeline instead.",
+            "features": [
+                {"name": "Backward Design", "description": "Learning Outcomes (Bloom's) → Assessments → Content-last approach"},
+                {"name": "Textbook Generation", "description": "AI-generated academic chapter with Harvard Elements, Anti-AI vocabulary rules"},
+                {"name": "8 Slide Types", "description": "Title, Objectives, Agenda, Divider, Content, Exercise, Summary, Closing"},
+                {"name": "Academic Speaker Notes", "description": "300-500 words per slide, academic-narrative tone"},
+                {"name": "Quality Gates", "description": "Anti-AI regex check + LLM-as-Judge review + structure validation"},
+                {"name": "MC+MR Questions", "description": "Multiple Choice + Multiple Response, per-answer feedback"},
+                {"name": "Bloom's Level Split", "description": "Separate AI calls for Level 1 (20), Level 2 (20), Level 3 (10)"},
+                {"name": "Multi-Format Export", "description": "DOCX (textbook) + PPTX + Excel review + iSpring Excel + Moodle XML"},
+                {"name": "Zero-Impact Architecture", "description": "New module (lesson-pro/) with 3 new DB models, no changes to existing code"}
+            ],
+            "db_models": ["LessonProSession", "ProSlide", "ProQuestion"],
+            "api_prefix": "/api/lesson-pro/*",
+            "prompt_prefix": "pro.*",
+            "estimated_effort": "25-30 days"
+        }
     }
 }

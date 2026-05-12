@@ -1,9 +1,9 @@
 {
     "meta": {
         "schema_version": "2.0.0",
-        "awf_version": "4.1.0",
-        "last_saved": "2026-04-20T11:19:00+07:00",
-        "save_count": 3,
+        "awf_version": "4.2.0",
+        "last_saved": "2026-05-12T15:39:00Z",
+        "save_count": 8,
         "project_status": "PRODUCTION"
     },
     "project": {
@@ -107,7 +107,7 @@
         "containerization": "Docker",
         "orchestration": "docker-compose",
         "storage": "MinIO (S3-compatible)",
-        "reverse_proxy": "nginx (proxy_timeout: 180s)",
+        "reverse_proxy": "nginx (proxy_timeout: 600s)",
         "ci_cd": "GitHub Actions → GHCR → VPS docker compose pull",
         "domain": "ai.hoclieu.id.vn",
         "cliproxy_domain": "cliproxy.hoclieu.id.vn",
@@ -117,7 +117,7 @@
         "repo_url": "https://github.com/xuanhoatrieu/ai-teaching-assistant",
         "default_branch": "main",
         "commit_rule": "⛔ LUÔN HỎI TRƯỚC KHI COMMIT/PUSH",
-        "latest_tag": "v1.2.6",
+        "latest_tag": "v1.3.9",
         "ci_cd": "GitHub Actions builds Docker images on tag push"
     },
     "security": {

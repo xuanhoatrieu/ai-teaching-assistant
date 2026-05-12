@@ -1,0 +1,80 @@
+// Prisma Schema additions for Video Generation
+// Copy these model definitions into your existing schema.prisma
+
+// ── Add to existing Lesson model ──
+// model Lesson {
+//   ...existing fields...
+//   videoGenerations VideoGeneration[]
+// }
+
+model VideoGeneration {
+  id              String   @id @default(uuid())
+  lessonId        String
+  lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  // Config
+  format          String   @default("horizontal")
+  resolution      String   @default("1080p")
+  style           String   @default("auto")
+  narrationLang   String   @default("vi")
+  subtitleLang    String   @default("vi")
+  narrationSpeed  Float    @default(1.0)
+
+  // Status tracking
+  status          String   @default("pending")
+  progress        Int      @default(0)
+  currentStep     String?
+  totalScenes     Int      @default(0)
+  doneScenes      Int      @default(0)
+  errorMessage    String?
+
+  // Output
+  videoUrl        String?
+  subtitleUrl     String?
+  thumbnailUrl    String?
+  duration        Float?
+  fileSize        Int?
+  videoScript     Json?
+
+  // Relations
+  scenes          VideoScene[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([lessonId])
+  @@index([userId])
+  @@index([status])
+}
+
+model VideoScene {
+  id              String   @id @default(uuid())
+  videoGenId      String
+  videoGen        VideoGeneration @relation(fields: [videoGenId], references: [id], onDelete: Cascade)
+
+  sceneIndex      Int
+  title           String
+  approach        String
+  narrationText   String   @db.Text
+  subtitleText    String?  @db.Text
+  visualDesc      String?  @db.Text
+  imagePrompt     String?  @db.Text
+  imageUrl        String?
+  manimCode       String?  @db.Text
+  codeLines       Json?
+
+  // Output
+  clipUrl         String?
+  audioUrl        String?
+  duration        Float?
+  status          String   @default("pending")
+  errorMessage    String?
+  retryCount      Int      @default(0)
+
+  createdAt       DateTime @default(now())
+
+  @@index([videoGenId])
+  @@unique([videoGenId, sceneIndex])
+}

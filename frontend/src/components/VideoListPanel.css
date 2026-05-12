@@ -1,0 +1,176 @@
+/* ─── VideoListPanel ─────────────────── */
+
+.video-list-panel {
+    width: 100%;
+}
+
+.video-list-loading {
+    text-align: center;
+    color: #94a3b8;
+    padding: 40px;
+}
+
+.video-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ─── Video Card ─────────────────────── */
+.video-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(59, 130, 246, 0.1);
+    border-radius: 12px;
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.video-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(30, 41, 59, 0.8);
+}
+
+.video-card-thumbnail {
+    position: relative;
+    width: 80px;
+    height: 54px;
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: rgba(15, 23, 42, 0.8);
+}
+
+.video-card-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.video-card-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1));
+}
+
+.video-duration {
+    position: absolute;
+    bottom: 3px;
+    right: 3px;
+    padding: 2px 6px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+}
+
+.video-card-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.video-card-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #f1f5f9;
+    margin: 0 0 6px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.video-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.video-progress-mini {
+    font-size: 12px;
+    color: #fbbf24;
+}
+
+.video-lesson-tag {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #94a3b8;
+    background: rgba(59, 130, 246, 0.08);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.video-card-actions {
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.video-card:hover .video-card-actions {
+    opacity: 1;
+}
+
+.status-badge.pending {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+}
+
+/* ─── Input Type Cards (Create Modal) ── */
+.input-type-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.input-type-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 12px;
+    border: 2px solid rgba(59, 130, 246, 0.15);
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.4);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+}
+
+.input-type-card:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+    background: rgba(59, 130, 246, 0.05);
+}
+
+.input-type-card.selected {
+    border-color: rgba(59, 130, 246, 0.6);
+    background: rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 16px rgba(59, 130, 246, 0.15);
+}
+
+.input-type-card input[type="radio"] {
+    display: none;
+}
+
+.input-type-icon {
+    font-size: 28px;
+}
+
+.input-type-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #e2e8f0;
+}
+
+.input-type-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    line-height: 1.4;
+}

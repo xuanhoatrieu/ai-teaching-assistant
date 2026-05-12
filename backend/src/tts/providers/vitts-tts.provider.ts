@@ -53,7 +53,14 @@ export class ViTTSTTSProvider implements ITTSProvider {
             throw new Error('ViTTS API key is required');
         }
 
-        const mode = options?.vittsMode || 'auto';
+        let mode = options?.vittsMode;
+        if (!mode) {
+            if (options?.voiceId && options.voiceId !== 'auto' && options.voiceId !== 'vitts:auto') {
+                mode = 'clone';
+            } else {
+                mode = 'auto';
+            }
+        }
         const speed = options?.vittsSpeed ?? options?.speed ?? 1.0;
         const numStep = options?.vittsNumStep ?? 32;
         const normalize = options?.vittsNormalize ?? true;

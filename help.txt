@@ -1,0 +1,70 @@
+usage: manimgl [-h] [-w] [-s] [-l] [-m] [--hd] [--uhd] [-f] [-p] [-i] [-t]
+               [--vcodec VCODEC] [--pix_fmt PIX_FMT] [-q] [-a] [-o] [--finder]
+               [--subdivide] [--file_name FILE_NAME]
+               [-n START_AT_ANIMATION_NUMBER] [-e LINE_NUMBER] [-r RESOLUTION]
+               [--fps FPS] [-c COLOR] [--leave_progress_bars]
+               [--show_animation_progress] [--prerun] [--video_dir VIDEO_DIR]
+               [--config_file CONFIG_FILE] [-v] [--log-level LOG_LEVEL]
+               [--clear-cache] [--autoreload]
+               [file] [scene_names ...]
+
+positional arguments:
+  file                  Path to file holding the python code for the scene
+  scene_names           Name of the Scene class you want to see
+
+options:
+  -h, --help            show this help message and exit
+  -w, --write_file      Render the scene as a movie file
+  -s, --skip_animations
+                        Save the last frame
+  -l, --low_quality     Render at 480p
+  -m, --medium_quality  Render at 720p
+  --hd                  Render at a 1080p
+  --uhd                 Render at a 4k
+  -f, --full_screen     Show window in full screen
+  -p, --presenter_mode  Scene will stay paused during wait calls until space
+                        bar or right arrow is hit, like a slide show
+  -i, --gif             Save the video as gif
+  -t, --transparent     Render to a movie file with an alpha channel
+  --vcodec VCODEC       Video codec to use with ffmpeg
+  --pix_fmt PIX_FMT     Pixel format to use for the output of ffmpeg, defaults
+                        to `yuv420p`
+  -q, --quiet
+  -a, --write_all       Write all the scenes from a file
+  -o, --open            Automatically open the saved file once its done
+  --finder              Show the output file in finder
+  --subdivide           Divide the output animation into individual movie
+                        files for each animation
+  --file_name FILE_NAME
+                        Name for the movie or image file
+  -n, --start_at_animation_number START_AT_ANIMATION_NUMBER
+                        Start rendering not from the first animation, but from
+                        another, specified by its index. If you pass in two
+                        comma separated values, e.g. "3,6", it will end the
+                        rendering at the second value
+  -e, --embed LINE_NUMBER
+                        Adds a breakpoint at the inputted file dropping into
+                        an interactive iPython session at that point of the
+                        code.
+  -r, --resolution RESOLUTION
+                        Resolution, passed as "WxH", e.g. "1920x1080"
+  --fps FPS             Frame rate, as an integer
+  -c, --color COLOR     Background color
+  --leave_progress_bars
+                        Leave progress bars displayed in terminal
+  --show_animation_progress
+                        Show progress bar for each animation
+  --prerun              Calculate total framecount, to display in a progress
+                        bar, by doing an initial run of the scene which skips
+                        animations.
+  --video_dir VIDEO_DIR
+                        Directory to write video
+  --config_file CONFIG_FILE
+                        Path to the custom configuration file
+  -v, --version         Display the version of manimgl
+  --log-level LOG_LEVEL
+                        Level of messages to Display, can be DEBUG / INFO /
+                        WARNING / ERROR / CRITICAL
+  --clear-cache         Erase the cache used for Tex and Text Mobjects
+  --autoreload          Automatically reload Python modules to pick up code
+                        changes across different files

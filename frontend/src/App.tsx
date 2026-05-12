@@ -26,6 +26,8 @@ import { LessonProgressPage } from './pages/LessonProgress';
 import { LessonPreviewPage } from './pages/LessonPreview';
 import { UserSettingsPage } from './pages/UserSettings';
 import { PptxAudioToolPage } from './pages/PptxAudioTool';
+import { VideoGeneratorPage } from './pages/VideoGeneratorPage';
+import { VideoStudioPage } from './pages/VideoStudio';
 
 import './index.css';
 
@@ -53,6 +55,8 @@ function App() {
             <Route path="lessons/:id/classic" element={<LessonEditorPage />} />
             <Route path="lessons/:id/progress" element={<LessonProgressPage />} />
             <Route path="lessons/:id/preview" element={<LessonPreviewPage />} />
+            <Route path="lessons/:lessonId/video" element={<VideoGeneratorPage />} />
+            <Route path="subjects/:subjectId/video/:videoId" element={<VideoStudioPage />} />
             <Route path="settings" element={<UserSettingsPage />} />
             <Route path="pptx-audio-tool" element={<PptxAudioToolPage />} />
             <Route path="pptx-audio-tool/:sessionId" element={<PptxAudioToolPage />} />

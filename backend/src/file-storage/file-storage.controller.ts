@@ -198,6 +198,58 @@ export class FileStorageController {
             throw new NotFoundException('File not found');
         }
     }
+    /**
+     * PUBLIC endpoint for serving textbook illustration assets
+     * GET /files/public/syllabus-textbook/:syllabusId/:lessonId/assets/:filename
+     *
+     * Serves: uploads/syllabus-textbook/{syllabusId}/{lessonId}/assets/{filename}
+     */
+    @Get('public/syllabus-textbook/:syllabusId/:lessonId/assets/:filename')
+    async serveTextbookAsset(
+        @Param('syllabusId') syllabusId: string,
+        @Param('lessonId') lessonId: string,
+        @Param('filename') filename: string,
+        @Res() res: Response,
+    ): Promise<void> {
+        const filePath = path.join(
+            this.fileStorageService.getTextbookAssetsPath(syllabusId, lessonId),
+            filename,
+        );
+
+        if (!this.fileStorageService.validatePathWithinDataUser(filePath)) {
+            // Assets are under uploads/, not datauser/. Use manual validation.
+            const resolved = path.resolve(filePath);
+            const uploadsBase = path.resolve(process.cwd(), 'uploads');
+            if (!resolved.startsWith(uploadsBase)) {
+                throw new ForbiddenException('Invalid file path');
+            }
+        }
+
+        const exists = await this.fileStorageService.fileExists(filePath);
+        if (!exists) {
+            throw new NotFoundException('Textbook asset not found');
+        }
+
+        const ext = path.extname(filename).toLowerCase();
+        const contentTypes: Record<string, string> = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml',
+        };
+
+        try {
+            const fileBuffer = await this.fileStorageService.readFile(filePath);
+            res.setHeader('Content-Type', contentTypes[ext] || 'image/png');
+            res.setHeader('Content-Length', fileBuffer.length);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.send(fileBuffer);
+        } catch {
+            throw new NotFoundException('File not found');
+        }
+    }
 
     // ============================================================
     // AUTHENTICATED ROUTES (generic routes with params)
@@ -210,6 +262,7 @@ export class FileStorageController {
     @Get(':userId/:lessonId/:type/:filename')
     @UseGuards(JwtAuthGuard)
     async serveFile(
+        @Req() rawReq: any,
         @Param('userId') userId: string,
         @Param('lessonId') lessonId: string,
         @Param('type') type: string,
@@ -223,9 +276,13 @@ export class FileStorageController {
         }
 
         // Get current user from JWT
-        const currentUser = req.user as { userId: string };
+        console.log('GET FILE:', req.url, 'query token:', req.query?.token ? 'yes' : 'no');
+        const currentUser = req.user as { id: string };
 
-        // Verify user has access to this lesson
+        // Verify user has access to this resource (could be a lesson or a video generation)
+        let hasAccess = false;
+
+        // 1. Try to find as a Lesson
         const lesson = await this.prisma.lesson.findFirst({
             where: { id: lessonId },
             include: {
@@ -235,13 +292,22 @@ export class FileStorageController {
             },
         });
 
-        if (!lesson) {
-            throw new NotFoundException('Lesson not found');
+        if (lesson && lesson.subject.userId === currentUser.id) {
+            hasAccess = true;
         }
 
-        // Check if user owns the lesson (via subject ownership)
-        if (lesson.subject.userId !== currentUser.userId) {
-            throw new ForbiddenException('Access denied');
+        // 2. Try to find as a VideoGeneration
+        if (!hasAccess) {
+            const video = await this.prisma.videoGeneration.findFirst({
+                where: { id: lessonId },
+            });
+            if (video && video.userId === currentUser.id) {
+                hasAccess = true;
+            }
+        }
+
+        if (!hasAccess) {
+            throw new ForbiddenException('Access denied or resource not found');
         }
 
         // Build file path
@@ -311,9 +377,12 @@ export class FileStorageController {
         }
 
         // Get current user from JWT
-        const currentUser = req.user as { userId: string };
+        const currentUser = req.user as { id: string };
 
-        // Verify user has access to this lesson
+        // Verify user has access to this resource (could be a lesson or a video generation)
+        let hasAccess = false;
+
+        // 1. Try to find as a Lesson
         const lesson = await this.prisma.lesson.findFirst({
             where: { id: lessonId },
             include: {
@@ -323,12 +392,22 @@ export class FileStorageController {
             },
         });
 
-        if (!lesson) {
-            throw new NotFoundException('Lesson not found');
+        if (lesson && lesson.subject.userId === currentUser.id) {
+            hasAccess = true;
         }
 
-        if (lesson.subject.userId !== currentUser.userId) {
-            throw new ForbiddenException('Access denied');
+        // 2. Try to find as a VideoGeneration
+        if (!hasAccess) {
+            const video = await this.prisma.videoGeneration.findFirst({
+                where: { id: lessonId },
+            });
+            if (video && video.userId === currentUser.id) {
+                hasAccess = true;
+            }
+        }
+
+        if (!hasAccess) {
+            throw new ForbiddenException('Access denied or resource not found');
         }
 
         // Get directory path

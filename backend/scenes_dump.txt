@@ -1,0 +1,18 @@
+
+=== Scene 0: Gradient Descent in 2 Minutes ===
+Approach: manim
+
+=== Scene 1: The Loss Landscape ===
+Approach: manim
+
+=== Scene 2: Follow the Negative Gradient ===
+Approach: manim
+
+=== Scene 3: Learning Rate Matters ===
+Approach: manim
+
+=== Scene 4: Tiny Python Demo ===
+Approach: screen_record
+
+=== Scene 5: Summary ===
+Approach: static

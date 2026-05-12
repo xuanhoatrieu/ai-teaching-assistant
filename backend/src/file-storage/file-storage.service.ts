@@ -488,6 +488,36 @@ export class FileStorageService {
         };
     }
 
+    // ==================== TEXTBOOK ASSETS ====================
+
+    /**
+     * Get assets directory for textbook illustrations.
+     * Structure: uploads/syllabus-textbook/<syllabusId>/<lessonId>/assets/
+     */
+    getTextbookAssetsPath(syllabusId: string, lessonId: string): string {
+        this.validatePathSegment(syllabusId);
+        this.validatePathSegment(lessonId);
+        return path.join(process.cwd(), 'uploads', 'syllabus-textbook', syllabusId, lessonId, 'assets');
+    }
+
+    /**
+     * Save a textbook illustration asset (diagram or AI image).
+     */
+    async saveTextbookAsset(
+        syllabusId: string,
+        lessonId: string,
+        imageBuffer: Buffer,
+        filename: string,
+    ): Promise<{ filePath: string; publicUrl: string }> {
+        const assetsDir = this.getTextbookAssetsPath(syllabusId, lessonId);
+        const filePath = path.join(assetsDir, filename);
+        await this.saveFile(filePath, imageBuffer);
+        return {
+            filePath,
+            publicUrl: `/files/public/syllabus-textbook/${syllabusId}/${lessonId}/assets/${filename}`,
+        };
+    }
+
     // ==================== SECURITY ====================
 
     /**

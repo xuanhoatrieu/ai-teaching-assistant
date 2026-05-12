@@ -1,0 +1,699 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "total_files_scanned": 418,
+    "total_scenes_found": 4915,
+    "selected_patterns": 50,
+    "categories": {
+      "3d_scene": 5,
+      "formula_scene": 5,
+      "general": 5,
+      "geometry_scene": 5,
+      "graph_scene": 5,
+      "updater_animation": 5,
+      "coordinate_transform": 5,
+      "formula_transform": 5,
+      "matrix_scene": 5,
+      "title_card": 5
+    }
+  },
+  "patterns": {
+    "SurfaceExample": {
+      "template_type": "3d_scene",
+      "tags": [
+        "3d",
+        "animation",
+        "color",
+        "geometry",
+        "text",
+        "title",
+        "transform",
+        "updater"
+      ],
+      "base_class": "ThreeDScene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 80,
+      "code": "class SurfaceExample(ThreeDScene):\n    def construct(self):\n        surface_text = Text(\"For 3d scenes, try using surfaces\")\n        surface_text.fix_in_frame()\n        surface_text.to_edge(UP)\n        self.add(surface_text)\n        self.wait(0.1)\n\n        torus1 = Torus(r1=1, r2=1)\n        torus2 = Torus(r1=3, r2=1)\n        sphere = Sphere(radius=3, resolution=torus1.resolution)\n        # You can texture a surface with up to two images, which will\n        # be interpreted as the side towards the light, and away from\n        # the light.  These can be either urls, or paths to a local file\n        # in whatever you've set as the image directory in\n        # the custom_config.yml file\n\n        # day_texture = \"EarthTextureMap\"\n        # night_texture = \"NightEarthTextureMap\"\n        day_texture = \"https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Whole_world_-_land_and_oceans.jpg/1280px-Whole_world_-_land_and_oceans.jpg\"\n        night_texture = \"https://upload.wikimedia.org/wikipedia/commons/thumb/b/ba/The_earth_at_night.jpg/1280px-The_earth_at_night.jpg\"\n\n        surfaces = [\n            TexturedSurface(surface, day_texture, night_texture)\n            for surface in [sphere, torus1, torus2]\n        ]\n\n        for mob in surfaces:\n            mob.shift(IN)\n            mob.mesh = SurfaceMesh(mob)\n            mob.mesh.set_stroke(BLUE, 1, opacity=0.5)\n\n        surface = surfaces[0]\n\n        self.play(\n            FadeIn(surface),\n            ShowCreation(surface.mesh, lag_ratio=0.01, run_time=3),\n        )\n        for mob in surfaces:\n            mob.add(mob.mesh)\n        surface.save_state()\n        self.play(Rotate(surface, PI / 2), run_time=2)\n        for mob in surfaces[1:]:\n            mob.rotate(PI / 2)\n\n        self.play(\n            Transform(surface, surfaces[1]),\n            run_time=3\n        )\n\n        self.play(\n            Transform(surface, surfaces[2]),\n            # Move camera frame during the transition\n            self.frame.animate.increment_phi(-10 * DEG),\n            self.frame.animate.increment_theta(-20 * DEG),\n            run_time=3\n        )\n        # Add ambient rotation\n        self.frame.add_updater(lambda m, dt: m.increment_theta(-0.1 * dt))\n\n        # Play around with where the light is\n        light_text = Text(\"You can move around the light source\")\n        light_text.move_to(surface_text)\n        light_text.fix_in_frame()\n\n        self.play(FadeTransform(surface_text, light_text))\n        light = self.camera.light_source\n        light_dot = GlowDot(color=WHITE, radius=0.5)\n        light_dot.always.move_to(light)\n        self.add(light, light_dot)\n        light.save_state()\n        self.play(light.animate.move_to(3 * IN), run_time=5)\n        self.play(light.animate.shift(10 * OUT), run_time=5)\n\n        drag_text = Text(\"Try moving the mouse while pressing d or f\")\n        drag_text.move_to(light_text)\n        drag_text.fix_in_frame()\n\n        self.play(FadeTransform(light_text, drag_text))\n        self.wait()"
+    },
+    "AboutToyPuzzles": {
+      "template_type": "3d_scene",
+      "tags": [
+        "3d",
+        "animation",
+        "color",
+        "formula",
+        "geometry",
+        "tex",
+        "text",
+        "transform"
+      ],
+      "base_class": "UtilitiesPuzzleScene",
+      "source": "3b1b-workspace/videos/_2017/mug.py",
+      "line_count": 80,
+      "code": "class AboutToyPuzzles(UtilitiesPuzzleScene, TeacherStudentsScene, ThreeDScene):\n    def construct(self):\n        self.remove(self.pi_creatures)\n        self.lay_out_puzzle()\n        self.point_to_abstractions()\n        self.show_this_video()\n\n    def lay_out_puzzle(self):\n        self.setup_configuration()\n        houses, utilities = self.houses, self.utilities\n        lines = VGroup(*it.chain(*self.get_almost_solution_lines()))\n        no_crossing_words = self.get_no_crossing_words()\n\n        self.remove(self.objects)\n        self.play(\n            ReplacementTransform(\n                VGroup(houses[1], houses[1]).copy().fade(1),\n                VGroup(houses[0], houses[2]),\n                rate_func = squish_rate_func(smooth, 0.35, 1),\n                run_time = 2,\n            ),\n            FadeIn(houses[1]),\n            LaggedStartMap(DrawBorderThenFill, utilities, run_time = 2)\n        )\n        self.play(\n            LaggedStartMap(\n                ShowCreation, lines, \n                run_time = 3\n            ),\n            Animation(self.objects)\n        )\n        self.play(\n            Write(no_crossing_words[0]),\n            GrowArrow(no_crossing_words[1]),\n        )\n        self.wait()\n\n        self.objects.add_to_back(lines, no_crossing_words)\n\n    def point_to_abstractions(self):\n        objects = self.objects\n        objects.generate_target()\n        objects.target.scale(0.5)\n        objects.target.move_to(\n            (FRAME_Y_RADIUS*DOWN + FRAME_X_RADIUS*LEFT)/2\n        )\n\n        eulers = OldTex(*\"V-E+F=2\")\n        eulers.set_color_by_tex_to_color_map({\n            \"V\" : RED,\n            \"E\" : GREEN,\n            \"F\" : BLUE,\n        })\n        eulers.to_edge(UP, buff = 2)\n\n        cube = Cube()\n        cube.set_stroke(WHITE, 2)\n        cube.set_height(0.75)\n        cube.pose_at_angle()\n        cube.next_to(eulers, UP)\n\n        tda = OldTexText(\"Topological \\\\\\\\ Data Analysis\")\n        tda.move_to(DOWN + 4*RIGHT)\n\n        arrow_from_eulers = Arrow(\n            eulers.get_bottom(), tda.get_corner(UP+LEFT),\n            color = WHITE\n        )\n\n        self.play(\n            objects.scale, 0.5,\n            objects.move_to, DOWN + 4*LEFT,\n        )\n        arrow_to_eulers = Arrow(\n            self.houses[2].get_corner(UP+LEFT),\n            eulers.get_bottom(),\n            color = WHITE\n        )\n        always_rotate(cube, axis=UP)\n        self.play(\n        # ... (truncated for brevity)"
+    },
+    "AccurateProductRule": {
+      "template_type": "3d_scene",
+      "tags": [
+        "3d",
+        "animation",
+        "color",
+        "formula",
+        "tex",
+        "text",
+        "transform"
+      ],
+      "base_class": "SampleSpaceScene",
+      "source": "3b1b-workspace/videos/_2018/eop/independence.py",
+      "line_count": 80,
+      "code": "class AccurateProductRule(SampleSpaceScene, ThreeDScene):\n    def construct(self):\n        self.setup_terms()\n        self.add_sample_space()\n        self.wait()\n        self.show_first_division()\n        self.show_second_division()\n        self.move_to_third_dimension()\n        self.show_final_probability()\n        self.show_confusion()\n\n    def setup_terms(self):\n        filler_tex = \"Filler\"\n        lhs = OldTex(\"P(\", filler_tex, \")\", \"=\")\n        p1 = OldTex(\"P(\", filler_tex, \")\")\n        p2 = OldTex(\"P(\", filler_tex, \"|\", filler_tex, \")\")\n        p3 = OldTex(\"P(\", filler_tex, \"|\", filler_tex, \")\")\n        terms = VGroup(lhs, p1, p2, p3)\n        terms.arrange(RIGHT, buff = SMALL_BUFF)\n        terms.to_edge(UP, buff = LARGE_BUFF)\n\n        kwargs = {\"buff\" : SMALL_BUFF, \"include_qs\" : False}\n        slot_group_lists = [\n            [get_slot_group([True, True, False], **kwargs)],\n            [get_slot_group([True], **kwargs)],\n            [\n                get_slot_group([True, True], **kwargs),\n                get_slot_group([True], **kwargs),\n            ],\n            [\n                get_slot_group([True, True, False], **kwargs),\n                get_slot_group([True, True], **kwargs),\n            ],\n        ]\n        for term, slot_group_list in zip(terms, slot_group_lists):\n            parts = term.get_parts_by_tex(filler_tex)\n            for part, slot_group in zip(parts, slot_group_list):\n                slot_group.replace(part, dim_to_match = 0)\n                term.submobjects[term.index_of_part(part)] = slot_group\n        # terms[2][1].content[0].set_fill(BLACK, 0)\n        # VGroup(*terms[3][1].content[:2]).set_fill(BLACK, 0)\n\n        value_texs = [\"0.8\", \">0.8\", \"<0.2\"]\n        for term, tex in zip(terms[1:], value_texs):\n            term.value = OldTex(tex)\n            term.value.next_to(term, UP)\n\n        self.terms = terms\n        self.add(terms[0])\n\n    def add_sample_space(self):\n        SampleSpaceScene.add_sample_space(self, height = 4, width = 5)\n        self.sample_space.to_edge(DOWN)\n\n    def show_first_division(self):\n        space = self.sample_space\n        space.divide_horizontally(\n            [0.8], colors = [GREEN_E, RED_E]\n        )\n        space.horizontal_parts.fade(0.1)\n        top_label = self.terms[1].copy()\n        bottom_label = top_label.copy()\n        slot_group = get_slot_group([False], buff = SMALL_BUFF, include_qs = False)\n        slot_group.replace(bottom_label[1])\n        Transform(bottom_label[1], slot_group).update(1)\n        braces_and_labels = space.get_side_braces_and_labels(\n            [top_label, bottom_label]\n        )\n\n        self.play(\n            FadeIn(space.horizontal_parts),\n            FadeIn(braces_and_labels)\n        )\n        self.play(ReplacementTransform(\n            top_label.copy(), self.terms[1]\n        ))\n        self.wait()\n        self.play(Write(self.terms[1].value))\n        self.wait()\n\n        # ... (truncated for brevity)"
+    },
+    "AddTwoSineWaves": {
+      "template_type": "3d_scene",
+      "tags": [
+        "3d",
+        "animation",
+        "axes",
+        "color",
+        "formula",
+        "graph",
+        "tex",
+        "text"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2023/optics_puzzles/adding_waves.py",
+      "line_count": 80,
+      "code": "class AddTwoSineWaves(InteractiveScene):\n    def construct(self):\n        # Setup axes\n        axes1, axes2, axes3 = all_axes = [self.get_axes() for _ in range(3)]\n        for axes, y in zip(all_axes, [2.5, 0, -3.0]):\n            axes.set_y(y)\n            axes.to_edge(RIGHT)\n\n        # First two waves\n        wave1 = self.get_variable_wave(axes1, color=BLUE, func_name=\"f(t)\", index=\"1\")\n        wave2 = self.get_variable_wave(axes2, color=YELLOW, func_name=\"g(t)\", index=\"2\", omega=PI)\n\n        self.play(\n            FadeIn(axes1),\n            ShowCreation(wave1[0]),\n        )\n        self.play(LaggedStartMap(FadeIn, wave1[2]),)\n        self.change_all_parameters(wave1, 0.5, PI, PI / 4)\n        self.wait()\n\n        self.play(\n            FadeIn(axes2),\n            ShowCreation(wave2[0]),\n        )\n        self.play(LaggedStartMap(FadeIn, wave2[2]),)\n        self.change_all_parameters(wave2, 0.75, 2 * PI, PI / 2)\n        self.wait()\n\n        self.add(axes2)\n        self.add(wave2)\n\n        # Sum wave\n        wave3 = axes3.get_graph(\n            lambda x: wave1.func(x) + wave2.func(x),\n            color=GREEN,\n            bind=True\n        )\n        wave3_label = Tex(\"f(t) + g(t)\", font_size=36)\n        wave3_label.move_to(axes3.c2p(0.5, 1.5), DL)\n\n        self.play(LaggedStart(\n            TransformFromCopy(axes1, axes3),\n            TransformFromCopy(axes2, axes3),\n            TransformFromCopy(wave1.labels[3][\"f(t)\"], wave3_label[\"f(t)\"]),\n            TransformFromCopy(wave2.labels[3][\"g(t)\"], wave3_label[\"+ g(t)\"]),\n            lag_ratio=0.05\n        ))\n        self.play(\n            TransformFromCopy(wave1[0], wave3),\n            TransformFromCopy(wave2[0], wave3),\n        )\n        self.wait()\n\n        # Some example changes\n        self.change_wave_parameter(wave1, \"phi\", TAU)\n        self.change_wave_parameter(wave2, \"A\", 0.5)\n        self.change_wave_parameter(wave1, \"omega\", 4.5)\n        self.change_wave_parameter(wave1, \"phi\", 3 * PI / 4)\n        self.change_wave_parameter(wave2, \"omega\", 3 * PI)\n        self.change_wave_parameter(wave2, \"phi\", 5)\n        self.wait()\n\n        # Lock both frequencies\n        frame = self.frame\n        t2c = {R\"\\omega\": GOLD}\n        top_words = TexText(\n            R\"If both have matching \\\\ frequencies, $\\omega$...\",\n            font_size=36,\n            t2c=t2c\n        )\n        top_words.next_to(VGroup(wave1.labels, wave2.labels), LEFT, buff=2.0)\n\n        omega_locks = VGroup()\n        for wave in [wave1, wave2]:\n            lock = SVGMobject(\"lock\")\n            lock.match_height(wave.labels[1])\n            lock.next_to(wave.labels[1], LEFT, SMALL_BUFF)\n            omega_locks.add(lock)\n\n        omega_locks.set_color(GOLD)\n        # ... (truncated for brevity)"
+    },
+    "AdjustingTheMachine": {
+      "template_type": "3d_scene",
+      "tags": [
+        "3d",
+        "animation",
+        "color",
+        "updater"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2024/transformers/chm.py",
+      "line_count": 29,
+      "code": "class AdjustingTheMachine(InteractiveScene):\n    def construct(self):\n        # Add a machine and repeatedly tweak it\n        frame = self.frame\n        self.set_floor_plane(\"xz\")\n        frame.reorient(-28, -17, 0, ORIGIN, 8.91)\n        self.camera.light_source.move_to([-10, 10, 10])\n\n        machine = MachineWithDials(n_rows=10, n_cols=12)\n        machine.set_height(6)\n        blocks = VCube().replicate(10)\n        blocks.set_shape(machine.get_width(), machine.get_height(), 1.0)\n        blocks.deactivate_depth_test()\n        cam_loc = self.frame.get_implied_camera_location() \n        for block in blocks:\n            block.sort(lambda p: -get_norm(p - cam_loc))\n        blocks.set_fill(GREY_D, 1)\n        blocks.set_shading(0.2, 0.5, 0.25)\n        blocks.arrange(OUT, buff=0.5)\n        blocks.move_to(machine, OUT)\n\n        self.add(blocks)\n        self.add(machine)\n\n        frame.clear_updaters()\n        frame.add_updater(lambda f: f.set_theta(-30 * DEGREES * math.cos(0.1 * self.time)))\n        self.add(frame)\n        for x in range(6):\n            self.play(machine.random_change_animation(lag_factor=0.1))"
+    },
+    "AnimatingMethods": {
+      "template_type": "formula_scene",
+      "tags": [
+        "animation",
+        "color",
+        "formula",
+        "numberplane",
+        "tex"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 42,
+      "code": "class AnimatingMethods(Scene):\n    def construct(self):\n        grid = Tex(R\"\\pi\").get_grid(10, 10, height=4)\n        self.add(grid)\n\n        # You can animate the application of mobject methods with the\n        # \".animate\" syntax:\n        self.play(grid.animate.shift(LEFT))\n\n        # Both of those will interpolate between the mobject's initial\n        # state and whatever happens when you apply that method.\n        # For this example, calling grid.shift(LEFT) would shift the\n        # grid one unit to the left, but both of the previous calls to\n        # \"self.play\" animate that motion.\n\n        # The same applies for any method, including those setting colors.\n        self.play(grid.animate.set_color(YELLOW))\n        self.wait()\n        self.play(grid.animate.set_submobject_colors_by_gradient(BLUE, GREEN))\n        self.wait()\n        self.play(grid.animate.set_height(TAU - MED_SMALL_BUFF))\n        self.wait()\n\n        # The method Mobject.apply_complex_function lets you apply arbitrary\n        # complex functions, treating the points defining the mobject as\n        # complex numbers.\n        self.play(grid.animate.apply_complex_function(np.exp), run_time=5)\n        self.wait()\n\n        # Even more generally, you could apply Mobject.apply_function,\n        # which takes in functions form R^3 to R^3\n        self.play(\n            grid.animate.apply_function(\n                lambda p: [\n                    p[0] + 0.5 * math.sin(p[1]),\n                    p[1] + 0.5 * math.sin(p[0]),\n                    p[2]\n                ]\n            ),\n            run_time=5,\n        )\n        self.wait()"
+    },
+    "TexIndexing": {
+      "template_type": "formula_scene",
+      "tags": [
+        "animation",
+        "color",
+        "formula",
+        "tex",
+        "text"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 51,
+      "code": "class TexIndexing(Scene):\n    def construct(self):\n        # You can index into Tex mobject (or other StringMobjects) by substrings\n        equation = Tex(R\"e^{\\pi i} = -1\", font_size=144)\n\n        self.add(equation)\n        self.play(FlashAround(equation[\"e\"]))\n        self.wait()\n        self.play(Indicate(equation[R\"\\pi\"]))\n        self.wait()\n        self.play(TransformFromCopy(\n            equation[R\"e^{\\pi i}\"].copy().set_opacity(0.5),\n            equation[\"-1\"],\n            path_arc=-PI / 2,\n            run_time=3\n        ))\n        self.play(FadeOut(equation))\n\n        # Or regular expressions\n        equation = Tex(\"A^2 + B^2 = C^2\", font_size=144)\n\n        self.play(Write(equation))\n        for part in equation[re.compile(r\"\\w\\^2\")]:\n            self.play(FlashAround(part))\n        self.wait()\n        self.play(FadeOut(equation))\n        \n        # Indexing by substrings like this may not work when\n        # the order in which Latex draws symbols does not match\n        # the order in which they show up in the string.\n        # For example, here the infinity is drawn before the sigma\n        # so we don't get the desired behavior.\n        equation = Tex(R\"\\sum_{n = 1}^\\infty \\frac{1}{n^2} = \\frac{\\pi^2}{6}\", font_size=72)\n        self.play(FadeIn(equation))\n        self.play(equation[R\"\\infty\"].animate.set_color(RED))  # Doesn't hit the infinity\n        self.wait()\n        self.play(FadeOut(equation))\n\n        # However you can always fix this by explicitly passing in\n        # a string you might want to isolate later. Also, using\n        # \\over instead of \\frac helps to avoid the issue for fractions\n        equation = Tex(\n            R\"\\sum_{n = 1}^\\infty {1 \\over n^2} = {\\pi^2 \\over 6}\",\n            # Explicitly mark \"\\infty\" as a substring you might want to access\n            isolate=[R\"\\infty\"],\n            font_size=72\n        )\n        self.play(FadeIn(equation))\n        self.play(equation[R\"\\infty\"].animate.set_color(RED))  # Got it!\n        self.wait()\n        self.play(FadeOut(equation))"
+    },
+    "TexTransformExample": {
+      "template_type": "formula_scene",
+      "tags": [
+        "animation",
+        "color",
+        "formula",
+        "tex",
+        "text"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 70,
+      "code": "class TexTransformExample(Scene):\n    def construct(self):\n        # Tex to color map\n        t2c = {\n            \"A\": BLUE,\n            \"B\": TEAL,\n            \"C\": GREEN,\n        }\n        # Configuration to pass along to each Tex mobject\n        kw = dict(font_size=72, t2c=t2c)\n        lines = VGroup(\n            Tex(\"A^2 + B^2 = C^2\", **kw),\n            Tex(\"A^2 = C^2 - B^2\", **kw),\n            Tex(\"A^2 = (C + B)(C - B)\", **kw),\n            Tex(R\"A = \\sqrt{(C + B)(C - B)}\", **kw),\n        )\n        lines.arrange(DOWN, buff=LARGE_BUFF)\n\n        self.add(lines[0])\n        # The animation TransformMatchingStrings will line up parts\n        # of the source and target which have matching substring strings.\n        # Here, giving it a little path_arc makes each part rotate into\n        # their final positions, which feels appropriate for the idea of\n        # rearranging an equation\n        self.play(\n            TransformMatchingStrings(\n                lines[0].copy(), lines[1],\n                # matched_keys specifies which substring should\n                # line up. If it's not specified, the animation\n                # will align the longest matching substrings.\n                # In this case, the substring \"^2 = C^2\" would\n                # trip it up\n                matched_keys=[\"A^2\", \"B^2\", \"C^2\"],\n                # When you want a substring from the source\n                # to go to a non-equal substring from the target,\n                # use the key map.\n                key_map={\"+\": \"-\"},\n                path_arc=90 * DEG,\n            ),\n        )\n        self.wait()\n        self.play(TransformMatchingStrings(\n            lines[1].copy(), lines[2],\n            matched_keys=[\"A^2\"]\n        ))\n        self.wait()\n        self.play(\n            TransformMatchingStrings(\n                lines[2].copy(), lines[3],\n                key_map={\"2\": R\"\\sqrt\"},\n                path_arc=-30 * DEG,\n            ),\n        )\n        self.wait(2)\n        self.play(LaggedStartMap(FadeOut, lines, shift=2 * RIGHT))\n\n        # TransformMatchingShapes will try to line up all pieces of a\n        # source mobject with those of a target, regardless of the\n        # what Mobject type they are.\n        source = Text(\"the morse code\", height=1)\n        target = Text(\"here come dots\", height=1)\n        saved_source = source.copy()\n\n        self.play(Write(source))\n        self.wait()\n        kw = dict(run_time=3, path_arc=PI / 2)\n        self.play(TransformMatchingShapes(source, target, **kw))\n        self.wait()\n        self.play(TransformMatchingShapes(target, saved_source, **kw))\n        self.wait()"
+    },
+    "UpdatersExample": {
+      "template_type": "formula_scene",
+      "tags": [
+        "animation",
+        "brace",
+        "color",
+        "geometry",
+        "tex",
+        "text",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 58,
+      "code": "class UpdatersExample(Scene):\n    def construct(self):\n        square = Square()\n        square.set_fill(BLUE_E, 1)\n\n        # On all frames, the constructor Brace(square, UP) will\n        # be called, and the mobject brace will set its data to match\n        # that of the newly constructed object\n        brace = always_redraw(Brace, square, UP)\n\n        label = TexText(\"Width = 0.00\")\n        number = label.make_number_changeable(\"0.00\")\n\n        # This ensures that the method deicmal.next_to(square)\n        # is called on every frame\n        label.always.next_to(brace, UP)\n        # You could also write the following equivalent line\n        # label.add_updater(lambda m: m.next_to(brace, UP))\n\n        # If the argument itself might change, you can use f_always,\n        # for which the arguments following the initial Mobject method\n        # should be functions returning arguments to that method.\n        # The following line ensures thst decimal.set_value(square.get_y())\n        # is called every frame\n        number.f_always.set_value(square.get_width)\n        # You could also write the following equivalent line\n        # number.add_updater(lambda m: m.set_value(square.get_width()))\n\n        self.add(square, brace, label)\n\n        # Notice that the brace and label track with the square\n        self.play(\n            square.animate.scale(2),\n            rate_func=there_and_back,\n            run_time=2,\n        )\n        self.wait()\n        self.play(\n            square.animate.set_width(5, stretch=True),\n            run_time=3,\n        )\n        self.wait()\n        self.play(\n            square.animate.set_width(2),\n            run_time=3\n        )\n        self.wait()\n\n        # In general, you can always call Mobject.add_updater, and pass in\n        # a function that you want to be called on every frame.  The function\n        # should take in either one argument, the mobject, or two arguments,\n        # the mobject and the amount of time since the last frame.\n        now = self.time\n        w0 = square.get_width()\n        square.add_updater(\n            lambda m: m.set_width(w0 * math.sin(self.time - now) + w0)\n        )\n        self.wait(4 * PI)"
+    },
+    "ABCNotBCA": {
+      "template_type": "formula_scene",
+      "tags": [
+        "color",
+        "formula",
+        "tex",
+        "text"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2018/eop/combinations.py",
+      "line_count": 10,
+      "code": "class ABCNotBCA(Scene):\n    def construct(self):\n        words = OldTexText(\"If order mattered:\")\n        equation = OldTexText(\"(A, B, C) $\\\\ne$ (B, C, A)\")\n        equation.set_color(YELLOW)\n        equation.next_to(words, DOWN)\n        group = VGroup(words, equation)\n        group.set_width(FRAME_WIDTH - 1)\n        group.to_edge(DOWN)\n        self.add(words, equation)"
+    },
+    "TextExample": {
+      "template_type": "general",
+      "tags": [
+        "animation",
+        "color",
+        "text"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 39,
+      "code": "class TextExample(Scene):\n    def construct(self):\n        # To run this scene properly, you should have \"Consolas\" font in your computer\n        # for full usage, you can see https://github.com/3b1b/manim/pull/680\n        text = Text(\"Here is a text\", font=\"Consolas\", font_size=90)\n        difference = Text(\n            \"\"\"\n            The most important difference between Text and TexText is that\\n\n            you can change the font more easily, but can't use the LaTeX grammar\n            \"\"\",\n            font=\"Arial\", font_size=24,\n            # t2c is a dict that you can choose color for different text\n            t2c={\"Text\": BLUE, \"TexText\": BLUE, \"LaTeX\": ORANGE}\n        )\n        VGroup(text, difference).arrange(DOWN, buff=1)\n        self.play(Write(text))\n        self.play(FadeIn(difference, UP))\n        self.wait(3)\n\n        fonts = Text(\n            \"And you can also set the font according to different words\",\n            font=\"Arial\",\n            t2f={\"font\": \"Consolas\", \"words\": \"Consolas\"},\n            t2c={\"font\": BLUE, \"words\": GREEN}\n        )\n        fonts.set_width(FRAME_WIDTH - 1)\n        slant = Text(\n            \"And the same as slant and weight\",\n            font=\"Consolas\",\n            t2s={\"slant\": ITALIC},\n            t2w={\"weight\": BOLD},\n            t2c={\"slant\": ORANGE, \"weight\": RED}\n        )\n        VGroup(fonts, slant).arrange(DOWN, buff=0.8)\n        self.play(FadeOut(text), FadeOut(difference, shift=DOWN))\n        self.play(Write(fonts))\n        self.wait()\n        self.play(Write(slant))\n        self.wait()"
+    },
+    "ALotToHoldInYouHead": {
+      "template_type": "general",
+      "tags": [
+        "animation"
+      ],
+      "base_class": "TeacherStudentsScene",
+      "source": "3b1b-workspace/videos/_2024/transformers/supplements.py",
+      "line_count": 7,
+      "code": "class ALotToHoldInYouHead(TeacherStudentsScene):\n    def construct(self):\n        self.play(\n            self.teacher.says(\"It's a lot to\\nhold in your head!\", mode=\"surprised\"),\n            self.change_students(\"confused\", \"erm\", \"dejected\", look_at=self.screen),\n        )\n        self.wait(5)"
+    },
+    "AddTwoRotatingVectors": {
+      "template_type": "general",
+      "tags": [],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2023/optics_puzzles/adding_waves.py",
+      "line_count": 3,
+      "code": "class AddTwoRotatingVectors(InteractiveScene):\n    def construct(self):\n        pass"
+    },
+    "AddedBubble": {
+      "template_type": "general",
+      "tags": [
+        "animation"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2023/convolutions2/gauss_example_supplements.py",
+      "line_count": 6,
+      "code": "class AddedBubble(InteractiveScene):\n    def construct(self):\n        randy = Randolph()\n        randy.to_corner(DL)\n        self.play(randy.says(\"It follows from \\n the CLT\"))\n        self.remove(randy)"
+    },
+    "AddingVariablesWithMGF": {
+      "template_type": "general",
+      "tags": [],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2023/clt_proof/main.py",
+      "line_count": 6,
+      "code": "class AddingVariablesWithMGF(InteractiveScene):\n    def construct(self):\n        # What we want is M_{X1+...+Xn}(t)\n\n        # Addition rule\n        pass"
+    },
+    "InteractiveDevelopment": {
+      "template_type": "geometry_scene",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "text",
+        "transform"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 44,
+      "code": "class InteractiveDevelopment(Scene):\n    def construct(self):\n        circle = Circle()\n        circle.set_fill(BLUE, opacity=0.5)\n        circle.set_stroke(BLUE_E, width=4)\n        square = Square()\n\n        self.play(ShowCreation(square))\n        self.wait()\n\n        # This opens an iPython terminal where you can keep writing\n        # lines as if they were part of this construct method.\n        # In particular, 'square', 'circle' and 'self' will all be\n        # part of the local namespace in that terminal.\n        self.embed()\n\n        # Try copying and pasting some of the lines below into\n        # the interactive shell\n        self.play(ReplacementTransform(square, circle))\n        self.wait()\n        self.play(circle.animate.stretch(4, 0))\n        self.play(Rotate(circle, 90 * DEG))\n        self.play(circle.animate.shift(2 * RIGHT).scale(0.25))\n\n        text = Text(\"\"\"\n            In general, using the interactive shell\n            is very helpful when developing new scenes\n        \"\"\")\n        self.play(Write(text))\n\n        # In the interactive shell, you can just type\n        # play, add, remove, clear, wait, save_state and restore,\n        # instead of self.play, self.add, self.remove, etc.\n\n        # To interact with the window, type touch().  You can then\n        # scroll in the window, or zoom by holding down 'z' while scrolling,\n        # and change camera perspective by holding down 'd' while moving\n        # the mouse.  Press 'r' to reset to the standard camera position.\n        # Press 'q' to stop interacting with the window and go back to\n        # typing new commands into the shell.\n\n        # In principle you can customize a scene to be responsive to\n        # mouse and keyboard interactions\n        always(circle.move_to, self.mouse_point)"
+    },
+    "AddTwoMatrixSizes": {
+      "template_type": "geometry_scene",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "text"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2024/transformers/supplements.py",
+      "line_count": 14,
+      "code": "class AddTwoMatrixSizes(InteractiveScene):\n    def construct(self):\n        # Test\n        rect = Rectangle(3.0, 1.0)\n        rect.set_stroke(BLUE, 3)\n        total = Integer(2 * 4 * (12288**2))\n        total.set_color(BLUE)\n        total.next_to(rect, UP)\n\n        self.play(\n            ShowCreation(rect),\n            Write(total)\n        )\n        self.wait()"
+    },
+    "AdditiveGroupOfComplexNumbers": {
+      "template_type": "geometry_scene",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "text"
+      ],
+      "base_class": "ComplexTransformationScene",
+      "source": "3b1b-workspace/videos/_2017/efvgt.py",
+      "line_count": 80,
+      "code": "class AdditiveGroupOfComplexNumbers(ComplexTransformationScene):\n    CONFIG = {\n        \"x_min\" : -2*int(FRAME_X_RADIUS),\n        \"x_max\" : 2*int(FRAME_X_RADIUS),\n        \"y_min\" : -FRAME_HEIGHT,\n        \"y_max\" : FRAME_HEIGHT,\n        \"example_points\" : [\n            complex(3, 2),\n            complex(1, -3),\n        ]\n    }\n    def construct(self):\n        self.add_plane()\n        self.show_preview_example_slides()\n        self.show_vertical_slide()\n        self.show_example_point()\n        self.show_example_addition()\n        self.write_group_name()\n        self.show_some_random_slides()\n\n    def add_plane(self):\n        self.add_transformable_plane(animate = True)\n        zero_dot = Dot(\n            self.z_to_point(0),\n            color = ADDER_COLOR\n        )\n        self.play(ShowCreation(zero_dot))\n        self.plane.add(zero_dot)\n        self.plane.zero_dot = zero_dot\n        self.wait()\n\n    def show_preview_example_slides(self):\n        example_vect = 2*UP+RIGHT\n        for vect in example_vect, -example_vect:\n            self.play(self.plane.shift, vect, run_time = 2)\n            self.wait()\n\n    def show_vertical_slide(self):\n        dots = VGroup(*[\n            Dot(self.z_to_point(complex(0, i)))\n            for i in range(1, 4)\n        ])\n        dots.set_color(YELLOW)\n        labels = VGroup(*self.imag_labels[-3:])\n\n        arrow = Arrow(ORIGIN, dots[-1].get_center(), buff = 0)\n        arrow.set_color(ADDER_COLOR)\n\n        self.plane.save_state()\n        for dot, label in zip(dots, labels):\n            self.play(\n                Indicate(label),\n                ShowCreation(dot)\n            )\n        self.add_foreground_mobjects(dots)\n        self.wait()\n        Scene.play(self, ShowCreation(arrow))\n        self.add_foreground_mobjects(arrow)\n        self.play(\n            self.plane.shift, dots[-1].get_center(),\n            run_time = 2\n        )\n        self.wait()\n        self.play(FadeOut(arrow))\n        self.foreground_mobjects.remove(arrow)\n        self.play(\n            self.plane.shift, 6*DOWN,\n            run_time = 3,\n        )\n        self.wait()\n        self.play(self.plane.restore, run_time = 2)\n        self.foreground_mobjects.remove(dots)\n        self.play(FadeOut(dots))\n\n    def show_example_point(self):\n        z = self.example_points[0]\n        point = self.z_to_point(z)\n        dot = Dot(point, color = YELLOW)\n        arrow = Vector(point, buff = dot.radius)\n        arrow.set_color(dot.get_color())\n        # ... (truncated for brevity)"
+    },
+    "AllOfTheVideos": {
+      "template_type": "geometry_scene",
+      "tags": [
+        "animation",
+        "geometry"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2018/WindingNumber_G.py",
+      "line_count": 23,
+      "code": "class AllOfTheVideos(Scene):\n    CONFIG = {\n        \"camera_config\" : {\n            \"background_opacity\" : 1,\n        }\n    }\n    def construct(self):\n        thumbnail_dir = os.path.join(MEDIA_DIR, \"3b1b_videos/Winding/OldThumbnails\")\n        n = 4\n        images = Group(*[\n            ImageMobject(os.path.join(thumbnail_dir, file))\n            for file in os.listdir(thumbnail_dir)[:n**2]\n        ])\n        for image in images:\n            rect = SurroundingRectangle(image, buff = 0)\n            rect.set_stroke(WHITE, 1)\n            image.add(rect)\n        images.arrange_in_grid(n, n, buff = 0)\n        images.set_height(FRAME_HEIGHT)\n        random.shuffle(images.submobjects)\n\n        self.play(LaggedStartMap(FadeIn, images, run_time = 4))\n        self.wait()"
+    },
+    "AmbientPermutations": {
+      "template_type": "geometry_scene",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "text"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2022/galois/art_supplements.py",
+      "line_count": 29,
+      "code": "class AmbientPermutations(Scene):\n    def construct(self):\n        # Test\n        text = Text(\"abcde\", font_size=72)\n        text.arrange_to_fit_width(4.5)\n        self.add(text)\n\n        # Animate swaps\n        n_swaps = 10\n        perms = list(it.permutations(range(len(text))))\n\n        for x in range(n_swaps):\n            perm = random.choice(perms)\n            letter_anims = []\n            arrow_anims = []\n            for i, letter in enumerate(text):\n                target = text[perm[i]]\n                letter_anims.append(letter.animate.move_to(target, DOWN).set_anim_args(path_arc=90 * DEGREES))\n                if i < perm[i]:\n                    arrow = Arrow(letter.get_bottom(), target.get_bottom(), path_arc=90 * DEGREES)\n                elif i > perm[i]:\n                    arrow = Arrow(letter.get_top(), target.get_top(), path_arc=90 * DEGREES)\n                else:\n                    arrow = VMobject()\n                arrow.set_stroke(BLUE)\n                arrow_anims.append(ShowCreationThenFadeOut(arrow, run_time=2))\n\n            self.play(LaggedStart(*arrow_anims, *letter_anims, lag_ratio=0.05))\n            text.sort()"
+    },
+    "CoordinateSystemExample": {
+      "template_type": "graph_scene",
+      "tags": [
+        "animation",
+        "axes",
+        "brace",
+        "color",
+        "geometry",
+        "text",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 74,
+      "code": "class CoordinateSystemExample(Scene):\n    def construct(self):\n        axes = Axes(\n            # x-axis ranges from -1 to 10, with a default step size of 1\n            x_range=(-1, 10),\n            # y-axis ranges from -2 to 2 with a step size of 0.5\n            y_range=(-2, 2, 0.5),\n            # The axes will be stretched so as to match the specified\n            # height and width\n            height=6,\n            width=10,\n            # Axes is made of two NumberLine mobjects.  You can specify\n            # their configuration with axis_config\n            axis_config=dict(\n                stroke_color=GREY_A,\n                stroke_width=2,\n                numbers_to_exclude=[0],\n            ),\n            # Alternatively, you can specify configuration for just one\n            # of them, like this.\n            y_axis_config=dict(\n                big_tick_numbers=[-2, 2],\n            )\n        )\n        # Keyword arguments of add_coordinate_labels can be used to\n        # configure the DecimalNumber mobjects which it creates and\n        # adds to the axes\n        axes.add_coordinate_labels(\n            font_size=20,\n            num_decimal_places=1,\n        )\n        self.add(axes)\n\n        # Axes descends from the CoordinateSystem class, meaning\n        # you can call call axes.coords_to_point, abbreviated to\n        # axes.c2p, to associate a set of coordinates with a point,\n        # like so:\n        dot = Dot(fill_color=RED)\n        dot.move_to(axes.c2p(0, 0))\n        self.play(FadeIn(dot, scale=0.5))\n        self.play(dot.animate.move_to(axes.c2p(3, 2)))\n        self.wait()\n        self.play(dot.animate.move_to(axes.c2p(5, 0.5)))\n        self.wait()\n\n        # Similarly, you can call axes.point_to_coords, or axes.p2c\n        # print(axes.p2c(dot.get_center()))\n\n        # We can draw lines from the axes to better mark the coordinates\n        # of a given point.\n        # Here, the always_redraw command means that on each new frame\n        # the lines will be redrawn\n        h_line = always_redraw(lambda: axes.get_h_line(dot.get_left()))\n        v_line = always_redraw(lambda: axes.get_v_line(dot.get_bottom()))\n\n        self.play(\n            ShowCreation(h_line),\n            ShowCreation(v_line),\n        )\n        self.play(dot.animate.move_to(axes.c2p(3, -2)))\n        self.wait()\n        self.play(dot.animate.move_to(axes.c2p(1, 1)))\n        self.wait()\n\n        # If we tie the dot to a particular set of coordinates, notice\n        # that as we move the axes around it respects the coordinate\n        # system defined by them.\n        f_always(dot.move_to, lambda: axes.c2p(1, 1))\n        self.play(\n            axes.animate.scale(0.75).to_corner(UL),\n            run_time=2,\n        )\n        self.wait()\n        self.play(FadeOut(VGroup(axes, dot, h_line, v_line)))"
+    },
+    "GraphExample": {
+      "template_type": "graph_scene",
+      "tags": [
+        "animation",
+        "axes",
+        "color",
+        "geometry",
+        "graph",
+        "text",
+        "transform",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 76,
+      "code": "class GraphExample(Scene):\n    def construct(self):\n        axes = Axes((-3, 10), (-1, 8), height=6)\n        axes.add_coordinate_labels()\n\n        self.play(Write(axes, lag_ratio=0.01, run_time=1))\n\n        # Axes.get_graph will return the graph of a function\n        sin_graph = axes.get_graph(\n            lambda x: 2 * math.sin(x),\n            color=BLUE,\n        )\n        # By default, it draws it so as to somewhat smoothly interpolate\n        # between sampled points (x, f(x)).  If the graph is meant to have\n        # a corner, though, you can set use_smoothing to False\n        relu_graph = axes.get_graph(\n            lambda x: max(x, 0),\n            use_smoothing=False,\n            color=YELLOW,\n        )\n        # For discontinuous functions, you can specify the point of\n        # discontinuity so that it does not try to draw over the gap.\n        step_graph = axes.get_graph(\n            lambda x: 2.0 if x > 3 else 1.0,\n            discontinuities=[3],\n            color=GREEN,\n        )\n\n        # Axes.get_graph_label takes in either a string or a mobject.\n        # If it's a string, it treats it as a LaTeX expression.  By default\n        # it places the label next to the graph near the right side, and\n        # has it match the color of the graph\n        sin_label = axes.get_graph_label(sin_graph, \"\\\\sin(x)\")\n        relu_label = axes.get_graph_label(relu_graph, Text(\"ReLU\"))\n        step_label = axes.get_graph_label(step_graph, Text(\"Step\"), x=4)\n\n        self.play(\n            ShowCreation(sin_graph),\n            FadeIn(sin_label, RIGHT),\n        )\n        self.wait(2)\n        self.play(\n            ReplacementTransform(sin_graph, relu_graph),\n            FadeTransform(sin_label, relu_label),\n        )\n        self.wait()\n        self.play(\n            ReplacementTransform(relu_graph, step_graph),\n            FadeTransform(relu_label, step_label),\n        )\n        self.wait()\n\n        parabola = axes.get_graph(lambda x: 0.25 * x**2)\n        parabola.set_stroke(BLUE)\n        self.play(\n            FadeOut(step_graph),\n            FadeOut(step_label),\n            ShowCreation(parabola)\n        )\n        self.wait()\n\n        # You can use axes.input_to_graph_point, abbreviated\n        # to axes.i2gp, to find a particular point on a graph\n        dot = Dot(fill_color=RED)\n        dot.move_to(axes.i2gp(2, parabola))\n        self.play(FadeIn(dot, scale=0.5))\n\n        # A value tracker lets us animate a parameter, usually\n        # with the intent of having other mobjects update based\n        # on the parameter\n        x_tracker = ValueTracker(2)\n        dot.add_updater(lambda d: d.move_to(axes.i2gp(x_tracker.get_value(), parabola)))\n\n        self.play(x_tracker.animate.set_value(4), run_time=3)\n        self.play(x_tracker.animate.set_value(-2), run_time=3)\n        self.wait()"
+    },
+    "OpeningManimExample": {
+      "template_type": "graph_scene",
+      "tags": [
+        "animation",
+        "axes",
+        "color",
+        "formula",
+        "matrix",
+        "numberplane",
+        "tex",
+        "text",
+        "title",
+        "transform"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 57,
+      "code": "class OpeningManimExample(Scene):\n    def construct(self):\n        intro_words = Text(\"\"\"\n            The original motivation for manim was to\n            better illustrate mathematical functions\n            as transformations.\n        \"\"\")\n        intro_words.to_edge(UP)\n\n        self.play(Write(intro_words))\n        self.wait(2)\n\n        # Linear transform\n        grid = NumberPlane((-10, 10), (-5, 5))\n        matrix = [[1, 1], [0, 1]]\n        linear_transform_words = VGroup(\n            Text(\"This is what the matrix\"),\n            IntegerMatrix(matrix),\n            Text(\"looks like\")\n        )\n        linear_transform_words.arrange(RIGHT)\n        linear_transform_words.to_edge(UP)\n        linear_transform_words.set_backstroke(width=5)\n\n        self.play(\n            ShowCreation(grid),\n            FadeTransform(intro_words, linear_transform_words)\n        )\n        self.wait()\n        self.play(grid.animate.apply_matrix(matrix), run_time=3)\n        self.wait()\n\n        # Complex map\n        c_grid = ComplexPlane()\n        moving_c_grid = c_grid.copy()\n        moving_c_grid.prepare_for_nonlinear_transform()\n        c_grid.set_stroke(BLUE_E, 1)\n        c_grid.add_coordinate_labels(font_size=24)\n        complex_map_words = TexText(\"\"\"\n            Or thinking of the plane as $\\\\mathds{C}$,\\\\\\\\\n            this is the map $z \\\\rightarrow z^2$\n        \"\"\")\n        complex_map_words.to_corner(UR)\n        complex_map_words.set_backstroke(width=5)\n\n        self.play(\n            FadeOut(grid),\n            Write(c_grid, run_time=3),\n            FadeIn(moving_c_grid),\n            FadeTransform(linear_transform_words, complex_map_words),\n        )\n        self.wait()\n        self.play(\n            moving_c_grid.animate.apply_complex_function(lambda z: z**2),\n            run_time=6,\n        )\n        self.wait(2)"
+    },
+    "TexAndNumbersExample": {
+      "template_type": "graph_scene",
+      "tags": [
+        "animation",
+        "axes",
+        "color",
+        "formula",
+        "geometry",
+        "implicit",
+        "tex",
+        "text",
+        "transform",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 66,
+      "code": "class TexAndNumbersExample(Scene):\n    def construct(self):\n        axes = Axes((-3, 3), (-3, 3), unit_size=1)\n        axes.to_edge(DOWN)\n        axes.add_coordinate_labels(font_size=16)\n        circle = Circle(radius=2)\n        circle.set_stroke(YELLOW, 3)\n        circle.move_to(axes.get_origin())\n        self.add(axes, circle)\n\n        # When numbers show up in tex, they can be readily\n        # replaced with DecimalMobjects so that methods like\n        # get_value and set_value can be called on them, and\n        # animations like ChangeDecimalToValue can be called\n        # on them.\n        tex = Tex(\"x^2 + y^2 = 4.00\")\n        tex.next_to(axes, UP, buff=0.5)\n        value = tex.make_number_changeable(\"4.00\")\n\n\n        # This will tie the right hand side of our equation to\n        # the square of the radius of the circle\n        value.add_updater(lambda v: v.set_value(circle.get_radius()**2))\n        self.add(tex)\n\n        text = Text(\"\"\"\n            You can manipulate numbers\n            in Tex mobjects\n        \"\"\", font_size=30)\n        text.next_to(tex, RIGHT, buff=1.5)\n        arrow = Arrow(text, tex)\n        self.add(text, arrow)\n\n        self.play(\n            circle.animate.set_height(2.0),\n            run_time=4,\n            rate_func=there_and_back,\n        )\n\n        # By default, tex.make_number_changeable replaces the first occurrence\n        # of the number,but by passing replace_all=True it replaces all and\n        # returns a group of the results\n        exponents = tex.make_number_changeable(\"2\", replace_all=True)\n        self.play(\n            LaggedStartMap(\n                FlashAround, exponents,\n                lag_ratio=0.2, buff=0.1, color=RED\n            ),\n            exponents.animate.set_color(RED)\n        )\n\n        def func(x, y):\n            # Switch from manim coords to axes coords\n            xa, ya = axes.point_to_coords(np.array([x, y, 0]))\n            return xa**4 + ya**4 - 4\n\n        new_curve = ImplicitFunction(func)\n        new_curve.match_style(circle)\n        circle.rotate(angle_of_vector(new_curve.get_start()))  # Align\n        value.clear_updaters()\n\n        self.play(\n            *(ChangeDecimalToValue(exp, 4) for exp in exponents),\n            ReplacementTransform(circle.copy(), new_curve),\n            circle.animate.set_stroke(width=1, opacity=0.5),\n        )"
+    },
+    "ActanAndTanGraphs": {
+      "template_type": "graph_scene",
+      "tags": [
+        "animation",
+        "axes",
+        "brace",
+        "formula",
+        "graph",
+        "tex",
+        "text",
+        "updater"
+      ],
+      "base_class": "GraphScene",
+      "source": "3b1b-workspace/videos/_2019/clacks/solution1.py",
+      "line_count": 80,
+      "code": "class ActanAndTanGraphs(GraphScene):\n    CONFIG = {\n        \"x_min\": -PI / 8,\n        \"x_max\": 5 * PI / 8,\n        \"y_min\": -PI / 8,\n        \"y_max\": 4 * PI / 8,\n        \"x_tick_frequency\": PI / 8,\n        \"x_leftmost_tick\": -PI / 8,\n        \"y_tick_frequency\": PI / 8,\n        \"y_leftmost_tick\": -PI / 8,\n        \"x_axis_width\": 10,\n        \"y_axis_height\": 7,\n        \"graph_origin\": 2.5 * DOWN + 5 * LEFT,\n        \"num_graph_anchor_points\": 500,\n    }\n\n    def construct(self):\n        self.setup_axes()\n        axes = self.axes\n        labels = VGroup(\n            OldTex(\"\\\\pi / 8\"),\n            OldTex(\"\\\\pi / 4\"),\n            OldTex(\"3\\\\pi / 8\"),\n            OldTex(\"\\\\pi / 2\"),\n        )\n        for n, label in zip(it.count(1), labels):\n            label.scale(0.75)\n            label.next_to(self.coords_to_point(n * PI / 8, 0), DOWN)\n            self.add(label)\n\n        id_graph = self.get_graph(lambda x: x, x_max=1.5)\n        arctan_graph = self.get_graph(np.arctan, x_max=1.5)\n        tan_graph = self.get_graph(np.tan, x_max=1.5)\n        graphs = VGroup(id_graph, arctan_graph, tan_graph)\n\n        id_label = OldTex(\"f(x) = x\")\n        arctan_label = OldTex(\"\\\\arctan(x)\")\n        tan_label = OldTex(\"\\\\tan(x)\")\n        labels = VGroup(id_label, arctan_label, tan_label)\n        for label, graph in zip(labels, graphs):\n            label.match_color(graph)\n            label.next_to(graph.get_points()[-1], RIGHT)\n            if label.get_bottom()[1] > FRAME_HEIGHT / 2:\n                label.next_to(graph.point_from_proportion(0.75), LEFT)\n\n        arctan_x_tracker = ValueTracker(3 * PI / 8)\n        arctan_v_line = always_redraw(\n            lambda: self.get_vertical_line_to_graph(\n                arctan_x_tracker.get_value(),\n                arctan_graph,\n                line_class=DashedLine,\n                color=WHITE,\n            )\n        )\n        tan_x_tracker = ValueTracker(2 * PI / 8)\n        tan_v_line = always_redraw(\n            lambda: self.get_vertical_line_to_graph(\n                tan_x_tracker.get_value(),\n                tan_graph,\n                line_class=DashedLine,\n                color=WHITE,\n            )\n        )\n\n        self.add(axes)\n        self.play(\n            ShowCreation(id_graph),\n            Write(id_label)\n        )\n        self.play(\n            ShowCreation(arctan_graph),\n            Write(arctan_label)\n        )\n        self.add(arctan_v_line)\n        self.play(arctan_x_tracker.set_value, 0, run_time=2)\n        self.wait()\n        self.play(\n            TransformFromCopy(arctan_graph, tan_graph),\n            TransformFromCopy(arctan_label, tan_label),\n        )\n        self.add(tan_v_line)\n        self.play(tan_x_tracker.set_value, 0, run_time=2)\n        self.wait()"
+    },
+    "ControlsExample": {
+      "template_type": "updater_animation",
+      "tags": [
+        "color",
+        "geometry",
+        "text",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/manim/example_scenes.py",
+      "line_count": 36,
+      "code": "class ControlsExample(Scene):\n    drag_to_pan = False\n\n    def setup(self):\n        self.textbox = Textbox()\n        self.checkbox = Checkbox()\n        self.color_picker = ColorSliders()\n        self.panel = ControlPanel(\n            Text(\"Text\", font_size=24), self.textbox, Line(),\n            Text(\"Show/Hide Text\", font_size=24), self.checkbox, Line(),\n            Text(\"Color of Text\", font_size=24), self.color_picker\n        )\n        self.add(self.panel)\n\n    def construct(self):\n        text = Text(\"text\", font_size=96)\n\n        def text_updater(old_text):\n            assert(isinstance(old_text, Text))\n            new_text = Text(self.textbox.get_value(), font_size=old_text.font_size)\n            # new_text.align_data_and_family(old_text)\n            new_text.move_to(old_text)\n            if self.checkbox.get_value():\n                new_text.set_fill(\n                    color=self.color_picker.get_picked_color(),\n                    opacity=self.color_picker.get_picked_opacity()\n                )\n            else:\n                new_text.set_opacity(0)\n            old_text.become(new_text)\n\n        text.add_updater(text_updater)\n\n        self.add(MotionMobject(text))\n\n        self.textbox.set_value(\"Manim\")"
+    },
+    "AllVideosOrdered": {
+      "template_type": "updater_animation",
+      "tags": [
+        "animation",
+        "geometry",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2021/some1_winners.py",
+      "line_count": 54,
+      "code": "class AllVideosOrdered(Scene):\n    slug_file = \"some1_video_urls_ordered.txt\"\n    grid_size = 3\n    time_per_image = 0.2\n\n    def construct(self):\n        n = self.grid_size\n        N = n**2\n        time_per_image = self.time_per_image\n        buffer_size = 2 * N\n\n        slugs = get_youtube_slugs(self.slug_file)\n        random.shuffle(slugs)\n        log.info(f\"Number of slugs: {len(slugs)}\")\n        image_slots = ScreenRectangle().get_grid(n, n, buff=0.2)\n        image_slots.set_height(FRAME_HEIGHT)\n        image_slots.set_stroke(WHITE, 1)\n\n        images = buffer_size * [None]\n\n        self.add(image_slots)\n\n        def update_image(image, dt):\n            image.time += dt\n            image.set_opacity(clip(5 * image.time / (N * time_per_image), 0, 1))\n\n        k = 0\n        for slug in ProgressDisplay(slugs):\n            slot = image_slots[k % N]\n            save_thumbnail_locally(slug)\n            file = yt_slug_to_image_file(slug)\n            if not os.path.exists(file):\n                continue\n            if k > buffer_size:\n                old_image = images[k % buffer_size]\n                self.camera.release_texture(old_image.path)\n                self.remove(old_image)\n\n            image = ImageMobject(file)\n            image.replace(slot, stretch=True)\n\n            images[k % buffer_size] = image\n\n            image.time = 0\n            image.add_updater(update_image)\n            self.add(image)\n            self.wait(time_per_image)\n\n            k += 1\n\n            # Hack to keep OpenGL from tracking too many textures.\n            # Should be fixed more intelligently in Camera\n            if k % (buffer_size) == 0:\n                self.camera.n_textures = buffer_size + 2"
+    },
+    "AmbientChangingDots": {
+      "template_type": "updater_animation",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "updater"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2024/transformers/supplements.py",
+      "line_count": 17,
+      "code": "class AmbientChangingDots(InteractiveScene):\n    def construct(self):\n        # Test\n        dots = Dot().get_grid(20, 30)\n        dots.set_height(8)\n        dots.set_fill(opacity=0.5)\n        dots.phases = np.random.uniform(0, TAU, len(dots))\n        dots.freqs = np.random.uniform(0.3, 0.8, len(dots))\n\n        def update_dots(dots):\n            for dot, phase, freq in zip(dots, dots.phases, dots.freqs):\n                dot.set_fill(opacity=np.cos(phase + freq * self.time)**2)\n            return dots\n\n        dots.add_updater(update_dots)\n        self.add(dots)\n        self.wait(30)"
+    },
+    "ArrowOverInldexHalf": {
+      "template_type": "updater_animation",
+      "tags": [
+        "updater"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2023/optics_puzzles/ior_annotations.py",
+      "line_count": 20,
+      "code": "class ArrowOverInldexHalf(InteractiveScene):\n    speed = 1.0\n    index = 0.68\n    bounds = (-3, 3)\n\n    def construct(self):\n        arrow = Vector(0.5 * DOWN)\n        arrow.next_to(UP, UP)\n        arrow.to_edge(LEFT, buff=0)\n        x_min, x_max = self.bounds\n\n        def update_arrow(arr, dt):\n            step = dt * self.speed\n            if x_min < arr.get_x() < x_max:\n                step /= self.index\n            arr.shift(step * RIGHT)\n\n        arrow.add_updater(update_arrow)\n        self.add(arrow)\n        self.wait_until(lambda: arrow.get_x() > FRAME_WIDTH / 2 + 2 * arrow.get_width())"
+    },
+    "CarbonDecayingInMammoth": {
+      "template_type": "updater_animation",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2019/diffyq/part3/staging.py",
+      "line_count": 49,
+      "code": "class CarbonDecayingInMammoth(Scene):\n    def construct(self):\n        mammoth = SVGMobject(\"Mammoth\")\n        mammoth.set_color(\n            interpolate_color(GREY_BROWN, WHITE, 0.25)\n        )\n        mammoth.set_height(4)\n        body = mammoth[9]\n\n        atoms = VGroup(*[\n            self.get_atom(body)\n            for n in range(600)\n        ])\n\n        p_decay = 0.2\n\n        def update_atoms(group, dt):\n            for atom in group:\n                if np.random.random() < dt * p_decay:\n                    group.remove(atom)\n            return group\n        atoms.add_updater(update_atoms)\n\n        self.add(mammoth)\n        self.add(atoms)\n        self.wait(20)\n\n    def get_atom(self, body):\n        atom = Dot(color=GOLD)\n        atom.set_height(0.05)\n\n        dl = body.get_corner(DL)\n        ur = body.get_corner(UR)\n\n        wn = 0\n        while wn == 0:\n            point = np.array([\n                interpolate(dl[0], ur[0], np.random.random()),\n                interpolate(dl[1], ur[1], np.random.random()),\n                0\n            ])\n            wn = get_winding_number([\n                body.point_from_proportion(a) - point\n                for a in np.linspace(0, 1, 300)\n            ])\n            wn = int(np.round(wn))\n\n        atom.move_to(point)\n        return atom"
+    },
+    "ApplyComplexFunction": {
+      "template_type": "coordinate_transform",
+      "tags": [
+        "animation",
+        "numberplane"
+      ],
+      "base_class": "LinearTransformationScene",
+      "source": "3b1b-workspace/videos/_2016/eola/chapter3.py",
+      "line_count": 20,
+      "code": "class ApplyComplexFunction(LinearTransformationScene):\n    CONFIG = {\n        \"function\" : lambda z : 0.5*z**2,\n        \"show_basis_vectors\" : False,\n        \"foreground_plane_kwargs\" : {\n            \"x_radius\" : FRAME_X_RADIUS,\n            \"y_radius\" : FRAME_Y_RADIUS,\n            \"secondary_line_ratio\" : 0\n        },\n    }\n    def construct(self):\n        self.setup()\n        self.plane.prepare_for_nonlinear_transform(100)\n        self.wait()\n        self.play(ApplyMethod(\n            self.plane.apply_complex_function, self.function,\n            run_time = 5,\n            path_arc = np.pi/2\n        ))\n        self.wait()"
+    },
+    "BorderOf2dRegionScene": {
+      "template_type": "coordinate_transform",
+      "tags": [
+        "animation",
+        "numberplane",
+        "text"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2018/WindingNumber.py",
+      "line_count": 11,
+      "code": "class BorderOf2dRegionScene(Scene):\n    def construct(self):\n        num_plane = NumberPlane()\n        self.add(num_plane)\n\n        points = standard_rect + 1.5 * UP + 2 * RIGHT\n        interior = Polygon(*points, fill_color = neutral_color, fill_opacity = 1, stroke_width = 0)\n        self.play(FadeIn(interior))\n\n        border = Polygon(*points, color = negative_color, stroke_width = border_stroke_width)\n        self.play(ShowCreation(border))"
+    },
+    "ColorMappedByFuncScene": {
+      "template_type": "coordinate_transform",
+      "tags": [
+        "numberplane"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2018/WindingNumber.py",
+      "line_count": 79,
+      "code": "class ColorMappedByFuncScene(Scene):\n    CONFIG = {\n        \"func\" : lambda p : p,\n        \"num_plane\" : NumberPlane(),\n        \"show_num_plane\" : True,\n\n        \"show_output\" : False,\n\n        \"hide_background\" : False #Background used for color mapped objects, not as background\n    }\n\n    def short_path_to_long_path(self, filename_with_ext):\n        return self.get_image_file_path(filename_with_ext)\n\n    def setup(self):\n        # The composition of input_to_pos and pos_to_color \n        # is to be equal to func (which turns inputs into colors)\n        # However, depending on whether we are showing input or output (via a MappingCamera),\n        # we color the background using either func or the identity map\n        if self.show_output:\n            self.input_to_pos_func = self.func\n            self.pos_to_color_func = lambda p : p\n        else:\n            self.input_to_pos_func = lambda p : p\n            self.pos_to_color_func = self.func\n\n        self.pixel_pos_to_color_func = lambda x_y3 : self.pos_to_color_func(\n            self.num_plane.point_to_coords_cheap(np.array([x_y3[0], x_y3[1], 0]))\n        )\n\n        jitter_val = 0.1\n        line_coords = np.linspace(-10, 10) + jitter_val\n        func_hash_points = it.product(line_coords, line_coords)\n\n        def mini_hasher(p):\n            rgba = point_to_rgba(self.pixel_pos_to_color_func(p))\n            if rgba[3] != 1.0:\n                print(\"Warning! point_to_rgba assigns fractional alpha\", rgba[3])\n            return tuple(rgba)\n\n        to_hash = tuple(mini_hasher(p) for p in func_hash_points)\n        func_hash = hash(to_hash)\n        # We hash just based on output image\n        # Thus, multiple scenes with same output image can re-use it\n        # without recomputation\n        full_hash = hash((func_hash, self.camera.get_pixel_width()))\n        self.background_image_file = self.short_path_to_long_path(\n            \"color_mapped_bg_hash_\" + str(full_hash) + \".png\"\n        )\n        self.in_background_pass = not os.path.exists(self.background_image_file)\n\n        print(\"Background file: \" + self.background_image_file)\n        if self.in_background_pass:\n            print(\"The background file does not exist yet; this will be a background creation + video pass\")\n        else:\n            print(\"The background file already exists; this will only be a video pass\")\n\n    def construct(self):\n        if self.in_background_pass:\n            self.camera.set_background_from_func(\n                lambda x_y: point_to_rgba(\n                    self.pixel_pos_to_color_func(\n                        (x_y[0], x_y[1])\n                    )\n                )\n            )\n            self.save_image(self.background_image_file, mode=\"RGBA\")\n\n        if self.hide_background:\n            # Clearing background\n            self.camera.background_image = None\n        else:\n            # Even if we just computed the background, we switch to the file now\n            self.camera.background_image = self.background_image_file\n        self.camera.init_background()\n\n        if self.show_num_plane:\n            self.num_plane.fade()\n            self.add(self.num_plane)"
+    },
+    "ComplexExponentialPlay": {
+      "template_type": "coordinate_transform",
+      "tags": [
+        "color",
+        "geometry",
+        "numberplane",
+        "updater"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2020/ldm.py",
+      "line_count": 80,
+      "code": "class ComplexExponentialPlay(Scene):\n    def setup(self):\n        self.transform_alpha = 0\n\n    def construct(self):\n        # Plane\n        plane = ComplexPlane(\n            x_min=-2 * FRAME_WIDTH,\n            x_max=2 * FRAME_WIDTH,\n            y_min=-2 * FRAME_HEIGHT,\n            y_max=2 * FRAME_HEIGHT,\n        )\n        plane.add_coordinates()\n        self.add(plane)\n\n        # R Dot\n        r_dot = Dot(color=YELLOW)\n\n        def update_r_dot(dot, point_tracker=self.mouse_drag_point):\n            point = point_tracker.get_location()\n            if abs(point[0]) < 0.1:\n                point[0] = 0\n            if abs(point[1]) < 0.1:\n                point[1] = 0\n            dot.move_to(point)\n\n        r_dot.add_updater(update_r_dot)\n        self.mouse_drag_point.move_to(plane.n2p(1))\n\n        # Transformed sample dots\n        def func(z, dot=r_dot, plane=plane):\n            r = plane.p2n(dot.get_center())\n            result = np.exp(r * z)\n            if abs(result) > 20:\n                result *= 20 / abs(result)\n            return result\n\n        sample_dots = VGroup()\n        dot_template = Dot(radius=0.05)\n        dot_template.set_opacity(0.8)\n        spacing = 0.05\n        for x in np.arange(-7, 7, spacing):\n            dot = dot_template.copy()\n            dot.set_color(TEAL)\n            dot.z = x\n            dot.move_to(plane.n2p(dot.z))\n            sample_dots.add(dot)\n        for y in np.arange(-6, 6, spacing):\n            dot = dot_template.copy()\n            dot.set_color(MAROON)\n            dot.z = complex(0, y)\n            dot.move_to(plane.n2p(dot.z))\n            sample_dots.add(dot)\n\n        special_values = [1, complex(0, 1), -1, complex(0, -1)]\n        special_dots = VGroup(*[\n            list(filter(lambda d: abs(d.z - x) < 0.01, sample_dots))[0]\n            for x in special_values\n        ])\n        for dot in special_dots:\n            dot.set_fill(opacity=1)\n            dot.scale(1.2)\n            dot.set_stroke(WHITE, 2)\n\n        sample_dots.save_state()\n\n        def update_sample(sample, f=func, plane=plane, scene=self):\n            sample.restore()\n            sample.apply_function_to_submobject_positions(\n                lambda p: interpolate(\n                    p,\n                    plane.n2p(f(plane.p2n(p))),\n                    scene.transform_alpha,\n                )\n            )\n            return sample\n\n        sample_dots.add_updater(update_sample)\n\n        # Sample lines\n        # ... (truncated for brevity)"
+    },
+    "ComplexPlaneIs2d": {
+      "template_type": "coordinate_transform",
+      "tags": [
+        "animation",
+        "numberplane"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2018/WindingNumber.py",
+      "line_count": 6,
+      "code": "class ComplexPlaneIs2d(Scene):\n    def construct(self):\n        com_plane = ComplexPlane()\n        self.add(com_plane)\n        # TODO: Add labels to axes, specific complex points\n        self.wait()"
+    },
+    "AddTwoFunctions": {
+      "template_type": "formula_transform",
+      "tags": [
+        "animation",
+        "brace",
+        "formula",
+        "geometry",
+        "tex",
+        "text",
+        "transform"
+      ],
+      "base_class": "FunctionGraphScene",
+      "source": "3b1b-workspace/videos/_2016/eola/chapter11.py",
+      "line_count": 80,
+      "code": "class AddTwoFunctions(FunctionGraphScene):\n    def construct(self):\n        f_graph = self.get_function_graph()\n        g_graph = self.get_function_graph()\n        def sum_func(x):\n            return f_graph.get_function()(x)+g_graph.get_function()(x)\n        sum_graph = self.get_function_graph(sum_func, animate = False)\n        self.remove(sum_graph)\n        f_label = self.label_graph(f_graph)\n        g_label = self.label_graph(g_graph)\n\n        f_lines = self.get_output_lines(f_graph)\n        g_lines = self.get_output_lines(g_graph)\n        sum_lines = self.get_output_lines(sum_graph, nudge = False)\n\n        curr_x_point = f_lines[0].get_start()\n        sum_def = self.get_sum_definition(DecimalNumber(curr_x_point[0]))\n        # sum_def.set_width(FRAME_X_RADIUS-1)\n        sum_def.to_corner(UP+LEFT)\n        arrow = Arrow(sum_def[2].get_bottom(), curr_x_point, color = WHITE)        \n        prefix = sum_def[0]\n        suffix = VGroup(*sum_def[1:])\n        rect = BackgroundRectangle(sum_def)\n        brace = Brace(prefix)\n        brace.add(brace.get_text(\"New function\").shift_onto_screen())\n\n        self.play(\n            Write(prefix, run_time = 2),\n            FadeIn(brace)\n        )\n        self.wait()        \n        for lines in f_lines, g_lines:\n            self.add_lines(lines)\n        self.play(*list(map(FadeOut, [f_graph, g_graph])))\n        self.wait()\n        self.play(FadeOut(brace))\n        fg_group = VGroup(*list(f_label)+list(g_label))\n        self.play(\n            FadeIn(rect),\n            Animation(prefix),\n            Transform(fg_group, suffix),\n        )\n        self.remove(prefix, fg_group)\n        self.add(sum_def)\n        self.play(ShowCreation(arrow))\n\n        self.show_line_addition(f_lines[0], g_lines[0], sum_lines[0])\n        self.wait()\n\n        curr_x_point = f_lines[1].get_start()\n        new_sum_def = self.get_sum_definition(DecimalNumber(curr_x_point[0]))\n        new_sum_def.to_corner(UP+LEFT)\n        new_arrow = Arrow(sum_def[2].get_bottom(), curr_x_point, color = WHITE)\n        self.play(\n            Transform(sum_def, new_sum_def),\n            Transform(arrow, new_arrow),\n        )\n        self.show_line_addition(f_lines[1], g_lines[1], sum_lines[1])\n        self.wait()\n\n        final_sum_def = self.get_sum_definition(OldTex(\"x\"))\n        final_sum_def.to_corner(UP+LEFT)\n        self.play(\n            FadeOut(rect),\n            Transform(sum_def, final_sum_def),\n            FadeOut(arrow)\n        )\n        self.show_line_addition(*it.starmap(VGroup, [\n            f_lines[2:], g_lines[2:], sum_lines[2:]\n        ]))\n        self.play(ShowCreation(sum_graph))\n\n    def get_sum_definition(self, input_mob):\n        result = VGroup(*it.chain(\n            OldTex(\"(f+g)\", \"(\"), \n            [input_mob.copy()],\n            OldTex(\")\", \"=\", \"f(\"),\n            [input_mob.copy()],\n            OldTex(\")\", \"+\", \"g(\"),\n            [input_mob.copy()],\n        # ... (truncated for brevity)"
+    },
+    "AddVectorsCoordinateByCoordinate": {
+      "template_type": "formula_transform",
+      "tags": [
+        "animation",
+        "color",
+        "formula",
+        "matrix",
+        "tex",
+        "text",
+        "transform"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2016/eola/chapter11.py",
+      "line_count": 23,
+      "code": "class AddVectorsCoordinateByCoordinate(Scene):\n    def construct(self):\n        v1 = Matrix([\"x_1\", \"y_1\", \"z_1\"])\n        v2 = Matrix([\"x_2\", \"y_2\", \"z_2\"])\n        v_sum =  Matrix([\"x_1 + x_2\", \"y_1 + y_2\", \"z_1 + z_2\"])\n        for v in v1, v2, v_sum:\n            v.get_entries()[0].set_color(X_COLOR)\n            v.get_entries()[1].set_color(Y_COLOR)\n            v.get_entries()[2].set_color(Z_COLOR)\n        plus, equals = OldTex(\"+=\")\n        VGroup(v1, plus, v2, equals, v_sum).arrange()\n\n        self.add(v1, plus, v2)\n        self.wait()\n        self.play(\n            Write(equals),\n            Write(v_sum.get_brackets())\n        )\n        self.play(\n            Transform(v1.get_entries().copy(), v_sum.get_entries()),\n            Transform(v2.get_entries().copy(), v_sum.get_entries()),\n        )\n        self.wait()"
+    },
+    "AddedVsOplussed": {
+      "template_type": "formula_transform",
+      "tags": [
+        "animation",
+        "color",
+        "formula",
+        "geometry",
+        "tex",
+        "transform"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2016/triangle_of_power/end.py",
+      "line_count": 24,
+      "code": "class AddedVsOplussed(Scene):\n    def construct(self):\n        top = TOP()\n        left_times  = top.put_in_vertex(0, OldTex(\"\\\\times\"))\n        left_dot    = top.put_in_vertex(0, Dot())\n        right_times = top.put_in_vertex(2, OldTex(\"\\\\times\"))\n        right_dot   = top.put_in_vertex(2, Dot())\n        plus        = top.put_in_vertex(1, OldTex(\"+\"))\n        oplus       = top.put_in_vertex(1, OldTex(\"\\\\oplus\"))\n        left_times.set_color(YELLOW)        \n        right_times.set_color(YELLOW)        \n        plus.set_color(GREEN)        \n        oplus.set_color(BLUE)\n\n        self.add(top, left_dot, plus, right_times)\n        self.wait()\n        self.play(\n            Transform(\n                VMobject(left_dot, plus, right_times),\n                VMobject(right_dot, oplus, left_times),\n                path_arc = np.pi/2\n            )\n        )\n        self.wait()"
+    },
+    "AdditiveProperty": {
+      "template_type": "formula_transform",
+      "tags": [
+        "animation",
+        "color",
+        "formula",
+        "geometry",
+        "tex",
+        "text",
+        "transform"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2016/triangle_of_power/triangle.py",
+      "line_count": 80,
+      "code": "class AdditiveProperty(Scene):\n    def construct(self):\n        exp_rule, log_rule = self.write_old_style_rules()\n        t_exp_rule, t_log_rule = self.get_new_style_rules()\n\n        self.play(\n            ApplyMethod(exp_rule.to_edge, UP),\n            ApplyMethod(log_rule.to_edge, DOWN, 1.5)\n        )\n        t_exp_rule.next_to(exp_rule, DOWN)\n        t_exp_rule.set_color(GREEN)\n        t_log_rule.next_to(log_rule, UP)\n        t_log_rule.set_color(RED)\n        self.play(\n            FadeIn(t_exp_rule),\n            FadeIn(t_log_rule),\n            ApplyMethod(exp_rule.set_color, GREEN),\n            ApplyMethod(log_rule.set_color, RED),\n        )\n        self.wait()\n        all_tops = [m for m in t_exp_rule.split()+t_log_rule.split() if isinstance(m, TOP)]\n        self.put_in_circles(all_tops)\n        self.set_color_appropriate_parts(t_exp_rule, t_log_rule)\n\n\n\n\n    def write_old_style_rules(self):\n        start = OldTex(\"a^x a^y = a^{x+y}\")\n        end = OldTex(\"\\\\log_a(xy) = \\\\log_a(x) + \\\\log_a(y)\")\n        start.shift(UP)\n        end.shift(DOWN)\n        a1, x1, a2, y1, eq1, a3, p1, x2, y2 = start.split()\n        a4, x3, y3, eq2, a5, x4, p2, a6, y4 = np.array(end.split())[\n            [3, 5, 6, 8, 12, 14, 16, 20, 22]\n        ]\n        start_copy = start.copy()\n        self.play(Write(start_copy))\n        self.wait()\n        self.play(Transform(\n            VMobject(a1, x1, a2, y1, eq1, a3, p1, x2, a3.copy(), y2),\n            VMobject(a4, x3, a4.copy(), y3, eq2, a5, p2, x4, a6, y4)\n        ))\n        self.play(Write(end))\n        self.clear()\n        self.add(start_copy, end)\n        self.wait()\n        return start_copy, end\n\n    def get_new_style_rules(self):\n        upper_mobs = [\n            TOP(\"a\", \"x\", \"R\"), Dot(), \n            TOP(\"a\", \"y\", \"R\"), OldTex(\"=\"), \n            TOP(\"a\", \"x+y\")\n        ]\n        lower_mobs = [\n            TOP(\"a\", None, \"xy\"), OldTex(\"=\"),\n            TOP(\"a\", None, \"x\"), OldTex(\"+\"),\n            TOP(\"a\", None, \"y\"),\n        ]\n        for mob in upper_mobs + lower_mobs:\n            if isinstance(mob, TOP):\n                mob.scale(0.5)\n        for group in upper_mobs, lower_mobs:\n            for m1, m2 in zip(group, group[1:]):\n                m2.next_to(m1)\n        for top in upper_mobs[0], upper_mobs[2]:\n            top.set_value(2, None)\n        upper_mobs = VMobject(*upper_mobs).center().shift(2*UP)\n        lower_mobs = VMobject(*lower_mobs).center().shift(2*DOWN)\n        return upper_mobs, lower_mobs\n\n    def put_in_circles(self, tops):\n        anims = []\n        for top in tops:\n            for i, value in enumerate(top.values):\n                if isinstance(value, VectorizedPoint):\n                    index = i\n            circle = top.put_on_vertex(index, Circle(color = WHITE))\n            anims.append(\n        # ... (truncated for brevity)"
+    },
+    "AdditivityProperty": {
+      "template_type": "formula_transform",
+      "tags": [
+        "animation",
+        "color",
+        "formula",
+        "geometry",
+        "tex",
+        "transform"
+      ],
+      "base_class": "TwoDToOneDScene",
+      "source": "3b1b-workspace/videos/_2016/eola/chapter7.py",
+      "line_count": 68,
+      "code": "class AdditivityProperty(TwoDToOneDScene):\n    CONFIG = {\n        \"show_basis_vectors\" : False,\n        \"sum_before\" : True\n    }\n    def construct(self):\n        v = Vector([2, 1], color = V_COLOR)\n        w = Vector([-1, 1], color = W_COLOR)\n\n\n        L, sum_tex, r_paren = symbols = self.get_symbols()\n        symbols.shift(4*RIGHT+2*UP)\n        self.add_foreground_mobject(sum_tex)\n        self.play(ShowCreation(v))\n        self.play(ShowCreation(w))\n        if self.sum_before:\n            sum_vect = self.play_sum(v, w)\n        else:\n            self.add_vector(v, animate = False)\n            self.add_vector(w, animate = False)\n        self.apply_transposed_matrix(self.t_matrix)\n        if not self.sum_before:\n            sum_vect = self.play_sum(v, w)\n        symbols.target = symbols.copy().next_to(sum_vect, UP)\n        VGroup(L, r_paren).set_color(BLACK)\n        self.play(Transform(symbols, symbols.target))\n        self.wait()\n\n    def play_sum(self, v, w):\n        sum_vect = Vector(v.get_end()+w.get_end(), color = SUM_COLOR)\n        self.play(w.shift, v.get_end(), path_arc = np.pi/4)\n        self.play(ShowCreation(sum_vect))\n        for vect in v, w:\n            vect.target = vect.copy()\n            vect.target.set_fill(opacity = 0)\n            vect.target.set_stroke(width = 0)\n        sum_vect.target = sum_vect\n        self.play(*[\n            Transform(mob, mob.target)\n            for mob in (v, w, sum_vect)\n        ])\n        self.add_vector(sum_vect, animate = False)\n        return sum_vect\n\n    def get_symbols(self):\n        v_tex, w_tex = [\"\\\\vec{\\\\textbf{%s}}\"%c for c in (\"v\", \"w\")]\n        if self.sum_before:\n            tex_mob = OldTex(\n                \"L(\", v_tex, \"+\", w_tex, \")\"\n            )\n            result = VGroup(\n                tex_mob[0], \n                VGroup(*tex_mob[1:4]), \n                tex_mob[4]\n            )\n        else:\n            tex_mob = OldTex(\n                \"L(\", v_tex, \")\", \"+\", \"L(\", w_tex, \")\"\n            )\n            result = VGroup(\n                VectorizedPoint(tex_mob.get_left()),\n                tex_mob,\n                VectorizedPoint(tex_mob.get_right()),\n            )\n        tex_mob.set_color_by_tex(v_tex, V_COLOR)\n        tex_mob.set_color_by_tex(w_tex, W_COLOR)\n        result[1].add_to_back(BackgroundRectangle(result[1]))        \n        return result"
+    },
+    "BigMatrixMultiplication": {
+      "template_type": "matrix_scene",
+      "tags": [
+        "animation",
+        "matrix"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2024/transformers/supplements.py",
+      "line_count": 17,
+      "code": "class BigMatrixMultiplication(InteractiveScene):\n    mat_dims = (12, 12)\n    random_seed = 9\n\n    def construct(self):\n        # Test\n        matrix = WeightMatrix(shape=self.mat_dims)\n        matrix.set_width(FRAME_WIDTH - 4)\n        matrix.to_edge(LEFT, buff=0.5)\n        vector = NumericEmbedding(length=self.mat_dims[0])\n        vector.match_height(matrix)\n        vector.next_to(matrix, RIGHT)\n\n        self.add(matrix)\n        self.add(vector)\n        show_matrix_vector_product(self, matrix, vector)\n        self.wait()"
+    },
+    "BitVsQubitMatrix": {
+      "template_type": "matrix_scene",
+      "tags": [
+        "geometry",
+        "matrix",
+        "text",
+        "title"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2025/grover/qc_supplements.py",
+      "line_count": 32,
+      "code": "class BitVsQubitMatrix(InteractiveScene):\n    def construct(self):\n        # Set up frame\n        boxes = Rectangle(5, 3).get_grid(2, 2, buff=0)\n        boxes.to_edge(DOWN, buff=MED_LARGE_BUFF)\n        boxes.shift(RIGHT)\n        boxes.set_stroke(WHITE, 1)\n\n        top_titles = VGroup(\n            Text(\"Bit\", font_size=72),\n            Text(\"Qubit\", font_size=72),\n        )\n        for title, box in zip(top_titles, boxes):\n            title.next_to(box, UP)\n            title.align_to(top_titles[0], UP)\n\n        side_titles = VGroup(\n            Text(\"State\", font_size=48),\n            Text(\"What you\\nobserve\", font_size=48),\n        )\n        for title, box in zip(side_titles, boxes[::2]):\n            title.next_to(box, LEFT)\n        side_titles[0].match_x(side_titles[1])\n\n        for i in [0, 2, 3]:\n            content = Text(R\"0 or 1\", font_size=72)\n            content.move_to(boxes[i])\n            boxes[i].add(content)\n\n        self.add(boxes)\n        self.add(top_titles)\n        self.add(side_titles)"
+    },
+    "ChangeOfBasisPreview": {
+      "template_type": "matrix_scene",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "matrix",
+        "text"
+      ],
+      "base_class": "LinearTransformationScene",
+      "source": "3b1b-workspace/videos/_2016/eola/chapter8p2.py",
+      "line_count": 71,
+      "code": "class ChangeOfBasisPreview(LinearTransformationScene):\n    CONFIG = {\n        \"include_background_plane\" : False,\n        \"foreground_plane_kwargs\" : {\n            \"x_radius\" : FRAME_WIDTH,\n            \"y_radius\" : FRAME_WIDTH,\n            \"secondary_line_ratio\" : 0\n        },\n        \"t_matrix\" : [[2, 1], [-1, 1]],\n        \"i_target_color\" : YELLOW,\n        \"j_target_color\" : MAROON_B,\n        \"sum_color\" : PINK,\n        \"vector\" : [-1, 2],\n    }\n    def construct(self):\n        randy = Randolph()\n        pinky = Mortimer(color = PINK)\n        randy.to_corner(DOWN+LEFT)\n        pinky.to_corner(DOWN+RIGHT)\n        self.plane.fade()\n\n        self.add_foreground_mobject(randy, pinky)\n        coords = Matrix(self.vector)\n        coords.add_to_back(BackgroundRectangle(coords))\n        self.add_foreground_mobject(coords)\n        coords.move_to(\n            randy.get_corner(UP+RIGHT),\n            aligned_edge = DOWN+LEFT\n        )\n        coords.target = coords.copy()\n        coords.target.move_to(\n            pinky.get_corner(UP+LEFT),\n            aligned_edge = DOWN+RIGHT\n        )\n        self.play(\n            Write(coords),\n            randy.change_mode, \"speaking\"\n        )\n        self.scale_basis_vectors()\n        self.apply_transposed_matrix(\n            self.t_matrix,\n            added_anims = [\n                MoveToTarget(coords),\n                ApplyMethod(pinky.change_mode, \"speaking\"),\n                ApplyMethod(randy.change_mode, \"plain\"),\n            ]\n        )\n        self.play(\n            randy.change_mode, \"erm\",\n            self.i_hat.set_color, self.i_target_color,\n            self.j_hat.set_color, self.j_target_color,\n        )\n        self.i_hat.color = self.i_target_color\n        self.j_hat.color = self.j_target_color\n        self.scale_basis_vectors()\n\n    def scale_basis_vectors(self):\n        for vect in self.i_hat, self.j_hat:\n            vect.save_state()\n        self.play(self.i_hat.scale, self.vector[0])\n        self.play(self.j_hat.scale, self.vector[1])\n        self.play(self.j_hat.shift, self.i_hat.get_end())\n        sum_vect = Vector(self.j_hat.get_end(), color = self.sum_color)\n        self.play(ShowCreation(sum_vect))\n        self.wait(2)\n        self.play(\n            FadeOut(sum_vect),\n            self.i_hat.restore,\n            self.j_hat.restore,\n        )\n        self.wait()"
+    },
+    "Chapter9": {
+      "template_type": "matrix_scene",
+      "tags": [
+        "matrix"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2016/eola/thumbnails.py",
+      "line_count": 28,
+      "code": "class Chapter9(Scene):\n    def construct(self):\n        you = You()\n        jenny = Jennifer()\n        you.change_mode(\"erm\")\n        jenny.change_mode(\"speaking\")\n        you.shift(LEFT)\n        jenny.shift(2*RIGHT)\n\n        vector = Vector([3, 2])\n        vector.center().shift(2*DOWN)\n        vector.set_stroke(width = 8)\n        vector.tip.scale(2)\n\n        you.coords = Matrix([3, 2])\n        jenny.coords = Matrix([\"5/3\", \"1/3\"])\n        for pi in jenny, you:\n            pi.bubble = pi.get_bubble(SpeechBubble, width = 3, height = 3)\n            if pi is you:\n                pi.bubble.shift(MED_SMALL_BUFF*RIGHT)\n            else:\n                pi.coords.scale(0.8)\n                pi.bubble.shift(MED_SMALL_BUFF*LEFT)\n            pi.bubble.add_content(pi.coords)\n            pi.add(pi.bubble, pi.coords)\n            pi.look_at(vector)\n\n        self.add(you, jenny, vector)"
+    },
+    "ColumnsToBasisVectors": {
+      "template_type": "matrix_scene",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "matrix",
+        "transform"
+      ],
+      "base_class": "LinearTransformationScene",
+      "source": "3b1b-workspace/videos/_2016/eola/chapter3.py",
+      "line_count": 80,
+      "code": "class ColumnsToBasisVectors(LinearTransformationScene):\n    CONFIG = {\n        \"t_matrix\" : [[3, 1], [1, 2]]\n    }\n    def construct(self):\n        self.setup()\n        vector_coords = [-1, 2]\n\n        vector = self.move_matrix_columns(self.t_matrix, vector_coords)\n        self.scale_and_add(vector, vector_coords)\n        self.wait(3)\n\n    def move_matrix_columns(self, transposed_matrix, vector_coords = None):\n        matrix = np.array(transposed_matrix).transpose()\n        matrix_mob = Matrix(matrix)\n        matrix_mob.to_corner(UP+LEFT)\n        matrix_mob.add_background_to_entries()\n        col1 = VMobject(*matrix_mob.get_mob_matrix()[:,0])\n        col1.set_color(X_COLOR)\n        col2 = VMobject(*matrix_mob.get_mob_matrix()[:,1])\n        col2.set_color(Y_COLOR)\n        matrix_brackets = matrix_mob.get_brackets()\n        matrix_background = BackgroundRectangle(matrix_mob)\n        self.add_foreground_mobject(matrix_background, matrix_mob)\n\n        if vector_coords is not None:\n            vector = Matrix(vector_coords)\n            VMobject(*vector.get_mob_matrix().flatten()).set_color(YELLOW)\n            vector.set_height(matrix_mob.get_height())\n            vector.next_to(matrix_mob, RIGHT)\n            vector_background = BackgroundRectangle(vector)\n            self.add_foreground_mobject(vector_background, vector)\n\n        new_i = Vector(matrix[:,0])\n        new_j = Vector(matrix[:,1])\n        i_label = vector_coordinate_label(new_i).set_color(X_COLOR)\n        j_label = vector_coordinate_label(new_j).set_color(Y_COLOR)\n        i_coords = VMobject(*i_label.get_mob_matrix().flatten())\n        j_coords = VMobject(*j_label.get_mob_matrix().flatten())\n        i_brackets = i_label.get_brackets()\n        j_brackets = j_label.get_brackets()\n        i_label_background = BackgroundRectangle(i_label)\n        j_label_background = BackgroundRectangle(j_label)\n        i_coords_start = VMobject(\n            matrix_background.copy(),\n            col1.copy(),\n            matrix_brackets.copy()\n        )\n        i_coords_end = VMobject(\n            i_label_background,\n            i_coords,\n            i_brackets,\n        )\n        j_coords_start = VMobject(\n            matrix_background.copy(),\n            col2.copy(),\n            matrix_brackets.copy()\n        )\n        j_coords_end = VMobject(\n            j_label_background,\n            j_coords,\n            j_brackets,\n        )\n\n        transform_matrix1 = np.array(matrix)\n        transform_matrix1[:,1] = [0, 1]\n        transform_matrix2 = np.dot(\n            matrix,\n            np.linalg.inv(transform_matrix1)\n        )\n\n        self.wait()\n        self.apply_transposed_matrix(\n            transform_matrix1.transpose(),\n            added_anims = [Transform(i_coords_start, i_coords_end)],\n            path_arc = np.pi/2,\n        )\n        self.add_foreground_mobject(i_coords_start)\n        self.apply_transposed_matrix(\n            transform_matrix2.transpose(),\n            added_anims = [Transform(j_coords_start, j_coords_end) ],\n            path_arc = np.pi/2,\n        )\n        self.add_foreground_mobject(j_coords_start)\n        self.wait()\n\n        self.matrix = VGroup(matrix_background, matrix_mob)\n        self.i_coords = i_coords_start\n        self.j_coords = j_coords_start\n\n        return vector if vector_coords is not None else None\n\n\n    def scale_and_add(self, vector, vector_coords):\n        i_copy = self.i_hat.copy()\n        j_copy = self.j_hat.copy()\n        i_target = i_copy.copy().scale(vector_coords[0]).fade(0.3)\n        j_target = j_copy.copy().scale(vector_coords[1]).fade(0.3)\n\n        coord1, coord2 = vector.copy().get_mob_matrix().flatten()\n        coord1.add_background_rectangle()\n        coord2.add_background_rectangle()\n\n        self.play(\n            Transform(i_copy, i_target),\n            ApplyMethod(coord1.next_to, i_target.get_center(), DOWN)\n        )\n        self.play(\n            Transform(j_copy, j_target),\n            ApplyMethod(coord2.next_to, j_target.get_center(), LEFT)\n        )\n        j_copy.add(coord2)\n        self.play(ApplyMethod(j_copy.shift, i_copy.get_end()))\n        self.add_vector(j_copy.get_end())\n        self.wait()"
+    },
+    "AllFeaturedCreators": {
+      "template_type": "title_card",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "text",
+        "title"
+      ],
+      "base_class": "MortyPiCreatureScene",
+      "source": "3b1b-workspace/videos/_2018/fc1.py",
+      "line_count": 71,
+      "code": "class AllFeaturedCreators(MortyPiCreatureScene):\n    def construct(self):\n        morty = self.pi_creature\n        title = Title(\"Featured creators\")\n\n        dots = VGroup(*[Dot(color=WHITE) for x in range(4)])\n        dots.arrange(DOWN, buff=LARGE_BUFF)\n        dots.to_edge(LEFT, buff=2)\n\n        creators = VGroup(*list(map(TexText, [\n            \"Think Twice\",\n            \"LeiosOS\",\n            \"Welch Labs\",\n            \"Infinity plus one\",\n        ])))\n\n        for creator, dot in zip(creators, dots):\n            creator.next_to(dot, RIGHT)\n            dot.save_state()\n            dot.scale(4)\n            dot.set_fill(opacity=0)\n\n        rects = VGroup(*list(map(SurroundingRectangle, creators)))\n        rects.set_stroke(WHITE, 2)\n        rects.set_fill(BLUE_E, 1)\n\n        think_words = VGroup(*list(map(TexText, [\n            \"(thinks visually)\",\n            \"(thinks in terms of communities)\",\n            \"(thinks in terms of series)\",\n            \"(thinks playfully)\",\n        ])))\n        for word, creator in zip(think_words, creators):\n            # word.move_to(creator, RIGHT)\n            # word.align_to(RIGHT, LEFT)\n            word.next_to(creator, RIGHT)\n            word.set_color(YELLOW)\n\n        self.play(\n            morty.change, \"raise_right_hand\",\n            Write(title)\n        )\n        self.wait()\n        self.play(LaggedStartMap(\n            ApplyMethod, dots,\n            lambda m: (m.restore,)\n        ))\n        self.play(\n            LaggedStartMap(FadeIn, rects, lag_ratio=0.7),\n            morty.change, \"happy\"\n        )\n        self.add(creators, rects)\n        self.wait()\n\n        modes = [\"hooray\", \"tease\", \"raise_right_hand\", \"hooray\"]\n        for rect, word, mode in zip(rects, think_words, modes):\n            self.play(\n                self.get_rect_removal(rect),\n                morty.change, mode,\n            )\n            self.wait()\n            self.play(Write(word))\n            self.wait()\n\n        self.add(think_words)\n\n    def get_rect_removal(self, rect):\n        rect.generate_target()\n        rect.target.stretch(0, 0, about_edge=LEFT)\n        rect.target.set_stroke(width=0)\n        return MoveToTarget(rect)"
+    },
+    "AlreadyCoveredConvolutions": {
+      "template_type": "title_card",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "text",
+        "title"
+      ],
+      "base_class": "TeacherStudentsScene",
+      "source": "3b1b-workspace/videos/_2023/convolutions2/supplements.py",
+      "line_count": 80,
+      "code": "class AlreadyCoveredConvolutions(TeacherStudentsScene):\n    def construct(self):\n        # Ask\n        morty = self.teacher\n        stds = self.students\n        self.screen.to_edge(UR)\n        self.play(\n            stds[2].says(\n                \"Wait, didn't you already\\ncover convolutions?\",\n                mode=\"dance_1\"\n            ),\n            morty.change(\"guilty\"),\n        )\n        self.play(\n            self.change_students(\"hesitant\", \"awe\", None, look_at=self.screen)\n        )\n        self.wait(2)\n\n        # Show video\n        words = VGroup(\n            Text(\"Only discrete examples\", font_size=48),\n            Text(\n                \"\"\"\n                Probability\n                Moving averages\n                Image processing\n                Polynomial multiplication\n                Relationship with FFTs\n                \"\"\",\n                alignment=\"LEFT\",\n                font_size=36\n            ),\n        )\n        words.arrange(DOWN, buff=MED_LARGE_BUFF, aligned_edge=LEFT)\n        words[1].shift(0.25 * RIGHT)\n        words.to_corner(UL)\n        words.to_edge(UP)\n\n        self.play(LaggedStart(\n            morty.change(\"raise_right_hand\", look_at=self.screen),\n            stds[2].debubble(mode=\"sassy\", look_at=self.screen),\n            stds[1].change(\"pondering\", look_at=self.screen),\n        ))\n        self.wait(2)\n        self.play(\n            Write(words[0], run_time=1),\n            self.change_students(\"pondering\", \"tease\", \"plain\", look_at=words)\n        )\n        self.wait(3)\n        self.play(FadeIn(words[1], run_time=1, lag_ratio=0.1))\n        self.wait(3)\n\n        # Awkward spot\n        no_prereq = Text(\"Not a \\n prerequisite\", font_size=60)\n        no_prereq.move_to(words).to_edge(LEFT, buff=1.0)\n        no_prereq.set_color(RED)\n        redundancy_words = Text(\"But some overlap\\nwith this video\")\n        redundancy_words.move_to(no_prereq, LEFT)\n        redundancy_words.match_color(no_prereq)\n        arrow = Vector(2.5 * RIGHT)\n        arrow.next_to(no_prereq, RIGHT)\n        arrow.match_color(no_prereq)\n\n        self.play(\n            morty.change(\"guilty\"),\n            self.change_students(\"hesitant\", \"pondering\", \"hesitant\", look_at=morty.eyes)\n        )\n        self.wait()\n        self.look_at(no_prereq, added_anims=[\n            FadeOut(words, LEFT),\n            FadeIn(no_prereq, LEFT),\n        ])\n        self.play(\n            GrowArrow(arrow),\n            morty.change(\"raise_left_hand\", self.screen)\n        )\n        self.wait(2)\n        self.play(morty.change(\"maybe\"))\n        self.look_at(no_prereq, added_anims=[\n            FadeOut(no_prereq, UP),\n            FadeIn(redundancy_words, UP),\n            arrow.animate.stretch(0.8, 0, about_edge=RIGHT),\n        ])\n        self.wait(3)\n        self.play(\n            morty.change(\"tease\"),\n            self.change_students(\"happy\", \"thinking\", \"happy\", look_at=morty.eyes),\n        )\n        self.wait(4)"
+    },
+    "AnalysisIntuitionFraming": {
+      "template_type": "title_card",
+      "tags": [
+        "animation",
+        "color",
+        "geometry",
+        "text",
+        "title"
+      ],
+      "base_class": "InteractiveScene",
+      "source": "3b1b-workspace/videos/_2024/puzzles/supplements.py",
+      "line_count": 20,
+      "code": "class AnalysisIntuitionFraming(InteractiveScene):\n    def construct(self):\n        # Test\n        self.add(FullScreenRectangle())\n        squares = Rectangle(4, 3).replicate(2)\n        squares.set_height(4.5)\n        squares.set_fill(BLACK, 1)\n        squares.set_stroke(WHITE, 2)\n        squares.arrange(RIGHT, buff=1.0)\n        squares.move_to(0.5 * DOWN)\n\n        titles = VGroup(Text(\"Analysis\"), Text(\"Intuition\"))\n        titles.scale(1.5)\n        for title, square in zip(titles, squares):\n            title.next_to(square, UP)\n        titles[0].align_to(titles[1], UP)\n\n        self.add(squares)\n        self.play(LaggedStartMap(FadeIn, titles))\n        self.wait()"
+    },
+    "AsideOnWaveTerminology": {
+      "template_type": "title_card",
+      "tags": [
+        "animation",
+        "color",
+        "text",
+        "title"
+      ],
+      "base_class": "TeacherStudentsScene",
+      "source": "3b1b-workspace/videos/_2023/optics_puzzles/ior_annotations.py",
+      "line_count": 26,
+      "code": "class AsideOnWaveTerminology(TeacherStudentsScene):\n    def construct(self):\n        # Test\n        title = Text(\"Wave terminology\", font_size=60)\n        title.to_corner(UR)\n        title.to_edge(UP, buff=0.25)\n        title.add(Underline(title))\n        title.set_color(YELLOW)\n        terms = VGroup(\n            Text(\"Phase\"),\n            Text(\"Frequency\"),\n            Text(\"Wave number\"),\n            Text(\"Amplitude\"),\n        )\n        terms.arrange(DOWN, buff=0.5, aligned_edge=LEFT)\n        terms.next_to(title, DOWN)\n        terms.shift(0.5 * LEFT)\n\n        self.add(title, terms)\n\n        self.play(\n            self.teacher.change(\"raise_right_hand\", terms),\n            self.change_students(\"pondering\", \"tease\", \"hesitant\", look_at=terms),\n            LaggedStartMap(FadeIn, terms, shift=0.25 * DOWN, lag_ratio=0.5),\n        )\n        self.wait(3)"
+    },
+    "AskAboutComplexity": {
+      "template_type": "title_card",
+      "tags": [
+        "color",
+        "geometry",
+        "text",
+        "title"
+      ],
+      "base_class": "Scene",
+      "source": "3b1b-workspace/videos/_2021/newton_fractal.py",
+      "line_count": 14,
+      "code": "class AskAboutComplexity(Scene):\n    def construct(self):\n        self.add(FullScreenRectangle())\n\n        question = Text(\"What does this complexity reflect?\")\n        question.set_width(FRAME_WIDTH - 2)\n        question.to_edge(UP)\n        self.add(question)\n\n        screen = ScreenRectangle()\n        screen.set_height(6.0)\n        screen.set_fill(BLACK, 1)\n        screen.next_to(question, DOWN)\n        self.add(screen)"
+    }
+  }
+}

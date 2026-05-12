@@ -74,6 +74,7 @@ model User {
   templates          PPTXTemplate[]
   modelConfigs       ModelConfig[]
   pptxAudioSessions  PptxAudioSession[]
+  videoGenerations   VideoGeneration[]
 
   @@map("users")
 }
@@ -101,6 +102,8 @@ model Subject {
   // Relations
   user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   lessons Lesson[]
+  videoGenerations VideoGeneration[]
+  syllabus Syllabus?
 
   @@map("subjects")
 }
@@ -131,6 +134,8 @@ model Lesson {
   slides               Slide[]               // Step 3: Structured slide data
   interactiveQuestions InteractiveQuestion[] // Step 6: Interactive questions during lesson
   reviewQuestions      ReviewQuestion[]      // Step 6: Review questions (Bloom taxonomy)
+  videoGenerations     VideoGeneration[]
+  syllabusLesson       SyllabusLesson?
 
   @@map("lessons")
 }
@@ -437,4 +442,168 @@ model PptxAudioSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("pptx_audio_sessions")
+}
+
+// ==================== VIDEO GENERATION MODELS ====================
+
+model VideoGeneration {
+  id              String   @id @default(uuid())
+  subjectId       String   @map("subject_id")
+  subject         Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  lessonId        String?  @map("lesson_id")
+  lesson          Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  userId          String   @map("user_id")
+  user            User     @relation(fields: [userId], references: [id])
+
+  // Video title (editable by user)
+  title           String   @default("Video mới")
+
+  // Input source
+  inputType       String   @default("manual") @map("input_type") // lesson | manual | upload
+  inputText       String?  @map("input_text") @db.Text           // Raw input text / outline
+  inputFilesJson  Json?    @map("input_files_json")              // [{name, url, type}] uploaded files
+
+  // Config
+  format          String   @default("horizontal")
+  resolution      String   @default("1080p")
+  style           String   @default("auto")
+  narrationLang   String   @default("vi") @map("narration_lang")
+  subtitleLang    String   @default("vi") @map("subtitle_lang")
+  narrationSpeed  Float    @default(1.0)  @map("narration_speed")
+
+  // Script (editable by user before render)
+  videoScript     Json?    @map("video_script")     // AI-generated script
+  editedScript    Json?    @map("edited_script")    // User-edited version (takes priority)
+  scriptStatus    String   @default("none") @map("script_status") // none | generating | ready | edited
+
+  // Wizard step tracking
+  wizardStep      Int      @default(1) @map("wizard_step") // 1=input, 2=script, 3=scenes, 4=render, 5=output
+
+  // Render status tracking
+  status          String   @default("draft") // draft | pending | script | rendering | composing | uploading | done | error
+  progress        Int      @default(0)
+  renderStep      String?  @map("render_step")  // Current render step message
+  totalScenes     Int      @default(0) @map("total_scenes")
+  doneScenes      Int      @default(0) @map("done_scenes")
+  errorMessage    String?  @map("error_message")
+
+  // Output
+  videoUrl        String?  @map("video_url")
+  subtitleUrl     String?  @map("subtitle_url")
+  thumbnailUrl    String?  @map("thumbnail_url")
+  duration        Float?
+  fileSize        Int?     @map("file_size")
+
+  // Relations
+  scenes          VideoScene[]
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt      @map("updated_at")
+
+  @@index([subjectId])
+  @@index([lessonId])
+  @@index([userId])
+  @@index([status])
+  @@map("video_generations")
+}
+
+model VideoScene {
+  id              String   @id @default(uuid())
+  videoGenId      String   @map("video_gen_id")
+  videoGen        VideoGeneration @relation(fields: [videoGenId], references: [id], onDelete: Cascade)
+
+  sceneIndex      Int      @map("scene_index")
+  title           String
+  approach        String
+  narrationText   String   @map("narration_text") @db.Text
+  subtitleText    String?  @map("subtitle_text") @db.Text
+  visualDesc      String?  @map("visual_desc") @db.Text
+  imagePrompt     String?  @map("image_prompt") @db.Text
+  imageUrl        String?  @map("image_url")
+  manimCode       String?  @map("manim_code") @db.Text
+  codeLines       Json?    @map("code_lines")
+
+  // Output
+  clipUrl         String?  @map("clip_url")
+  audioUrl        String?  @map("audio_url")
+  duration        Float?
+  status          String   @default("pending")
+  errorMessage    String?  @map("error_message")
+  retryCount      Int      @default(0) @map("retry_count")
+  approved        Boolean  @default(false)
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([videoGenId])
+  @@unique([videoGenId, sceneIndex])
+  @@map("video_scenes")
+}
+
+// ==================== SYLLABUS PIPELINE ====================
+
+model Syllabus {
+  id        String   @id @default(uuid())
+  subjectId String   @unique @map("subject_id")
+  status    String   @default("draft") // draft, complete
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  subject    Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  blocks     SyllabusBlock[]
+  references SyllabusReference[]
+  lessons    SyllabusLesson[]
+
+  @@map("syllabi")
+}
+
+model SyllabusBlock {
+  id         String   @id @default(uuid())
+  syllabusId String   @map("syllabus_id")
+  blockType  String   @map("block_type") // header, general_info, lecturers, description, clo, materials, student_tasks, assessment, content_detail, update_log
+  title      String
+  content    String   @default("") @db.Text
+  metadata   Json?    // Structured data for tables (lecturers, CLO, assessment matrix)
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  syllabus Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+
+  @@map("syllabus_blocks")
+}
+
+model SyllabusReference {
+  id              String   @id @default(uuid())
+  syllabusId      String   @map("syllabus_id")
+  fileName        String   @map("file_name")
+  fileUrl         String   @map("file_url") // MinIO object path
+  fileSize        Int?     @map("file_size")
+  markdownContent String?  @map("markdown_content") @db.Text
+  status          String   @default("pending") // pending, processing, done, error
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  syllabus Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+
+  @@map("syllabus_references")
+}
+
+model SyllabusLesson {
+  id              String   @id @default(uuid())
+  syllabusId      String   @map("syllabus_id")
+  sortOrder       Int      @map("sort_order")
+  title           String
+  outline         String   @db.Text
+  textbookContent String?  @map("textbook_content") @db.Text
+  textbookStatus  String   @default("none") @map("textbook_status") // none, generating, done, error
+  textbookPlan    String?  @map("textbook_plan") @db.Text            // Backward Design plan (JSON)
+  textbookPhase   String?  @map("textbook_phase")                    // extracting, planning, writing, illustrating, reviewing, done, error
+  textbookImages  Json?    @map("textbook_images")                   // [{url, caption, type: 'mermaid'|'ai_image'}]
+  lessonId        String?  @unique @map("lesson_id") // Optional 1:1 link to existing Lesson
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  syllabus Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+  lesson   Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+
+  @@map("syllabus_lessons")
 }

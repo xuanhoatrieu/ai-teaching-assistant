@@ -1,0 +1,28 @@
+# Docker Compose addition for vid-worker
+# Add this service to the existing docker-compose.yml of ai-teaching-assistant
+
+# vid-worker:
+#   build: ./vid-worker
+#   depends_on:
+#     - redis
+#   environment:
+#     - REDIS_URL=redis://redis:6379
+#     - GEMINI_API_KEY=${GEMINI_API_KEY}
+#     - VITTS_API_KEY=${VITTS_API_KEY}
+#     - VITTS_BASE_URL=https://vitts.hoclieu.id.vn
+#     - MINIO_ENDPOINT=minio:9000
+#     - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+#     - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+#     - MINIO_BUCKET=ai-teaching
+#     - IMAGEN_API_KEY=${IMAGEN_API_KEY}
+#   volumes:
+#     - vid-worker-cache:/app/tmp
+#   deploy:
+#     resources:
+#       limits:
+#         memory: 4G
+#         cpus: '2.0'
+#   restart: unless-stopped
+
+# volumes:
+#   vid-worker-cache:

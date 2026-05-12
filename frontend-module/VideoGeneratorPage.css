@@ -1,0 +1,327 @@
+/* Video Generator Page — Styles */
+/* Based on design-specs.md: Dark theme, indigo accent */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+.video-generator-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  font-family: 'Inter', sans-serif;
+  color: #f1f5f9;
+}
+
+/* ── Header ── */
+.page-header {
+  margin-bottom: 24px;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+.breadcrumb a {
+  color: #818cf8;
+  text-decoration: none;
+}
+.breadcrumb a:hover { text-decoration: underline; }
+.breadcrumb .current { color: #f1f5f9; }
+
+.page-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ── Error Banner ── */
+.error-banner {
+  background: #ef444420;
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fca5a5;
+  font-size: 14px;
+}
+.error-banner button {
+  background: none;
+  border: none;
+  color: #fca5a5;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+/* ── Panel Base ── */
+.config-panel,
+.progress-panel,
+.video-preview,
+.video-history {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  animation: fadeInUp 0.3s ease-out;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.panel-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+/* ── Config Panel ── */
+.config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.config-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+.config-field select {
+  width: 100%;
+  height: 40px;
+  background: #334155;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 14px;
+  padding: 0 12px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.config-field select:focus {
+  border-color: #6366f1;
+  outline: none;
+}
+
+.generate-btn {
+  width: 100%;
+  height: 48px;
+  background: #6366f1;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.generate-btn:hover:not(:disabled) {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
+.generate-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Progress Panel ── */
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.progress-text {
+  font-size: 14px;
+  color: #94a3b8;
+}
+.progress-percent {
+  font-size: 14px;
+  font-weight: 600;
+  color: #6366f1;
+}
+
+.progress-bar-track {
+  height: 8px;
+  background: #334155;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #818cf8);
+  border-radius: 4px;
+  transition: width 0.5s ease-out;
+}
+
+/* Scene list */
+.scene-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.scene-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.scene-item:hover { background: #334155; }
+.scene-done { opacity: 0.8; }
+.scene-rendering { background: #334155; }
+.scene-error { background: #ef444410; }
+
+.scene-icon { width: 24px; text-align: center; }
+.scene-index { color: #94a3b8; min-width: 70px; }
+.scene-title { flex: 1; }
+.scene-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.scene-duration { color: #64748b; font-size: 13px; min-width: 45px; text-align: right; }
+
+.scene-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid #334155;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Video Preview ── */
+.video-container {
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.video-player {
+  width: 100%;
+  aspect-ratio: 16/9;
+  background: #0f172a;
+  display: block;
+}
+
+.video-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #64748b;
+}
+.placeholder-icon { font-size: 48px; margin-bottom: 8px; }
+
+.video-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 12px;
+}
+
+.video-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s;
+}
+.btn-primary {
+  background: #6366f1;
+  color: white;
+  border: none;
+}
+.btn-primary:hover { background: #4f46e5; }
+.btn-outline {
+  background: transparent;
+  color: #6366f1;
+  border: 1px solid #6366f1;
+}
+.btn-outline:hover { background: #6366f120; }
+
+/* ── History Table ── */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.history-table th {
+  text-align: left;
+  padding: 8px 12px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 500;
+  border-bottom: 1px solid #334155;
+}
+.history-table td {
+  padding: 12px;
+  border-bottom: 1px solid #334155;
+  font-size: 14px;
+}
+.history-table tr:last-child td { border-bottom: none; }
+
+.status-badge {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.status-done { background: #22c55e20; color: #22c55e; }
+.status-error { background: #ef444420; color: #ef4444; }
+.status-pending { background: #f59e0b20; color: #f59e0b; }
+
+.history-actions {
+  display: flex;
+  gap: 8px;
+}
+.btn-icon {
+  width: 32px; height: 32px;
+  background: none;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.btn-icon:hover { background: #334155; }
+.btn-danger:hover { background: #ef444420; border-color: #ef4444; }
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .config-grid { grid-template-columns: repeat(2, 1fr); }
+  .video-actions { flex-direction: column; }
+}
+@media (max-width: 640px) {
+  .config-grid { grid-template-columns: 1fr; }
+  .video-generator-page { padding: 16px; }
+}

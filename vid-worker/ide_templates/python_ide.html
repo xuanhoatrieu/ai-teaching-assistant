@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Python IDE</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #1e1e1e;
+            font-family: 'Consolas', 'Fira Code', monospace;
+            color: #d4d4d4;
+            overflow: hidden;
+        }
+
+        /* Top bar */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            height: 36px;
+            background: #2d2d2d;
+            border-bottom: 1px solid #404040;
+            padding: 0 12px;
+            gap: 8px;
+        }
+        .top-bar .dots {
+            display: flex;
+            gap: 6px;
+        }
+        .top-bar .dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+        }
+        .dot-red { background: #ff5f57; }
+        .dot-yellow { background: #febc2e; }
+        .dot-green { background: #28c840; }
+        .top-bar .title {
+            color: #858585;
+            font-size: 13px;
+            margin-left: 12px;
+        }
+
+        /* Tab bar */
+        .tab-bar {
+            display: flex;
+            height: 32px;
+            background: #252526;
+            border-bottom: 1px solid #404040;
+        }
+        .tab {
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            font-size: 13px;
+            color: #969696;
+            background: #2d2d2d;
+            border-right: 1px solid #404040;
+        }
+        .tab.active {
+            color: #d4d4d4;
+            background: #1e1e1e;
+            border-bottom: 2px solid #007acc;
+        }
+        .tab .icon { margin-right: 6px; color: #519aba; }
+
+        /* Editor area */
+        .editor-container {
+            display: flex;
+            height: calc(100vh - 68px);
+        }
+
+        /* Line numbers */
+        .line-numbers {
+            width: 50px;
+            background: #1e1e1e;
+            border-right: 1px solid #333;
+            padding: 8px 0;
+            text-align: right;
+            color: #858585;
+            font-size: 16px;
+            line-height: 28px;
+            user-select: none;
+        }
+        .line-numbers div {
+            padding-right: 12px;
+        }
+
+        /* Code editor */
+        #editor {
+            flex: 1;
+            padding: 8px 16px;
+            font-size: 16px;
+            line-height: 28px;
+            color: #d4d4d4;
+            background: #1e1e1e;
+            outline: none;
+            white-space: pre;
+            overflow: auto;
+            caret-color: #aeafad;
+        }
+
+        /* Status bar */
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            height: 24px;
+            background: #007acc;
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            font-size: 12px;
+            color: white;
+            gap: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="top-bar">
+        <div class="dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+        </div>
+        <span class="title">Python — Visual Studio Code</span>
+    </div>
+
+    <div class="tab-bar">
+        <div class="tab active">
+            <span class="icon">🐍</span> main.py
+        </div>
+    </div>
+
+    <div class="editor-container">
+        <div class="line-numbers" id="lineNumbers"></div>
+        <div id="editor" contenteditable="true" spellcheck="false"></div>
+    </div>
+
+    <div class="status-bar">
+        <span>Python 3.12</span>
+        <span>UTF-8</span>
+        <span>Spaces: 4</span>
+        <span style="margin-left:auto;">Ln 1, Col 1</span>
+    </div>
+
+    <script>
+        // Update line numbers
+        const editor = document.getElementById('editor');
+        const lineNumbers = document.getElementById('lineNumbers');
+
+        function updateLineNumbers() {
+            const lines = editor.innerText.split('\n').length || 1;
+            lineNumbers.innerHTML = '';
+            for (let i = 1; i <= Math.max(lines, 30); i++) {
+                const div = document.createElement('div');
+                div.textContent = i;
+                lineNumbers.appendChild(div);
+            }
+        }
+
+        editor.addEventListener('input', updateLineNumbers);
+        updateLineNumbers();
+    </script>
+</body>
+</html>

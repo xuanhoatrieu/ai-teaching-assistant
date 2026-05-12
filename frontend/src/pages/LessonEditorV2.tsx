@@ -123,9 +123,14 @@ function LessonEditorContent() {
                         <span>/</span>
                         <span className="current">{lessonData.title}</span>
                     </div>
-                    <Link to={`/lessons/${lessonData.id}/classic`} className="version-toggle">
-                        📋 Classic Editor
-                    </Link>
+                    <div style={{ display: 'flex', gap: '10px' }}>
+                        <Link to={`/lessons/${lessonData.id}/video`} className="version-toggle" style={{ background: '#3b82f6', color: 'white', borderColor: '#3b82f6' }}>
+                            🎬 Tạo Video
+                        </Link>
+                        <Link to={`/lessons/${lessonData.id}/classic`} className="version-toggle">
+                            📋 Classic Editor
+                        </Link>
+                    </div>
                 </div>
                 <h1 className="lesson-title">{lessonData.title}</h1>
             </header>

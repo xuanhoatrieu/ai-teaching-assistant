@@ -17,6 +17,7 @@ import { InteractiveQuestionService } from './interactive-question.service';
 import { ReviewQuestionService } from './review-question.service';
 import { PrismaService } from '../prisma/prisma.service';
 import * as ExcelJS from 'exceljs';
+import { buildMoodleXml } from './moodle-xml.helper';
 
 // DTOs
 interface CreateInteractiveQuestionDto {
@@ -286,6 +287,28 @@ export class QuestionsController {
         // Write to response
         await workbook.xlsx.write(res);
         res.end();
+    }
+
+    /**
+     * GET /lessons/:lessonId/review-questions/export/moodle-xml
+     * Export review questions as Moodle-compatible XML file
+     */
+    @Get('review-questions/export/moodle-xml')
+    async exportReviewQuestionsMoodleXml(
+        @Param('lessonId') lessonId: string,
+        @Res() res: Response,
+    ) {
+        const questions = await this.reviewQuestionService.getQuestions(lessonId);
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+        });
+
+        const xml = buildMoodleXml(questions, lesson?.title || 'lesson');
+
+        const filename = `${lesson?.title || 'lesson'}_moodle.xml`;
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.send(xml);
     }
 
     /**

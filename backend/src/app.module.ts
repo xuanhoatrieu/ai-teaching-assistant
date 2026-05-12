@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { VideoGenModule } from './video-gen/video-gen.module';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -28,6 +30,7 @@ import { QuestionsModule } from './questions/questions.module';
 import { MigrationModule } from './migration/migration.module';
 import { PptxModule } from './pptx/pptx.module';
 import { PptxAudioToolModule } from './pptx-audio-tool/pptx-audio-tool.module';
+import { SyllabusModule } from './syllabus/syllabus.module';
 
 @Module({
   imports: [
@@ -71,6 +74,14 @@ import { PptxAudioToolModule } from './pptx-audio-tool/pptx-audio-tool.module';
     MigrationModule,
     PptxModule,
     PptxAudioToolModule,
+    BullModule.forRoot({
+      redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379'),
+      },
+    }),
+    VideoGenModule,
+    SyllabusModule,
   ],
   controllers: [AppController],
   providers: [AppService],

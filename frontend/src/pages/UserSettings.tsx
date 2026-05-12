@@ -269,7 +269,7 @@ function MyTemplatesSection() {
     );
 }
 
-function ModelConfigSection({ serviceStatus }: { serviceStatus: Record<string, boolean> }) {
+function ModelConfigSection() {
     const [configs, setConfigs] = useState<Record<string, ModelConfig>>({});
     const [availableModels, setAvailableModels] = useState<Record<string, AvailableModel[]>>({});
     const [taskTypes, setTaskTypes] = useState<string[]>([]);
@@ -297,16 +297,32 @@ function ModelConfigSection({ serviceStatus }: { serviceStatus: Record<string, b
     };
 
     const discoverModels = async () => {
-        if (!serviceStatus['GEMINI']) {
-            setError('Vui lòng cấu hình Gemini API Key trước');
-            return;
-        }
         try {
             setIsDiscovering(true);
             setError('');
             const res = await api.get('/user/model-config/discover');
             setAvailableModels(res.data.models);
-            setMessage('Đã tìm thấy các model khả dụng!');
+
+            // Build summary message
+            const counts: string[] = [];
+            const m = res.data.models || {};
+            if (m.CLIPROXY?.length) counts.push(`CLIProxy: ${m.CLIPROXY.length}`);
+            if (m.GEMINI?.length) counts.push(`Gemini: ${m.GEMINI.length}`);
+            if (m.IMAGE_GEN?.length) counts.push(`ImageGen: ${m.IMAGE_GEN.length}`);
+            if (m.VITTS?.length) counts.push(`ViTTS: ${m.VITTS.length}`);
+            if (m.VBEE?.length) counts.push(`Vbee: ${m.VBEE.length}`);
+
+            const total = Object.values(m).reduce((sum: number, arr: any) => sum + (arr?.length || 0), 0);
+            if (total === 0) {
+                setError('Không tìm thấy model nào. Kiểm tra API key (Gemini hoặc CLIProxy) trong Admin Settings.');
+            } else {
+                let msg = `✅ Tìm thấy ${total} models (${counts.join(', ')})`;
+                // Warn if CLIProxy is missing but enabled
+                if (!m.CLIPROXY?.length && m.GEMINI?.length) {
+                    msg += ' — ⚠️ CLIProxy: không có model (kiểm tra API key trong Admin Settings)';
+                }
+                setMessage(msg);
+            }
         } catch (err: any) {
             setError(err.response?.data?.message || 'Không thể kết nối để lấy danh sách model');
         } finally {
@@ -376,7 +392,7 @@ function ModelConfigSection({ serviceStatus }: { serviceStatus: Record<string, b
                 <button
                     className="btn-discover"
                     onClick={discoverModels}
-                    disabled={isDiscovering || !serviceStatus['GEMINI']}
+                    disabled={isDiscovering}
                 >
                     {isDiscovering ? '⏳ Đang kiểm tra...' : '🔍 Khám phá Models'}
                 </button>
@@ -653,7 +669,7 @@ export function UserSettingsPage() {
             </section>
 
             {/* Model Configuration Section */}
-            <ModelConfigSection serviceStatus={serviceStatus} />
+            <ModelConfigSection />
 
             {/* My Templates Section */}
             <MyTemplatesSection />
