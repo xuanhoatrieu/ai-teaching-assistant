@@ -21,15 +21,17 @@ export interface ModelConfigDto {
     modelName: string;
 }
 
-// Default models for each task type - Using Gemini 2.5 models
-// NOTE: Image model updated to gemini-2.0-flash-exp-image-generation (2026-01)
+// Default models for each task type
+// NOTE: These are LAST-RESORT fallbacks. CLIProxy admin config overrides them.
+// TTS default: ViTTS OmniVoice → Voice Design → Male
+// Image default: gpt-image-2 via CLIProxy
 const DEFAULT_MODELS: Record<TaskTypeValue, { provider: string; modelName: string }> = {
-    OUTLINE: { provider: 'GEMINI', modelName: 'gemini-2.5-pro' },
-    SLIDES: { provider: 'GEMINI', modelName: 'gemini-2.5-pro' },
-    SPEAKER_NOTES: { provider: 'GEMINI', modelName: 'gemini-2.5-pro' },
-    QUESTIONS: { provider: 'GEMINI', modelName: 'gemini-2.5-pro' },
-    IMAGE: { provider: 'GEMINI', modelName: 'gemini-2.0-flash-exp-image-generation' },
-    TTS: { provider: 'GEMINI', modelName: 'gemini-2.5-flash-preview-tts' },
+    OUTLINE: { provider: 'CLIPROXY', modelName: 'gpt-5.5' },
+    SLIDES: { provider: 'CLIPROXY', modelName: 'gpt-5.5' },
+    SPEAKER_NOTES: { provider: 'CLIPROXY', modelName: 'gpt-5.5' },
+    QUESTIONS: { provider: 'CLIPROXY', modelName: 'gpt-5.5' },
+    IMAGE: { provider: 'CLIPROXY', modelName: 'gpt-image-2' },
+    TTS: { provider: 'VITTS', modelName: 'vitts:design' },
 };
 
 @Injectable()
@@ -107,6 +109,20 @@ export class ModelConfigService {
      * Fast method - uses cached CLIProxy config if available
      */
     async getDefaultForTask(taskType: TaskTypeValue): Promise<{ provider: string; modelName: string }> {
+        // For TTS: Check ViTTS admin config FIRST (priority over CLIProxy TTS)
+        if (taskType === 'TTS') {
+            try {
+                const vittsEnabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
+                if (vittsEnabled?.value === 'true') {
+                    const vittsVoice = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.defaultVoice' } });
+                    const modelName = vittsVoice?.value || 'vitts:design';
+                    return { provider: 'VITTS', modelName };
+                }
+            } catch (error: any) {
+                this.logger.warn(`Failed to get ViTTS config: ${error.message}`);
+            }
+        }
+
         // Check admin defaults (stored in system_configs table)
         if (this.cliproxy) {
             try {
@@ -122,6 +138,7 @@ export class ModelConfigService {
                     if (taskType === 'IMAGE' && cliproxyConfig.defaultImageModel) {
                         return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultImageModel };
                     }
+                    // TTS from CLIProxy only if ViTTS admin not enabled (already checked above)
                     if (taskType === 'TTS' && cliproxyConfig.defaultTTSModel) {
                         return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTTSModel };
                     }
@@ -802,8 +819,18 @@ export class ModelConfigService {
                         defaults.IMAGE = { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultImageModel };
                     }
 
-                    // Override TTS model default (uses GEMINI provider, not CLIProxy)
-                    if (cliproxyConfig.defaultTTSModel) {
+                    // Override TTS model default: ViTTS admin > CLIProxy TTS
+                    // Check ViTTS admin config first
+                    let vittsOverride = false;
+                    try {
+                        const vittsEnabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
+                        if (vittsEnabled?.value === 'true') {
+                            const vittsVoice = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.defaultVoice' } });
+                            defaults.TTS = { provider: 'VITTS', modelName: vittsVoice?.value || 'vitts:design' };
+                            vittsOverride = true;
+                        }
+                    } catch { /* ignore */ }
+                    if (!vittsOverride && cliproxyConfig.defaultTTSModel) {
                         defaults.TTS = { provider: 'GEMINI', modelName: cliproxyConfig.defaultTTSModel };
                     }
 

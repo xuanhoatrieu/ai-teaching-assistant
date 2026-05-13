@@ -200,36 +200,49 @@ export class TTSService {
                 }
             }
         } else if (dto.provider === 'VITTS') {
-            // Get ViTTS credentials (stored as JSON: {"apiKey": "xxx", "baseUrl": "yyy"})
+            // Priority 1: User's own ViTTS credentials
             const vittsCredentialsJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
 
-            if (!vittsCredentialsJson) {
-                // AUTO-FALLBACK: ViTTS not configured, try Gemini TTS instead
-                this.logger.warn('ViTTS API key not configured - falling back to Gemini TTS');
-                const geminiApiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-                if (!geminiApiKey) {
-                    throw new Error('No TTS provider configured. Please add Gemini API key or ViTTS credentials in Settings.');
-                }
-                this.logger.log('Using Gemini TTS as fallback (voice: Puck)');
-                provider = this.ttsFactory.getDefaultProvider(geminiApiKey);
-                dto.voiceId = 'Puck';
-                dto.provider = 'GEMINI';
-            } else {
-                // Parse ViTTS credentials
+            if (vittsCredentialsJson) {
+                // Parse user's ViTTS credentials
                 try {
                     const vittsCredentials = JSON.parse(vittsCredentialsJson);
-                    this.logger.log(`[DEBUG] ViTTS credentials: apiKey=${vittsCredentials.apiKey?.substring(0, 10)}..., baseUrl=${vittsCredentials.baseUrl || 'NOT SET'}`);
+                    this.logger.log(`[DEBUG] ViTTS user credentials: apiKey=${vittsCredentials.apiKey?.substring(0, 10)}..., baseUrl=${vittsCredentials.baseUrl || 'NOT SET'}`);
                     if (!vittsCredentials.apiKey) {
                         throw new Error('Invalid ViTTS credentials format. Expected: {"apiKey": "xxx", "baseUrl": "yyy"}');
                     }
 
-                    this.logger.log(`Using ViTTS provider with baseUrl: ${vittsCredentials.baseUrl || 'default'}`);
+                    this.logger.log(`Using ViTTS provider with user credentials, baseUrl: ${vittsCredentials.baseUrl || 'default'}`);
                     provider = this.ttsFactory.getProvider('VITTS' as any, {
                         apiKey: vittsCredentials.apiKey,
                         baseUrl: vittsCredentials.baseUrl,
                     });
                 } catch (parseError) {
                     throw new Error(`Invalid ViTTS credentials JSON: ${parseError.message}`);
+                }
+            } else {
+                // Priority 2: Admin/system ViTTS credentials from system_configs
+                const adminVittsEnabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
+                const adminVittsApiKey = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.apiKey' } });
+                const adminVittsBaseUrl = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.baseUrl' } });
+
+                if (adminVittsEnabled?.value === 'true' && adminVittsApiKey?.value) {
+                    this.logger.log(`Using ViTTS admin credentials (system-level), baseUrl: ${adminVittsBaseUrl?.value || 'default'}`);
+                    provider = this.ttsFactory.getProvider('VITTS' as any, {
+                        apiKey: adminVittsApiKey.value,
+                        baseUrl: adminVittsBaseUrl?.value || 'http://117.0.36.6:8888',
+                    });
+                } else {
+                    // Priority 3: Fallback to Gemini TTS
+                    this.logger.warn('ViTTS not configured (no user or admin credentials) - falling back to Gemini TTS');
+                    const geminiApiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+                    if (!geminiApiKey) {
+                        throw new Error('No TTS provider configured. Please add Gemini API key or ViTTS credentials in Settings.');
+                    }
+                    this.logger.log('Using Gemini TTS as fallback (voice: Puck)');
+                    provider = this.ttsFactory.getDefaultProvider(geminiApiKey);
+                    dto.voiceId = 'Puck';
+                    dto.provider = 'GEMINI';
                 }
             }
         } else if (dto.provider === 'CLIPROXY') {

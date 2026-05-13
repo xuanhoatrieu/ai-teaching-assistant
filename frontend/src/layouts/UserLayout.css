@@ -1,6 +1,44 @@
 .user-layout {
     min-height: 100vh;
     background: #0f172a;
+    display: flex;
+    flex-direction: column;
+}
+
+.user-main {
+    flex: 1;
+    padding: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Footer */
+.user-footer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px 32px;
+    border-top: 1px solid rgba(59, 130, 246, 0.08);
+    color: #475569;
+    font-size: 13px;
+}
+
+.footer-separator {
+    color: #334155;
+}
+
+.footer-link {
+    text-decoration: none;
+    font-size: 14px;
+    opacity: 0.6;
+    transition: opacity 0.2s ease;
+}
+
+.footer-link:hover {
+    opacity: 1;
 }
 
 .user-header {
@@ -95,10 +133,4 @@
 
 .logout-btn:hover {
     background: rgba(239, 68, 68, 0.1);
-}
-
-.user-main {
-    padding: 32px;
-    max-width: 1400px;
-    margin: 0 auto;
 }

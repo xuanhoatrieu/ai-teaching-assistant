@@ -321,6 +321,32 @@ Chỉ trả về JSON, không thêm text khác.`,
   }
   console.log('✅ TTS providers created:', ttsProviders.length);
 
+  // 4. Create ViTTS admin config (system-level default for all users)
+  const vittsConfigs = [
+    { key: 'vitts.enabled', value: 'true' },
+    { key: 'vitts.baseUrl', value: 'http://117.0.36.6:8888' },
+    { key: 'vitts.apiKey', value: 'vneu_SqSvHWYLuHEc9cp4kRNYAxOUv73J39vXG8ywp6igQRo' },
+    { key: 'vitts.defaultVoice', value: 'vitts:design' },
+    { key: 'vitts.designInstruct', value: 'male, middle-aged' },
+  ];
+
+  for (const config of vittsConfigs) {
+    await prisma.systemConfig.upsert({
+      where: { key: config.key },
+      update: {}, // Don't overwrite if already exists
+      create: config,
+    });
+  }
+  console.log('✅ ViTTS admin config created');
+
+  // 5. Set CLIProxy default image model to gpt-image-2
+  await prisma.systemConfig.upsert({
+    where: { key: 'cliproxy.defaultImageModel' },
+    update: { value: 'gpt-image-2' },
+    create: { key: 'cliproxy.defaultImageModel', value: 'gpt-image-2' },
+  });
+  console.log('✅ CLIProxy defaultImageModel set to gpt-image-2');
+
   console.log('🎉 Seeding completed!');
 }
 

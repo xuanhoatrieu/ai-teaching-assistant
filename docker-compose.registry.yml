@@ -66,7 +66,7 @@ services:
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      CLIPROXY_URL: ${CLIPROXY_URL:-https://cliproxy.hoclieu.id.vn}
+      CLIPROXY_URL: ${CLIPROXY_URL:-http://152.67.112.145:8317}
       CLIPROXY_API_KEY: ${CLIPROXY_API_KEY}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}

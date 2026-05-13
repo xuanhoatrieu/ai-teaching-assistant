@@ -62,10 +62,22 @@ export function SettingsPage() {
     const [isTestingImageGen, setIsTestingImageGen] = useState(false);
     const [isSavingImageGen, setIsSavingImageGen] = useState(false);
 
+    // ViTTS state
+    const [vittsEnabled, setVittsEnabled] = useState(false);
+    const [vittsBaseUrl, setVittsBaseUrl] = useState('');
+    const [vittsApiKey, setVittsApiKey] = useState('');
+    const [vittsDefaultVoice, setVittsDefaultVoice] = useState('vitts:design');
+    const [vittsDesignInstruct, setVittsDesignInstruct] = useState('male, middle-aged');
+    const [vittsCurrentApiKey, setVittsCurrentApiKey] = useState('');
+    const [vittsTestResult, setVittsTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isTestingVitts, setIsTestingVitts] = useState(false);
+    const [isSavingVitts, setIsSavingVitts] = useState(false);
+
     useEffect(() => {
         fetchSettings();
         fetchCLIProxyConfig();
         fetchImageGenConfig();
+        fetchViTTSConfig();
     }, []);
 
     const fetchSettings = async () => {
@@ -251,6 +263,71 @@ export function SettingsPage() {
         }
     };
 
+    // ========================
+    // ViTTS handlers
+    // ========================
+
+    const fetchViTTSConfig = async () => {
+        try {
+            const response = await api.get('/admin/config/vitts');
+            const config = response.data;
+            setVittsEnabled(config.enabled);
+            setVittsBaseUrl(config.baseUrl || '');
+            setVittsCurrentApiKey(config.apiKey || '');
+            setVittsDefaultVoice(config.defaultVoice || 'vitts:design');
+            setVittsDesignInstruct(config.designInstruct || 'male, middle-aged');
+        } catch (err) {
+            console.error('Failed to fetch ViTTS config:', err);
+        }
+    };
+
+    const handleSaveVitts = async () => {
+        setIsSavingVitts(true);
+        try {
+            await api.put('/admin/config/vitts', {
+                enabled: vittsEnabled,
+                baseUrl: vittsBaseUrl || undefined,
+                apiKey: vittsApiKey || undefined,
+                defaultVoice: vittsDefaultVoice || undefined,
+                designInstruct: vittsDesignInstruct || undefined,
+            });
+            setMessage('ViTTS configuration saved');
+            setVittsApiKey('');
+            await fetchViTTSConfig();
+        } catch (err: any) {
+            setMessage(err.response?.data?.message || 'Failed to save ViTTS config');
+        } finally {
+            setIsSavingVitts(false);
+        }
+    };
+
+    const handleTestVitts = async () => {
+        setIsTestingVitts(true);
+        setVittsTestResult(null);
+        try {
+            // Auto-save first
+            await api.put('/admin/config/vitts', {
+                enabled: vittsEnabled,
+                baseUrl: vittsBaseUrl || undefined,
+                apiKey: vittsApiKey || undefined,
+                defaultVoice: vittsDefaultVoice || undefined,
+                designInstruct: vittsDesignInstruct || undefined,
+            });
+            setVittsApiKey('');
+
+            const response = await api.get('/admin/config/vitts/test');
+            setVittsTestResult(response.data);
+            await fetchViTTSConfig();
+        } catch (err: any) {
+            setVittsTestResult({
+                success: false,
+                message: err.response?.data?.message || 'Connection test failed',
+            });
+        } finally {
+            setIsTestingVitts(false);
+        }
+    };
+
     if (isLoading) {
         return <div className="admin-page loading">Loading...</div>;
     }
@@ -296,7 +373,7 @@ export function SettingsPage() {
                                 type="text"
                                 value={cliproxyUrl}
                                 onChange={(e) => setCliproxyUrl(e.target.value)}
-                                placeholder="https://cliproxy.hoclieu.id.vn"
+                                placeholder="http://152.67.112.145:8317"
                             />
                             <p className="help-text">Current: {cliproxyConfig?.url || 'Not set'}</p>
                         </div>
@@ -491,6 +568,109 @@ export function SettingsPage() {
                         {imageGenTestResult && (
                             <div className={`test-result ${imageGenTestResult.success ? 'success' : 'error'}`}>
                                 {imageGenTestResult.success ? '✅' : '❌'} {imageGenTestResult.message}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* ViTTS System Config Section */}
+            <div className="settings-section cliproxy-section">
+                <h2>🎙️ ViTTS Voice (OmniVoice)</h2>
+                <p className="section-desc">
+                    Cấu hình giọng đọc ViTTS mặc định cho toàn hệ thống. User không cần tự cấu hình API key.
+                </p>
+
+                <div className="setting-group">
+                    <label className="toggle-label">
+                        <input
+                            type="checkbox"
+                            checked={vittsEnabled}
+                            onChange={(e) => setVittsEnabled(e.target.checked)}
+                        />
+                        <span>Enable ViTTS (System-level)</span>
+                        {vittsEnabled && <span className="status-badge enabled">Active</span>}
+                        {!vittsEnabled && <span className="status-badge disabled">Disabled</span>}
+                    </label>
+                    <p className="help-text">
+                        Khi bật, tất cả user sẽ dùng giọng ViTTS mặc định mà không cần cấu hình riêng.
+                    </p>
+                </div>
+
+                {vittsEnabled && (
+                    <>
+                        <div className="setting-group">
+                            <label htmlFor="vitts-baseurl">ViTTS Base URL</label>
+                            <input
+                                id="vitts-baseurl"
+                                type="text"
+                                value={vittsBaseUrl}
+                                onChange={(e) => setVittsBaseUrl(e.target.value)}
+                                placeholder="http://117.0.36.6:8888"
+                            />
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="vitts-apikey">API Key</label>
+                            <input
+                                id="vitts-apikey"
+                                type="password"
+                                value={vittsApiKey}
+                                onChange={(e) => setVittsApiKey(e.target.value)}
+                                placeholder="Enter new API key to update"
+                            />
+                            <p className="help-text">
+                                Current: {vittsCurrentApiKey || 'Not set'}
+                            </p>
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="vitts-voice">🔊 Default Voice Mode</label>
+                            <select
+                                id="vitts-voice"
+                                value={vittsDefaultVoice}
+                                onChange={(e) => setVittsDefaultVoice(e.target.value)}
+                            >
+                                <option value="vitts:design">Voice Design (mô tả giọng)</option>
+                                <option value="vitts:auto">Auto (AI tự chọn)</option>
+                            </select>
+                            <p className="help-text">Design: mô tả giọng nam/nữ, tuổi. Auto: AI tự chọn giọng phù hợp.</p>
+                        </div>
+
+                        {vittsDefaultVoice === 'vitts:design' && (
+                            <div className="setting-group">
+                                <label htmlFor="vitts-instruct">🎭 Voice Design Instruct</label>
+                                <input
+                                    id="vitts-instruct"
+                                    type="text"
+                                    value={vittsDesignInstruct}
+                                    onChange={(e) => setVittsDesignInstruct(e.target.value)}
+                                    placeholder="male, middle-aged"
+                                />
+                                <p className="help-text">Mô tả giọng mặc định. VD: "male, middle-aged" hoặc "female, young adult"</p>
+                            </div>
+                        )}
+
+                        <div className="button-group">
+                            <button
+                                className="secondary-btn"
+                                onClick={handleTestVitts}
+                                disabled={isTestingVitts}
+                            >
+                                {isTestingVitts ? '⏳ Testing...' : '🔍 Test Connection'}
+                            </button>
+                            <button
+                                className="primary-btn"
+                                onClick={handleSaveVitts}
+                                disabled={isSavingVitts}
+                            >
+                                {isSavingVitts ? 'Saving...' : 'Save ViTTS Settings'}
+                            </button>
+                        </div>
+
+                        {vittsTestResult && (
+                            <div className={`test-result ${vittsTestResult.success ? 'success' : 'error'}`}>
+                                {vittsTestResult.success ? '✅' : '❌'} {vittsTestResult.message}
                             </div>
                         )}
                     </>

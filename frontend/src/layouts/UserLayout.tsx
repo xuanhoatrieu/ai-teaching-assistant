@@ -43,6 +43,15 @@ export function UserLayout() {
             <main className="user-main">
                 <Outlet />
             </main>
+
+            <footer className="user-footer">
+                <span>© {new Date().getFullYear()} AI Teaching Assistant</span>
+                <span className="footer-separator">·</span>
+                <span>Developed by Triệu Xuân Hòa</span>
+                <a href="https://www.facebook.com/aieduwork" target="_blank" rel="noopener noreferrer" className="footer-link" title="AIEduWork">
+                    🌐
+                </a>
+            </footer>
         </div>
     );
 }

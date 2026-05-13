@@ -384,4 +384,115 @@ export class SystemConfigController {
             };
         }
     }
+
+    // ========================
+    // ViTTS System Config
+    // ========================
+
+    /**
+     * Get ViTTS admin configuration
+     */
+    @Get('vitts')
+    async getViTTSConfig() {
+        const enabled = await this.configService.get('vitts.enabled');
+        const baseUrl = await this.configService.get('vitts.baseUrl');
+        const apiKey = await this.configService.get('vitts.apiKey');
+        const defaultVoice = await this.configService.get('vitts.defaultVoice');
+        const designInstruct = await this.configService.get('vitts.designInstruct');
+
+        return {
+            enabled: enabled === 'true',
+            baseUrl: baseUrl || 'http://117.0.36.6:8888',
+            apiKey: apiKey ? '***' + apiKey.slice(-4) : '',
+            defaultVoice: defaultVoice || 'vitts:design',
+            designInstruct: designInstruct || 'male, middle-aged',
+        };
+    }
+
+    /**
+     * Update ViTTS admin configuration
+     */
+    @Put('vitts')
+    async updateViTTSConfig(@Body() dto: {
+        enabled?: boolean;
+        baseUrl?: string;
+        apiKey?: string;
+        defaultVoice?: string;
+        designInstruct?: string;
+    }) {
+        this.logger.log(`Updating ViTTS config: ${JSON.stringify({ ...dto, apiKey: dto.apiKey ? '***' : undefined })}`);
+
+        if (dto.enabled !== undefined) {
+            await this.configService.set('vitts.enabled', String(dto.enabled));
+        }
+        if (dto.baseUrl) {
+            await this.configService.set('vitts.baseUrl', dto.baseUrl);
+        }
+        if (dto.apiKey) {
+            await this.configService.set('vitts.apiKey', dto.apiKey);
+        }
+        if (dto.defaultVoice) {
+            await this.configService.set('vitts.defaultVoice', dto.defaultVoice);
+        }
+        if (dto.designInstruct) {
+            await this.configService.set('vitts.designInstruct', dto.designInstruct);
+        }
+
+        return { success: true, message: 'ViTTS configuration updated' };
+    }
+
+    /**
+     * Test ViTTS connection
+     */
+    @Get('vitts/test')
+    async testViTTSConnection() {
+        const apiKey = await this.configService.get('vitts.apiKey');
+        const baseUrl = await this.configService.get('vitts.baseUrl') || 'http://117.0.36.6:8888';
+
+        if (!apiKey) {
+            return { success: false, message: '❌ ViTTS API key not configured' };
+        }
+
+        try {
+            const response = await fetch(`${baseUrl}/api/v1/tts/voices`, {
+                headers: { 'X-API-Key': apiKey },
+                signal: AbortSignal.timeout(10000),
+            });
+
+            if (response.ok) {
+                const data = await response.json().catch(() => null);
+                const voiceCount = Array.isArray(data) ? data.length : (data?.voices?.length || '?');
+                return {
+                    success: true,
+                    message: `✅ ViTTS connected! URL: ${baseUrl} (${voiceCount} voices)`,
+                };
+            } else {
+                return {
+                    success: false,
+                    message: `❌ ViTTS returned HTTP ${response.status}`,
+                };
+            }
+        } catch (error: any) {
+            const msg = error.message || '';
+            const isTimeout = error.name === 'TimeoutError' || msg.includes('timeout') || msg.includes('aborted');
+            const isNetworkError = msg.includes('fetch failed') || msg.includes('ECONNREFUSED') || msg.includes('EHOSTUNREACH') || msg.includes('ENOTFOUND');
+
+            if (isNetworkError) {
+                return {
+                    success: false,
+                    message: `⚠️ Không kết nối được tới ${baseUrl}. Server ViTTS có thể chỉ accessible từ VPS. Trên VPS sẽ hoạt động bình thường.`,
+                };
+            }
+            if (isTimeout) {
+                return {
+                    success: false,
+                    message: `❌ ViTTS timeout (10s) — server có thể chậm hoặc không accessible từ máy này.`,
+                };
+            }
+            return {
+                success: false,
+                message: `❌ ViTTS error: ${msg}`,
+            };
+        }
+    }
 }

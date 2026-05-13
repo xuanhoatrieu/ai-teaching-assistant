@@ -21,7 +21,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "system_configs_key_key" ON "system_configs"("
 -- Insert default CLIProxy config
 INSERT INTO "system_configs" ("id", "key", "value", "updated_at") VALUES
   (gen_random_uuid()::text, 'cliproxy.enabled', 'true', NOW()),
-  (gen_random_uuid()::text, 'cliproxy.url', 'https://cliproxy.hoclieu.id.vn', NOW()),
+  (gen_random_uuid()::text, 'cliproxy.url', 'http://152.67.112.145:8317', NOW()),
   (gen_random_uuid()::text, 'cliproxy.apiKey', 'ai-teaching-assistant-prod', NOW()),
   (gen_random_uuid()::text, 'cliproxy.defaultTextModel', 'gemini-2.5-flash', NOW()),
   (gen_random_uuid()::text, 'cliproxy.defaultImageModel', 'gemini-3-pro-image-preview', NOW())

@@ -252,6 +252,12 @@ export function SubjectDetailPage() {
             {/* Tabs */}
             <div className="subject-tabs">
                 <button
+                    className={`tab-btn ${activeTab === 'syllabus' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('syllabus')}
+                >
+                    📋 Đề cương
+                </button>
+                <button
                     className={`tab-btn ${activeTab === 'lessons' ? 'active' : ''}`}
                     onClick={() => setActiveTab('lessons')}
                 >
@@ -263,12 +269,6 @@ export function SubjectDetailPage() {
                     onClick={() => setActiveTab('videos')}
                 >
                     🎬 Video
-                </button>
-                <button
-                    className={`tab-btn ${activeTab === 'syllabus' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('syllabus')}
-                >
-                    📋 Đề cương
                 </button>
             </div>
 

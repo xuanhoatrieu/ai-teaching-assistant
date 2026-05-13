@@ -1,6 +1,6 @@
 {
     "meta": {
-        "last_updated": "2026-05-12T15:39:00+07:00"
+        "last_updated": "2026-05-13T17:25:00+07:00"
     },
     "decisions": [
         {"decision": "CLIProxy as Priority 1, Gemini SDK as fallback", "reason": "CLIProxy provides free multi-model access (GPT, Claude, Gemini) via self-hosted proxy"},
@@ -68,7 +68,13 @@
         {"decision": "Force font via w:rFonts XML instead of python-docx style.font.name", "reason": "Pandoc reference.docx uses Aptos (Word theme font). python-docx style.font.name doesn't override theme fonts. Direct XML w:rFonts with ascii/hAnsi/eastAsia/cs slots is the only reliable method."},
         {"decision": "Force LEFT alignment via XML w:jc instead of paragraph.alignment=0", "reason": "python-docx treats LEFT (value 0) as 'default' and silently skips writing the XML element. Paragraph then inherits JUSTIFY from Normal style. Must use direct XML parse_xml('<w:jc w:val=left/>')."},
         {"decision": "Remove ALL frontend axios timeouts (set to 0)", "reason": "Dev server AI operations are unpredictable in duration. False-negative errors (frontend shows error but data saved in DB) confuse users. Backend never times out — frontend should match."},
-        {"decision": "ILLUSTRATE step uses HTML comment markers", "reason": "WRITE step inserts <!-- ILLUSTRATION: {type, description} --> markers. ILLUSTRATE step parses these + proposes additional illustrations. Decouples content writing from image generation."}
+        {"decision": "ILLUSTRATE step uses HTML comment markers", "reason": "WRITE step inserts <!-- ILLUSTRATION: {type, description} --> markers. ILLUSTRATE step parses these + proposes additional illustrations. Decouples content writing from image generation."},
+        {"decision": "ViTTS admin 3-tier fallback: User cred → Admin cred → Gemini TTS", "reason": "Allows all users to use ViTTS voice without personal API key. Admin API key stored in system_configs. seed-configs.js upserts on Docker startup."},
+        {"decision": "Default models: gpt-5.5 (text), gpt-image-2 (image), vitts:design (TTS)", "reason": "All via CLIProxy except TTS via ViTTS admin. getDefaultForTask checks vitts.enabled FIRST before CLIProxy TTS."},
+        {"decision": "CLIProxy URL: http://152.67.112.145:8317 (direct IP, not domain)", "reason": "Domain cliproxy.hoclieu.id.vn was outdated. Direct IP is more reliable. Updated in .env, .env.example, docker-compose, migration SQL, seed-configs.js."},
+        {"decision": "seed-configs.js (standalone JS) instead of prisma db seed", "reason": "prisma db seed requires ts-node in Docker production image. Standalone JS script with @prisma/client import runs directly with node."},
+        {"decision": "ViTTS test connection: network error shows friendly message about VPS-only access", "reason": "ViTTS server (117.0.36.6:8888) only accessible from VPS network. Local dev will always get 'fetch failed'. Error message explains this instead of confusing admin."},
+        {"decision": "Tab reorder: Đề cương → Bài giảng → Video (default still opens Bài giảng)", "reason": "Syllabus-first workflow. Tab visual order changed but activeTab default remains 'lessons' for backward compatibility."}
     ],
     "patterns": [
         "NestJS module structure with controller/service/module",
