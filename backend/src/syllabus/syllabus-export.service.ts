@@ -463,6 +463,14 @@ export class SyllabusExportService {
             const postprocessScript = path.join(process.cwd(), 'assets', 'docx_postprocess.py');
             const tmpDocxStyled = tmpDocx.replace('.docx', '_styled.docx');
             try {
+                // Auto-install python-docx if not available
+                try {
+                    execSync('python3 -c "import docx"', { timeout: 5_000, stdio: 'pipe' });
+                } catch {
+                    this.logger.log('python-docx not found, installing...');
+                    execSync('pip3 install --break-system-packages python-docx', { timeout: 60_000, stdio: 'pipe' });
+                    this.logger.log('python-docx installed successfully');
+                }
                 execSync(`python3 ${JSON.stringify(postprocessScript)} ${JSON.stringify(tmpDocx)} ${JSON.stringify(tmpDocxStyled)}`, { timeout: 30_000 });
                 // Use styled version if post-processing succeeded
                 if (fs.existsSync(tmpDocxStyled)) {

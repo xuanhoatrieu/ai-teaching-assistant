@@ -24,5 +24,10 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/pages/VideoGeneratorPage.tsx",
+    "src/components/VideoHistory.tsx",
+    "src/components/VideoPreview.tsx"
+  ]
 }

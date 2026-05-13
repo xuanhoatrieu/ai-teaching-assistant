@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, IsNumber, IsBoolean } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class SlideContentDto {
@@ -33,6 +33,10 @@ export class SlideContentDto {
 export class GeneratePptxDto {
     @IsString()
     templateId: string;
+
+    @IsBoolean()
+    @IsOptional()
+    skipAudio?: boolean;
 }
 
 export class GeneratePptxRequestDto {

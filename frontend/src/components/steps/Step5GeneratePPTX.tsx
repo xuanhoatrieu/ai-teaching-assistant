@@ -44,6 +44,7 @@ export function Step5GeneratePPTX() {
     const [currentSlide, setCurrentSlide] = useState(0);
     const [totalSlides, setTotalSlides] = useState(0);
     const [pptxBlob, setPptxBlob] = useState<Blob | null>(null);
+    const [pptxNoAudioBlob, setPptxNoAudioBlob] = useState<Blob | null>(null);
     const [contentGenerated, setContentGenerated] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
     const shouldStopGenerating = useRef(false);
@@ -170,6 +171,37 @@ export function Step5GeneratePPTX() {
 
             const blob = await response.blob();
             setPptxBlob(blob);
+            setProgress(100);
+            setStatus('completed');
+        } catch (err: any) {
+            setStatus('error');
+            setError(err.message || 'Không thể tạo file PowerPoint');
+        }
+    }, [lessonId, selectedTemplate]);
+
+    const handleGeneratePptxNoAudio = useCallback(async () => {
+        setStatus('generating_pptx');
+        setProgress(90);
+        setError(null);
+
+        try {
+            const response = await fetch(`/api/lessons/${lessonId}/pptx/generate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
+                },
+                body: JSON.stringify({ templateId: selectedTemplate, skipAudio: true }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => null);
+                const errorMsg = errorData?.message || 'Không thể tạo file PPTX';
+                throw new Error(Array.isArray(errorMsg) ? errorMsg.join(', ') : errorMsg);
+            }
+
+            const blob = await response.blob();
+            setPptxNoAudioBlob(blob);
             setProgress(100);
             setStatus('completed');
         } catch (err: any) {
@@ -372,6 +404,19 @@ export function Step5GeneratePPTX() {
         }
     };
 
+    const handleDownloadNoAudio = () => {
+        if (pptxNoAudioBlob) {
+            const url = URL.createObjectURL(pptxNoAudioBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${lessonData?.title || 'presentation'}_no_audio.pptx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    };
+
     // Get selected template for preview
     const selectedTpl = templates.find(t => t.id === selectedTemplate);
 
@@ -465,12 +510,20 @@ export function Step5GeneratePPTX() {
                     </button>
 
                     {contentGenerated && (
-                        <button
-                            className="btn-secondary"
-                            onClick={pptxBlob ? handleDownload : handleGeneratePptx}
-                        >
-                            {pptxBlob ? '📥 Tải PPTX' : '📦 Tạo file PPTX'}
-                        </button>
+                        <>
+                            <button
+                                className="btn-secondary"
+                                onClick={pptxBlob ? handleDownload : handleGeneratePptx}
+                            >
+                                {pptxBlob ? '📥 Tải PPTX (có Audio)' : '📦 Tạo PPTX (có Audio)'}
+                            </button>
+                            <button
+                                className="btn-secondary"
+                                onClick={pptxNoAudioBlob ? handleDownloadNoAudio : handleGeneratePptxNoAudio}
+                            >
+                                {pptxNoAudioBlob ? '📥 Tải PPTX (không Audio)' : '📦 Tạo PPTX (không Audio)'}
+                            </button>
+                        </>
                     )}
                 </div>
             )}

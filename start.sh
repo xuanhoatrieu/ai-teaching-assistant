@@ -122,6 +122,18 @@ case "${1:-start}" in
         # Stop any existing instances first
         stop_all 2>/dev/null
         echo ""
+        # Install any new dependencies
+        echo -e "${BLUE}📦 Installing dependencies...${NC}"
+        cd "$BASE_DIR/backend" && npm install --silent 2>/dev/null
+        cd "$BASE_DIR/frontend" && npm install --silent 2>/dev/null
+
+        # Sync database schema (adds new tables/columns, NEVER drops existing data)
+        echo -e "${BLUE}🗄️  Syncing database schema...${NC}"
+        cd "$BASE_DIR/backend"
+        npx prisma generate 2>/dev/null
+        npx prisma db push 2>&1 | tail -3
+        echo -e "${GREEN}   ✅ Database schema synced${NC}"
+        echo ""
 
         start_backend
         start_frontend

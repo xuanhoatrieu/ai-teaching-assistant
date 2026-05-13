@@ -337,9 +337,10 @@ export class PptxService {
     async generatePptx(
         lessonId: string,
         templateId: string,
-        userId: string
+        userId: string,
+        skipAudio?: boolean
     ): Promise<Buffer> {
-        this.logger.log(`Generating PPTX for lesson ${lessonId} with template ${templateId}`);
+        this.logger.log(`Generating PPTX for lesson ${lessonId} with template ${templateId}${skipAudio ? ' (no audio)' : ''}`);
 
         // Get lesson with slides
         const lesson = await this.prisma.lesson.findUnique({
@@ -383,13 +384,16 @@ export class PptxService {
         // Build slide content for Python service
         // IMPORTANT: Use optimizedContentJson (AI-generated) if available, fallback to original content
         const slideContents: SlideContent[] = lesson.slides.map(slide => {
-            // Try Slide.audioUrl first (new), then SlideAudio table (legacy)
-            let audioUrl = slide.audioUrl;
-            let audioSource = 'Slide';
-            if (!audioUrl) {
-                const legacyAudio = slideAudios.find(a => a.slideIndex === slide.slideIndex);
-                audioUrl = legacyAudio?.audioUrl || null;
-                audioSource = legacyAudio?.audioUrl ? 'SlideAudio(legacy)' : 'none';
+            let audioUrl = null as string | null;
+            let audioSource = 'skipped';
+            if (!skipAudio) {
+                audioUrl = slide.audioUrl;
+                audioSource = 'Slide';
+                if (!audioUrl) {
+                    const legacyAudio = slideAudios.find(a => a.slideIndex === slide.slideIndex);
+                    audioUrl = legacyAudio?.audioUrl || null;
+                    audioSource = legacyAudio?.audioUrl ? 'SlideAudio(legacy)' : 'none';
+                }
             }
             const audioPath = audioUrl ? this.getLocalPath(audioUrl) : undefined;
             this.logger.log(`[PPTX] Slide ${slide.slideIndex}: audio=${audioSource}, audioUrl=${audioUrl || 'NULL'}, audioPath=${audioPath || 'NULL'}`);

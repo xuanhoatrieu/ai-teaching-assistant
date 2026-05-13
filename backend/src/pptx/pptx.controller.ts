@@ -185,7 +185,8 @@ export class PptxController {
         const buffer = await this.pptxService.generatePptx(
             lessonId,
             dto.templateId,
-            req.user.id
+            req.user.id,
+            dto.skipAudio
         );
 
         // Get lesson title for filename
