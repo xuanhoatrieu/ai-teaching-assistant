@@ -5,11 +5,13 @@
  * Uses upsert to safely add missing configs without overwriting existing data.
  */
 const { PrismaClient } = require('@prisma/client');
+const { PrismaPg } = require('@prisma/adapter-pg');
+const { Pool } = require('pg');
 
 async function seedConfigs() {
-  const prisma = new PrismaClient({
-    datasources: { db: { url: process.env.DATABASE_URL } },
-  });
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
 
   try {
     console.log('🔧 Seeding admin configs...');
@@ -54,6 +56,7 @@ async function seedConfigs() {
     // Don't crash the container if seed fails
   } finally {
     await prisma.$disconnect();
+    await pool.end();
   }
 }
 
