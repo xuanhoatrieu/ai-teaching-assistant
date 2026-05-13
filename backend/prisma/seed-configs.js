@@ -7,7 +7,9 @@
 const { PrismaClient } = require('@prisma/client');
 
 async function seedConfigs() {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({
+    datasources: { db: { url: process.env.DATABASE_URL } },
+  });
 
   try {
     console.log('🔧 Seeding admin configs...');
