@@ -1,6 +1,6 @@
 {
     "meta": {
-        "last_updated": "2026-05-13T17:25:00+07:00"
+        "last_updated": "2026-05-13T18:41:00+07:00"
     },
     "decisions": [
         {"decision": "CLIProxy as Priority 1, Gemini SDK as fallback", "reason": "CLIProxy provides free multi-model access (GPT, Claude, Gemini) via self-hosted proxy"},
@@ -74,7 +74,8 @@
         {"decision": "CLIProxy URL: http://152.67.112.145:8317 (direct IP, not domain)", "reason": "Domain cliproxy.hoclieu.id.vn was outdated. Direct IP is more reliable. Updated in .env, .env.example, docker-compose, migration SQL, seed-configs.js."},
         {"decision": "seed-configs.js (standalone JS) instead of prisma db seed", "reason": "prisma db seed requires ts-node in Docker production image. Standalone JS script with @prisma/client import runs directly with node."},
         {"decision": "ViTTS test connection: network error shows friendly message about VPS-only access", "reason": "ViTTS server (117.0.36.6:8888) only accessible from VPS network. Local dev will always get 'fetch failed'. Error message explains this instead of confusing admin."},
-        {"decision": "Tab reorder: Đề cương → Bài giảng → Video (default still opens Bài giảng)", "reason": "Syllabus-first workflow. Tab visual order changed but activeTab default remains 'lessons' for backward compatibility."}
+        {"decision": "Tab reorder: Đề cương → Bài giảng → Video (default still opens Bài giảng)", "reason": "Syllabus-first workflow. Tab visual order changed but activeTab default remains 'lessons' for backward compatibility."},
+        {"decision": "PrismaClient init in standalone JS script (Prisma 7.x)", "reason": "Prisma 7.x removed 'datasources' option. Standalone scripts (like seed-configs.js) MUST use the adapter pattern: const pool = new Pool({ connectionString }); const adapter = new PrismaPg(pool); const prisma = new PrismaClient({ adapter }); And must pool.end() in finally block to prevent hanging."}
     ],
     "patterns": [
         "NestJS module structure with controller/service/module",

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
+import { UsefulLinksAdmin } from '../../components/admin/UsefulLinksAdmin';
 import './AdminPage.css';
 
 interface SettingsData {
@@ -729,6 +730,9 @@ export function SettingsPage() {
                     {isSaving ? 'Saving...' : 'Save Settings'}
                 </button>
             </div>
+            
+            {/* Useful Links Admin Section */}
+            <UsefulLinksAdmin />
         </div>
     );
 }

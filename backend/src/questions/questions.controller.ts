@@ -10,12 +10,14 @@ import {
     UseGuards,
     Res,
     Req,
+    Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InteractiveQuestionService } from './interactive-question.service';
 import { ReviewQuestionService } from './review-question.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { GenerationJobService } from '../generation-job/generation-job.service';
 import * as ExcelJS from 'exceljs';
 import { buildMoodleXml } from './moodle-xml.helper';
 
@@ -55,10 +57,13 @@ interface GenerateReviewQuestionsDto {
 @Controller('lessons/:lessonId')
 @UseGuards(JwtAuthGuard)
 export class QuestionsController {
+    private readonly logger = new Logger(QuestionsController.name);
+
     constructor(
         private readonly interactiveQuestionService: InteractiveQuestionService,
         private readonly reviewQuestionService: ReviewQuestionService,
         private readonly prisma: PrismaService,
+        private readonly jobService: GenerationJobService,
     ) { }
 
     // ==================== INTERACTIVE QUESTIONS ====================
@@ -153,7 +158,7 @@ export class QuestionsController {
 
     /**
      * POST /lessons/:lessonId/review-questions/generate
-     * Deletes existing questions and creates new ones
+     * Returns jobId immediately, processes in background.
      */
     @Post('review-questions/generate')
     async generateReviewQuestions(
@@ -162,25 +167,52 @@ export class QuestionsController {
         @Req() req: any,
     ) {
         const userId = req.user.id;
-        const slidesContent = await this.getSlidesContent(lessonId);
-        const lessonNumber = await this.getLessonNumber(lessonId);
+        const levelCounts = {
+            level1: dto.level1 || 4,
+            level2: dto.level2 || 3,
+            level3: dto.level3 || 3,
+        };
 
-        return this.reviewQuestionService.generateFromSlides(
+        // Create job record in DB
+        const job = await this.jobService.createJob({
+            type: 'review-questions',
             lessonId,
-            lessonNumber,
-            slidesContent,
             userId,
-            {
-                level1: dto.level1 || 4,
-                level2: dto.level2 || 3,
-                level3: dto.level3 || 3,
-            },
-        );
+            total: levelCounts.level1 + levelCounts.level2 + levelCounts.level3,
+            payload: levelCounts,
+        });
+
+        // Kick off background processing
+        setImmediate(async () => {
+            try {
+                await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị tạo câu hỏi ôn tập...');
+
+                const slidesContent = await this.getSlidesContent(lessonId);
+                const lessonNumber = await this.getLessonNumber(lessonId);
+
+                await this.jobService.updateProgress(job.id, 10, `Đang tạo ${job.total} câu hỏi ôn tập...`);
+
+                await this.reviewQuestionService.generateFromSlides(
+                    lessonId,
+                    lessonNumber,
+                    slidesContent,
+                    userId,
+                    levelCounts,
+                );
+
+                await this.jobService.completeJob(job.id);
+            } catch (error) {
+                this.logger.error(`[generateReviewQuestions] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
     }
 
     /**
      * POST /lessons/:lessonId/review-questions/append
-     * Keeps existing questions and adds new ones
+     * Returns jobId immediately, processes in background.
      */
     @Post('review-questions/append')
     async appendReviewQuestions(
@@ -189,24 +221,47 @@ export class QuestionsController {
         @Req() req: any,
     ) {
         const userId = req.user.id;
-        const slidesContent = await this.getSlidesContent(lessonId);
-        const lessonNumber = await this.getLessonNumber(lessonId);
+        const levelCounts = {
+            level1: dto.level1 || 4,
+            level2: dto.level2 || 3,
+            level3: dto.level3 || 3,
+        };
 
-        const newQuestions = await this.reviewQuestionService.appendFromSlides(
+        // Create job record in DB
+        const job = await this.jobService.createJob({
+            type: 'append-questions',
             lessonId,
-            lessonNumber,
-            slidesContent,
             userId,
-            {
-                level1: dto.level1 || 4,
-                level2: dto.level2 || 3,
-                level3: dto.level3 || 3,
-            },
-        );
+            total: levelCounts.level1 + levelCounts.level2 + levelCounts.level3,
+            payload: levelCounts,
+        });
 
-        // Return all questions (existing + new)
-        const allQuestions = await this.reviewQuestionService.getQuestions(lessonId);
-        return allQuestions;
+        // Kick off background processing
+        setImmediate(async () => {
+            try {
+                await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị thêm câu hỏi...');
+
+                const slidesContent = await this.getSlidesContent(lessonId);
+                const lessonNumber = await this.getLessonNumber(lessonId);
+
+                await this.jobService.updateProgress(job.id, 10, `Đang tạo thêm ${job.total} câu hỏi...`);
+
+                await this.reviewQuestionService.appendFromSlides(
+                    lessonId,
+                    lessonNumber,
+                    slidesContent,
+                    userId,
+                    levelCounts,
+                );
+
+                await this.jobService.completeJob(job.id);
+            } catch (error) {
+                this.logger.error(`[appendReviewQuestions] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
     }
 
     /**

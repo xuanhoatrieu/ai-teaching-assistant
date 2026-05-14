@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api, API_BASE_URL } from '../../lib/api';
+import { useJobPolling } from '../../hooks/useJobPolling';
 import { TTSSelector } from '../TTSSelector';
 import { ModelSelector } from '../ModelSelector';
 import '../ModelSelector.css';
@@ -121,76 +122,66 @@ export function Step4GenerateAudio() {
     };
 
     // ═══════════════════════════════════════════════════════════════
-    // SPEAKER NOTES GENERATION (NEW)
+    // SPEAKER NOTES GENERATION (ASYNC JOB)
     // ═══════════════════════════════════════════════════════════════
+    const reloadAfterJob = async () => {
+        const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
+        if (slidesRes.data) setSlideContents(slidesRes.data);
+        const audioRes = await api.get(`/lessons/${lessonId}/slide-audios`);
+        if (audioRes.data?.length > 0) setSlideAudios(normalizeSlideAudios(audioRes.data));
+    };
+
+    const notesJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingNotes(false);
+            await reloadAfterJob();
+        },
+        onError: (msg) => {
+            setIsGeneratingNotes(false);
+            alert(`Lỗi khi tạo lời giảng: ${msg}`);
+        },
+    });
+
+    const optimizeJob = useJobPolling({
+        onComplete: async () => {
+            setIsOptimizingNotes(false);
+            await reloadAfterJob();
+        },
+        onError: (msg) => {
+            setIsOptimizingNotes(false);
+            alert(`Lỗi khi tối ưu lời giảng: ${msg}`);
+        },
+    });
+
     const generateSpeakerNotes = async () => {
         try {
             setIsGeneratingNotes(true);
             const response = await api.post(
                 `/lessons/${lessonId}/slide-audios/generate-speaker-notes`,
-                {},
-                { timeout: 0 }, // no timeout — AI generation for many slides can be slow
             );
-            setSlideAudios(normalizeSlideAudios(response.data));
-            // Also reload slide contents to get updated speakerNote fields
-            const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
-            if (slidesRes.data) setSlideContents(slidesRes.data);
+            if (response.data?.jobId) {
+                notesJob.startPolling(response.data.jobId);
+            }
         } catch (error: any) {
-            console.error('Error generating speaker notes:', error);
-            // Timeout or network error — data may have been saved in DB
-            // Reload to check before showing error
-            try {
-                const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
-                if (slidesRes.data) setSlideContents(slidesRes.data);
-                const audioRes = await api.get(`/lessons/${lessonId}/slide-audios`);
-                if (audioRes.data?.length > 0) {
-                    setSlideAudios(normalizeSlideAudios(audioRes.data));
-                    const hasNotes = audioRes.data.some((sa: any) => sa.speakerNote?.trim());
-                    if (hasNotes) {
-                        // Data was saved! Just the response didn't make it back
-                        alert('⚠️ Kết nối bị gián đoạn nhưng lời giảng đã được tạo thành công! Dữ liệu đã được tải lại.');
-                        return;
-                    }
-                }
-            } catch { /* reload failed, show original error */ }
-            alert('Lỗi khi tạo lời giảng. Vui lòng thử lại.');
-        } finally {
+            console.error('Error starting speaker notes generation:', error);
             setIsGeneratingNotes(false);
+            alert('Lỗi khi bắt đầu tạo lời giảng. Vui lòng thử lại.');
         }
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    // OPTIMIZE & QA SPEAKER NOTES (STEP 2)
-    // ═══════════════════════════════════════════════════════════════
     const optimizeSpeakerNotes = async () => {
         try {
             setIsOptimizingNotes(true);
             const response = await api.post(
                 `/lessons/${lessonId}/slide-audios/optimize-speaker-notes`,
-                {},
-                { timeout: 0 }, // no timeout — AI optimization for many slides can be slow
             );
-            setSlideAudios(normalizeSlideAudios(response.data));
-            // Also reload slide contents to get updated speakerNote fields
-            const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
-            if (slidesRes.data) setSlideContents(slidesRes.data);
+            if (response.data?.jobId) {
+                optimizeJob.startPolling(response.data.jobId);
+            }
         } catch (error: any) {
-            console.error('Error optimizing speaker notes:', error);
-            // Timeout or network error — data may have been saved in DB
-            try {
-                const audioRes = await api.get(`/lessons/${lessonId}/slide-audios`);
-                if (audioRes.data?.length > 0) {
-                    setSlideAudios(normalizeSlideAudios(audioRes.data));
-                    const slidesRes = await api.get(`/lessons/${lessonId}/slides`);
-                    if (slidesRes.data) setSlideContents(slidesRes.data);
-                    // Check if optimization actually happened (notes updated recently)
-                    alert('⚠️ Kết nối bị gián đoạn nhưng dữ liệu đã được tải lại. Vui lòng kiểm tra lời giảng bên dưới.');
-                    return;
-                }
-            } catch { /* reload failed, show original error */ }
-            alert('Lỗi khi tối ưu lời giảng. Vui lòng thử lại.');
-        } finally {
+            console.error('Error starting speaker notes optimization:', error);
             setIsOptimizingNotes(false);
+            alert('Lỗi khi bắt đầu tối ưu lời giảng. Vui lòng thử lại.');
         }
     };
 
@@ -529,7 +520,7 @@ export function Step4GenerateAudio() {
                         disabled={isGeneratingNotes}
                     >
                         {isGeneratingNotes ? (
-                            <><span className="spinner"></span> Đang tạo lời giảng...</>
+                            <><span className="spinner"></span> {notesJob.jobStatus?.message || 'Đang tạo lời giảng...'}</>
                         ) : hasSpeakerNotes ? (
                             '🔄 Tạo lại Lời Giảng'
                         ) : (
@@ -544,7 +535,7 @@ export function Step4GenerateAudio() {
                         title={!hasSpeakerNotes ? 'Tạo lời giảng trước' : 'Kiểm duyệt + Rửa ngôn ngữ + Tối ưu TTS'}
                     >
                         {isOptimizingNotes ? (
-                            <><span className="spinner"></span> Đang tối ưu...</>
+                            <><span className="spinner"></span> {optimizeJob.jobStatus?.message || 'Đang tối ưu...'}</>
                         ) : (
                             '✅ Tối Ưu & Kiểm Duyệt'
                         )}

@@ -607,3 +607,41 @@ model SyllabusLesson {
 
   @@map("syllabus_lessons")
 }
+
+// ==================== ASYNC GENERATION JOBS ====================
+
+model GenerationJob {
+  id        String   @id @default(uuid())
+  type      String   // review-questions | speaker-notes | optimize-notes | append-questions
+  lessonId  String   @map("lesson_id")
+  userId    String   @map("user_id")
+  status    String   @default("pending") // pending | processing | done | error
+  progress  Int      @default(0)         // 0-100
+  total     Int      @default(0)         // total items to process
+  message   String?                      // progress message for UI
+  result    Json?                        // optional result data
+  error     String?  @db.Text            // error message if failed
+  payload   Json?                        // input params (levelCounts, etc.)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([lessonId])
+  @@index([status])
+  @@map("generation_jobs")
+}
+
+// ==================== USEFUL TOOLS LINKS ====================
+
+model UsefulLink {
+  id          String   @id @default(uuid())
+  title       String
+  url         String
+  icon        String   @default("🔗")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("useful_links")
+}

@@ -1,70 +1,93 @@
-usage: manimgl [-h] [-w] [-s] [-l] [-m] [--hd] [--uhd] [-f] [-p] [-i] [-t]
-               [--vcodec VCODEC] [--pix_fmt PIX_FMT] [-q] [-a] [-o] [--finder]
-               [--subdivide] [--file_name FILE_NAME]
-               [-n START_AT_ANIMATION_NUMBER] [-e LINE_NUMBER] [-r RESOLUTION]
-               [--fps FPS] [-c COLOR] [--leave_progress_bars]
-               [--show_animation_progress] [--prerun] [--video_dir VIDEO_DIR]
-               [--config_file CONFIG_FILE] [-v] [--log-level LOG_LEVEL]
-               [--clear-cache] [--autoreload]
-               [file] [scene_names ...]
+Usage: graphify <command>
 
-positional arguments:
-  file                  Path to file holding the python code for the scene
-  scene_names           Name of the Scene class you want to see
+Commands:
+  install [--platform P]  copy skill to platform config dir (claude|windows|codex|opencode|aider|claw|droid|trae|trae-cn|gemini|cursor|antigravity|hermes|kiro|pi)
+  path "A" "B"            shortest path between two nodes in graph.json
+    --graph <path>          path to graph.json (default graphify-out/graph.json)
+  explain "X"             plain-language explanation of a node and its neighbors
+    --graph <path>          path to graph.json (default graphify-out/graph.json)
+  clone <github-url>      clone a GitHub repo locally and print its path for /graphify
+  merge-driver <base> <current> <other>  git merge driver: union-merge two graph.json files (set up via hook install)
+  merge-graphs <g1> <g2>  merge two or more graph.json files into one cross-repo graph
+    --out <path>            output path (default: graphify-out/merged-graph.json)
+    --branch <branch>       checkout a specific branch (default: repo default)
+    --out <dir>             clone to a custom directory (default: ~/.graphify/repos/<owner>/<repo>)
+  add <url>               fetch a URL and save it to ./raw, then update the graph
+    --author "Name"         tag the author of the content
+    --contributor "Name"    tag who added it to the corpus
+    --dir <path>            target directory (default: ./raw)
+  watch <path>            watch a folder and rebuild the graph on code changes
+  update <path>           re-extract code files and update the graph (no LLM needed)
+    --force                 overwrite graph.json even if the rebuild has fewer nodes
+                            (also: GRAPHIFY_FORCE=1 env var; use after refactors that delete code)
+  cluster-only <path>     rerun clustering on an existing graph.json and regenerate report
+    --no-viz                skip graph.html generation (useful for >5000 node graphs / CI)
+    --graph <path>          path to graph.json (default <path>/graphify-out/graph.json)
+  query "<question>"       BFS traversal of graph.json for a question
+    --dfs                   use depth-first instead of breadth-first
+    --context C             explicit edge-context filter (repeatable)
+    --budget N              cap output at N tokens (default 2000)
+    --graph <path>          path to graph.json (default graphify-out/graph.json)
+  save-result             save a Q&A result to graphify-out/memory/ for graph feedback loop
+    --question Q            the question asked
+    --answer A              the answer to save
+    --type T                query type: query|path_query|explain (default: query)
+    --nodes N1 N2 ...       source node labels cited in the answer
+    --memory-dir DIR        memory directory (default: graphify-out/memory)
+  check-update <path>     check needs_update flag and notify if semantic re-extraction is pending (cron-safe)
+  tree                    emit a D3 v7 collapsible-tree HTML for graph.json
+    --graph PATH            path to graph.json (default graphify-out/graph.json)
+    --output HTML           output path (default graphify-out/GRAPH_TREE.html)
+    --root PATH             filesystem root for the hierarchy
+    --max-children N        cap children per node (default 200)
+    --top-k-edges N         per-symbol outbound edges in inspector (default 12)
+    --label NAME            project label in header
+  extract <path>          headless full extraction (AST + semantic LLM) for CI/scripts
+    --backend B             kimi|claude (default: whichever API key is set)
+    --model <name>          override the backend's default model
+    --out DIR               output dir (default: <path>); writes <DIR>/graphify-out/
+    --no-cluster            skip clustering, write raw extraction only
+    --global                also merge the resulting graph into the global graph
+    --as <tag>              repo tag for --global (default: target directory name)
+  global add <graph.json>  add/update a project graph in the global graph (~/.graphify/global-graph.json)
+    --as <tag>               repo tag (default: parent directory name)
+  global remove <tag>      remove a repo's nodes from the global graph
+  global list              list repos in the global graph
+  global path              print path to the global graph file
+  benchmark [graph.json]  measure token reduction vs naive full-corpus approach
+  hook install            install post-commit/post-checkout git hooks (all platforms)
+  hook uninstall          remove git hooks
+  hook status             check if git hooks are installed
+  gemini install          write GEMINI.md section + BeforeTool hook (Gemini CLI)
+  gemini uninstall        remove GEMINI.md section + BeforeTool hook
+  cursor install          write .cursor/rules/graphify.mdc (Cursor)
+  cursor uninstall        remove .cursor/rules/graphify.mdc
+  claude install          write graphify section to CLAUDE.md + PreToolUse hook (Claude Code)
+  claude uninstall        remove graphify section from CLAUDE.md + PreToolUse hook
+  codex install           write graphify section to AGENTS.md (Codex)
+  codex uninstall         remove graphify section from AGENTS.md
+  opencode install        write graphify section to AGENTS.md + tool.execute.before plugin (OpenCode)
+  opencode uninstall      remove graphify section from AGENTS.md + plugin
+  aider install           write graphify section to AGENTS.md (Aider)
+  aider uninstall         remove graphify section from AGENTS.md
+  copilot install         copy graphify skill to ~/.copilot/skills (GitHub Copilot CLI)
+  copilot uninstall       remove graphify skill from ~/.copilot/skills
+  vscode install          configure VS Code Copilot Chat (skill + .github/copilot-instructions.md)
+  vscode uninstall        remove VS Code Copilot Chat configuration
+  claw install            write graphify section to AGENTS.md (OpenClaw)
+  claw uninstall          remove graphify section from AGENTS.md
+  droid install           write graphify section to AGENTS.md (Factory Droid)
+  droid uninstall        remove graphify section from AGENTS.md
+  trae install            write graphify section to AGENTS.md (Trae)
+  trae uninstall         remove graphify section from AGENTS.md
+  trae-cn install         write graphify section to AGENTS.md (Trae CN)
+  trae-cn uninstall      remove graphify section from AGENTS.md
+  antigravity install     write .agent/rules + .agent/workflows + skill (Google Antigravity)
+  antigravity uninstall   remove .agent/rules, .agent/workflows, and skill
+  hermes install          write skill to ~/.hermes/skills/graphify/ (Hermes)
+  hermes uninstall        remove skill from ~/.hermes/skills/graphify/
+  kiro install            write skill to .kiro/skills/graphify/ + steering file (Kiro IDE/CLI)
+  kiro uninstall          remove skill + steering file
+  pi install              write skill to ~/.pi/agent/skills/graphify/ (Pi coding agent)
+  pi uninstall            remove skill from ~/.pi/agent/skills/graphify/
 
-options:
-  -h, --help            show this help message and exit
-  -w, --write_file      Render the scene as a movie file
-  -s, --skip_animations
-                        Save the last frame
-  -l, --low_quality     Render at 480p
-  -m, --medium_quality  Render at 720p
-  --hd                  Render at a 1080p
-  --uhd                 Render at a 4k
-  -f, --full_screen     Show window in full screen
-  -p, --presenter_mode  Scene will stay paused during wait calls until space
-                        bar or right arrow is hit, like a slide show
-  -i, --gif             Save the video as gif
-  -t, --transparent     Render to a movie file with an alpha channel
-  --vcodec VCODEC       Video codec to use with ffmpeg
-  --pix_fmt PIX_FMT     Pixel format to use for the output of ffmpeg, defaults
-                        to `yuv420p`
-  -q, --quiet
-  -a, --write_all       Write all the scenes from a file
-  -o, --open            Automatically open the saved file once its done
-  --finder              Show the output file in finder
-  --subdivide           Divide the output animation into individual movie
-                        files for each animation
-  --file_name FILE_NAME
-                        Name for the movie or image file
-  -n, --start_at_animation_number START_AT_ANIMATION_NUMBER
-                        Start rendering not from the first animation, but from
-                        another, specified by its index. If you pass in two
-                        comma separated values, e.g. "3,6", it will end the
-                        rendering at the second value
-  -e, --embed LINE_NUMBER
-                        Adds a breakpoint at the inputted file dropping into
-                        an interactive iPython session at that point of the
-                        code.
-  -r, --resolution RESOLUTION
-                        Resolution, passed as "WxH", e.g. "1920x1080"
-  --fps FPS             Frame rate, as an integer
-  -c, --color COLOR     Background color
-  --leave_progress_bars
-                        Leave progress bars displayed in terminal
-  --show_animation_progress
-                        Show progress bar for each animation
-  --prerun              Calculate total framecount, to display in a progress
-                        bar, by doing an initial run of the scene which skips
-                        animations.
-  --video_dir VIDEO_DIR
-                        Directory to write video
-  --config_file CONFIG_FILE
-                        Path to the custom configuration file
-  -v, --version         Display the version of manimgl
-  --log-level LOG_LEVEL
-                        Level of messages to Display, can be DEBUG / INFO /
-                        WARNING / ERROR / CRITICAL
-  --clear-cache         Erase the cache used for Tex and Text Mobjects
-  --autoreload          Automatically reload Python modules to pick up code
-                        changes across different files

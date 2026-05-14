@@ -1,6 +1,16 @@
+import { useState, useEffect, useRef } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { api } from '../lib/api';
 import './UserLayout.css';
+
+interface UsefulLink {
+    id: string;
+    title: string;
+    url: string;
+    icon: string;
+    description: string | null;
+}
 
 const menuItems = [
     { path: '/', label: 'Subjects', icon: '📚' },
@@ -11,6 +21,31 @@ const menuItems = [
 export function UserLayout() {
     const { user, logout } = useAuth();
     const location = useLocation();
+    const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const fetchLinks = async () => {
+            try {
+                const res = await api.get('/useful-links');
+                setUsefulLinks(res.data || []);
+            } catch (err) {
+                console.error('Failed to load useful links', err);
+            }
+        };
+        fetchLinks();
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     return (
         <div className="user-layout">
@@ -28,6 +63,38 @@ export function UserLayout() {
                                 {item.label}
                             </Link>
                         ))}
+                        
+                        {usefulLinks.length > 0 && (
+                            <div className="nav-dropdown" ref={dropdownRef}>
+                                <button 
+                                    className={`nav-link dropdown-toggle ${isDropdownOpen ? 'open' : ''}`}
+                                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                >
+                                    <span>🧰</span>
+                                    Công cụ
+                                    <span className="dropdown-arrow">▼</span>
+                                </button>
+                                {isDropdownOpen && (
+                                    <div className="dropdown-menu">
+                                        {usefulLinks.map(link => (
+                                            <a 
+                                                key={link.id} 
+                                                href={link.url} 
+                                                target="_blank" 
+                                                rel="noopener noreferrer"
+                                                className="dropdown-item"
+                                            >
+                                                <span className="item-icon">{link.icon}</span>
+                                                <div className="item-content">
+                                                    <span className="item-title">{link.title}</span>
+                                                    {link.description && <span className="item-desc">{link.description}</span>}
+                                                </div>
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </nav>
                 </div>
 

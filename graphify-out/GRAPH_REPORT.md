@@ -1,16 +1,16 @@
-# Graph Report - ai-teaching-assistant  (2026-05-10)
+# Graph Report - ai-teaching-assistant  (2026-05-14)
 
 ## Corpus Check
-- 818 files · ~15,361,765 words
+- 831 files · ~15,566,678 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 26458 nodes · 79325 edges · 945 communities (604 shown, 341 thin omitted)
-- Extraction: 63% EXTRACTED · 37% INFERRED · 0% AMBIGUOUS · INFERRED: 29708 edges (avg confidence: 0.75)
+- 26554 nodes · 79433 edges · 947 communities (605 shown, 342 thin omitted)
+- Extraction: 63% EXTRACTED · 37% INFERRED · 0% AMBIGUOUS · INFERRED: 29709 edges (avg confidence: 0.75)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `fcaebef4`
+- Built from commit: `de091ada`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -483,7 +483,6 @@
 - [[_COMMUNITY_Community 465|Community 465]]
 - [[_COMMUNITY_Community 466|Community 466]]
 - [[_COMMUNITY_Community 467|Community 467]]
-- [[_COMMUNITY_Community 468|Community 468]]
 - [[_COMMUNITY_Community 469|Community 469]]
 - [[_COMMUNITY_Community 470|Community 470]]
 - [[_COMMUNITY_Community 471|Community 471]]
@@ -497,6 +496,7 @@
 - [[_COMMUNITY_Community 479|Community 479]]
 - [[_COMMUNITY_Community 480|Community 480]]
 - [[_COMMUNITY_Community 481|Community 481]]
+- [[_COMMUNITY_Community 482|Community 482]]
 - [[_COMMUNITY_Community 483|Community 483]]
 - [[_COMMUNITY_Community 484|Community 484]]
 - [[_COMMUNITY_Community 485|Community 485]]
@@ -577,12 +577,12 @@
 - [[_COMMUNITY_Community 560|Community 560]]
 - [[_COMMUNITY_Community 561|Community 561]]
 - [[_COMMUNITY_Community 562|Community 562]]
-- [[_COMMUNITY_Community 563|Community 563]]
 - [[_COMMUNITY_Community 564|Community 564]]
 - [[_COMMUNITY_Community 565|Community 565]]
 - [[_COMMUNITY_Community 566|Community 566]]
 - [[_COMMUNITY_Community 567|Community 567]]
 - [[_COMMUNITY_Community 568|Community 568]]
+- [[_COMMUNITY_Community 569|Community 569]]
 - [[_COMMUNITY_Community 570|Community 570]]
 - [[_COMMUNITY_Community 571|Community 571]]
 - [[_COMMUNITY_Community 572|Community 572]]
@@ -612,7 +612,6 @@
 - [[_COMMUNITY_Community 596|Community 596]]
 - [[_COMMUNITY_Community 597|Community 597]]
 - [[_COMMUNITY_Community 598|Community 598]]
-- [[_COMMUNITY_Community 599|Community 599]]
 - [[_COMMUNITY_Community 600|Community 600]]
 - [[_COMMUNITY_Community 601|Community 601]]
 - [[_COMMUNITY_Community 602|Community 602]]
@@ -621,9 +620,9 @@
 - [[_COMMUNITY_Community 605|Community 605]]
 - [[_COMMUNITY_Community 606|Community 606]]
 - [[_COMMUNITY_Community 607|Community 607]]
+- [[_COMMUNITY_Community 608|Community 608]]
 - [[_COMMUNITY_Community 609|Community 609]]
 - [[_COMMUNITY_Community 610|Community 610]]
-- [[_COMMUNITY_Community 611|Community 611]]
 - [[_COMMUNITY_Community 612|Community 612]]
 - [[_COMMUNITY_Community 613|Community 613]]
 - [[_COMMUNITY_Community 614|Community 614]]
@@ -722,7 +721,6 @@
 - [[_COMMUNITY_Community 707|Community 707]]
 - [[_COMMUNITY_Community 708|Community 708]]
 - [[_COMMUNITY_Community 709|Community 709]]
-- [[_COMMUNITY_Community 710|Community 710]]
 - [[_COMMUNITY_Community 711|Community 711]]
 - [[_COMMUNITY_Community 712|Community 712]]
 - [[_COMMUNITY_Community 713|Community 713]]
@@ -752,9 +750,9 @@
 - [[_COMMUNITY_Community 737|Community 737]]
 - [[_COMMUNITY_Community 738|Community 738]]
 - [[_COMMUNITY_Community 739|Community 739]]
+- [[_COMMUNITY_Community 740|Community 740]]
 - [[_COMMUNITY_Community 741|Community 741]]
 - [[_COMMUNITY_Community 742|Community 742]]
-- [[_COMMUNITY_Community 743|Community 743]]
 - [[_COMMUNITY_Community 744|Community 744]]
 - [[_COMMUNITY_Community 745|Community 745]]
 - [[_COMMUNITY_Community 746|Community 746]]
@@ -792,7 +790,7 @@
 - [[_COMMUNITY_Community 779|Community 779]]
 - [[_COMMUNITY_Community 780|Community 780]]
 - [[_COMMUNITY_Community 782|Community 782]]
-- [[_COMMUNITY_Community 784|Community 784]]
+- [[_COMMUNITY_Community 783|Community 783]]
 - [[_COMMUNITY_Community 785|Community 785]]
 - [[_COMMUNITY_Community 786|Community 786]]
 - [[_COMMUNITY_Community 787|Community 787]]
@@ -801,31 +799,29 @@
 - [[_COMMUNITY_Community 790|Community 790]]
 - [[_COMMUNITY_Community 791|Community 791]]
 - [[_COMMUNITY_Community 792|Community 792]]
+- [[_COMMUNITY_Community 793|Community 793]]
 - [[_COMMUNITY_Community 794|Community 794]]
 - [[_COMMUNITY_Community 795|Community 795]]
 - [[_COMMUNITY_Community 796|Community 796]]
-- [[_COMMUNITY_Community 797|Community 797]]
 - [[_COMMUNITY_Community 798|Community 798]]
 - [[_COMMUNITY_Community 799|Community 799]]
+- [[_COMMUNITY_Community 800|Community 800]]
 - [[_COMMUNITY_Community 801|Community 801]]
 - [[_COMMUNITY_Community 802|Community 802]]
 - [[_COMMUNITY_Community 803|Community 803]]
-- [[_COMMUNITY_Community 804|Community 804]]
-- [[_COMMUNITY_Community 805|Community 805]]
 - [[_COMMUNITY_Community 806|Community 806]]
+- [[_COMMUNITY_Community 807|Community 807]]
+- [[_COMMUNITY_Community 808|Community 808]]
+- [[_COMMUNITY_Community 809|Community 809]]
+- [[_COMMUNITY_Community 810|Community 810]]
+- [[_COMMUNITY_Community 811|Community 811]]
+- [[_COMMUNITY_Community 812|Community 812]]
+- [[_COMMUNITY_Community 813|Community 813]]
 - [[_COMMUNITY_Community 814|Community 814]]
-- [[_COMMUNITY_Community 815|Community 815]]
-- [[_COMMUNITY_Community 816|Community 816]]
-- [[_COMMUNITY_Community 817|Community 817]]
-- [[_COMMUNITY_Community 819|Community 819]]
-- [[_COMMUNITY_Community 821|Community 821]]
 - [[_COMMUNITY_Community 822|Community 822]]
 - [[_COMMUNITY_Community 823|Community 823]]
 - [[_COMMUNITY_Community 824|Community 824]]
-- [[_COMMUNITY_Community 825|Community 825]]
-- [[_COMMUNITY_Community 826|Community 826]]
 - [[_COMMUNITY_Community 827|Community 827]]
-- [[_COMMUNITY_Community 828|Community 828]]
 - [[_COMMUNITY_Community 829|Community 829]]
 - [[_COMMUNITY_Community 830|Community 830]]
 - [[_COMMUNITY_Community 831|Community 831]]
@@ -839,6 +835,7 @@
 - [[_COMMUNITY_Community 839|Community 839]]
 - [[_COMMUNITY_Community 840|Community 840]]
 - [[_COMMUNITY_Community 841|Community 841]]
+- [[_COMMUNITY_Community 842|Community 842]]
 - [[_COMMUNITY_Community 843|Community 843]]
 - [[_COMMUNITY_Community 844|Community 844]]
 - [[_COMMUNITY_Community 845|Community 845]]
@@ -848,7 +845,6 @@
 - [[_COMMUNITY_Community 849|Community 849]]
 - [[_COMMUNITY_Community 850|Community 850]]
 - [[_COMMUNITY_Community 851|Community 851]]
-- [[_COMMUNITY_Community 852|Community 852]]
 - [[_COMMUNITY_Community 853|Community 853]]
 - [[_COMMUNITY_Community 854|Community 854]]
 - [[_COMMUNITY_Community 855|Community 855]]
@@ -856,6 +852,8 @@
 - [[_COMMUNITY_Community 857|Community 857]]
 - [[_COMMUNITY_Community 858|Community 858]]
 - [[_COMMUNITY_Community 859|Community 859]]
+- [[_COMMUNITY_Community 860|Community 860]]
+- [[_COMMUNITY_Community 861|Community 861]]
 - [[_COMMUNITY_Community 862|Community 862]]
 - [[_COMMUNITY_Community 863|Community 863]]
 - [[_COMMUNITY_Community 864|Community 864]]
@@ -864,26 +862,27 @@
 - [[_COMMUNITY_Community 867|Community 867]]
 - [[_COMMUNITY_Community 868|Community 868]]
 - [[_COMMUNITY_Community 869|Community 869]]
-- [[_COMMUNITY_Community 870|Community 870]]
-- [[_COMMUNITY_Community 871|Community 871]]
 - [[_COMMUNITY_Community 872|Community 872]]
 - [[_COMMUNITY_Community 873|Community 873]]
-- [[_COMMUNITY_Community 879|Community 879]]
-- [[_COMMUNITY_Community 880|Community 880]]
-- [[_COMMUNITY_Community 881|Community 881]]
-- [[_COMMUNITY_Community 908|Community 908]]
+- [[_COMMUNITY_Community 874|Community 874]]
+- [[_COMMUNITY_Community 875|Community 875]]
+- [[_COMMUNITY_Community 876|Community 876]]
+- [[_COMMUNITY_Community 882|Community 882]]
+- [[_COMMUNITY_Community 883|Community 883]]
+- [[_COMMUNITY_Community 884|Community 884]]
 - [[_COMMUNITY_Community 910|Community 910]]
-- [[_COMMUNITY_Community 911|Community 911]]
 - [[_COMMUNITY_Community 912|Community 912]]
 - [[_COMMUNITY_Community 913|Community 913]]
 - [[_COMMUNITY_Community 914|Community 914]]
+- [[_COMMUNITY_Community 915|Community 915]]
 - [[_COMMUNITY_Community 916|Community 916]]
-- [[_COMMUNITY_Community 917|Community 917]]
 - [[_COMMUNITY_Community 918|Community 918]]
+- [[_COMMUNITY_Community 919|Community 919]]
 - [[_COMMUNITY_Community 920|Community 920]]
 - [[_COMMUNITY_Community 922|Community 922]]
-- [[_COMMUNITY_Community 929|Community 929]]
-- [[_COMMUNITY_Community 930|Community 930]]
+- [[_COMMUNITY_Community 924|Community 924]]
+- [[_COMMUNITY_Community 931|Community 931]]
+- [[_COMMUNITY_Community 932|Community 932]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `OldTexText` - 2660 edges
@@ -909,2075 +908,2067 @@
 - `get_background()` --calls--> `FullScreenRectangle`  [INFERRED]
   3b1b-workspace/videos/_2020/hamming.py → 3b1b-workspace/manim/manimlib/mobject/frame.py
 
-## Communities (945 total, 341 thin omitted)
+## Communities (947 total, 342 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
-Nodes (83): interesting_problems(), ComplexNumberRotation, get_sender_and_receiver(), SenderReceiverDynamic, get_1d_equation(), get_2d_equation(), get_matrix_exponential(), get_figure() (+75 more)
+Nodes (50): get_1d_equation(), get_matrix_exponential(), GraphAndHistoryOfExponential, get_figure(), det_path_anim(), get_diag_rects(), get_overline(), get_tripple_underline() (+42 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.01
-Nodes (232): OldDodecahedron, Animation, prepare_animation(), AnimationGroup, LaggedStart, LaggedStartMap, Creates a list of triplets of the form         (anim, start_time, end_time), Succession (+224 more)
+Nodes (221): interesting_problems(), OldCube, OldDodecahedron, OldOctohedron, OldStars, AnimationGroup, LaggedStartMap, Creates a list of triplets of the form         (anim, start_time, end_time) (+213 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.01
-Nodes (41): IntegrationByParts, get_confetti_animations(), SchizophrenicNumbers, TransformingAreasXCoord, TransformingAreasYCoord, get_circle_drawing_terms(), PiTauDebate, WomanIcon (+33 more)
+Nodes (248): ClassWatching, EndScreen, KindWordsOnEoLA, HistoryOfOurPeople, AskHowItsImplemented, ButWhy, ComplainAboutParityCheckWeakness, ConflictingViewsOnXor (+240 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.01
-Nodes (261): BuildUpGaussian, AddingVariablesWithMGF, ConfusionAboutCGF, ConnectingArrow, CumulantsOfScaledSum, DefineCGF, DefineMGF, DirectMGFInterpretation (+253 more)
+Nodes (293): IntroduceDFT, GrowingToDoList, IntegrationByParts, MakeALotOfPiCreaturesHappy, PatreonLogin, PythagoreanTransformation, RandolphWatching, RandolphWatchingWithLaptop (+285 more)
 
 ### Community 4 - "Community 4"
 Cohesion: 0.01
-Nodes (195): ClassWatching, EndScreen, KindWordsOnEoLA, HistoryOfOurPeople, AskAboutHowItsSoLow, AskWhyItWorks, FailedPromises, MoreExamples (+187 more)
+Nodes (247): AddingVariablesWithMGF, AskAboutTheProof, ConfusionAboutCGF, ConnectingArrow, CumulantsOfScaledSum, DefineCGF, DefineMGF, DirectMGFInterpretation (+239 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.01
-Nodes (35): FiveRegionsFourEdgesEachGraph, BreakApartSum, SamplePointIn3d, get_baby_monster(), get_cube(), get_flip_icon(), get_monster(), get_permutation_arrows() (+27 more)
+Nodes (70): CrossingOneMillion, IntroduceTotientJargon, get_bit_string(), blink_monster(), get_baby_monster(), get_glassy_cube(), get_monster(), get_permutation_arrows() (+62 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.01
-Nodes (203): IntroduceDFT, GrowingToDoList, MakeALotOfPiCreaturesHappy, PatreonLogin, PatreonLogo, PythagoreanTransformation, RandolphWatching, RandolphWatchingWithLaptop (+195 more)
+Nodes (36): SchizophrenicNumbers, PonderOverOffCenterDiagram, ChangeTopic, get_covid_clipboard(), Cycles, FixedPoints, CorrectViewOfFarmersAndLibrarians, Farmer (+28 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.02
-Nodes (68): Announcements, AskAboutHigherDimensions, AskAboutLongerLists, AskWhy, BackAndForth, BrilliantGeometryQuiz, BrilliantScrollThroughCourses, BugOnASurface (+60 more)
+Cohesion: 0.01
+Nodes (36): BreakApartSum, EveryOutputPointHasAColor, get_cube(), get_flip_icon(), get_rot_icon(), get_snowflake(), get_c_dot_label(), MentionFatouSetsAndJuliaSets (+28 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.02
-Nodes (67): AddFraudulentLine, AnnounceDigitalSignatures, AskAboutTrustingWork, AskHowDigitalSignaturesArePossible, AskQuestion, AskWhatToAddToProtocol, BigDifferenceBetweenLDAndCryptocurrencies, BitcoinIsALedger (+59 more)
+Nodes (18): IntroduceBinaryCounting, ShowMultiplicationOfRealAndImaginaryExponentialParts, get_circle_drawing_terms(), GrowFromCenter, IntroScene, GeneralizeChainRule, ShoveXSquaredInSine, NextVideo (+10 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.02
-Nodes (30): Chessboard, Coin, CoinsOnBoard, FlipCoin, get_bit_string(), ImpossibleVariations, Key, string_to_bools() (+22 more)
+Nodes (73): AddAllTrianglesToABSquares, AddParallelLines, AddTriangleCopyToABSquares, CompletelyFillLargeSquare, DrawAllThreeSquares, DrawAllThreeSquaresWithMoreTriangles, DrawCSquareWithAllTraingles, DrawNakedCSqurae (+65 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.02
-Nodes (39): FadeInFromPoint, FadeOutToPoint, TwoByTwoGrid, get_blackbox_machine(), get_classical_computer_symbol(), get_key_icon(), get_quantum_computer_symbol(), AmbientStateVector (+31 more)
+Nodes (98): ColumnsToBasisVectors, AllXAxisVectorsAreEigenvectors, BasisVectorsAreEigenvectors, CanEigenvaluesBeNegative, CannotDoWithWithAllTransformations, ChangeToEigenBasis, CommonPattern, ContrastMatrixUnderstandingWithEigenvalue (+90 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.02
-Nodes (20): CrossingOneMillion, flat_project(), get_pre_shadow(), get_shadow(), TwoToOneCover, VFadeOut, ChangeDecimalToValue, ChangingDecimal (+12 more)
+Nodes (62): AddFraudulentLine, AnnounceDigitalSignatures, AskAboutTrustingWork, AskHowDigitalSignaturesArePossible, AskQuestion, AskWhatToAddToProtocol, BitcoinIsALedger, BobDoubtsBroadcastTransaction (+54 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.02
-Nodes (49): ExamplesOfNonlinearOneDimensionalTransforms, ExamplesOfNonlinearTwoDimensionalTransformations, TrickyExamplesOfNonlinearTwoDimensionalTransformations, IntroduceBase10, Given2DThinkComplex, AreYouPausingAndPondering, get_cramer_matrix(), The inputs matrix and output_vect should be Matrix mobjects (+41 more)
+Nodes (50): SideGigToFullTime, Outline, ReframeOnLattice, get_fourier_graph(), CleverProofExample, IntroScene, get_plusses_and_minuses(), get_prob_review_label() (+42 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.02
-Nodes (23): EaterWrapper, get_moon(), Spotlight, VideoWrapper, BeamSplitter, AskAboutOutside, AnimatedBoundary, TracedPath (+15 more)
+Nodes (25): ShowDerivativeAtExamplePoint, get_cramer_matrix(), LinearSystem, The inputs matrix and output_vect should be Matrix mobjects, SolvingASystemWithOrthonormalMatrix, RepeatedMultiplicationInAction, IntroducePolynomialSpace, DifferentConceptions (+17 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.02
-Nodes (31): SideGigToFullTime, Outline, ReframeOnLattice, CompareWaveEquations, ComputationalNetwork, PrimePiEPttern, PrimePiEPttern, CleverProofExample (+23 more)
+Nodes (42): get_organized_images(), layer_to_image_array(), AlternateNeuralNetworks, AskAboutLayers, AskAboutWhatEdgesAreDoing, BiasForInactiviyWords, BrainAndHow, BreakDownName (+34 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.04
-Nodes (102): AddJustOneNullSpaceVector, CircuitDiagram, ClockwiseCounterclockwise, ColumnsRepresentBasisVectors, ComplicatedSystem, DeclareNewTransformation, DefineColumnSpace, DefineRank (+94 more)
+Cohesion: 0.02
+Nodes (36): AccurateProductRule, AssociatePatternsWithScores, AssumeOrderDoesntMatter, BeforeCounting, BreakDownQuestionPatterns, ButWhatsTheAnswer, CompareTwoSituations, ComputeProbabilityOfOneRight (+28 more)
 
 ### Community 16 - "Community 16"
 Cohesion: 0.02
-Nodes (39): get_organized_images(), layer_to_image_array(), AlternateNeuralNetworks, AskAboutLayers, AskAboutWhatEdgesAreDoing, BiasForInactiviyWords, BrainAndHow, BreakDownName (+31 more)
+Nodes (94): AliceName, AlicesFaceAverage, AlicesInsights, AliceWords, AllPossibleOrientations, AmbientCubeTurningIntoNewShapes, AmbientCubeWithLabels, AmbientDodecahedronShadow (+86 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.02
-Nodes (88): ExampleMatrixMultiplication, MatrixVectorMechanicalMultiplication, MatrixVectorMultiplicationAbstract, AskAboutCommutativity, AskAssociativityQuestion, DeterminedByTwoBasisVectors, ExampleTransformation, ExplainWhyItsMatrixMultiplication (+80 more)
+Nodes (88): ExampleMatrixMultiplication, MatrixVectorMechanicalMultiplication, MatrixVectorMultiplicationAbstract, AskAboutCommutativity, DeterminedByTwoBasisVectors, ExampleTransformation, ExplainWhyItsMatrixMultiplication, ExplanationTrumpsProof (+80 more)
 
 ### Community 18 - "Community 18"
 Cohesion: 0.02
-Nodes (90): AliceName, AlicesFaceAverage, AlicesInsights, AliceWords, AllPossibleOrientations, AmbientCubeTurningIntoNewShapes, AmbientCubeWithLabels, AmbientDodecahedronShadow (+82 more)
+Nodes (23): ExamplesOfNonlinearOneDimensionalTransforms, ExamplesOfNonlinearTwoDimensionalTransformations, TrickyExamplesOfNonlinearTwoDimensionalTransformations, IntroduceBase10, EndOfGeometryProofiness, SpherePatronThanks, AskAboutTurbulence, ShowNavierStokesEquations (+15 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.02
-Nodes (59): Arrow, PremiseOfMLWithText, SimpleAutogregression, AdjustingTheMachine, AskAboutAttention, BadChatBot, ChatbotFeedback, ContrastWithEarlierFrame (+51 more)
+Cohesion: 0.03
+Nodes (37): focus_scan_anim_lines(), FullExampleWithNewEnd, get_bit_grid(), get_bit_grid_boxes(), get_bit_mob_value(), get_bit_n_subgroup(), get_bit_n_sublist(), get_grid_position_labels() (+29 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.03
-Nodes (31): AreaIsDerivative, ApproximateNearNewPoint, BoundedRadiusOfConvergence, ConstructQuadraticApproximation, ConvergenceExample, CubicAndQuarticApproximations, derivative(), EachTermControlsOneDerivative (+23 more)
+Cohesion: 0.05
+Nodes (102): AddJustOneNullSpaceVector, CircuitDiagram, ClockwiseCounterclockwise, ColumnsRepresentBasisVectors, ComplicatedSystem, DeclareNewTransformation, DefineColumnSpace, DefineRank (+94 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.02
-Nodes (77): AddTwoMatrixSizes, ALotToHoldInYouHead, AmbientChangingDots, AndGate, AskAboutBias, AskAboutCrossAttention, AskAboutOtherEmbeddings, AskAboutOutput (+69 more)
+Cohesion: 0.03
+Nodes (46): NetworkScene, AskHowItDoes, AskNetworkAboutMemorizing, BackpropComingLaterWords, BackPropWrapper, BeginAndEndRecap, CannotDraw, ConfusedAboutHighDimension (+38 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.03
-Nodes (48): NetworkScene, AskHowItDoes, AskNetworkAboutMemorizing, BackpropComingLaterWords, BackPropWrapper, BeginAndEndRecap, CannotDraw, ConfusedAboutHighDimension (+40 more)
+Cohesion: 0.02
+Nodes (83): ExampleGraphHoldXConstant, ExampleGraphHoldYConstant, GradientDescentWrapper, ShowExampleFunctionGraph, ShowFunction, ShowGradient, ShowGraphWithVectors, ShowSimpleMultivariableFunction (+75 more)
 
 ### Community 23 - "Community 23"
-Cohesion: 0.03
-Nodes (37): FullFormulaExplanation, RightHand, SystemOfEquations, AddedVsOplussed, AsymmetriesInTheMath, ChangeWeCanBelieveIn, DontLearnFromSymbols, InYourOwnNotes (+29 more)
+Cohesion: 0.04
+Nodes (21): MiningIsALottery, ScopeMeiosis, IntroduceQuaternions, NavierStokesEquations, VortedStretching, MathematicalWebOfConnections, ThinkBackToHowAmazingThisIs, ChooseThreeFromFive (+13 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.02
-Nodes (59): center_in_closest_rect(), ChopIntervalInProportions, CircleZoomInOnOne, clear_way_for_text(), ClearlyNonsense, convergent_sum(), DanceDotOnInterval, DeduceWhereNegativeOneFalls (+51 more)
+Cohesion: 0.03
+Nodes (54): AllValuesBetween1And2, ChallengeOne, ChallengeTwo, CompareFractionComplexity, ConstructPiano, continued_fraction(), CoverFractionsWithWholeInterval, CoveringSetsWithOpenIntervals (+46 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.03
-Nodes (36): Broadcast, DecimalMatrix, LaggedStart, CubicBezier, Creates a cubic Bézier curve.      A cubic Bézier curve is defined by four contr, MobjectMatrix, AttentionPatterns, CountMatrixParameters (+28 more)
+Cohesion: 0.02
+Nodes (66): AboutFatouDisks, AboutFatouDisksJustWords, AboutJuliaDisks, AmbientJulia, AmbientNewtonBoundary, AmbientNewtonRepetition, AmbientRepetition, AmbientRepetitionChaos (+58 more)
 
 ### Community 26 - "Community 26"
-Cohesion: 0.03
-Nodes (51): ClassLooking, DiseaseBayes, EndScreen, get_bayes_formula(), LandscapeOfTools, Rearrange, ShowTwoPerspectives, TemptingFormula (+43 more)
+Cohesion: 0.02
+Nodes (43): TakePartialDerivatives, IncmpressibleAndIrrotational, NablaNotation, OnToTheLesson, PhaseFlowQuestions, QuickWordsOnNotation, ToolsBeyondDivAndCurlForODEs, FeynmanElementaryQuote (+35 more)
 
 ### Community 27 - "Community 27"
 Cohesion: 0.03
-Nodes (106): BorderOf2dRegionScene, ButOnThisLoopOverHere, CCWColorWalk, CCWColorWalkOdometer, CombineInterval, CombineInterval2, complex_to_pair(), ComplexPlaneIs2d (+98 more)
+Nodes (48): AskAboutWhereEquationComesFrom, AskWhyRewriteIt, ContrastPDEToODE, ReactionsToInitialHeatEquation, ReferenceKhanVideo, AltHeatRHS, AskAboutActuallySolving, BringTogether (+40 more)
 
 ### Community 28 - "Community 28"
 Cohesion: 0.03
-Nodes (12): EmeraldLogo, FinalProof, PonderOverOffCenterDiagram, get_covid_clipboard(), DrawBorderThenFill, CirclePuzzle, Banner, CurrBanner (+4 more)
+Nodes (25): FadeInFromPoint, FadeOutToPoint, TransformMatchingParts, TwoByTwoGrid, get_blackbox_machine(), get_classical_computer_symbol(), get_quantum_computer_symbol(), BitString (+17 more)
 
 ### Community 29 - "Community 29"
 Cohesion: 0.03
-Nodes (27): AssumeOrderDoesntMatter, BeforeCounting, Compute6of10GirlsProbability, ComputeProbabilityOfOneRight, ComputeProbabilityOfOneWrong, CorrectForDependence, CycleThroughPatterns, CycleThroughPatternsForThree (+19 more)
+Nodes (50): ClassLooking, DiseaseBayes, EndScreen, get_bayes_formula(), LandscapeOfTools, Rearrange, ShowTwoPerspectives, TemptingFormula (+42 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.04
-Nodes (21): MiningIsALottery, LinearSystem, SolvingASystemWithOrthonormalMatrix, ScopeMeiosis, IntroduceQuaternions, QuaternionHistory, ThinkBackToHowAmazingThisIs, CompareToGalacticMass (+13 more)
+Nodes (38): ChooseXThenYUniformly, ContrastDistributions, ExactBullseye, ExpectedScoreEqualsQMark, ExpectedValueComputation, ExpectedValueFromBars, GameOver, GameWithSpecifiedScore (+30 more)
 
 ### Community 31 - "Community 31"
-Cohesion: 0.04
-Nodes (48): AllValuesBetween1And2, ChallengeTwo, CompareFractionComplexity, ConstructPiano, continued_fraction(), CoverFractionsWithWholeInterval, CoveringSetsWithOpenIntervals, DefineOpenInterval (+40 more)
+Cohesion: 0.05
+Nodes (19): BugOnTheSurfaceSlidersPart, FiveDBoxExampleWithSliders, FourDBoxExampleWithSliders, FourDCase, Introduce4DSliders, OfferAHybrid, ShowingToFriend, Skeptic (+11 more)
 
 ### Community 32 - "Community 32"
 Cohesion: 0.03
-Nodes (54): PureAirfoilFlow, ArrowScene, BumpyPlaneRide, CandleLabel, CarefulWithLasers, Chaos, CreationDestructionMobject, Diffusion (+46 more)
+Nodes (17): HolomorphicDynamics, Featuring, Spotlight, VideoWrapper, OrientAModel, AnimatedBoundary, TracedPath, TracingTail (+9 more)
 
 ### Community 33 - "Community 33"
-Cohesion: 0.05
-Nodes (50): BrachistochroneWordSliding, BumpyDefineCurveWithKnob, Cycloid, DefineCurveWithKnob, LoopTheLoop, MinimalPotentialEnergy, NotTheCircle, PathSlidingScene (+42 more)
+Cohesion: 0.04
+Nodes (67): AbstractNumericAssociation, AdditivityProperty, AdditivityPropertyPart2, AlwaysfollowIHatJHat, AnExampleWillClarify, AskAboutNonUnitVectors, AskAboutProjectionMatrix, AskAboutSymmetry (+59 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.04
-Nodes (51): AbstractNumericAssociation, AdditivityProperty, AdditivityPropertyPart2, AlwaysfollowIHatJHat, AnExampleWillClarify, AskAboutNonUnitVectors, AskAboutProjectionMatrix, AskAboutSymmetry (+43 more)
+Cohesion: 0.03
+Nodes (54): PureAirfoilFlow, ArrowScene, BumpyPlaneRide, CandleLabel, CarefulWithLasers, Chaos, CreationDestructionMobject, Diffusion (+46 more)
 
 ### Community 35 - "Community 35"
 Cohesion: 0.03
-Nodes (78): AnalyzeRomeoAndJulietSpace, ArnoldBookClip, BasicVectorFieldIdea, CircularFlowEvaluation, CircularPhaseFlow, ColumnsToBasisVectors, Compare1DTo2DEquations, ComplexEquation (+70 more)
+Nodes (26): ApplicationNames, AskRecipriocalQuestion, ChangeInAreaOverChangeInX, Chapter3OpeningQuote, Chapter3PatreonThanks, DerivativeFromZoomingInOnSine, DerivativeIntuitionFromSineGraph, DerivativeOfSineIsSlope (+18 more)
 
 ### Community 36 - "Community 36"
-Cohesion: 0.03
-Nodes (45): AngleUpdater, ArcHighlightOverlaySceneCircumferenceEight, ArcHighlightOverlaySceneCircumferenceSixteen, BaselPatreonThanks, ButWait, CenterOfLargerCircleOverlayText, CircumferenceText, ContinualLightIndicatorUpdate (+37 more)
+Cohesion: 0.04
+Nodes (36): DecimalMatrix, MobjectMatrix, AttentionPatterns, DescribeAttentionEquation, ManyTypesOfUpdates, MyseteryNovel, OutputMatrix, DivyUpParameters (+28 more)
 
 ### Community 37 - "Community 37"
 Cohesion: 0.03
-Nodes (46): AdditivityProperty, ApplyComplexFunction, CrazyTransformation, curvy_squish(), DeduceResultWithGeneralCoordinates, DeduceTransformationFromMatrix, ExponentialTransformation, FinalSlide (+38 more)
+Nodes (48): AdditivityProperty, ApplyComplexFunction, CrazyTransformation, curvy_squish(), DeduceResultWithGeneralCoordinates, DeduceTransformationFromMatrix, Describe90DegreeRotation, DescribeShear (+40 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.03
-Nodes (25): ApplicationNames, AskRecipriocalQuestion, ChangeInAreaOverChangeInX, Chapter3PatreonThanks, DerivativeFromZoomingInOnSine, DerivativeIntuitionFromSineGraph, DerivativeOfSineIsSlope, DerivativeOfXSquaredAsGraph (+17 more)
+Nodes (48): center_in_closest_rect(), ChopIntervalInProportions, CircleZoomInOnOne, clear_way_for_text(), ClearlyNonsense, convergent_sum(), DanceDotOnInterval, DeduceWhereNegativeOneFalls (+40 more)
 
 ### Community 39 - "Community 39"
 Cohesion: 0.04
-Nodes (21): CannotUseLHopital, Chapter7PatreonThanks, DerivativeLimitReciprocity, DiscussLowercaseDs, EpsilonDeltaCounterExample, EpsilonDeltaExample, GeneralLHoptial, Goals (+13 more)
+Nodes (19): AskAboutGeneralCircles, BuildToDADR, CalculusInANutshell, CircleScene, CleanUpABit, DerivativeAsTangentLine, FundamentalTheorem, GraphIntegral (+11 more)
 
 ### Community 40 - "Community 40"
-Cohesion: 0.04
-Nodes (21): AskAboutGeneralCircles, BuildToDADR, CalculusInANutshell, CircleScene, CleanUpABit, DerivativeAsTangentLine, FundamentalTheorem, GraphIntegral (+13 more)
+Cohesion: 0.03
+Nodes (38): AlwaysStartSimple, AskWhatsOnTest, ContrastToOtherOlympiadProblems, CountHoles, Describe2011IMO, DifficultyEstimateVsReality, EasyToFoolYourself, FailureToEmpathize (+30 more)
 
 ### Community 41 - "Community 41"
-Cohesion: 0.03
-Nodes (68): AckoNet, BenSparksVideoWrapper, Recap, ComingVideoWrapper, NextVideoWrapper, WhyNotThisWrapper, ComingUp, LurkingAssumption (+60 more)
+Cohesion: 0.05
+Nodes (65): AskAboutWhyYouWouldAddSpheres, AskWhyAreTheyTheSame, AskWhyYouWouldChooseThisProof, ConjectureLineEquivalence, CreativeConstruction, CylinderDandelinSpheresChangingSlope, DandelinEndScreen, DandelinSpheresInCylinder (+57 more)
 
 ### Community 42 - "Community 42"
 Cohesion: 0.04
-Nodes (37): AskAboutBrightness, FinalSumManipulationScene, PondScene, AngleUpdater, ArcHighlightOverlayScene, BackToEulerSumScene, ContinualLightIndicatorUpdate, copy_func() (+29 more)
+Nodes (17): CannotUseLHopital, Chapter7PatreonThanks, DerivativeLimitReciprocity, DiscussLowercaseDs, EpsilonDeltaCounterExample, EpsilonDeltaExample, GeneralLHoptial, GraphLimitExpression (+9 more)
 
 ### Community 43 - "Community 43"
 Cohesion: 0.03
-Nodes (45): AskAboutLongVsShort, AskAboutUncertainty, AskPhysicists, BetterTranslation, BringInFourierTranform, CleanerFourierTradeoff, CrossOutDefinitenessAndCertainty, DopplerComparisonTodos (+37 more)
+Nodes (26): AddTwoGammaDistributions, AltConvolutions, AltSyncedConvolution, CompareFormulas, ContinuousSampleAnnotations, Convolutions, ConvolveTwoNormals, ConvolveTwoUniforms (+18 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.03
-Nodes (45): NewtonVsJohann, BalanceCompetingFactors, Challenge, CircleOfIdeas, CondensedVersion, DisectBrachistochroneWord, FermatsPrincipleStatement, FindAnotherSolution (+37 more)
+Cohesion: 0.02
+Nodes (63): AckoNet, BenSparksVideoWrapper, Recap, ComingVideoWrapper, NextVideoWrapper, WhyNotThisWrapper, ComingUp, LurkingAssumption (+55 more)
 
 ### Community 45 - "Community 45"
-Cohesion: 0.04
-Nodes (25): AddTwoGammaDistributions, AltConvolutions, AltSyncedConvolution, CompareFormulas, ContinuousSampleAnnotations, Convolutions, ConvolveTwoUniforms, ConvolveUniformWithWedge (+17 more)
+Cohesion: 0.03
+Nodes (73): ArnoldBookClip, BasicVectorFieldIdea, BernoullisThoughts, CircularFlowEvaluation, CircularPhaseFlow, ColumnsToBasisVectors, Compare1DTo2DEquations, ComplexEquation (+65 more)
 
 ### Community 46 - "Community 46"
-Cohesion: 0.04
-Nodes (42): AltOpeningQuote, CramerOpeningQuote, Chapter1OpeningQuote, Introduction, Chapter10OpeningQuote, Chapter1OpeningQuote, Chapter2OpeningQuote, Chapter3OpeningQuote (+34 more)
+Cohesion: 0.08
+Nodes (43): PhaseSpaceOfPopulationModel, ShowTwoPopulations, Axes, IntroduceVectorField, Pendulum, ThetaVsTAxes, IntroduceVectorField, AirResistanceBrace (+35 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.05
-Nodes (22): AlwaysPictureTheSpaceOfPossibilities, AskAboutRephrasingQuestion, CompareNumbersInBothExamples, DepressingForMedicalTestDesigners, HowMuchCanYouChangeThisPrior, IntroduceTelepathyExample, LessMedicalExample, NonchalantReactionToPositiveTest (+14 more)
+Cohesion: 0.04
+Nodes (23): AngleToProbabilityChart, AngryPiCreature, ConfusedPiCreature, DirectionOfPolarization, ForgetPreviousActions, IntroduceLabeledFilters, IntroduceLabeledFiltersNoRotation, MoreFiltersMoreLight (+15 more)
 
 ### Community 48 - "Community 48"
-Cohesion: 0.04
-Nodes (18): DsOverDtGraphically, AlternateExample, AskAboutNaturalLog, Chapter6OpeningQuote, Chapter6PatreonThanks, CompareLadderAndCircle, DerivativeOfNaturalLog, FinalWords (+10 more)
+Cohesion: 0.02
+Nodes (61): DivCurlEndScreen, QuaternionEndscreen, ChessEndScreen, HammingEndScreen, EndScreen, MonsterThanks, SIREndScreen, EndScreen (+53 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.04
-Nodes (45): ShowTwoPopulations, BlocksAndWallExample, NameBump, ActanAndTanGraphs, AddTwoThetaManyTimes, AltShowTwoPopulations, AnalyzeCircleGeometry1e2, AnalyzeCircleGeometry1e4 (+37 more)
+Cohesion: 0.05
+Nodes (25): AboutToyPuzzles, AskAboutRegions, ConcludeFiveRegions, CyclesHaveAtLeastFour, EulersFormulaForGeneralPlanarGraph, FromLastVideo, FunnyStory, Homework (+17 more)
 
 ### Community 50 - "Community 50"
-Cohesion: 0.07
-Nodes (39): PhaseSpaceOfPopulationModel, Axes, IntroduceVectorField, Pendulum, ThetaVsTAxes, IntroduceVectorField, AirResistanceBrace, AltThreeBodiesInSpace (+31 more)
+Cohesion: 0.04
+Nodes (38): AltEFieldIntroduction, AlternateCompositeChargesInPlane, AltRowOfCharges, ChargeOnZAxis, CircularPolarization1D, CircularPolarization2D, CoulombLorentzExample, CoulombLorentzExample3D (+30 more)
 
 ### Community 51 - "Community 51"
-Cohesion: 0.05
-Nodes (39): ApplyEulerToMoser, args_to_string(), CannotDirectlyApplyEulerToMoser, CircleScene, CountIntersectionPoints, CountLines, CountSections, DefiningGraph (+31 more)
+Cohesion: 0.04
+Nodes (15): get_sphere_mesh(), SizeOfEarthRenewed, ProjectionTheorem, BeamSplitter, AskAboutOutside, ThreeDAxes, Square3D, SurfaceMesh (+7 more)
 
 ### Community 52 - "Community 52"
-Cohesion: 0.07
-Nodes (58): AskAboutWhyYouWouldAddSpheres, AskWhyAreTheyTheSame, AskWhyYouWouldChooseThisProof, ConjectureLineEquivalence, CreativeConstruction, CylinderDandelinSpheresChangingSlope, DandelinEndScreen, DandelinSpheresInCylinder (+50 more)
+Cohesion: 0.04
+Nodes (74): BorderOf2dRegionScene, CombineInterval, CombineInterval2, complex_to_pair(), ComplexPlaneIs2d, Diagnostic, DiffOdometer, EquationSolver2d (+66 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.04
-Nodes (60): BetweenNothingAndQuarantineWrapper, CentralMarketLargePopulation, CentralMarketLowerInfection, CentralMarketQuarantine, CentralMarketQuarantine80p, CentralMarketVeryFrequentLargePopulationDelayedSocialDistancing, CutPInfectionInHalf, DarkerInterpretation (+52 more)
+Cohesion: 0.07
+Nodes (38): BrachistochroneWordSliding, BumpyDefineCurveWithKnob, Cycloid, DefineCurveWithKnob, LoopTheLoop, MinimalPotentialEnergy, NotTheCircle, PathSlidingScene (+30 more)
 
 ### Community 54 - "Community 54"
-Cohesion: 0.06
-Nodes (33): alt_mobius_strip_func(), find_rectangle(), get_example_loop(), get_half_parametric_func(), get_quick_loop_func(), get_special_dot(), get_surface_func(), Returns an numpy array of 4 elements, between 0 and 1, such that      entering t (+25 more)
+Cohesion: 0.04
+Nodes (57): BetweenNothingAndQuarantineWrapper, CutPInfectionInHalf, DarkerInterpretation, DelayedSocialDistancingLargeCity, DelayedSocialDistancingLargeCity50p, DelayedSocialDistancingLargeCity70p, DelayedSocialDistancingLargeCity90p, DelayedSocialDistancingLargeCity90pAlt (+49 more)
 
 ### Community 55 - "Community 55"
-Cohesion: 0.07
-Nodes (35): Chapter1Thumbnail, Thumbnail, GraphCarTrajectory, IncrementNumber, ShowSpeedometer, AltAreaUnderCurve, AreaUnderACurve, AreaUnderVGraph (+27 more)
+Cohesion: 0.04
+Nodes (15): FiveRegionsFourEdgesEachGraph, IncompleteSquares, create_tip_with_stroke_width(), Returns a VGroup (collection of VMobjects) containing         the TipableVMObjec, Returns the TipableVMobject instance's (first) tip,         otherwise throws an, Looks at the normals to the first two         anchors, and finds their intersect, Meant for shared functionality between Arc and Line.     Functionality can be cl, Adds a tip to the TipableVMobject instance, recognising         that the endpoin (+7 more)
 
 ### Community 56 - "Community 56"
-Cohesion: 0.08
-Nodes (22): ComplexWavesBase, CreateZonePlate, DiffractionGratingScene, DoubleSlit, ExplainWaveVisualization, FullDiffractionGrating, hsl_to_rgb(), LightExposingFilm (+14 more)
+Cohesion: 0.05
+Nodes (39): summarize_pattern(), ApplyEulerToMoser, args_to_string(), CannotDirectlyApplyEulerToMoser, CircleScene, CountIntersectionPoints, CountLines, CountSections (+31 more)
 
 ### Community 57 - "Community 57"
 Cohesion: 0.03
-Nodes (50): EuclidEndScreen, AimingForRediscovery, AskAboutHomology, CommentOnContardiction, CommentOnForce, DivergenceTheorem, DumbQuestion, EndScreen2 (+42 more)
+Nodes (51): AnnotateSetup, AnnotateZerothOrderBeam2, ArrowWithQMark, AskAboutCenterBeam, AskAboutHigherOrderBeams, AskAboutRecordingPhase, AskWhyForSinusoidalGratingFact, BinaryVsSinusoidalDiffraction (+43 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.03
-Nodes (48): NewtonRuleLabel, AltPauseAndPonder, AmbientRepetition, AmbientRootFinding, ArtPuzzle, AskAboutComplexity, AskAboutFractals, AssumingItsGood (+40 more)
+Cohesion: 0.04
+Nodes (31): append_points(), Returns the pattern (0, 1, 2, 2, 3, 4, 4, 5, 6, ...), Add cubic bezier curve to the path., If you want a point a proportion alpha along the curve, this         gives you t, set_points(), approx_smooth_quadratic_bezier_handles(), diag_to_matrix(), get_quadratic_approximation_of_cubic() (+23 more)
 
 ### Community 59 - "Community 59"
 Cohesion: 0.03
-Nodes (43): AnnotateDemo, AskAboutDiagonal, AskAboutQuantum, AskNoteVerticalVariation, BasicallyZ, BigPlus, CombineColors, ContinuousGraph (+35 more)
+Nodes (47): EuclidEndScreen, EndScreen2, DerivativeFormula, EndScreen, ForcedOscillatorEquation, FromPropertyToLaplaceTransform, IntegrateByParts, MoveAroundPolesSeeDynamics (+39 more)
 
 ### Community 60 - "Community 60"
-Cohesion: 0.03
-Nodes (51): AnnotateSetup, AnnotateZerothOrderBeam2, ArrowWithQMark, AskAboutCenterBeam, AskAboutHigherOrderBeams, AskAboutRecordingPhase, AskWhyForSinusoidalGratingFact, BinaryVsSinusoidalDiffraction (+43 more)
+Cohesion: 0.05
+Nodes (31): ThreeLinesChainRule, AnalyzeExponentRatio, ApplyChainRule, AskAboutConstantOne, ChainRuleIntuition, Chapter4Wrapper, CompareTwoConstantToEightConstant, CompareWaysToWriteExponentials (+23 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.04
-Nodes (14): append_points(), apply_function(), Returns the pattern (0, 1, 2, 2, 3, 4, 4, 5, 6, ...), The 'joint product' is a 4-vector holding the cross and dot         product betw, Add cubic bezier curve to the path., Edits the path so as to pass smoothly through all         the current anchor poi, If you want a point a proportion alpha along the curve, this         gives you t, set_points() (+6 more)
+Cohesion: 0.03
+Nodes (43): AnnotateDemo, AskAboutDiagonal, AskAboutQuantum, AskNoteVerticalVariation, BasicallyZ, BigPlus, CombineColors, ContinuousGraph (+35 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.06
-Nodes (39): CyclesCorrespondWithConnectedComponents, DefineSpanningTree, DrawDualGraph, DualGraph, DualSpanningTree, DualSpanningTreeWords, EdgesAreTheSame, EulersFormulaWords (+31 more)
+Nodes (14): AskAboutNaturalLog, Chapter6OpeningQuote, Chapter6PatreonThanks, CompareLadderAndCircle, FinalWords, Ladder, LightweightCircleExample, LightweightLadderScene (+6 more)
 
 ### Community 63 - "Community 63"
-Cohesion: 0.03
-Nodes (39): BreakUpQuaternionMultiplicationInParts, ComplexPlane135, Felix, HoldUpQuanta, HowQuaternionsRotate3dPoints, IntroduceFelix, IntroduceHamilton, JMultiplicationChart (+31 more)
+Cohesion: 0.08
+Nodes (20): ComplexWavesBase, CreateZonePlate, DiffractionGratingScene, DoubleSlit, ExplainWaveVisualization, FullDiffractionGrating, hsl_to_rgb(), LightExposingFilm (+12 more)
 
 ### Community 64 - "Community 64"
-Cohesion: 0.05
-Nodes (22): ABCNotBCA, AskAboutAllPossibilities, AskWhyTheyAreCalledBinomial, BuildFiveFromFour, BuildUpFromStart, CombinationsPatreonEndScreen, ConfusedPi, ExperienceProblemSolver (+14 more)
+Cohesion: 0.04
+Nodes (46): AddingBitsObservationOverlay, AskAboutPhysicsRelation, AskForFormulaForI, AskWhatWorldeIs, BestDoubleEntropies, ButTheyreNotEquallyLikely, ConstrastResultsWrapper, DefineInformation (+38 more)
 
 ### Community 65 - "Community 65"
-Cohesion: 0.05
-Nodes (36): NearbyStars, ParalaxMeasurmentFromEarth, ParalxInSolarSystem, ShowConstellationsDuringOrbit, SimpleDotsFromPerspective, SimpleDotsParalax, TransitOfVenus, TransitOfVenusHigher (+28 more)
+Cohesion: 0.07
+Nodes (33): Chapter1Thumbnail, Thumbnail, GraphCarTrajectory, IncrementNumber, SecantLineToTangentLine, ShowSpeedometer, AltAreaUnderCurve, AreaUnderACurve (+25 more)
 
 ### Community 66 - "Community 66"
-Cohesion: 0.03
-Nodes (43): AngryStudents, AskHowThisIsHelpful, AskWhy, CentralWebConnections, CommentOnElastic, Confetti, ConfettiSpiril, DigitsOfPi (+35 more)
+Cohesion: 0.05
+Nodes (19): Antiderivative, Approx31, ASecondIntegralSensation, AskAboutAverageOfContinuousVariables, AverageOfContinuousVariable, AverageOfFiniteSet, AverageOfSineStart, Chapter9PatreonThanks (+11 more)
 
 ### Community 67 - "Community 67"
-Cohesion: 0.04
-Nodes (16): BroughtToYouBy, IncmpressibleAndIrrotational, OnToTheLesson, PhaseFlowQuestions, QuickWordsOnNotation, HoldUpMultivariableChainRule, FadeInFromDown, FadeIn (+8 more)
+Cohesion: 0.03
+Nodes (45): ArrowBetweenScreens, AtomsOfCalculus, BigCross, BothPositiveNumbers, ButSpringsAreReal, ComplainAboutNeelessComplexity, ConfusionAndWhy, ContrastDumbTrickAndLT (+37 more)
 
 ### Community 68 - "Community 68"
 Cohesion: 0.04
 Nodes (35): AltShowVaryingLinearCombinations, AnimationUnderSpanDefinition, AskAboutThreeDSpan, BothVectorsCouldBeZero, CheckYourUnderstanding, CoordinatesAsScalars, CoordinatesAsScalarsExample2, CoordinatesWereFamiliar (+27 more)
 
 ### Community 69 - "Community 69"
-Cohesion: 0.04
-Nodes (32): BorsukPatreonThanks, CryptoPatreonThanks, FractalPatreonThanks, HighDPatreonThanks, LeibnizPatreonThanks, PatreonThanksTriples, WavesPatreonThanks, Chapter10Thanks (+24 more)
+Cohesion: 0.05
+Nodes (22): ABCNotBCA, AskAboutAllPossibilities, AskWhyTheyAreCalledBinomial, BuildFiveFromFour, BuildUpFromStart, CombinationsPatreonEndScreen, ConfusedPi, ExperienceProblemSolver (+14 more)
 
 ### Community 70 - "Community 70"
-Cohesion: 0.05
-Nodes (24): AskAboutInfiniteIntelligence, AskWhy, DrawEllipseOverlay, Enthusiast, FeynmanAndOrbitingPlannetOnEllipseDiagram, FeynmanConfusedByNewton, FeynmanElementaryQuote, FeynmanLecturesScreenCaptureFrame (+16 more)
+Cohesion: 0.07
+Nodes (8): DistanceProductScene, FromGeometryToAlgebra, get_chord_f_label(), IntroduceDistanceProduct, KeeperAndSailor, KeeperAndSailorForSineProduct, You, PiCreature
 
 ### Community 71 - "Community 71"
-Cohesion: 0.03
-Nodes (43): AltWhatIsSurfaceArea, ButWhy, ButWhyAngry, ButWhyHappy, ButWhyHesitant, ButWhySassy, ChallengeMode, DrawSquareThenFade (+35 more)
-
-### Community 72 - "Community 72"
-Cohesion: 0.05
-Nodes (40): EMWave, OscillatingVectorComponents, AskAboutCubeDiagonals, CubeRotations, get_glassy_cube(), QuadrupletShufflings, ContinualAnimationGroup, Prism (+32 more)
-
-### Community 73 - "Community 73"
-Cohesion: 0.05
-Nodes (29): AlternateCompositeChargesInPlane, OneOfManyCharges, PolarizedScattering, PolarizedScatteringYZ, RandomRicochet, TestFields, acceleration_from_position(), AccelerationVector (+21 more)
-
-### Community 74 - "Community 74"
-Cohesion: 0.08
-Nodes (43): ArmedWithTwoKeyFacts, ByLine, Conclusion, ConfusedPiCreature, DefineChordF, DelicacyInIntermixingSeries, DistanceProductIsChordF, EndScreen (+35 more)
-
-### Community 75 - "Community 75"
-Cohesion: 0.05
-Nodes (28): AksAboutTranslatingColumns, AskAboutOtherWayAround, AskAboutTranslation, ChangeOfBasisExample, get_small_bubble(), GridIsAConstruct, IntroduceJennifer, JenniferScene (+20 more)
-
-### Community 76 - "Community 76"
-Cohesion: 0.03
-Nodes (44): AskAreYouSure, BigCross, BitExamples, BitVsQubitMatrix, ClassicalGates, ConfusionAtPresmises, ConstructQRCode2, DotsAndArrow (+36 more)
-
-### Community 77 - "Community 77"
 Cohesion: 0.07
 Nodes (25): Thumbnail, ReflectWorldThroughMirrorNew, ArctanSqrtPoint1Angle, AskAboutAddingThetaToItself, AskAboutAddingThetaToItselfThetaPoint1, AskAboutAddingThetaToItselfThetaPoint2, ClacksSolution2Thumbnail, ComingUpWrapper (+17 more)
 
-### Community 78 - "Community 78"
+### Community 72 - "Community 72"
 Cohesion: 0.04
-Nodes (13): ShowDerivativeAtExamplePoint, ZEqualsVDotK, RepeatedMultiplicationInAction, TweakLambda, ThreeStepPlan, FeelsBackwards, NameCoordinateSystem, SummarizeTranslationProcess (+5 more)
+Nodes (23): always(), append_points(), apply_depth_test(), deactivate_depth_test(), f_always(), fix_in_frame(), _FunctionalUpdaterBuilder, match_points() (+15 more)
 
-### Community 79 - "Community 79"
-Cohesion: 0.04
-Nodes (41): AllOfTheVideos, AltForeverNarrowingLoop, AltTeacherStudentsScene, AskAboutHowToGeneralizeSigns, BackToEquationSolving, ConfusedPiCreature, EndingCredits, EndScreen (+33 more)
+### Community 73 - "Community 73"
+Cohesion: 0.06
+Nodes (37): CyclesCorrespondWithConnectedComponents, DefineSpanningTree, DrawDualGraph, DualGraph, DualSpanningTree, DualSpanningTreeWords, EdgesAreTheSame, EulersFormulaWords (+29 more)
 
-### Community 80 - "Community 80"
+### Community 74 - "Community 74"
 Cohesion: 0.03
 Nodes (39): AddAreas, AnalysisIntuitionFraming, AreWeSupposedToKnowThat, AskAboutTilingBijection, AskHexagonQuestion, AskTetrahedronQuestion, BonusVideo, BonusVideoMention (+31 more)
 
+### Community 75 - "Community 75"
+Cohesion: 0.03
+Nodes (44): AskAreYouSure, BigCross, BitExamples, BitVsQubitMatrix, ClassicalGates, ConfusionAtPresmises, ConstructQRCode2, DotsAndArrow (+36 more)
+
+### Community 76 - "Community 76"
+Cohesion: 0.05
+Nodes (28): AngleUpdater, ArcHighlightOverlayScene, BackToEulerSumScene, ContinualLightIndicatorUpdate, copy_func(), EarthScene, FinalSumManipulationScene, FirstLighthouseScene (+20 more)
+
+### Community 77 - "Community 77"
+Cohesion: 0.05
+Nodes (40): direction_field(), distension(), great_circle_map(), Helper function for computing amount to distend homotopy.      Parameters     --, Parameters     ----------     pt : NumPy array (M,3), parallelizable         Poi, Attemps to format input as a NumPy array of size (N,), Function to test correctness of direction_field      Parameters     ----------, Tests correctness of great_circle_map      Parameters     ----------     discont (+32 more)
+
+### Community 78 - "Community 78"
+Cohesion: 0.05
+Nodes (44): BinaryCountingAtEveryScale, BinaryCountingAtLargeScale, BinaryCountingAtMediumScale, BinaryCountingAtSmallestScale, BothAreSelfSimilar, CodeThisUp, CompareNumberSystems, CoolRight (+36 more)
+
+### Community 79 - "Community 79"
+Cohesion: 0.09
+Nodes (39): ArmedWithTwoKeyFacts, ByLine, Conclusion, ConfusedPiCreature, DefineChordF, DelicacyInIntermixingSeries, DistanceProductIsChordF, EndScreen (+31 more)
+
+### Community 80 - "Community 80"
+Cohesion: 0.04
+Nodes (37): AboutSpaceFillingCurves, AssociatePixelWithFrequency, DataScrambledAnyway, get_freq_line(), get_grid(), GridOfPixels, GrowHilbertWithName, HilbertBetterThanSnakeQ (+29 more)
+
 ### Community 81 - "Community 81"
-Cohesion: 0.06
-Nodes (16): BayesianNetworkPreview, BayesOpeningQuote, BayesRuleInMemory, FinalWordsOnRule, TryUnitSquareVisual, FootnoteWrapper, GeneralizeBayesRule, HowDoesPokerWork (+8 more)
+Cohesion: 0.08
+Nodes (13): AltWhereItStartsItEnds, EvenCase, FearedCase, FormalizeMiddle, IntroduceWindmill, Returns animations to play following the contact, and total run time, Rotate180Argument, Rotate180ArgumentFast (+5 more)
 
 ### Community 82 - "Community 82"
-Cohesion: 0.04
-Nodes (46): AlternateAntipodalCollision, AlternateSphereSquishing, AntipodalCollisionIn3D, AntipodalEarthPoints, AntipodalPairToBeGivenCoordinates, AntipodalWalkAroundTransverseLoop, AskWhy, CircleToSphereToQMarks (+38 more)
+Cohesion: 0.05
+Nodes (23): ZoomInOnOne, AskAboutInfiniteIntelligence, AskWhy, DrawEllipseOverlay, Enthusiast, FeynmanConfusedByNewton, FeynmanLecturesScreenCaptureFrame, FeynmanRecountingNewton (+15 more)
 
 ### Community 83 - "Community 83"
-Cohesion: 0.03
-Nodes (40): ArrowBetweenScreens, BigCross, BothPositiveNumbers, ButSpringsAreReal, ComplainAboutNeelessComplexity, ConfusionAndWhy, DefineI, DerivativeOfExp (+32 more)
+Cohesion: 0.06
+Nodes (21): ButFirst, EulerAnglesAndGimbal, ExpandOutFullProduct, Gimbal, InterpolationFail, ISquaredRule, Link, PauseAndPlayOverlay (+13 more)
 
 ### Community 84 - "Community 84"
 Cohesion: 0.04
-Nodes (27): AboutPacing, ComposedTransformsForIntuitionList, DeterminantsAre, DifferingBackgrounds, ExampleTransformation, ExampleTransformationForIntuitionList, IntimidatingProf, LinearAlgebraIntuitions (+19 more)
+Nodes (39): AltWhatIsSurfaceArea, ButWhy, ButWhyAngry, ButWhyHappy, ButWhyHesitant, ButWhySassy, ChallengeMode, DrawSquareThenFade (+31 more)
 
 ### Community 85 - "Community 85"
 Cohesion: 0.04
-Nodes (51): GeneralizePythagoreanTheoremBeyondTwoD, AttemptAColoring, BitVectorSum, ChessEndScreen, ComingUpWrapper, CubeEdgeDescription, CubeSupplement, DiagramOfProgression (+43 more)
+Nodes (42): AltPauseAndPonder, AmbientRepetition, AmbientRootFinding, ArtPuzzle, AskAboutComplexity, AskAboutFractals, AssumingItsGood, BlobsOnBlobsOnBlobs (+34 more)
 
 ### Community 86 - "Community 86"
-Cohesion: 0.06
-Nodes (21): ButFirst, EulerAnglesAndGimbal, ExpandOutFullProduct, Gimbal, InterpolationFail, Introduction, ISquaredRule, Link (+13 more)
+Cohesion: 0.04
+Nodes (28): Arrow, LaggedStart, PremiseOfMLWithText, SimpleAutogregression, EnormousAmountOfTrainingText, EvenMoreTextIntoMachine, LotsOfTextIntoTheMachine, PredictTheNextWord (+20 more)
 
 ### Community 87 - "Community 87"
 Cohesion: 0.06
-Nodes (12): AliceRacesOtherMiners, BobDoubtsBroadcastTransaction, DistributedBlockChainScene, DistributedLedgerScene, DoubleSpendingAttack, FromBankToDecentralizedSystem, IntroduceBlockCreator, ShowSomeBroadcasting (+4 more)
+Nodes (26): BasicBlockCount, BasicBlockCount16Faster, BasicBlockCount1e1, BasicBlockCount1e10, BasicBlockCount1e2, BasicBlockCount1e4, BasicBlockCount1e6, BasicBlockCount1e8 (+18 more)
 
 ### Community 88 - "Community 88"
-Cohesion: 0.05
-Nodes (7): DefineInfiniteSum, TauPoem, ApplyFunction, DoublingPopulation, AlternateDefOfLinearlyDependent, TrackBasisVectorsExample, UsedToThinkinfOfFunctionsAsGraphs
+Cohesion: 0.06
+Nodes (27): AlBiruniEarthMeasurement, DistanceToSun, EarthAndVenus, EarthAroundSun, get_celestial_sphere(), get_earth(), get_moon(), get_planet() (+19 more)
 
 ### Community 89 - "Community 89"
-Cohesion: 0.04
-Nodes (30): FeelConfidentWithVerification, Promotion, HoldUpPreviousPromo, ToolsBeyondDivAndCurlForODEs, AllFeaturedCreators, EndScreen, GeneralWrapper, InfinityPlusOneWrapper (+22 more)
+Cohesion: 0.06
+Nodes (33): apply_function_to_points(), ChangingVectorFieldWrapper, DomainColoringWrapper, EndScreen, EoCWrapper, ExampleMultivariableFunction, ExampleNumberlineTransformationScene, ExamplePlease (+25 more)
 
 ### Community 90 - "Community 90"
-Cohesion: 0.05
-Nodes (32): load_data(), load_data_wrapper(), mnist_loader ~~~~~~~~~~~~  A library to load the MNIST image data.  For details, Return the MNIST data as a tuple containing the training data,     the validatio, Return a tuple containing ``(training_data, validation_data,     test_data)``. B, Return a 10-dimensional unit vector with a 1.0 in the jth     position and zeroe, vectorized_result(), get_pretrained_network() (+24 more)
-
-### Community 91 - "Community 91"
-Cohesion: 0.04
-Nodes (35): AboutSpaceFillingCurves, AssociatePixelWithFrequency, DataScrambledAnyway, get_freq_line(), get_grid(), GridOfPixels, GrowHilbertWithName, HilbertBetterThanSnakeQ (+27 more)
-
-### Community 92 - "Community 92"
 Cohesion: 0.03
 Nodes (33): AskAbouPairType, BeginWithOrdered, CreditThree, DefinePairTo3dFunction, DistinctPairCollisionOnSurface, DrawingOneLineOfTheSurface, DrawLeftrightArrow, DrawLineOnMobiusStrip (+25 more)
 
-### Community 93 - "Community 93"
-Cohesion: 0.05
-Nodes (29): AltEFieldIntroduction, AltRowOfCharges, ChargeOnZAxis, CircularPolarization1D, CircularPolarization2D, CoulombLorentzExample, CoulombLorentzExample3D, DiscussDecay (+21 more)
-
-### Community 94 - "Community 94"
+### Community 91 - "Community 91"
 Cohesion: 0.06
 Nodes (4): AmbientRootSwapping, QuadraticFormula, RadicalScene, RootCoefScene
 
+### Community 92 - "Community 92"
+Cohesion: 0.05
+Nodes (16): ComingUp, ConfusedMorty, ConstantMultiplication, ConstantMultiplicationFigure, DampenedSpring, DiscussProducts, IntroduceProductAsArea, MneumonicExample (+8 more)
+
+### Community 93 - "Community 93"
+Cohesion: 0.04
+Nodes (37): BoxCountingWithDisk, BreakUpCubeIn3D, BrokenUpCubeIn3D, ChangeWorldview, CompareOceans, CompareOceansLabels, DefineFractal, DifferentSlopesAtDifferentScales (+29 more)
+
+### Community 94 - "Community 94"
+Cohesion: 0.07
+Nodes (13): count_sections(), Arc, SpringSetup, MathAndPhysicsConspiring, Line, HalfPlane, plane_partition(), plane_partition_from_points() (+5 more)
+
 ### Community 95 - "Community 95"
-Cohesion: 0.06
-Nodes (32): apply_function_to_points(), ChangingVectorFieldWrapper, DomainColoringWrapper, EndScreen, EoCWrapper, ExampleMultivariableFunction, ExamplePlease, FeelsALittleCramped (+24 more)
+Cohesion: 0.04
+Nodes (35): ArcHighlightOverlaySceneCircumferenceEight, ArcHighlightOverlaySceneCircumferenceSixteen, AskAboutBrightness, BaselPatreonThanks, ButWait, CenterOfLargerCircleOverlayText, CircumferenceText, copy_func() (+27 more)
 
 ### Community 96 - "Community 96"
-Cohesion: 0.05
-Nodes (38): direction_field(), distension(), great_circle_map(), Helper function for computing amount to distend homotopy.      Parameters     --, Parameters     ----------     pt : NumPy array (M,3), parallelizable         Poi, Attemps to format input as a NumPy array of size (N,), Function to test correctness of direction_field      Parameters     ----------, Tests correctness of great_circle_map      Parameters     ----------     discont (+30 more)
-
-### Community 97 - "Community 97"
-Cohesion: 0.04
-Nodes (43): Amplitude, AnnoateWaveSumPhaseShift, ArrowOverInldexHalf, AsideOnWaveTerminology, AskAboutAmplitude, CausalInfluence, DefineIndexOfRefraction, DisectDrivenEq (+35 more)
-
-### Community 98 - "Community 98"
-Cohesion: 0.07
-Nodes (30): a_square(), AddAllTrianglesToABSquares, AddParallelLines, AddTriangleCopyToABSquares, b_square(), c_square(), CompletelyFillLargeSquare, DrawAllThreeSquares (+22 more)
-
-### Community 99 - "Community 99"
-Cohesion: 0.07
-Nodes (14): AskAboutStability, HighAmplitudePendulum, LovePhaseSpace, ManyStepsFromDifferentStartingPoints, # TODO: Arguably separate the part showing many, SetupToTakingManyTinySteps, ShowClutterPrevention, ShowHighVelocityCase (+6 more)
-
-### Community 100 - "Community 100"
-Cohesion: 0.03
-Nodes (45): AmbientErrorCorrection, AmbientErrorCorrection4, AmbientErrorCorrection6, ArrayOfValidMessages, BlockSize256, ButWhy, ByHandVsSoftwareVsHardware, ChangeAnywhereToOneBit (+37 more)
-
-### Community 101 - "Community 101"
 Cohesion: 0.04
 Nodes (40): ByTheWay, CallOutSphereExampleAsWrong, CircleExample, CircleExample100, CircleExample50, color_slices(), DefiningTheLengthOfACurve, EndScreen (+32 more)
 
-### Community 102 - "Community 102"
-Cohesion: 0.07
-Nodes (14): count_sections(), Arc, SpringSetup, MathAndPhysicsConspiring, Line, HalfPlane, plane_partition(), plane_partition_from_points() (+6 more)
+### Community 97 - "Community 97"
+Cohesion: 0.05
+Nodes (47): GeneralizePythagoreanTheoremBeyondTwoD, AttemptAColoring, BitVectorSum, ComingUpWrapper, CubeEdgeDescription, CubeSupplement, DiagramOfProgression, EdgeColoringExample (+39 more)
 
-### Community 103 - "Community 103"
+### Community 98 - "Community 98"
 Cohesion: 0.04
-Nodes (38): ClipFrom4DBoxExampleTODO, TODOBoxExample, TODOBugOnSurface, TODODeterminants, TODOTease, InsertAirfoildTODO, TODOInsertCostSurfaceSteps, TODOInsertEmphasizeComplexityOfCostFunctionCopy (+30 more)
+Nodes (34): AddArcComment, AskAboutPosition, AskAboutSome, BalancedEquation, ChallengeProblem, Clean100choose4, Clean4choose4, Clean6choose4 (+26 more)
 
-### Community 104 - "Community 104"
+### Community 99 - "Community 99"
 Cohesion: 0.06
 Nodes (33): AmbientWordEmbedding, DiscussTokenization, DotProducts, DotProductWithGenderDirection, DotProductWithPluralDirection, find_nearest_words(), get_principle_components(), get_word_to_vec_model() (+25 more)
 
-### Community 105 - "Community 105"
+### Community 100 - "Community 100"
 Cohesion: 0.04
-Nodes (34): AccuracyLabel, AngleLabel, AristarchusDistanceEstimate, AristarchusSunSizeEstimate, ArrowBackAndForth, AskAboutMoonrise, AskingTaoForTopics, CopernicusConclusions (+26 more)
+Nodes (31): BlocksAndWallExample, NameBump, ActanAndTanGraphs, AltShowTwoPopulations, AskAboutTheta, BlocksAndWallExampleMass16, BlocksAndWallExampleMass1e4, BlocksAndWallExampleMass64 (+23 more)
 
-### Community 106 - "Community 106"
-Cohesion: 0.03
-Nodes (35): AskAbout4DEmbeddings, AskAboutACircle, AskAboutProvingCollision, AskAboutTopology, AskAboutUnsolved, AskWhat, AskWhoCares, ChekhovsGun (+27 more)
-
-### Community 107 - "Community 107"
-Cohesion: 0.03
-Nodes (33): AddArcComment, AskAboutPosition, AskAboutSome, BalancedEquation, ChallengeProblem, Clean100choose4, Clean4choose4, Clean6choose4 (+25 more)
-
-### Community 108 - "Community 108"
-Cohesion: 0.07
-Nodes (25): BasicBlockCount, BasicBlockCount16Faster, BasicBlockCount1e1, BasicBlockCount1e10, BasicBlockCount1e2, BasicBlockCount1e4, BasicBlockCount1e6, BasicBlockCount1e8 (+17 more)
-
-### Community 109 - "Community 109"
-Cohesion: 0.09
-Nodes (5): DistanceProductScene, FromGeometryToAlgebra, IntroduceDistanceProduct, KeeperAndSailor, KeeperAndSailorForSineProduct
-
-### Community 110 - "Community 110"
+### Community 101 - "Community 101"
 Cohesion: 0.05
-Nodes (39): CarFactoryNumbers, DrawBigRect, DrawUnderline, Eq70, HalfFiniteHalfContinuous, LabelH, MeasureTheoryLeadsTo, NamePdfs (+31 more)
+Nodes (42): AlternateAntipodalCollision, AlternateSphereSquishing, AntipodalCollisionIn3D, AntipodalEarthPoints, AntipodalPairToBeGivenCoordinates, AntipodalWalkAroundTransverseLoop, AskWhy, CircleToSphereToQMarks (+34 more)
 
-### Community 111 - "Community 111"
-Cohesion: 0.04
-Nodes (33): BreakUpCubeIn3D, BrokenUpCubeIn3D, ChangeWorldview, CompareOceans, CompareOceansLabels, DefineFractal, DefineThreeDimensional, DifferentSlopesAtDifferentScales (+25 more)
-
-### Community 112 - "Community 112"
-Cohesion: 0.04
-Nodes (38): CirclesToPopulation, ClosingStoryWords, CompareThreeIntegrals, DefiningProperty, DirectlyUseful, FeelsLikeATrick, FinalExercise, GaussianQuestion (+30 more)
-
-### Community 113 - "Community 113"
-Cohesion: 0.04
-Nodes (33): AlreadyCoveredConvolutions, AskAboutAddingThreeUniforms, AskIfItsTheArea, AssumingIndependence, CanWeSeeAnExample, ComplainAboutCalculation, ConfusedAtThree, CountOutcomes (+25 more)
-
-### Community 114 - "Community 114"
+### Community 102 - "Community 102"
 Cohesion: 0.04
 Nodes (32): AngleDeviationForVenusParallax, Antidisk, ArcMinuteLabels, CompareLightSpeedEstimates, CompareTwoStars, ConnectingLine, CopernicanPrinciple, Count20Minutes (+24 more)
 
-### Community 115 - "Community 115"
-Cohesion: 0.06
-Nodes (21): Cylinder, WhiteLightAsASum, AltClockwiseCircularLight, AltCounterclockwiseCircularLight, ClockwiseCircularLight, CounterclockwiseCircularLight, InducedWiggleInCylinder, SimpleLightBeam (+13 more)
+### Community 103 - "Community 103"
+Cohesion: 0.03
+Nodes (35): AskAbout4DEmbeddings, AskAboutACircle, AskAboutProvingCollision, AskAboutTopology, AskAboutUnsolved, AskWhat, AskWhoCares, ChekhovsGun (+27 more)
 
-### Community 116 - "Community 116"
+### Community 104 - "Community 104"
+Cohesion: 0.04
+Nodes (33): gauss_func(), AskAboutFormalStatement, AskAboutPi, AskWhy, AssumingNormality, AverageDiceValues, CommentOnSpikeyBellCurve, DoesThisMakeSense (+25 more)
+
+### Community 105 - "Community 105"
 Cohesion: 0.07
-Nodes (28): AltSimpleAutoRegression, AnnotateNextWord, AutoregressionGPT3, ChatBotPrompt, ChatBotPrompt2, ChatBotPrompt3, clean_text(), get_gpt2_model() (+20 more)
+Nodes (14): AskAboutStability, HighAmplitudePendulum, LovePhaseSpace, ManyStepsFromDifferentStartingPoints, # TODO: Arguably separate the part showing many, SetupToTakingManyTinySteps, ShowClutterPrevention, ShowHighVelocityCase (+6 more)
 
-### Community 117 - "Community 117"
+### Community 106 - "Community 106"
 Cohesion: 0.04
-Nodes (33): AltTitle, AskAboutRelationToPrimes, AskWhat, BePlayful, CompareTauToApprox, DirichletComingUp, DirichletIn1837, DiscussPrimesMod10 (+25 more)
+Nodes (34): AimingForRediscovery, AskAboutHomology, CommentOnContardiction, CommentOnForce, DivergenceTheorem, DumbQuestion, FluxDecimals, FrameIntuitionVsExamples (+26 more)
 
-### Community 118 - "Community 118"
+### Community 107 - "Community 107"
+Cohesion: 0.04
+Nodes (38): CirclesToPopulation, ClosingStoryWords, CompareThreeIntegrals, DefiningProperty, DirectlyUseful, FeelsLikeATrick, FinalExercise, GaussianQuestion (+30 more)
+
+### Community 108 - "Community 108"
+Cohesion: 0.04
+Nodes (33): AlreadyCoveredConvolutions, AskAboutAddingThreeUniforms, AskIfItsTheArea, AssumingIndependence, CanWeSeeAnExample, ComplainAboutCalculation, ConfusedAtThree, CountOutcomes (+25 more)
+
+### Community 109 - "Community 109"
 Cohesion: 0.05
-Nodes (8): append_points(), match_points(), note_changed_family(), Edit all data and submobjects to be idential         to another mobject, Returns a new mobject containing multiple copies of this one         arranged in, resize_points(), set_data(), set_points()
+Nodes (25): ExamplePixels, ImageMobject, init_points(), pointwise_become_partial(), Returns an (nu, nv, 2) array of all pairs of u, v values, where         (nu, nv), Load an OBJ file and extract all texture filenames from its MTL file.          R, set_image_coords_by_uv_func(), TexturedGeometry (+17 more)
 
-### Community 119 - "Community 119"
+### Community 110 - "Community 110"
 Cohesion: 0.04
-Nodes (32): AskAboutFormalStatement, AskAboutPi, AskWhy, AssumingNormality, AverageDiceValues, CommentOnSpikeyBellCurve, ConvolutionsWrapper, DoesThisMakeSense (+24 more)
+Nodes (33): AccuracyLabel, AngleLabel, AristarchusDistanceEstimate, AristarchusSunSizeEstimate, ArrowBackAndForth, AskAboutMoonrise, AskingTaoForTopics, CopernicusConclusions (+25 more)
 
-### Community 120 - "Community 120"
-Cohesion: 0.04
-Nodes (32): BoxBlurMario, AskForExample, Boring, CatConvolutionLabel, DumbIdea, EnthusiasticAboutRunTime, FunToVisualize, GenericScreen (+24 more)
-
-### Community 121 - "Community 121"
+### Community 111 - "Community 111"
 Cohesion: 0.05
 Nodes (40): SolutionThumbnail, DistributionOverWord, EndScreen, HowLookTwoAheadWorks, ShowScoreDistribution, Thumbnail, AdieuDistribution, AudioDistribution (+32 more)
 
-### Community 122 - "Community 122"
+### Community 112 - "Community 112"
+Cohesion: 0.06
+Nodes (29): UpcomingSeriesOfVidoes, AddingNumbersOnNumberLine, CodingMathyAnimation, ComputerScientist, CoordinateSystemWalkthrough, DataAnalyst, FollowingVideos, HelpsToHaveOneThought (+21 more)
+
+### Community 113 - "Community 113"
+Cohesion: 0.06
+Nodes (21): AmbientTilingChanges, AmbientTilingChangesHexagonBound, AskAboutVolumeOfParallelpiped, AskStripQuestion, CubesAsHexagonTiling, CubeToHypercubeAnalogy, DrawHexagon, FourDDet (+13 more)
+
+### Community 114 - "Community 114"
+Cohesion: 0.1
+Nodes (23): find_rectangle(), get_example_loop(), get_half_parametric_func(), get_quick_loop_func(), get_special_dot(), get_surface_func(), Returns an numpy array of 4 elements, between 0 and 1, such that      entering t, AllAspectRatioPi (+15 more)
+
+### Community 115 - "Community 115"
+Cohesion: 0.04
+Nodes (25): AskWhatsDifferentInQM, Ay, BellsWrapper, ClockwisePhotonInsert, CompareWaveEquations, EnergyOfWavesTeacherPortion, Footnote, FromBracketFootnote (+17 more)
+
+### Community 116 - "Community 116"
+Cohesion: 0.08
+Nodes (13): CalcHomework, ComplexNewtonsMethod, ComplexNewtonsMethodManySeeds, ComplexNewtonsMethodManySeedsHigherRes, FactorPolynomial, FasterNewtonExample, GutCheckFormula, RealNewtonsMethod (+5 more)
+
+### Community 117 - "Community 117"
+Cohesion: 0.04
+Nodes (30): AskAboutComputation, AskQuestions, cylinder_flow_magnitude_field(), cylinder_flow_vector_field(), DefineDivergenceSymbols, derivative(), DivCurlDotCross, DivergenceZeroCondition (+22 more)
+
+### Community 118 - "Community 118"
 Cohesion: 0.05
 Nodes (41): AskIfThatsBetter, Assumptions, DetEquationLineOfReasoning, EigenvalueEquationRearranging, Example1, Example2, Example3, Example4 (+33 more)
 
-### Community 123 - "Community 123"
-Cohesion: 0.05
-Nodes (37): AmbientNewtonBoundary, AmbientNewtonRepetition, AmbientRepetition, AmbientRepetitionChaos, AmbientRepetitionInfty, AmbientRepetitionLimitPoint, AskAboutGeneralTheory, AskHowOftenThisHappensAlt (+29 more)
-
-### Community 124 - "Community 124"
-Cohesion: 0.05
-Nodes (12): CramersXEvaluation, HowBasisVectorMultiplicationPullsOutColumns, RasterizingBezier, RevisitExampleTransformation, ShearExample, Describe90DegreeRotation, DescribeShear, FollowLinearCombination (+4 more)
-
-### Community 125 - "Community 125"
-Cohesion: 0.06
-Nodes (20): AmbientTilingChanges, AmbientTilingChangesHexagonBound, AskAboutVolumeOfParallelpiped, AskStripQuestion, CubesAsHexagonTiling, CubeToHypercubeAnalogy, DrawHexagon, FourDDet (+12 more)
-
-### Community 126 - "Community 126"
-Cohesion: 0.09
-Nodes (8): HypersphereStereographicProjection, MultiplicationByJFromRight, QuaternionTracker, RuleOfQuaternionMultiplication, ShowArbitraryMultiplication, ShowJMultiplication, ShowMultiplicationBy135Example, StereoProjectedCircleFromHypersphere
-
-### Community 127 - "Community 127"
+### Community 119 - "Community 119"
 Cohesion: 0.12
 Nodes (22): AltDropletFlow, ComplexCurlExample, ConstantInwardFlow, ConstantOutwardFlow, ConstantPositiveCurl, CopyPlane, CurlArticleExample, DivergenceArticleExample (+14 more)
 
-### Community 128 - "Community 128"
-Cohesion: 0.08
-Nodes (23): apply_func_between_planes(), CreateMeshWarp, CreatePiHouseLog, CreatingTheSpiral, FourPannelsWithPrintGallery, FourStepsWithGrid, get_droste_from_log_image_path(), get_log_image() (+15 more)
+### Community 120 - "Community 120"
+Cohesion: 0.04
+Nodes (36): ClipFrom4DBoxExampleTODO, TODOBoxExample, TODOBugOnSurface, TODODeterminants, TODOTease, InsertAirfoildTODO, LostLecturePicture, DopplerComparisonTodos (+28 more)
 
-### Community 129 - "Community 129"
-Cohesion: 0.08
-Nodes (22): get_exp_graph_icon(), SPlane, Thumbnail, BreakUpCosineTex, ComplexExtension, DesiredMachine, DrivenHarmonicOscillatorEquation, ExpDeriv (+14 more)
-
-### Community 130 - "Community 130"
-Cohesion: 0.05
-Nodes (33): AskAboutSoundlessness, AskAboutWhy, AskWhatWillHappen, BlocksAndWallExample, BlocksAndWallExampleGalacticMass, BlocksAndWallExampleMass1e1, BlocksAndWallExampleMass1e10, BlocksAndWallExampleMass1e4 (+25 more)
-
-### Community 131 - "Community 131"
-Cohesion: 0.07
-Nodes (6): CoordinateSystem, Alias for input_to_graph_point, Use for graphing functions which might change over time, or change with, Abstract class for Axes and NumberPlane, Abbreviation for coords_to_point, Abbreviation for point_to_coords
-
-### Community 132 - "Community 132"
+### Community 121 - "Community 121"
 Cohesion: 0.04
 Nodes (28): AngleDeviationForVenusParallax, Antidisk, ArcMinuteLabels, CompareLightSpeedEstimates, CompareTwoStars, ConnectingLine, Count20Minutes, DemonstrateAnArcSecond (+20 more)
 
-### Community 133 - "Community 133"
-Cohesion: 0.04
-Nodes (42): DivCurlEndScreen, QuaternionEndscreen, HammingEndScreen, EndScreen, MonsterThanks, SIREndScreen, Part1EndScroll, EndScreen (+34 more)
+### Community 123 - "Community 123"
+Cohesion: 0.06
+Nodes (4): apply_points_function(), Direction just needs to be a vector pointing towards side or         corner in t, Meant to generalize get_x, get_y, get_z, Examples:         mob1.align_to(mob2, UP) moves mob1 vertically so that its
 
-### Community 134 - "Community 134"
+### Community 124 - "Community 124"
 Cohesion: 0.08
 Nodes (15): BasicSpringScene, DampedSpringSolutionsOnSPlane, DampingForceDemo, GuessCosine, GuessSine, Get a vector showing the mass's velocity, Get a vector showing the mass's velocity, SetOfInitialConditions (+7 more)
 
-### Community 135 - "Community 135"
+### Community 125 - "Community 125"
+Cohesion: 0.05
+Nodes (33): AskAboutSoundlessness, AskAboutWhy, AskWhatWillHappen, BlocksAndWallExample, BlocksAndWallExampleGalacticMass, BlocksAndWallExampleMass1e1, BlocksAndWallExampleMass1e10, BlocksAndWallExampleMass1e4 (+25 more)
+
+### Community 126 - "Community 126"
+Cohesion: 0.08
+Nodes (5): ApproximateOneRing, CircleScene, GraphRectangles, IntroduceCircle, RecapCircleSolution
+
+### Community 128 - "Community 128"
+Cohesion: 0.07
+Nodes (15): ChangingDecimal, load_data(), load_data_wrapper(), mnist_loader ~~~~~~~~~~~~  A library to load the MNIST image data.  For details, Return the MNIST data as a tuple containing the training data,     the validatio, Return a tuple containing ``(training_data, validation_data,     test_data)``. B, Return a 10-dimensional unit vector with a 1.0 in the jth     position and zeroe, vectorized_result() (+7 more)
+
+### Community 129 - "Community 129"
+Cohesion: 0.06
+Nodes (17): Polarizer, ApproxWordsLowAnglePendulum, GravityVector, HighAnglePendulum, IntroducePendulum, LongDoublePendulum, LowAnglePendulum, MediumAnglePendulum (+9 more)
+
+### Community 130 - "Community 130"
 Cohesion: 0.07
 Nodes (18): TourOfDifferentialEquations, AltBrownianMotion, BlackScholes, BrownianMotion, ContrastChapters1And2, LaplacianIntuition, PartTwoOfTour, ShowCross (+10 more)
 
-### Community 136 - "Community 136"
-Cohesion: 0.08
-Nodes (15): BoundaryConditionReference, CloserLookAtStraightLine, EmphasizeBoundaryPoints, FlatEdgesContinuousEvolution, MoreAccurateTempFlowWithArrows, ShowFreq1CosExpDecay, ShowFreq2CosExpDecay, ShowFreq4CosExpDecay (+7 more)
-
-### Community 137 - "Community 137"
-Cohesion: 0.08
-Nodes (9): ExplainCircleAnimations, FourierCirclesScene, FourierOfPiSymbol, FourierOfPiSymbol5, FourierSeriesIntroBackground12, FourierSeriesIntroBackground20, FourierSeriesIntroBackground4, FourierSeriesIntroBackground8 (+1 more)
-
-### Community 138 - "Community 138"
+### Community 131 - "Community 131"
 Cohesion: 0.05
-Nodes (30): CramersYEvaluation, Equals2, Equals3, FloatingMinus, FourPlusTwo, GaussTitle, InputParallelepipedAngledView, InputParallelepipedTopViewToSideView (+22 more)
+Nodes (28): BreakUpQuaternionMultiplicationInParts, ComplexPlane135, Felix, HoldUpQuanta, IfYouNeedAWarmUp, IntroduceHamilton, JMultiplicationChart, ManyNumberSystems (+20 more)
 
-### Community 139 - "Community 139"
+### Community 132 - "Community 132"
 Cohesion: 0.08
-Nodes (6): IncludeBias, IntroduceWeightMatrix, IntroduceWeights, PixelsFromVect, ShowRemainingNetwork, ConvolutionalNetworkPreview
+Nodes (6): CoordinateSystem, Alias for input_to_graph_point, Use for graphing functions which might change over time, or change with, Abstract class for Axes and NumberPlane, Abbreviation for coords_to_point, Abbreviation for point_to_coords
 
-### Community 140 - "Community 140"
-Cohesion: 0.08
-Nodes (9): AddVectorsOneByOne, DemonstrateAddingArrows, IntegralTrick, LabelRotatingVectors, PiFourierSeries, RealValuedFunctionFourierSeries, ShowStepFunctionIn2dView, SimpleComplexExponentExample (+1 more)
+### Community 133 - "Community 133"
+Cohesion: 0.05
+Nodes (24): AboutPacing, ComposedTransformsForIntuitionList, DeterminantsAre, DifferingBackgrounds, ExampleTransformation, ExampleTransformationForIntuitionList, IntimidatingProf, LinearAlgebraIntuitions (+16 more)
 
-### Community 142 - "Community 142"
-Cohesion: 0.07
-Nodes (28): UpcomingSeriesOfVidoes, AddingNumbersOnNumberLine, CodingMathyAnimation, ComputerScientist, CoordinateSystemWalkthrough, DataAnalyst, FollowingVideos, HelpsToHaveOneThought (+20 more)
-
-### Community 144 - "Community 144"
-Cohesion: 0.07
-Nodes (8): AccurateProductRule, AssociatePatternsWithScores, BreakDownQuestionPatterns, CorrelationsWith35Percent, ShowAllEightConditionals, ShowIndependenceSymbolically, TemptingButWrongCalculation, ThousandPossibleQuizzes
-
-### Community 145 - "Community 145"
-Cohesion: 0.04
-Nodes (29): AskAboutComputation, AskQuestions, cylinder_flow_magnitude_field(), cylinder_flow_vector_field(), DefineDivergenceSymbols, DivCurlDotCross, DivergenceZeroCondition, four_swirls_function() (+21 more)
-
-### Community 146 - "Community 146"
-Cohesion: 0.04
-Nodes (27): AskAboutZero, ButWhatIsIt, CosineEqualsWhat, CosLTLogicReversal, DerivativeRule, FullCosInsideSum, LaplaceFourierContrast, LevelsOfUnderstanding (+19 more)
-
-### Community 147 - "Community 147"
+### Community 134 - "Community 134"
 Cohesion: 0.09
 Nodes (7): AddMultipleSolutions, BreakDownAFunction, OceanOfPossibilities, SimpleCosExpGraph, SineWaveScaledByExp, StraightLine3DGraph, TemperatureGraphScene
 
-### Community 148 - "Community 148"
+### Community 135 - "Community 135"
 Cohesion: 0.06
-Nodes (7): apply_points_function(), Direction just needs to be a vector pointing towards side or         corner in t, Func should accept an (N, 3) array and return an (N, 4) array of RGB values in [, Func should accept an (N, 3) array and return an (N, 3) array of RGB values in [, Abbreviation for point_from_proportion, Examples:         mob1.align_to(mob2, UP) moves mob1 vertically so that its, set_rgba_array()
+Nodes (15): drag_pixels(), LogoGeneration, FuzzyDiscoveryToNewMath, LessAboutNewThoughts, ListOfPartialSums, OrganizePartialSums, connect_points(), different_points() (+7 more)
 
-### Community 149 - "Community 149"
-Cohesion: 0.07
-Nodes (27): Antipodes, BorsukEndScreen, DivisionOfUnity, DrawSphere, FunctionGInSymbols, GreenLine, Introduction, LineScene (+19 more)
+### Community 136 - "Community 136"
+Cohesion: 0.04
+Nodes (27): AskAboutZero, ButWhatIsIt, CosineEqualsWhat, CosLTLogicReversal, DerivativeRule, FullCosInsideSum, LaplaceFourierContrast, LevelsOfUnderstanding (+19 more)
 
-### Community 150 - "Community 150"
-Cohesion: 0.07
-Nodes (22): FourierSeriesIllustraiton, AlternateBoundaryConditions, ArrowAndCircle, AskAboutComplexNotVector, AskQuestionOfGraph, DescribeSVG, FootnoteOnSwappingIntegralAndSum, FourierName (+14 more)
-
-### Community 151 - "Community 151"
-Cohesion: 0.11
-Nodes (24): SmoothHilbertZoom, ComplexFourierSeriesExample, GrowToOrder8PseudoHilbertCurve, HilbertCurve, ComplexFourierSeriesExample, FourierOfBritain, FourierOfBritainZoomedIn, FourierOfFourier (+16 more)
-
-### Community 152 - "Community 152"
+### Community 137 - "Community 137"
 Cohesion: 0.09
-Nodes (8): AngularMomentumArgument, AskAboutEllipses, IntroduceShapeOfVelocities, KeplersSecondLaw, KeplersSecondLawImage, NonEllipticalKeplersLaw, Return a mobject illustrating the area swept         out between a point prop1 o, TheMotionOfPlanets
+Nodes (22): apply_func_between_planes(), CreateMeshWarp, CreatePiHouseLog, CreatingTheSpiral, FourPannelsWithPrintGallery, FourStepsWithGrid, get_droste_from_log_image_path(), get_log_image() (+14 more)
 
-### Community 153 - "Community 153"
+### Community 138 - "Community 138"
+Cohesion: 0.09
+Nodes (20): SPlane, BreakUpCosineTex, ComplexExtension, DesiredMachine, DrivenHarmonicOscillatorEquation, ExpDeriv, IntegrationByParts, IntroduceTransform (+12 more)
+
+### Community 139 - "Community 139"
+Cohesion: 0.04
+Nodes (28): AltTitle, AskAboutRelationToPrimes, AskWhat, BePlayful, CompareTauToApprox, DirichletComingUp, DirichletIn1837, DiscussPrimesMod10 (+20 more)
+
+### Community 140 - "Community 140"
 Cohesion: 0.05
-Nodes (24): AskWhatsDifferentInQM, Ay, BellsWrapper, ClockwisePhotonInsert, FilterLabel, Footnote, FromBracketFootnote, FromOtherVideoWrapper (+16 more)
+Nodes (27): AskAboutAlmostFouierName, AskAboutInverseFourier, BeforeGettingToTheFullMath, BuildUpExpressionStepByStep, CloseWithAPuzzle, EulersFormulaViaGroupTheoryWrapper, FourierEndScreen, Introduction (+19 more)
 
-### Community 154 - "Community 154"
-Cohesion: 0.07
-Nodes (15): CurlRelationBetweenFields, RandomWalks, SlidingBlocks, Superposition, ComplexWaves, Looks at the normals to the first two         anchors, and finds their intersect, get_full_surface(), get_sudanese_band() (+7 more)
+### Community 141 - "Community 141"
+Cohesion: 0.1
+Nodes (3): AskAboutFindingNewVelocities, IntroduceVelocityPhaseSpace, IntroduceVelocityPhaseSpaceWith16
 
-### Community 155 - "Community 155"
+### Community 142 - "Community 142"
 Cohesion: 0.05
-Nodes (25): ComplexExponentialPlay, ComplexMultiplication, ComplexNumberPreview, CosGraphs, CosSquare, CosWave, EtoILimit, EulersFormula (+17 more)
+Nodes (26): AddCenterLinesAndPlanesToSphere, AddedPromoWords, AntipodalViewOfThreeDCase, AverageSizeOfSphericalTriangleSection, AverageSizeOfSphericalTriangleSectionSupplement, BrilliantProbability, BrilliantPuzzle, FixThreePointsOnSphere (+18 more)
 
-### Community 156 - "Community 156"
+### Community 143 - "Community 143"
 Cohesion: 0.07
-Nodes (28): RightHandRule, BiggerWhenPerpendicular, CrossAndDualWords, CrossBasisVectors, CrossProductRightHandRule, DeterminantTrick, DoTheSameForCross, get_perm_sign() (+20 more)
+Nodes (14): SortOfDopplerEffect, AngleUpdater, ContinualLightIndicatorUpdate, ContinualThreeDLightConeUpdate, EarthScene, FirstLighthouseScene, IntroduceScreen, InverseSquareLaw (+6 more)
 
-### Community 158 - "Community 158"
-Cohesion: 0.07
-Nodes (21): FourierOfTrebleClef, FourierBatman, FourierGoogleG, FourierHeart, FourierNailAndGear, FourierNDQ, FourierOfEighthNote, FourierOfIP (+13 more)
-
-### Community 159 - "Community 159"
-Cohesion: 0.06
-Nodes (25): BasePredictor, Predictor, Remove thousand separators (dots) from numbers., Convert decimal numbers: 7,27 -> bảy phẩy hai mươi bảy, Convert percentages: 50% -> năm mươi phần trăm, Convert currency amounts, Convert time expressions: 2:20 -> hai giờ hai mươi phút, Convert date expressions (+17 more)
-
-### Community 161 - "Community 161"
-Cohesion: 0.07
-Nodes (29): DensePhaseKickBacks100, DensePhaseKickBacks25, DensePhaseKickBacks50, DenserKickForward, DensestKickForward, DissolveLayers, FastWave, GreenWaveFast (+21 more)
-
-### Community 162 - "Community 162"
-Cohesion: 0.07
-Nodes (21): CountingExampleSentence, CountTo1023, finger_tip_power_of_2(), FinishCountingExampleSentence, five_char_binary(), get_algorithm(), get_hand_map(), Hand (+13 more)
-
-### Community 163 - "Community 163"
-Cohesion: 0.05
-Nodes (25): AddCenterLinesAndPlanesToSphere, AddedPromoWords, AntipodalViewOfThreeDCase, AverageSizeOfSphericalTriangleSection, AverageSizeOfSphericalTriangleSectionSupplement, BrilliantProbability, BrilliantPuzzle, FixThreePointsOnSphere (+17 more)
-
-### Community 164 - "Community 164"
-Cohesion: 0.06
-Nodes (15): always(), apply_depth_test(), deactivate_depth_test(), f_always(), fix_in_frame(), _FunctionalUpdaterBuilder, Takes a snippet of code and inserts it into a         context which has the foll, Pass in a glsl expression in terms of x, y and z which returns         a float. (+7 more)
-
-### Community 166 - "Community 166"
-Cohesion: 0.08
-Nodes (9): get_fill_canvas(), ShaderWrapper, VShaderWrapper, get_shader_dir(), get_shader_code_from_file(), get_shader_program(), image_path_to_texture(), Sets a program uniform, and also keeps track of a dictionary     of previously s (+1 more)
-
-### Community 167 - "Community 167"
+### Community 144 - "Community 144"
 Cohesion: 0.12
 Nodes (41): brute_force_optimal_guess(), chunks(), entropy_of_distributions(), entropy_to_expected_score(), find_best_two_step_entropy(), find_smallest_second_guess_buckets(), find_top_scorers(), gather_entropy_to_score_data() (+33 more)
 
-### Community 168 - "Community 168"
+### Community 145 - "Community 145"
+Cohesion: 0.05
+Nodes (25): ComplexExponentialPlay, ComplexMultiplication, ComplexNumberPreview, CosGraphs, CosSquare, CosWave, EtoILimit, EulersFormula (+17 more)
+
+### Community 146 - "Community 146"
 Cohesion: 0.07
-Nodes (12): WalkEquatorPostTransform, PeopleValueGraph, BernoullisThoughts, ManyComputationsPerUnitTimeV2, ImagesMod256, double_smooth(), linear(), lingering() (+4 more)
+Nodes (29): RightHandRule, BiggerWhenPerpendicular, CrossAndDualWords, CrossBasisVectors, CrossProductRightHandRule, DeterminantTrick, DoTheSameForCross, get_cross_product_right_hand_rule_labels() (+21 more)
 
-### Community 169 - "Community 169"
+### Community 147 - "Community 147"
+Cohesion: 0.05
+Nodes (23): AskMathematicianFriend, ColorIntervals, ContinuityRequired, CouldNotDefineForSnakeCurve, DefineActualHilbertCurveText, DefiningCurves, DefinitionOfCurve, FollowManyPoints (+15 more)
+
+### Community 148 - "Community 148"
+Cohesion: 0.06
+Nodes (25): BasePredictor, Predictor, Remove thousand separators (dots) from numbers., Convert decimal numbers: 7,27 -> bảy phẩy hai mươi bảy, Convert percentages: 50% -> năm mươi phần trăm, Convert currency amounts, Convert time expressions: 2:20 -> hai giờ hai mươi phút, Convert date expressions (+17 more)
+
+### Community 150 - "Community 150"
+Cohesion: 0.06
+Nodes (14): To speed up some animations, particularly transformations,         it can be han, set_opacity(), set_opacity(), If there are multiple colors (for gradient)         this returns the first one, If there are multiple opacities, this returns the         first, set_style(), rgb_to_hex(), array_is_constant() (+6 more)
+
+### Community 151 - "Community 151"
 Cohesion: 0.08
-Nodes (29): DensePhaseKickBacks100, DensePhaseKickBacks25, DensePhaseKickBacks50, DenserKickForward, DensestKickForward, DissolveLayers, FastWave, GreenWaveFast (+21 more)
+Nodes (10): get_fill_canvas(), ShaderWrapper, VShaderWrapper, get_shader_dir(), get_colormap_code(), get_shader_code_from_file(), get_shader_program(), image_path_to_texture() (+2 more)
 
-### Community 170 - "Community 170"
+### Community 152 - "Community 152"
+Cohesion: 0.06
+Nodes (7): FocusOn, Indicate, UpdateLightIndicator, UpdateLightIndicator, inverse_power_law(), inverse_quadratic(), Transform
+
+### Community 153 - "Community 153"
 Cohesion: 0.05
-Nodes (26): AskAboutAlmostFouierName, AskAboutInverseFourier, BeforeGettingToTheFullMath, BuildUpExpressionStepByStep, CloseWithAPuzzle, EulersFormulaViaGroupTheoryWrapper, FourierEndScreen, MixingUnmixingTODOStub (+18 more)
+Nodes (24): AskAboutRelationToPrimes, AssumeKnowledgeOfComplexNumbers, ButWhatIsTheExensions, ComplexFunctionsAsTransformations, ComplexTransformationScene, ComplexValuedFunctions, CreditTwo, DiscussSumOfNaturals (+16 more)
 
-### Community 172 - "Community 172"
+### Community 154 - "Community 154"
+Cohesion: 0.11
+Nodes (23): ComplexFourierSeriesExample, GrowToOrder8PseudoHilbertCurve, HilbertCurve, ComplexFourierSeriesExample, FourierOfBritain, FourierOfBritainZoomedIn, FourierOfFourier, FourierOfFourier100xZoom (+15 more)
+
+### Community 155 - "Community 155"
+Cohesion: 0.06
+Nodes (23): ShowSum, PhysicsExample, FakeAreaManipulation, LogarithmicSpiral, cross(), get_closest_point_on_line(), get_dist(), get_norm() (+15 more)
+
+### Community 156 - "Community 156"
+Cohesion: 0.08
+Nodes (13): AlwaysPictureTheSpaceOfPossibilities, AskAboutRephrasingQuestion, CompareNumbersInBothExamples, IntroduceTelepathyExample, LessMedicalExample, OneInOneThousandHaveDisease, OneInOneThousandHaveDiseaseCopy, PlaneCrashProbability (+5 more)
+
+### Community 157 - "Community 157"
+Cohesion: 0.07
+Nodes (21): CountingExampleSentence, CountTo1023, finger_tip_power_of_2(), FinishCountingExampleSentence, five_char_binary(), get_algorithm(), get_hand_map(), Hand (+13 more)
+
+### Community 159 - "Community 159"
+Cohesion: 0.08
+Nodes (6): DsOverDtGraphically, TCubedExample, TinyMovement, AlternateExample, DerivativeOfNaturalLog, ZoomedScene
+
+### Community 160 - "Community 160"
+Cohesion: 0.08
+Nodes (13): DecomposeAudioSegment, FourierCirclesScene, CombineWavesToImage_SlowFPS, DecomposeRoar_SlowFPS, ContrastPureToneToPianoKey, DecomposeAudioSegment, get_ellipsis_vector(), get_wave_sum() (+5 more)
+
+### Community 161 - "Community 161"
+Cohesion: 0.11
+Nodes (5): AskAssociativityQuestion, LightSource, Spotlight, Point, VectorizedPoint
+
+### Community 162 - "Community 162"
 Cohesion: 0.05
-Nodes (25): AltThumbnail1, AskProbabilityOfCoins, AskWhy, BarChartTest, BinomialName, CarFactoryNumbers, ComingUpWrapper, ComplainAboutSimplisticModel (+17 more)
+Nodes (24): AltThumbnail1, AskProbabilityOfCoins, AskWhy, BarChartTest, BinomialName, CarFactoryNumbers, Guess96Percent, HighlightReviewParts (+16 more)
 
-### Community 173 - "Community 173"
-Cohesion: 0.05
-Nodes (26): AlwaysStartSimple, CountHoles, DifficultyEstimateVsReality, EasyToFoolYourself, FailureToEmpathize, FearedCase, FootnoteToIMOIntro, HarderThanExpected (+18 more)
+### Community 163 - "Community 163"
+Cohesion: 0.07
+Nodes (13): WhiteLightAsASum, VectorFieldWigglingNew, ResponsiveCharge, ChargeBasedVectorField, get_spectral_color(), get_spectral_colors(), GraphAsVectorField, MeanWave (+5 more)
 
-### Community 174 - "Community 174"
+### Community 164 - "Community 164"
 Cohesion: 0.1
-Nodes (10): CalcHomework, ComplexNewtonsMethod, ComplexNewtonsMethodManySeeds, ComplexNewtonsMethodManySeedsHigherRes, FasterNewtonExample, GutCheckFormula, RealNewtonsMethod, ZeroStepColoring (+2 more)
+Nodes (9): BreakUp2To256, LastVideo, MainBreakdown, QAndA, ShowTwoTo32, StateOfBitcoin, Thumbnail, WriteTWoTo160 (+1 more)
 
-### Community 175 - "Community 175"
+### Community 165 - "Community 165"
+Cohesion: 0.09
+Nodes (4): Thumbnail, ExplainCircleAnimations, FourierCirclesScene, complex_to_R3()
+
+### Community 166 - "Community 166"
 Cohesion: 0.05
-Nodes (20): ChaosTitle, ComingUp, EndScreen, GleickQuote, InputLabel, JumpToThisPoint, ReallyHardToSolve, ReasonForSolution (+12 more)
+Nodes (27): AddedBubble, AddingCopiesOfAVariable, AskAboutConvolution, ConvolutionMeaning, DrawQRCode, EndScreen, Exercise, HerschelMaxwellWords (+19 more)
 
-### Community 176 - "Community 176"
+### Community 167 - "Community 167"
+Cohesion: 0.07
+Nodes (22): Process Vietnamese text for TTS - ported from utils/vietnamese-processor.js, Pre-compile measurement unit regex patterns., Remove thousand separators (dots) from numbers., Convert decimal numbers: 7,27 -> bảy phẩy hai mươi bảy, Convert percentages: 50% -> năm mươi phần trăm, 3-5% -> ba đến năm phần trăm, Convert currency amounts., Convert time expressions: 2:20 -> hai giờ hai mươi phút, Convert year ranges: 1873-1907 -> một nghìn... đến một nghìn... (+14 more)
+
+### Community 168 - "Community 168"
 Cohesion: 0.09
 Nodes (5): CameraFrame, Returns a 4x4 for the affine transformation mapping a point         into the cam, Shortcut for set_euler_angles, defaulting to taking         in angles in degrees, rotate(), set_focal_distance()
 
-### Community 177 - "Community 177"
-Cohesion: 0.1
-Nodes (11): scale_func(), EliminateNonPrimative710Residues, ExplainRays, get_gcd(), PrimeSpiralsAtScale1000, read_in_primes(), ShowClassesOfPrimeRays, ShowSpiralsForWholeNumbers (+3 more)
+### Community 169 - "Community 169"
+Cohesion: 0.08
+Nodes (28): DensePhaseKickBacks100, DensePhaseKickBacks25, DensePhaseKickBacks50, DenserKickForward, DensestKickForward, DissolveLayers, FastWave, GreenWaveFast (+20 more)
 
-### Community 178 - "Community 178"
+### Community 170 - "Community 170"
+Cohesion: 0.09
+Nodes (7): AddVectorsOneByOne, DemonstrateAddingArrows, IntegralTrick, LabelRotatingVectors, PiFourierSeries, RealValuedFunctionFourierSeries, TRangingFrom0To1
+
+### Community 171 - "Community 171"
 Cohesion: 0.11
 Nodes (5): MirrorAndWiresOverlay, MirrorScene, ReflectWorldThroughMirrorThetaPoint1, ReflectWorldThroughMirrorThetaPoint2, ShowTrajectoryWithChangingTheta
 
-### Community 179 - "Community 179"
-Cohesion: 0.11
-Nodes (8): BreakUp2To256, LastVideo, MainBreakdown, QAndA, ShowTwoTo32, StateOfBitcoin, Thumbnail, WriteTWoTo160
-
-### Community 180 - "Community 180"
+### Community 172 - "Community 172"
 Cohesion: 0.11
 Nodes (14): AnalyzeHundreDiceQuestion, DiceSumDistributions, DiceSumDistributionsExp, ExpDistSumDistributions, get_dist(), get_mean_and_sd(), HowVarianceAdds, InfiniteVariance (+6 more)
 
-### Community 181 - "Community 181"
-Cohesion: 0.14
-Nodes (5): ExampleNumberlineTransformationScene, IntroduceTransformationView, NumberlineTransformationScene, TalkThroughXSquaredExample, XSquaredForNegativeInput
+### Community 173 - "Community 173"
+Cohesion: 0.09
+Nodes (7): AliceRacesOtherMiners, DistributedBlockChainScene, IntroduceBlockChain, Thumbnail, TwoBlockChains, VariableProofOfWork, WhenToTrustANewBlock
 
-### Community 182 - "Community 182"
+### Community 174 - "Community 174"
+Cohesion: 0.08
+Nodes (30): DisectAQuantumComputer, BigGuessAndCheck, ContrastTwoAlgorithmsFrame, GroverTimeline, GuessAndCheckEarlyGet, GuessAndCheckLateGet, GuessAndCheckMidGet, LargeGuessAndCheck (+22 more)
+
+### Community 175 - "Community 175"
 Cohesion: 0.07
-Nodes (21): ExamplePixels, Load an OBJ file and extract all texture filenames from its MTL file.          R, TexturedGeometry, ThreeDModel, get_cache_dir(), get_directories(), get_downloads_dir(), get_output_dir() (+13 more)
+Nodes (25): ConvolutionTheoremDiagram, FourierProblemSolvingSchematic, FourierWrapper, get_fifteenth_frac_tex(), get_multi_sinc_integral(), get_sinc_tex(), Graph15Case, InsertTwoCos (+17 more)
 
-### Community 183 - "Community 183"
+### Community 176 - "Community 176"
 Cohesion: 0.05
 Nodes (25): AnnotateIntro, CombinationOfExponentials, ComplainAboutSpecificity, ContourIntegralReference, ExplanationOneTitle, get_lt_group(), IntuitionEvaporating, InvertArrow (+17 more)
 
-### Community 184 - "Community 184"
+### Community 177 - "Community 177"
+Cohesion: 0.07
+Nodes (14): ContrastWearyAndSlate, DistributionOverWord, EntropyOfWordDistributionExample, ExampleGridColors, InformationLimit, LookThroughWindowsOfWords, ShowTonsOfWords, ShowWordLikelihoods (+6 more)
+
+### Community 178 - "Community 178"
+Cohesion: 0.08
+Nodes (25): Antipodes, BorsukEndScreen, DivisionOfUnity, DrawSphere, FunctionGInSymbols, GreenLine, Introduction, LineScene (+17 more)
+
+### Community 179 - "Community 179"
+Cohesion: 0.08
+Nodes (28): DensePhaseKickBacks100, DensePhaseKickBacks25, DensePhaseKickBacks50, DenserKickForward, DensestKickForward, DissolveLayers, FastWave, GreenWaveFast (+20 more)
+
+### Community 180 - "Community 180"
+Cohesion: 0.1
+Nodes (8): AngularMomentumArgument, AskAboutEllipses, KeplersSecondLaw, KeplersSecondLawImage, NonEllipticalKeplersLaw, Return a mobject illustrating the area swept         out between a point prop1 o, SunAnimation, TheMotionOfPlanets
+
+### Community 181 - "Community 181"
+Cohesion: 0.07
+Nodes (16): GaussianDistributionWrapper, MentionUncertaintyPrinciple, MentionUncertaintyPrincipleCopy, MultipleFlashes, OneLevelDeeper, ProbabalisticDotCloud, ProbabalisticMobjectCloud, ProbabalisticVectorCloud (+8 more)
+
+### Community 182 - "Community 182"
+Cohesion: 0.06
+Nodes (19): ComplexTransformationScene, ConfettiSpiril, ECLPromo, EfvgtPatreonThanks, EmeraldLogo, ExpTransformation, get_composite_rotation_angle_and_axis(), HomomophismPreview (+11 more)
+
+### Community 183 - "Community 183"
 Cohesion: 0.08
 Nodes (18): CrankEmail, DensityFormula, EuclidProof, GiantSieve, InfinitePrimes, NewGapsInPrimes, OldGapsInPrimes, PrimeDensityHistogram (+10 more)
 
+### Community 184 - "Community 184"
+Cohesion: 0.18
+Nodes (8): Chessboard, Coin, CoinsOnBoard, FlipCoin, Key, string_to_bools(), Group, SGroup
+
 ### Community 185 - "Community 185"
 Cohesion: 0.05
-Nodes (26): AreaToSignedArea, AstuteAmongYou, ConceptAndNotationFrames, EndScreen, EngineersSinc, ExpressAnger, FirstInASequence, HeavyMachinery (+18 more)
+Nodes (19): BalanceCompetingFactors, Challenge, CondensedVersion, DisectBrachistochroneWord, FermatsPrincipleStatement, FindAnotherSolution, IntroduceSteve, LetsBeHonest (+11 more)
 
 ### Community 186 - "Community 186"
-Cohesion: 0.09
-Nodes (12): AskAboutDirectConnection, CircumferenceOfCylinder, Cylinder, MapSphereOntoCylinder, ParametricDisc, Inherits from sphere so as to be as aligned as possible     for transformations, SequenceOfSpheres, ShowProjection (+4 more)
+Cohesion: 0.08
+Nodes (20): CompareCountries, ContrastRandomShufflingWithClustersAndTravel, EndScreen, GrowthEquation, IntroducePlot, IntroQuestion, LinRegNote, RescaleToLogarithmic (+12 more)
 
 ### Community 187 - "Community 187"
-Cohesion: 0.06
-Nodes (16): Updates things like starting_mobject, and (for         Transforms) target_mobjec, This method shouldn't exist, but it's here to         keep many old scenes from, Ordering must match the ording of arguments to interpolate_submobject, To speed up some animations, particularly transformations,         it can be han, Ensures all attributes which are mobjects are included         in the submobject, ImageMobject, set_opacity(), set_opacity() (+8 more)
+Cohesion: 0.08
+Nodes (12): AnalyzeStepAlongDiagonalLine, CleanExpAndRect, DiagonalSlices, Introduce3DGraph, OscillatingGaussianSlice, RotateGaussianSlice, RotationalSymmetryOfGaussian, SyncedSlices (+4 more)
 
 ### Community 188 - "Community 188"
 Cohesion: 0.09
-Nodes (4): BringTwoRodsTogether, ShowCurvatureToRateOfChangeIntuition, ShowEvolvingTempGraphWithArrows, TalkThrough1DHeatGraph
+Nodes (9): JustifyLengthStretch, JustifyLengthStretchHigherRes, JustifyLengthStretchHighestRes, LimitViewToCrossSection, SecondProof, SecondProofHigherRes, SecondProofHighestRes, SlantedShadowSquishing (+1 more)
+
+### Community 189 - "Community 189"
+Cohesion: 0.12
+Nodes (4): HypersphereStereographicProjection, QuaternionTracker, RuleOfQuaternionMultiplication, StereoProjectedCircleFromHypersphere
 
 ### Community 190 - "Community 190"
-Cohesion: 0.1
-Nodes (7): JustifyLengthStretch, JustifyLengthStretchHigherRes, JustifyLengthStretchHighestRes, LimitViewToCrossSection, SecondProof, SlantedShadowSquishing, ShowShadows
+Cohesion: 0.15
+Nodes (4): IntroduceTransformationView, NumberlineTransformationScene, TalkThroughXSquaredExample, XSquaredForNegativeInput
 
 ### Community 191 - "Community 191"
-Cohesion: 0.08
-Nodes (14): DivergenceAtSlowFastPoint, TestVectorField, ZToHalfFlowNearWall, ComplexTransformationScene, AnimatedStreamLines, get_rgb_gradient_function(), get_vectorized_rgb_gradient_function(), move_submobjects_along_vector_field() (+6 more)
+Cohesion: 0.06
+Nodes (19): Chapter2PatreonThanks, CompareTwoTimes, CompareTwoVerySimilarTimes, ContrastConcreteDtWithLimit, FathersOfCalculus, FirstRealWorld, IncrementTest, IntroduceCar (+11 more)
 
 ### Community 192 - "Community 192"
-Cohesion: 0.14
-Nodes (3): ContrastTwoRandomProcesses, RevisitTwoDCase, TwoDCase
+Cohesion: 0.1
+Nodes (8): AnswerConfigurationsCount, ConstrainedTowersOfHanoiScene, ExampleFirstMoves, IntroduceConstrainedTowersOfHanoi, IntroduceTowersOfHanoi, LargeScaleHanoiDecomposition, SimpleConstrainedBreakdown, TowersOfHanoiScene
 
 ### Community 193 - "Community 193"
-Cohesion: 0.06
-Nodes (14): StringMobject, get_svg_content_height(), get_tex_mob_scale_factor(), _Alignment, escape_markup_char(), get_text_mob_scale_factor(), markup_to_svg(), MarkupText (+6 more)
-
-### Community 194 - "Community 194"
-Cohesion: 0.08
-Nodes (17): get_vector_pair(), AlmostOrthogonal, AltLastTwoChapters, BasicMLPWalkThrough, BreakDownThreeSteps, ClassicNeuralNetworksPicture, LastTwoChapters, MatricesVsIntuition (+9 more)
-
-### Community 195 - "Community 195"
-Cohesion: 0.07
-Nodes (28): BinaryCountingAtEveryScale, BinaryCountingAtLargeScale, BinaryCountingAtMediumScale, BinaryCountingAtSmallestScale, BothAreSelfSimilar, CodeThisUp, CompareNumberSystems, CoolRight (+20 more)
-
-### Community 196 - "Community 196"
-Cohesion: 0.08
-Nodes (15): ApproxWordsLowAnglePendulum, GravityVector, HighAnglePendulum, IntroducePendulum, LongDoublePendulum, LowAnglePendulum, MediumAnglePendulum, MediumHighAnglePendulum (+7 more)
-
-### Community 197 - "Community 197"
 Cohesion: 0.08
 Nodes (19): BorderRect, CompareFreqDecays1to2, CompareFreqDecays1to4, CompareFreqDecays2to4, DerivativesOfLinearFunction, EquationAboveSineAnalysis, ExpVideoWrapper, FlatAtBoundaryWords (+11 more)
 
+### Community 194 - "Community 194"
+Cohesion: 0.1
+Nodes (8): ConstantEquals2, ImaginaryConstant, IntroducePhysicalModel, IntroductionOfExp, NegativeConstant, PiMinuteMark, ReferenceWhatItMeans, Thumbnail
+
+### Community 195 - "Community 195"
+Cohesion: 0.09
+Nodes (11): AskAboutDirectConnection, CircumferenceOfCylinder, Cylinder, MapSphereOntoCylinder, ParametricDisc, Inherits from sphere so as to be as aligned as possible     for transformations, ShowProjection, SphereCylinderScene (+3 more)
+
+### Community 196 - "Community 196"
+Cohesion: 0.05
+Nodes (24): AskAboutLongVsShort, AskAboutUncertainty, AskPhysicists, BetterTranslation, BringInFourierTranform, CleanerFourierTradeoff, CrossOutDefinitenessAndCertainty, DopplerFormulaInsert (+16 more)
+
+### Community 197 - "Community 197"
+Cohesion: 0.11
+Nodes (7): DeepZoomFractal, HighlightedJulia, IncreasingStepsNewtonFractal, IntroNewtonFractal, MetaFractal, MetaNewtonFractal, NewtonFractal
+
 ### Community 198 - "Community 198"
-Cohesion: 0.13
-Nodes (5): LightSource, Spotlight, Point, VectorizedPoint, project_along_vector()
+Cohesion: 0.14
+Nodes (3): ContrastTwoRandomProcesses, RevisitTwoDCase, TwoDCase
 
 ### Community 199 - "Community 199"
-Cohesion: 0.06
-Nodes (20): CertainRegularityInPrimes, FactorOrdinaryNumber, FactorsOfTwoNeitherHelpNorHurt, FermatsDreamExcerptWrapper, FromIntegerFactorsToGaussianFactors, IntersectionOfTwoFields, LooksLikeYoureMissingSome, NumberTheoryAtItsBest (+12 more)
+Cohesion: 0.09
+Nodes (10): CanYouExplainTheTattoo, Credit, ExplainTrigFunctionDistances, Introduce, IntroduceCSC, MisMatchOfCoPrefix, ReactionsToTattoo, RenameAllInTermsOfSine (+2 more)
 
 ### Community 200 - "Community 200"
-Cohesion: 0.12
-Nodes (14): AltIntro, FlowForCHM, FlowForCHM2, FlowForCHMNoText, FlowForMLPIntroReview, HighLevelNetworkFlow, LongerFlowLongerAttention, MentionContextSizeAndUnembedding (+6 more)
+Cohesion: 0.09
+Nodes (5): DefineInfiniteSum, ApplyFunction, DoublingPopulation, AlternateDefOfLinearlyDependent, UsedToThinkinfOfFunctionsAsGraphs
 
 ### Community 201 - "Community 201"
+Cohesion: 0.06
+Nodes (14): StringMobject, get_svg_content_height(), get_tex_mob_scale_factor(), _Alignment, escape_markup_char(), get_text_mob_scale_factor(), markup_to_svg(), MarkupText (+6 more)
+
+### Community 202 - "Community 202"
+Cohesion: 0.08
+Nodes (18): Cylinder, AltClockwiseCircularLight, AltCounterclockwiseCircularLight, ClockwiseCircularLight, CounterclockwiseCircularLight, InducedWiggleInCylinder, SimpleLightBeam, TransitionTo2D (+10 more)
+
+### Community 203 - "Community 203"
+Cohesion: 0.11
+Nodes (5): ShowCurvatureToRateOfChangeIntuition, ShowEvolvingTempGraphWithArrows, ShowManyVLines, TalkThrough1DHeatGraph, TransitionToContinuousCase
+
+### Community 205 - "Community 205"
+Cohesion: 0.07
+Nodes (25): AllOfTheVideos, AltForeverNarrowingLoop, AltTeacherStudentsScene, AskAboutHowToGeneralizeSigns, BackToEquationSolving, ConfusedPiCreature, EndingCredits, ForeverNarrowingLoop (+17 more)
+
+### Community 206 - "Community 206"
 Cohesion: 0.1
 Nodes (11): get_attr_dict_from_command_pair(), get_command_flag(), get_command_matches(), get_command_string(), get_configured_items(), get_content_prefix_and_suffix(), get_svg_string_by_content(), Rearrange `labeleled_submobjects` so that each submobject         is labelled by (+3 more)
 
-### Community 202 - "Community 202"
-Cohesion: 0.07
-Nodes (20): BuildCircleWithCombinedAnnulusses, CircleDerivativeFormula, CircumferenceToArea, CrossLineWithCircle, Distributions, get_boundary_volume_texs(), get_volume_texs(), SeparateRingsOfLatitude (+12 more)
-
-### Community 203 - "Community 203"
-Cohesion: 0.09
-Nodes (20): CompareCountries, ContrastRandomShufflingWithClustersAndTravel, EndScreen, GrowthEquation, IntroducePlot, IntroQuestion, LinRegNote, RescaleToLogarithmic (+12 more)
-
-### Community 204 - "Community 204"
-Cohesion: 0.06
-Nodes (18): ComplexTransformationScene, ECLPromo, EfvgtPatreonThanks, ExponentsAsRepeatedMultiplication, ExpTransformation, get_composite_rotation_angle_and_axis(), HomomophismPreview, HowDoSymmetriesPlayWithEachOther (+10 more)
-
-### Community 205 - "Community 205"
-Cohesion: 0.08
-Nodes (17): AltHeatRHS, AskAboutActuallySolving, BringTogether, CompareInputsOfGeneralCaseTo1D, CompareODEToPDE, D1EquationNoInputs, FourierSeriesIntro, HeatEquationIntroTitle (+9 more)
-
-### Community 206 - "Community 206"
-Cohesion: 0.09
-Nodes (22): AskAboutUnknownProbabilities, SimulationsOf50Reviews, StateIndependence, Thumbnail2, Thumbnail3, get_beta_label(), get_checks_and_crosses(), get_coin() (+14 more)
-
 ### Community 207 - "Community 207"
-Cohesion: 0.09
-Nodes (6): IntroduceLabeledFilters, IntroduceLabeledFiltersNoRotation, NoFirstMeasurementPreferenceBasedOnDirection, RemoveBFromLabeledFilters, ShowVariousFilterPairs, ShowVariousFilterPairsFrom0To45
+Cohesion: 0.08
+Nodes (11): BasicsOfPolarization, CircularPhotons, EMWave, FilterLabel, FilterScene, OscillatingVector, OscillatingVectorComponents, PolarizingFilter (+3 more)
 
 ### Community 208 - "Community 208"
-Cohesion: 0.07
-Nodes (16): AngleToProbabilityChart, AngryPiCreature, BasicsOfPolarization, ConfusedPiCreature, DirectionOfPolarization, MoreFiltersMoreLight, MoreFiltersMoreLightBlackBackground, NumbersSuggestHiddenVariablesAreImpossible (+8 more)
+Cohesion: 0.06
+Nodes (19): CertainRegularityInPrimes, FactorOrdinaryNumber, FactorsOfTwoNeitherHelpNorHurt, FermatsDreamExcerptWrapper, FromIntegerFactorsToGaussianFactors, Given2DThinkComplex, IntersectionOfTwoFields, LooksLikeYoureMissingSome (+11 more)
 
 ### Community 209 - "Community 209"
 Cohesion: 0.08
-Nodes (19): Process Vietnamese text for TTS - ported from utils/vietnamese-processor.js, Remove thousand separators (dots) from numbers., Convert decimal numbers: 7,27 -> bảy phẩy hai mươi bảy, Convert percentages: 50% -> năm mươi phần trăm, 3-5% -> ba đến năm phần trăm, Convert currency amounts., Convert time expressions: 2:20 -> hai giờ hai mươi phút, Convert year ranges: 1873-1907 -> một nghìn... đến một nghìn..., Convert date expressions including date ranges. (+11 more)
+Nodes (16): get_vector_pair(), AlmostOrthogonal, AltLastTwoChapters, BasicMLPWalkThrough, BreakDownThreeSteps, ClassicNeuralNetworksPicture, LastTwoChapters, MatricesVsIntuition (+8 more)
 
 ### Community 210 - "Community 210"
+Cohesion: 0.07
+Nodes (20): BuildCircleWithCombinedAnnulusses, CircleDerivativeFormula, CircumferenceToArea, CrossLineWithCircle, Distributions, get_boundary_volume_texs(), get_volume_texs(), SeparateRingsOfLatitude (+12 more)
+
+### Community 211 - "Community 211"
+Cohesion: 0.13
+Nodes (28): Union, AltSimpleAutoRegression, AnnotateNextWord, AutoregressionGPT3, ChatBotPrompt, ChatBotPrompt2, ChatBotPrompt3, get_gpt2_model() (+20 more)
+
+### Community 212 - "Community 212"
+Cohesion: 0.09
+Nodes (12): AskAboutConfigurations, BinaryCountingScene, CountInBinaryTo256, CountInDecimal, CountingScene, CountInTernary, CountTo27InTernary, DecimalCountingAtHundredsScale (+4 more)
+
+### Community 213 - "Community 213"
 Cohesion: 0.12
 Nodes (8): ClosedLoopScene, DefineInscribedSquareProblem, EndpointsGluedTogether, PairsOfPointsOnLoop, SearchForRectangleOnLoop, SeekSurfaceForPairs, ThumbnailImage, WigglingPairOfPoints
 
-### Community 211 - "Community 211"
-Cohesion: 0.09
-Nodes (11): AnalyzeStepAlongDiagonalLine, CleanExpAndRect, DiagonalSlices, Introduce3DGraph, OscillatingGaussianSlice, RotateGaussianSlice, RotationalSymmetryOfGaussian, SyncedSlices (+3 more)
-
-### Community 212 - "Community 212"
-Cohesion: 0.1
-Nodes (10): CanYouExplainTheTattoo, Credit, ExplainTrigFunctionDistances, Introduce, IntroduceCSC, MisMatchOfCoPrefix, ReactionsToTattoo, RenameAllInTermsOfSine (+2 more)
-
-### Community 213 - "Community 213"
-Cohesion: 0.09
-Nodes (8): ApplyMethod, Car, MoveCar, ParadoxAtTEquals0, SnapshotOfACar, TinyMovement, ContrastAbstractAndConcrete, DrivingACar
-
 ### Community 214 - "Community 214"
-Cohesion: 0.07
-Nodes (22): ConvolutionTheoremDiagram, FourierProblemSolvingSchematic, FourierWrapper, get_fifteenth_frac_tex(), get_sinc_tex(), Graph15Case, InsertTwoCos, LongerReciprocalSums (+14 more)
+Cohesion: 0.06
+Nodes (19): ChaosTitle, ComingUp, EndScreen, GleickQuote, InputLabel, JumpToThisPoint, ReallyHardToSolve, ReasonForSolution (+11 more)
 
 ### Community 215 - "Community 215"
-Cohesion: 0.12
-Nodes (6): IntroduceDistribution, ShowEntropyCalculations, ShowPatternInformationExamples, WordleDistributions, pattern_from_string(), safe_log2()
+Cohesion: 0.1
+Nodes (11): Thumbnail, IntroduceFelix, IntroduceThreeDNumbers, ReferernceSpheresFelixView, RotateCubeThreeTimes, RotationsIn3d, RotationsOfCube, RubiksCube (+3 more)
 
 ### Community 216 - "Community 216"
-Cohesion: 0.1
-Nodes (8): CycloidScene, EquationsForCycloid, IntroduceCycloid, LeviSolution, RollAlongVector, RotateWheel, SlidingObject, PathSlidingScene
-
-### Community 217 - "Community 217"
-Cohesion: 0.07
-Nodes (10): IntersectCubeGraphEdges, CompleteGraph, CubeGraph, DiscreteGraphScene, Graph, OctohedronGraph, 3           1   0            2     4             5, 5  7       12       03      4  6 (+2 more)
+Cohesion: 0.12
+Nodes (14): AltIntro, FlowForCHM, FlowForCHM2, FlowForCHMNoText, FlowForMLPIntroReview, HighLevelNetworkFlow, LongerFlowLongerAttention, MentionContextSizeAndUnembedding (+6 more)
 
 ### Community 218 - "Community 218"
-Cohesion: 0.07
-Nodes (20): joukowsky_map(), ArrowCircleTest, FuncRotater, LinearWalker(), LinePulser, LoopSplitScene, make_alpha_winder(), point_to_rescaled_size() (+12 more)
+Cohesion: 0.09
+Nodes (11): PMobject, DotCloud, GlowDot, GlowDots, set_radii(), set_radius(), TrueDot, match_colors() (+3 more)
 
 ### Community 219 - "Community 219"
-Cohesion: 0.12
-Nodes (7): DeepZoomFractal, HighlightedJulia, IncreasingStepsNewtonFractal, IntroNewtonFractal, MetaFractal, MetaNewtonFractal, NewtonFractal
+Cohesion: 0.09
+Nodes (12): WalkEquatorPostTransform, reverse_smooth(), ManyComputationsPerUnitTimeV2, ImagesMod256, double_smooth(), linear(), lingering(), overshoot() (+4 more)
 
 ### Community 220 - "Community 220"
-Cohesion: 0.16
-Nodes (7): IntroduceRecipe, RecipeFor10, RecipeFor1125, RecipeFor125, RecipeFor375, ShowAlternateFactorizationOfTwentyFive, WriteAlternateLastStep
+Cohesion: 0.11
+Nodes (8): a_square(), b_square(), c_square(), Triangle, ZoomInOnTroublePoint, region_from_line_boundary(), region_from_polygon_vertices(), Polygon
+
+### Community 221 - "Community 221"
+Cohesion: 0.1
+Nodes (13): _deep_reload(), _exec_module_and_track_imports(), get_module(), _is_user_defined_module(), ModuleLoader, Utility class to load a module from a file and handle its imports.      Most par, _reload_modules(), Subsets (+5 more)
+
+### Community 222 - "Community 222"
+Cohesion: 0.09
+Nodes (11): DivergenceAtSlowFastPoint, TestVectorField, get_vector_field_and_stream_lines(), AnimatedStreamLines, get_rgb_gradient_function(), get_vectorized_rgb_gradient_function(), move_points_along_vector_field(), ode_solution_points() (+3 more)
 
 ### Community 223 - "Community 223"
 Cohesion: 0.09
-Nodes (21): AllVideosOrdered, AllVideosOrdered, AllVideos, EndScreen, ExampleChannels, FeaturedContentFrame, FourCategories, HistogramOfViews (+13 more)
+Nodes (10): TestFields, acceleration_from_position(), ChargedParticle, ColoumbPlusLorentzField, coulomb_force(), CoulombField, lorentz_force(), points_to_particle_info() (+2 more)
 
 ### Community 224 - "Community 224"
-Cohesion: 0.12
-Nodes (7): ComplexExponentiationAbstract, ComplexExponentiationAdderHalf, ComplexExponentiationMultiplierHalf, ExpComplexHomomorphismPreviewAbstract, ExpComplexHomomorphismPreviewAdderHalf, ExpComplexHomomorphismPreviewMultiplierHalf, Thumbnail
+Cohesion: 0.15
+Nodes (5): ApplyFourierToFourier, DrawFrequencyPlot, get_fourier_transform(), ShowLowerFrequency, SummarizeTheFullTransform
 
 ### Community 225 - "Community 225"
-Cohesion: 0.13
-Nodes (12): LinearAsASuperpositionOfCircular, DrivenHarmonicOscillator, DynamicPlot, HarmonicOscillator, JigglesInCalcite, JigglesInCalciteY, SpiralPaths, SpiralPathsLeftHanded (+4 more)
+Cohesion: 0.16
+Nodes (7): IntroduceRecipe, RecipeFor10, RecipeFor1125, RecipeFor125, RecipeFor375, ShowAlternateFactorizationOfTwentyFive, WriteAlternateLastStep
 
 ### Community 226 - "Community 226"
-Cohesion: 0.11
-Nodes (9): DiscreteGraphStillImage1, DiscreteGraphStillImageFourth, DiscreteGraphStillImageHundredth, DiscreteGraphStillImageTenth, DiscreteSetup, ShowFinitelyManyX, ShowNewtonsLawGraph, TwoDBodyWithManyTemperaturesContour (+1 more)
+Cohesion: 0.09
+Nodes (22): AllVideosOrdered, AllVideosOrdered, AllVideos, EndScreen, ExampleChannels, FeaturedContentFrame, FourCategories, get_entry_tile() (+14 more)
 
 ### Community 227 - "Community 227"
-Cohesion: 0.12
-Nodes (8): ArithmeticCodingDiagram, DiagramTest, DynamicInterval, StackedProbDistribution, _ensure_nano_loaded(), get_next_char_distribution(), Return a probability distribution over `alphabet` using the nanoGPT     wiki_cha, UnitInterval
+Cohesion: 0.09
+Nodes (4): ImplicitFunction, ParametricCurve, GraphScene, Resulting group is of the form VGroup(             dx_line,             df_line,
 
 ### Community 228 - "Community 228"
 Cohesion: 0.13
-Nodes (15): Block, ClackFlashes, Wall, IntroduceVelocityVectorWithoutZoom, JustTheProcessNew, # TODO: Add labels for angles?, # TODO: Put in config, RescaleCoordinates (+7 more)
+Nodes (7): ChoosingBasedOnLetterFrequencies, IntroduceDistribution, IntroduceGame, ShowEntropyCalculations, ShowPatternInformationExamples, WordleDistributions, safe_log2()
 
 ### Community 229 - "Community 229"
-Cohesion: 0.09
-Nodes (25): derivative(), add_notes(), create_midi_file_with_notes(), extract_pure_keys(), gaussian_kernel(), generate_piano_sample_midi(), generate_pure_piano_key_files(), get_volume_to_velocity_func_map() (+17 more)
+Cohesion: 0.1
+Nodes (9): get_force_field_func(), GravityFluidFlow, IllustrateGaussMagnetic, IntroduceCurl, IntroduceVectorField, ShearCurl, ShorteningLongVectors, ShowCurlAtVariousPoints (+1 more)
 
 ### Community 230 - "Community 230"
-Cohesion: 0.09
-Nodes (19): viTTS Python SDK - Simple client for viTTS API  Usage:     from vitts_client imp, Synthesize text to speech.                  Args:             text: Text to synt, Synthesize text using a saved reference audio.                  Args:, List available system voices.                  Returns:             List of voic, List available TTS model checkpoints.                  Returns:             List, List your saved reference audio files.                  Args:             langua, Get a specific reference by ID., Download reference audio file.                  Args:             ref_id: Refere (+11 more)
+Cohesion: 0.07
+Nodes (22): AskAboutOtherWayAround, AskAboutTranslation, ChangeOfBasisExample, FeelsBackwards, JenniferScene, JennysGrid, JennyWatchesRotation, JennyWatchesRotationWithMatrixAndVector (+14 more)
 
 ### Community 231 - "Community 231"
-Cohesion: 0.1
-Nodes (11): _deep_reload(), _exec_module_and_track_imports(), get_module(), _is_user_defined_module(), _reload_modules(), Subsets, Subsets2, Subsets3 (+3 more)
+Cohesion: 0.13
+Nodes (13): DrivenHarmonicOscillator, DynamicPlot, HarmonicOscillator, JigglesInCalcite, JigglesInCalciteY, SpiralPaths, SpiralPathsLeftHanded, Spring (+5 more)
 
 ### Community 232 - "Community 232"
-Cohesion: 0.11
-Nodes (9): AsymptomaticCases, DotPerson, DoubleRadiusInGroup, IntroduceR0, IntroduceSocialDistancing, Person, PiPerson, Test (+1 more)
+Cohesion: 0.12
+Nodes (9): BoundaryConditionReference, ManipulateSinExpSurface, MoreAccurateTempFlowWithArrows, ShowFreq1CosExpDecay, ShowFreq2CosExpDecay, ShowFreq4CosExpDecay, ShowHarmonicSurfaces, Thumbnail (+1 more)
 
 ### Community 233 - "Community 233"
-Cohesion: 0.09
-Nodes (13): ContrastWearyAndSlate, DistributionOverWord, EntropyOfWordDistributionExample, ExampleGridColors, InformationLimit, LookThroughWindowsOfWords, ShowTonsOfWords, ShowWordLikelihoods (+5 more)
+Cohesion: 0.12
+Nodes (8): ArithmeticCodingDiagram, DiagramTest, DynamicInterval, StackedProbDistribution, _ensure_nano_loaded(), get_next_char_distribution(), Return a probability distribution over `alphabet` using the nanoGPT     wiki_cha, UnitInterval
 
 ### Community 234 - "Community 234"
-Cohesion: 0.15
-Nodes (3): FourierMachineScene, ShowLowerFrequency, WrapCosineGraphAroundCircle
+Cohesion: 0.09
+Nodes (21): get_pretrained_network(), maximizing_input(), Network, network.py ~~~~~~~~~~  A module to implement the stochastic gradient descent lea, Update the network's weights and biases by applying         gradient descent usi, Return a tuple ``(nabla_b, nabla_w)`` representing the         gradient for the, Return the number of test inputs for which the neural         network outputs th, Return the vector of partial derivatives \\partial C_x /         \\partial a for (+13 more)
 
 ### Community 235 - "Community 235"
 Cohesion: 0.09
-Nodes (15): SolvabilityChart, coefficients_to_roots(), Cubic, expanded_poly_tex(), find_root(), get_full_cubic_formula(), get_quadratic_formula(), optimal_transport() (+7 more)
+Nodes (19): viTTS Python SDK - Simple client for viTTS API  Usage:     from vitts_client imp, Synthesize text to speech.                  Args:             text: Text to synt, Synthesize text using a saved reference audio.                  Args:, List available system voices.                  Returns:             List of voic, List available TTS model checkpoints.                  Returns:             List, List your saved reference audio files.                  Args:             langua, Get a specific reference by ID., Download reference audio file.                  Args:             ref_id: Refere (+11 more)
 
 ### Community 236 - "Community 236"
-Cohesion: 0.11
-Nodes (6): ChangingDecimal, ChangingDecimalWithColor, EmphasizeComplexityOfCostFunction, HowMinimizingCostMeansBetterTrainingPerformance, IntroduceCostFunction, ManyMinimaWords
+Cohesion: 0.1
+Nodes (13): CurlRelationBetweenFields, EulerDiagram, ComplexWaves, LeftDiagram, get_full_surface(), get_sudanese_band(), mobius_strip_func(), stereo_project_point() (+5 more)
 
 ### Community 237 - "Community 237"
-Cohesion: 0.14
-Nodes (14): AnnotateNextWord, AthleteCompletion, AutoregressionGPT3, get_gpt2_model(), get_gpt2_tokenizer(), gpt2_predict_next_token(), gpt3_predict_next_token(), GPT3CleverestAutocomplete (+6 more)
+Cohesion: 0.09
+Nodes (15): FaintDartboard, IndependentCoordinates, ManyDifferentFs, OldTalkAboutSignOfConstantScraps, OldTwoKeyProperties, RationalNumbers, RescaleG, ShowPointR0 (+7 more)
+
+### Community 238 - "Community 238"
+Cohesion: 0.1
+Nodes (20): AltComplexExpGraph, BreakingDownCosine, BreakingDownFunctions, ComplexExpGraph, DefineSPlane, DefiningPropertyOfExp, ExampleExponentials, ExpGraph (+12 more)
 
 ### Community 239 - "Community 239"
-Cohesion: 0.11
-Nodes (4): Camera, Copy blocks between fbo's using Blit, Changes frame_shape to match the aspect ratio         of the pixels, where fixed, ThreeDCamera
+Cohesion: 0.07
+Nodes (19): AnalysisQuote, AskPuzzle, BernoulliQuote, EndScene, EulerSignature, EulerThinking, EulerWrites628, get_image() (+11 more)
 
 ### Community 240 - "Community 240"
+Cohesion: 0.13
+Nodes (15): Block, ClackFlashes, Wall, FailedAngleRelation, IntroduceVelocityVectorWithoutZoom, JustTheProcessNew, # TODO: Add labels for angles?, # TODO: Put in config (+7 more)
+
+### Community 241 - "Community 241"
 Cohesion: 0.09
-Nodes (15): BlankScene, ModuleLoader, Utility class to load a module from a file and handle its imports.      Most par, CheckpointManager, get_leading_comment(), InteractiveSceneEmbed, Flash border, and potentially play sound, on exceptions, Validates the syntax of a Python file without executing it.         Returns True (+7 more)
+Nodes (6): FaceDistanceDoesntDependOnDimension, Slider, TenDThumbnail, TwoDBoxExample, TwoDInnerSphereTouchingBox, TwoDOuterBox
 
 ### Community 242 - "Community 242"
-Cohesion: 0.07
-Nodes (18): AskAboutRelationToPrimes, ButWhatIsTheExensions, CreditTwo, DiscussSumOfNaturals, DontKnowDerivatives, FinalAnimationTease, IgnoreNegatives, InventingMathPreview (+10 more)
+Cohesion: 0.09
+Nodes (15): SolvabilityChart, coefficients_to_roots(), Cubic, expanded_poly_tex(), find_root(), get_full_cubic_formula(), get_quadratic_formula(), optimal_transport() (+7 more)
 
 ### Community 243 - "Community 243"
-Cohesion: 0.14
-Nodes (5): get_fourier_graph(), AmbiguityInLongEchos, IntroduceDopplerRadar, Thumbnail, TimeAndFrequencyGivePositionAndVelocity
+Cohesion: 0.12
+Nodes (5): IncludeBias, IntroduceWeights, PixelsFromVect, ShowRemainingNetwork, ConvolutionalNetworkPreview
 
 ### Community 244 - "Community 244"
-Cohesion: 0.1
-Nodes (8): BreakDownLaplaceTransform, get_complex_graph(), IntegrateComplexExponential, IntegrateConstant, LaplaceTransformOfCos, SimplePole, z_to_color(), SPlane
+Cohesion: 0.12
+Nodes (4): AlternateAreaUnderCurve, AreaUnderParabola, ExampleIntegralProblems, PlayingTowardsDADX
 
 ### Community 245 - "Community 245"
 Cohesion: 0.08
-Nodes (25): ChooseXThenYUniformly, ContrastDistributions, ExactBullseye, ExpectedScoreEqualsQMark, ExpectedValueComputation, ExpectedValueFromBars, GameWithSpecifiedScore, HistogramScene (+17 more)
+Nodes (9): CompleteGraph, CubeGraph, DiscreteGraphScene, Graph, OctohedronGraph, 3           1   0            2     4             5, 5  7       12       03      4  6, 4 2  3     8        0 1               7      5   6 (+1 more)
 
 ### Community 246 - "Community 246"
-Cohesion: 0.06
-Nodes (15): Chapter1PatreonThanks, EndScreen, Eoc1Thumbnail, FundamentalTheorem, MathematicianPonderingAreaUnderDifferentCurves, MoveForwardWithApproximation, NextVideos, NextVideoWrapper (+7 more)
-
-### Community 247 - "Community 247"
-Cohesion: 0.11
-Nodes (4): PAdicMetric, ReEmphasizeVennDiagram, VennDiagramProofByContradiction, center_of_mass()
-
-### Community 248 - "Community 248"
-Cohesion: 0.13
-Nodes (3): PhotonAtSlightAngle, ShootPhotonThroughFilter, ThreeFilters
-
-### Community 249 - "Community 249"
-Cohesion: 0.07
-Nodes (16): Chapter2PatreonThanks, CompareTwoTimes, CompareTwoVerySimilarTimes, ContrastConcreteDtWithLimit, FathersOfCalculus, FirstRealWorld, IncrementTest, IntroduceCar (+8 more)
-
-### Community 250 - "Community 250"
 Cohesion: 0.14
 Nodes (14): AnnotateNextWord, AthleteCompletion, AutoregressionGPT3, get_gpt2_model(), get_gpt2_tokenizer(), gpt2_predict_next_token(), gpt3_predict_next_token(), GPT3CleverestAutocomplete (+6 more)
 
+### Community 248 - "Community 248"
+Cohesion: 0.11
+Nodes (4): Camera, Copy blocks between fbo's using Blit, Changes frame_shape to match the aspect ratio         of the pixels, where fixed, ThreeDCamera
+
+### Community 250 - "Community 250"
+Cohesion: 0.1
+Nodes (6): divergence(), DivergenceAsNewFunction, DivergenceTinyNudgesView, JigglingSubmobjects, PureCylinderFlow, move_along_vector_field()
+
 ### Community 251 - "Community 251"
-Cohesion: 0.08
-Nodes (7): match_colors(), set_color_by_gradient(), If there are multiple colors (for gradient)         this returns the first one, If there are multiple opacities, this returns the         first, set_style(), rgb_to_hex(), resize_with_interpolation()
+Cohesion: 0.1
+Nodes (24): add_notes(), create_midi_file_with_notes(), extract_pure_keys(), gaussian_kernel(), generate_piano_sample_midi(), generate_pure_piano_key_files(), get_volume_to_velocity_func_map(), hz_to_midi_value() (+16 more)
 
 ### Community 252 - "Community 252"
 Cohesion: 0.11
-Nodes (18): DiceSimulation, DiceSimulationAlt1, DiceSimulationAlt2, DiceSimulationAlt3, DiceSimulationAlt4, DiceSimulationAlt5, LargerDiceSimulation, LargerUSimulation (+10 more)
-
-### Community 253 - "Community 253"
-Cohesion: 0.12
 Nodes (7): ClarifyInputAndOutput, GeneralizeToComplexFunctions, GraphForFlattenedPi, SimpleComplexExponentExample, TRangingFrom0To1, DE4Thumbnail, IncreaseOrderOfApproximation
 
 ### Community 254 - "Community 254"
-Cohesion: 0.15
-Nodes (3): Ladder, LightweightLadderScene, RelatedRatesExample
+Cohesion: 0.08
+Nodes (19): joukowsky_map(), ArrowCircleTest, FuncRotater, LinearWalker(), LinePulser, make_alpha_winder(), point_to_rescaled_size(), point_to_rev() (+11 more)
 
 ### Community 255 - "Community 255"
-Cohesion: 0.13
-Nodes (4): AlternateAreaUnderCurve, AreaUnderParabola, ExampleIntegralProblems, PlayingTowardsDADX
+Cohesion: 0.15
+Nodes (5): FeynmanAndOrbitingPlannetOnEllipseDiagram, ProveEllipse, ShowEllipseDefiningProperty, ShowEmergingEllipse, Thumbnail
 
 ### Community 256 - "Community 256"
-Cohesion: 0.13
-Nodes (5): ChoicesInNecklaceCutting, NecklaceDivisionSphereAssociation, ShowFunctionDiagram, TotalLengthOfEachJewelEquals, ReconfigurableScene
+Cohesion: 0.1
+Nodes (7): ApplyMethod, Car, MoveCar, ParadoxAtTEquals0, SnapshotOfACar, ContrastAbstractAndConcrete, DrivingACar
 
 ### Community 257 - "Community 257"
 Cohesion: 0.14
-Nodes (9): AskAboutRegions, CyclesHaveAtLeastFour, IntroduceRegions, IsK33Planar, NewRegionClosedOnlyForNodesWithEdges, ThisPuzzleIsHard, Thumbnail3, TwoKindsOfViewers (+1 more)
+Nodes (14): AnnotateNextWord, AthleteCompletion, AutoregressionGPT3, get_gpt2_model(), get_gpt2_tokenizer(), gpt2_predict_next_token(), gpt3_predict_next_token(), GPT3CleverestAutocomplete (+6 more)
 
 ### Community 258 - "Community 258"
-Cohesion: 0.13
-Nodes (4): AlternateBasis, OscillatingVector, ShowTipToTailSum, ShowVectorEquation
+Cohesion: 0.12
+Nodes (6): Compute6of10GirlsProbability, CorrectForDependence, CycleThroughPatterns, CycleThroughPatternsForThree, NameBinomial, ProbabilityOfAGivenBoyGirlPattern
 
 ### Community 259 - "Community 259"
-Cohesion: 0.13
-Nodes (3): PiCreatureScene, Likely updated for subclasses, TeacherStudentsScene
+Cohesion: 0.11
+Nodes (18): DiceSimulation, DiceSimulationAlt1, DiceSimulationAlt2, DiceSimulationAlt3, DiceSimulationAlt4, DiceSimulationAlt5, LargerDiceSimulation, LargerUSimulation (+10 more)
 
 ### Community 260 - "Community 260"
-Cohesion: 0.12
-Nodes (8): HangingWeightsScene, MentionDopplerRadar, Plane, RadarDish, RadarOperatorUncertainty, RadarPulse, ShowPlan, always_shift()
+Cohesion: 0.11
+Nodes (4): PAdicMetric, ReEmphasizeVennDiagram, VennDiagramProofByContradiction, center_of_mass()
 
 ### Community 261 - "Community 261"
-Cohesion: 0.07
-Nodes (19): DeterminantTrick, ButWeCanDoBetter, CrossVectorEmphasisWords, DeterminantTrickCopy, DualityReview, GeometricVolumeWords, MathematicalWild, NextVideo (+11 more)
+Cohesion: 0.12
+Nodes (9): AnalyzeCircleGeometry, AnalyzeCircleGeometry1e2, AnalyzeCircleGeometry1e4, AnnouncePhaseDiagram, CircleDiagramFromSlidingBlocks, CircleDiagramFromSlidingBlocks1e4, CircleDiagramFromSlidingBlocksSameMass, CircleDiagramFromSlidingBlocksSameMass1e1 (+1 more)
+
+### Community 262 - "Community 262"
+Cohesion: 0.14
+Nodes (3): FunctionGInputSpace, FunctionGOutputSpace, z_to_vector()
 
 ### Community 263 - "Community 263"
-Cohesion: 0.12
-Nodes (6): CheckeredCircle, Hand, IntroduceStereographicProjection, IntroduceStereographicProjectionLinusView, OneDegreeOfFreedomForRotation, ShowRotationUnderStereographicProjection
+Cohesion: 0.13
+Nodes (3): PhotonAtSlightAngle, ShootPhotonThroughFilter, ThreeFilters
 
 ### Community 264 - "Community 264"
-Cohesion: 0.15
-Nodes (6): FiveJewelCase, IntroduceStolenNecklaceProblem, MakeTwoJewelCaseContinuous, RepeatedShuffling, SixJewelCase, ThreeJewelCase
-
-### Community 265 - "Community 265"
-Cohesion: 0.08
-Nodes (18): AnalysisQuote, AskPuzzle, BernoulliQuote, ChangeTopic, EndScene, EulerSignature, EulerThinking, EulerWrites628 (+10 more)
+Cohesion: 0.13
+Nodes (5): ChoicesInNecklaceCutting, NecklaceDivisionSphereAssociation, ShowFunctionDiagram, TotalLengthOfEachJewelEquals, ReconfigurableScene
 
 ### Community 266 - "Community 266"
-Cohesion: 0.11
-Nodes (10): rect_func(), get_conv_graph(), MovingAverageAsConvolution, MovingAverageOfRectFuncs, Returns array of samples and graph, RectConvolutionsNewNotation, RepeatedConvolution, RepeatedConvolutionDoubleLump (+2 more)
+Cohesion: 0.16
+Nodes (3): ConstructQuadraticApproximation, ReflectionOnQuadraticSupplement, SimilarityOfChangeBehavior
 
 ### Community 267 - "Community 267"
-Cohesion: 0.17
-Nodes (3): ReferernceSpheresFelixView, RubiksCube, ShowRotationsJustWithReferenceCircles
+Cohesion: 0.06
+Nodes (15): Chapter1PatreonThanks, EndScreen, Eoc1Thumbnail, FundamentalTheorem, MathematicianPonderingAreaUnderDifferentCurves, MoveForwardWithApproximation, NextVideos, NextVideoWrapper (+7 more)
 
 ### Community 268 - "Community 268"
-Cohesion: 0.13
-Nodes (4): EquationSolver1d, EquationSolver2dNode, RectangleData, split_interval()
+Cohesion: 0.12
+Nodes (9): AsymptomaticCases, DotPerson, DoubleRadiusInGroup, IntroduceR0, IntroduceSocialDistancing, Person, PiPerson, Test (+1 more)
 
 ### Community 269 - "Community 269"
 Cohesion: 0.11
-Nodes (5): divergence(), DivergenceAsNewFunction, DivergenceTinyNudgesView, JigglingSubmobjects, PureCylinderFlow
+Nodes (20): ShowLimitToPdf, ArgumentBetweenBayesianAndFrequentist, BayesianFrequentistDivide, BayesRuleWithPdf, ComplainAboutSimplisticModel, Grey, HighlightReviewPartsReversed, LastTimeWrapper (+12 more)
+
+### Community 270 - "Community 270"
+Cohesion: 0.11
+Nodes (10): rect_func(), get_conv_graph(), MovingAverageAsConvolution, MovingAverageOfRectFuncs, Returns array of samples and graph, RectConvolutionsNewNotation, RepeatedConvolution, RepeatedConvolutionDoubleLump (+2 more)
 
 ### Community 271 - "Community 271"
-Cohesion: 0.12
-Nodes (9): PMobject, DotCloud, GlowDot, GlowDots, set_radii(), set_radius(), TrueDot, PMobject (+1 more)
+Cohesion: 0.11
+Nodes (7): CloserLookAtStraightLine, EmphasizeBoundaryPoints, FlatEdgesContinuousEvolution, ShowHarmonics, SimulateLinearGraph, SimulateRealSineCurve, SlopeToHeatFlow
 
 ### Community 272 - "Community 272"
-Cohesion: 0.08
-Nodes (8): EventDispatcher, EventListener, animate(), _AnimationBuilder, Extend attribute list of _AnimationBuilder object to include mobject attributes, You can change the args of :class:`~manimlib.animation.transform.Transform`, suc, object, DictAsObject
+Cohesion: 0.11
+Nodes (7): MeasuringNearbyStars, Read HYG Database from a gzipped file into a numpy array          Parameters:, MeasuringNearbyStars, Read HYG Database from a gzipped file into a numpy array          Parameters:, BringTwoRodsTogether, temperature_to_color(), inverse_interpolate()
 
 ### Community 273 - "Community 273"
 Cohesion: 0.1
-Nodes (10): on_mouse_drag(), on_mouse_motion(), on_mouse_press(), on_mouse_release(), on_mouse_scroll(), on_resize(), Puts focus on this window by hiding and showing it again.          Note that the, Resets the state and updates the scene associated to this window.          This (+2 more)
+Nodes (15): FourierBatman, FourierGoogleG, FourierHeart, FourierNailAndGear, FourierNDQ, FourierOfEighthNote, FourierOfIP, FourierOfN (+7 more)
 
 ### Community 274 - "Community 274"
-Cohesion: 0.14
-Nodes (22): DisectAQuantumComputer, BigGuessAndCheck, ContrastTwoAlgorithmsFrame, GroverTimeline, GuessAndCheckEarlyGet, GuessAndCheckLateGet, GuessAndCheckMidGet, LargeGuessAndCheck (+14 more)
+Cohesion: 0.07
+Nodes (16): AskAboutFavoriteProof, AskAboutHittingAllPoints, BabylonianTablets, BitOfCircleGeometry, BoringExample, CompareToFermatsLastTheorem, FiveTwoExample, GeneralExample (+8 more)
 
 ### Community 275 - "Community 275"
-Cohesion: 0.13
-Nodes (6): AnswerConfigurationsCount, ExampleFirstMoves, LargeScaleHanoiDecomposition, SimpleConstrainedBreakdown, SolveHanoi, TowersOfHanoiScene
+Cohesion: 0.14
+Nodes (11): ContinuouslyObeyingSnellsLaw, LimitingProcess, MultilayeredScene, NLayers, RaceLightInLayers, ShowDiscretePath, ShowLayerVariables, ShowLightAndSlidingObject (+3 more)
 
 ### Community 276 - "Community 276"
-Cohesion: 0.12
-Nodes (19): AltComplexExpGraph, BreakingDownCosine, BreakingDownFunctions, ComplexExpGraph, DefineSPlane, DefiningPropertyOfExp, ExampleExponentials, ExpGraph (+11 more)
+Cohesion: 0.09
+Nodes (16): color_region(), get_connected_components(), get_edges(), get_image_array(), JohannThinksHeIsBetter, JohannThinksOfFermat, MathematiciansOfEurope, NewtonConsideredEveryoneBeneathHim (+8 more)
 
 ### Community 277 - "Community 277"
-Cohesion: 0.14
-Nodes (8): SuitSymbol, get_heart_var(), get_heart_var_deriv(), get_love_equation1(), get_love_equation2(), get_ode(), get_vector_symbol(), LoveExample
+Cohesion: 0.11
+Nodes (13): DotCloud, AngledMedium, AngledMediumAnnotations, AngledMediumSingleFront, LineGame, Prism, ScalarFieldByOpacity, SnellsLaw (+5 more)
 
 ### Community 278 - "Community 278"
-Cohesion: 0.15
-Nodes (11): args_to_string(), ExamplesOfOneDimensionalLinearTransforms, ExamplesOfTwoDimensionalLinearTransformations, matrix_mobject(), matrix_to_string(), Show90DegreeRotation, ShowMatrixTransform, ShowMatrixTransformWithDot (+3 more)
-
-### Community 279 - "Community 279"
-Cohesion: 0.18
-Nodes (3): ApplyFourierToFourier, DrawFrequencyPlot, ShowLinearity
+Cohesion: 0.12
+Nodes (12): Diffusion1D, Diffusion1DStepFunction, Diffusion1DStepFunctionGraphed, Diffusion1DWith1Dot, Diffusion2D, Diffusion2D10KDots, Diffusion2D1Dot, DiffusionDeltaGraphed (+4 more)
 
 ### Community 280 - "Community 280"
-Cohesion: 0.12
-Nodes (19): BreakDownLoopWithNonzeroWinding, TransitionFromPathsToBoundaries, TransitionFromPathsToBoundariesArrowless, point_to_rgba(), rev_to_rgba(), average_color(), color_to_int_rgb(), color_to_int_rgba() (+11 more)
+Cohesion: 0.09
+Nodes (18): BigLoopNoZeros, ColorMappedByFuncScene, ColorMappedObjectsScene, DemonstrateColorMapping, ExamplePlaneFunc, LoopSplitScene, PureColorMap, PureColorMapOfX5Thing (+10 more)
 
 ### Community 281 - "Community 281"
-Cohesion: 0.14
-Nodes (9): BoxCountingScene, BoxCountingSierpinski, BoxCountingWithBritain, BoxCountingWithDisk, BritainBoxCountHighZoom, CheapBoxCountingWithBritain, FineGridSameAsLargeScaling, FinerBoxCountingWithDisk (+1 more)
+Cohesion: 0.12
+Nodes (17): Introduce3DSystem, SetupSimpleSystemOfEquations, ThinkOfPuzzleAsLinearCombination, average_color(), color_to_int_rgb(), color_to_int_rgba(), color_to_rgb(), color_to_rgba() (+9 more)
 
-### Community 282 - "Community 282"
+### Community 283 - "Community 283"
+Cohesion: 0.1
+Nodes (10): on_mouse_drag(), on_mouse_motion(), on_mouse_press(), on_mouse_release(), on_mouse_scroll(), on_resize(), Puts focus on this window by hiding and showing it again.          Note that the, Resets the state and updates the scene associated to this window.          This (+2 more)
+
+### Community 284 - "Community 284"
 Cohesion: 0.11
 Nodes (15): FlowSnake, BringInPeano, DullerKoch, FillOtherShapes, FromKochToSpaceFilling, Intro, IntroduceKoch, MostDelightfulName (+7 more)
 
-### Community 283 - "Community 283"
+### Community 286 - "Community 286"
+Cohesion: 0.15
+Nodes (11): args_to_string(), ExamplesOfOneDimensionalLinearTransforms, ExamplesOfTwoDimensionalLinearTransformations, matrix_mobject(), matrix_to_string(), Show90DegreeRotation, ShowMatrixTransform, ShowMatrixTransformWithDot (+3 more)
+
+### Community 287 - "Community 287"
+Cohesion: 0.14
+Nodes (7): DirectionOfA2DFunctionAlongABoundary, DotsHoppingToColor, InputOutputScene, IntroduceInputOutputScene, IntroduceVectorField, PathContainingZero, WindingNumbersInInputOutputContext
+
+### Community 288 - "Community 288"
+Cohesion: 0.09
+Nodes (17): BoundedRadiusOfConvergence, derivative(), EachTermControlsOneDerivative, EachTermHasMeaning, ExampleApproximation, ExampleApproximationWithCos, ExampleApproximationWithExp, ExampleApproximationWithSine (+9 more)
+
+### Community 289 - "Community 289"
+Cohesion: 0.11
+Nodes (16): AlmostTooGood, EndScreen, FiltrationProcess, get_youtube_slugs(), Introduction, Narrative, ProsConsOfContext, RevealingTiles (+8 more)
+
+### Community 290 - "Community 290"
+Cohesion: 0.08
+Nodes (8): EventDispatcher, EventListener, animate(), _AnimationBuilder, Extend attribute list of _AnimationBuilder object to include mobject attributes, You can change the args of :class:`~manimlib.animation.transform.Transform`, suc, object, DictAsObject
+
+### Community 291 - "Community 291"
 Cohesion: 0.09
 Nodes (20): AlgorithmOutline, AltMovingAverage, AltMovingAverageFast, BigPolynomials, BoxBlurCat, BoxBlurMario, CompareSizes, DataPointsToPolynomial (+12 more)
 
-### Community 284 - "Community 284"
-Cohesion: 0.12
-Nodes (12): DotCloud, AngledMedium, AngledMediumAnnotations, AngledMediumSingleFront, LineGame, ScalarFieldByOpacity, SnellsLaw, TransitionToOverheadView (+4 more)
-
-### Community 285 - "Community 285"
-Cohesion: 0.11
-Nodes (22): get_bars(), get_dots(), load_data(), ShotHistory, year_to_file_name(), approx_smooth_quadratic_bezier_handles(), diag_to_matrix(), get_quadratic_approximation_of_cubic() (+14 more)
-
-### Community 286 - "Community 286"
-Cohesion: 0.13
-Nodes (7): ExternalPatternEntry, InitialDemo, LookTwoStepsAhead, PreviewGamePlay, UniformPriorExample, WordlePriorExample, WordleSceneWithAnalysis
-
-### Community 287 - "Community 287"
-Cohesion: 0.13
-Nodes (9): get_binary_tex_mobs(), Keith, KeithShowingBinary, MentionLastVideo, MortyLookingAtRectangle, PatreonThanks, RecursionTime, RecursiveSolution (+1 more)
-
-### Community 288 - "Community 288"
-Cohesion: 0.08
-Nodes (14): AppleGoogleCoop, ContactTracingMisnomer, ContactTracingWords, ExplainTracing, LastFewMonths, LDMEndScreen, LocationTracking, MoreLinks (+6 more)
-
-### Community 289 - "Community 289"
-Cohesion: 0.1
-Nodes (15): color_region(), get_connected_components(), get_edges(), get_image_array(), JohannThinksHeIsBetter, JohannThinksOfFermat, MathematiciansOfEurope, NewtonConsideredEveryoneBeneathHim (+7 more)
-
-### Community 290 - "Community 290"
-Cohesion: 0.21
-Nodes (6): BiggerGaltonBoard, EmphasizeMultipleSums, GaltonBoard, GaltonTrickle, NotIdenticallyDistributed, SingleDropBigGaltonBoard
-
-### Community 291 - "Community 291"
-Cohesion: 0.16
-Nodes (3): ShowPassingFlash, IntroducePositionPhaseSpace, ShowMomentumConservation
-
 ### Community 292 - "Community 292"
-Cohesion: 0.12
-Nodes (7): HereWeTackle4d, IntroduceLinusTheLinelander, Linus, LinusReactions, LinusThinksAboutStretching, MentionCommutativity, TextbookQuaternionDefinition
-
-### Community 293 - "Community 293"
-Cohesion: 0.09
-Nodes (17): BigLoopNoZeros, ColorMappedByFuncScene, ColorMappedObjectsScene, DemonstrateColorMapping, ExamplePlaneFunc, PureColorMap, PureColorMapOfX5Thing, TinyLoopInInputPlaneAroundNonZero (+9 more)
-
-### Community 294 - "Community 294"
-Cohesion: 0.15
-Nodes (3): GradientNudging, ConstructGradientFromAllTrainingExamples, InterpretGradientComponents
-
-### Community 295 - "Community 295"
-Cohesion: 0.13
-Nodes (5): DefineTrueDerivative, LeadIntoASpecificExample, SecantLineToTangentLine, TCubedExample, Thumbnail
-
-### Community 296 - "Community 296"
-Cohesion: 0.11
-Nodes (6): buildCategoryXml(), buildMoodleXml(), buildQuestionXml(), cdataHtml(), escapeForCdata(), QuestionsController
-
-### Community 297 - "Community 297"
-Cohesion: 0.1
-Nodes (15): add(), bring_to_back(), clear(), Rendering can be more efficient when mobjects of the         same type are group, This is meant mostly for quick prototyping,         e.g. to add all mobjects def, remove(), remove_all_except(), temp_progress_bar() (+7 more)
-
-### Community 298 - "Community 298"
-Cohesion: 0.13
-Nodes (17): checkpoint_paste_wrapper(), ensure_terminus_tab_exists(), find_terminus_sheet(), get_manim_command(), is_terminal_in_ipython(), ManimCheckpointPaste, ManimExit, ManimRecordedCheckpointPaste (+9 more)
-
-### Community 299 - "Community 299"
-Cohesion: 0.16
-Nodes (9): FinalAnimation, IntroduceZeta, PreviewZetaAndContinuation, TestZetaOnFullPlane, TestZetaOnHalfPlane, TestZetaOnLine, Thumbnail, ZetaPartialSums (+1 more)
-
-### Community 300 - "Community 300"
-Cohesion: 0.15
-Nodes (9): ContinuouslyObeyingSnellsLaw, LimitingProcess, MultilayeredScene, NLayers, RaceLightInLayers, ShowDiscretePath, ShowLayerVariables, TwoToMany (+1 more)
-
-### Community 301 - "Community 301"
-Cohesion: 0.12
-Nodes (5): FourierTransformOfWaveFunction, IntroduceDeBroglie, ProbabalisticDetection, ShowMomentumFormula, SortOfDopplerEffect
-
-### Community 302 - "Community 302"
 Cohesion: 0.11
 Nodes (16): CenterPoint, chord_from_xy(), ChordsInSpaceWithCircle, CompareFirstTwoMethods, CorrectionInsert, get_method_indicator(), get_random_chord(), NonTransitive (+8 more)
 
-### Community 303 - "Community 303"
+### Community 293 - "Community 293"
+Cohesion: 0.11
+Nodes (7): BreakDownLaplaceTransform, IntegrateComplexExponential, IntegrateConstant, LaplaceTransformOfCos, SimplePole, z_to_color(), SPlane
+
+### Community 294 - "Community 294"
+Cohesion: 0.11
+Nodes (12): FourierOfTrebleClef, BoundaryConditionInterlude, CarbonDecayCurve, CarbonDecayingInMammoth, CircleAnimationOfF, EndScreen, ExponentialDecay, GiantCross (+4 more)
+
+### Community 295 - "Community 295"
+Cohesion: 0.14
+Nodes (7): get_heart_var(), get_heart_var_deriv(), get_love_equation1(), get_love_equation2(), get_ode(), get_vector_symbol(), LoveExample
+
+### Community 296 - "Community 296"
+Cohesion: 0.11
+Nodes (14): BreakDownLoopWithNonzeroWinding, EndScreen, FailureOfComposition, HypothesisAboutFullyColoredBoundary, SearchForZerosInInputSpace, SearchSpacePerimeterVsArea, ShowPolynomialFinalState, SolveX5SkipToEnd (+6 more)
+
+### Community 297 - "Community 297"
+Cohesion: 0.15
+Nodes (4): EquationSolver2dNode, RectangleData, split_interval(), mid()
+
+### Community 298 - "Community 298"
 Cohesion: 0.12
-Nodes (10): GlowDots, AskAboutFourSumsOfSquares, AskAboutLargeSumOfSquares, AskAboutThreeSumsOfSquares, Distributions, DotHistory, IntervalWithSample, Random3DVectors (+2 more)
+Nodes (9): EffectOfPowersOfTwo, FactorTwo, IntroduceGaussianPrimes, LatticePointScene, LookAtExampleRing, Show1125Circle, Show125CircleSimple, Show375Circle (+1 more)
+
+### Community 299 - "Community 299"
+Cohesion: 0.14
+Nodes (5): AskAboutAntiderivative, PiecewiseConstantPlot, PlotVelocity, v_func(), v_rate_func()
+
+### Community 300 - "Community 300"
+Cohesion: 0.21
+Nodes (6): BiggerGaltonBoard, EmphasizeMultipleSums, GaltonBoard, GaltonTrickle, NotIdenticallyDistributed, SingleDropBigGaltonBoard
+
+### Community 301 - "Community 301"
+Cohesion: 0.11
+Nodes (6): buildCategoryXml(), buildMoodleXml(), buildQuestionXml(), cdataHtml(), escapeForCdata(), QuestionsController
+
+### Community 302 - "Community 302"
+Cohesion: 0.14
+Nodes (7): get_binary_tex_mobs(), Keith, KeithShowingBinary, MortyLookingAtRectangle, PatreonThanks, RecursiveSolution, RecursiveSolutionToConstrained
+
+### Community 303 - "Community 303"
+Cohesion: 0.13
+Nodes (17): checkpoint_paste_wrapper(), ensure_terminus_tab_exists(), find_terminus_sheet(), get_manim_command(), is_terminal_in_ipython(), ManimCheckpointPaste, ManimExit, ManimRecordedCheckpointPaste (+9 more)
+
+### Community 304 - "Community 304"
+Cohesion: 0.15
+Nodes (8): DiscreteGraphStillImage1, DiscreteGraphStillImageFourth, DiscreteGraphStillImageHundredth, DiscreteGraphStillImageTenth, DiscreteSetup, ShowFinitelyManyX, TwoDBodyWithManyTemperaturesContour, TwoDBodyWithManyTemperaturesGraph
 
 ### Community 305 - "Community 305"
-Cohesion: 0.12
-Nodes (12): TwoChallenges, BufferedCounting, ClearLeftSide, DraggedPixels, EdgeDetection, Hand, SaveEachNumber, ShowCounting (+4 more)
-
-### Community 307 - "Community 307"
-Cohesion: 0.14
-Nodes (6): AmbientQuinticSolving, CyclicAttractor, InterpretBoundaryProperty, RepeatedNewton, RepeatedNewtonCubic, SimplyTendingToNearestRoot
-
-### Community 308 - "Community 308"
-Cohesion: 0.14
-Nodes (6): ExpandCountWith45, Show125Circle, SummarizeCountingRule, ThreeOutputsAsLatticePoints, ThreeOutputsAsLatticePointsContinued, WriteCountingRuleWithChi
-
-### Community 309 - "Community 309"
-Cohesion: 0.1
-Nodes (14): Britain, CompareBritainAndNorway, ConstrastSmoothAndFractal, ExamplesOfDimension, FractalNonFractalFlowChart, GiveShapeAndPonder, IfBritainWasEventuallySmooth, Norway (+6 more)
-
-### Community 310 - "Community 310"
-Cohesion: 0.1
-Nodes (10): ButDots, Countermathematical, HaveToShare, LogarithmProperties, Notation, PascalsCollision, ThreesomeOfNotation, TrigAnimation (+2 more)
-
-### Community 311 - "Community 311"
 Cohesion: 0.13
 Nodes (5): ChangeFromHorizontalToVerticallyPolarized, CircularlyPolarizedLight, DirectionOfPolarizationScene, ShowPolarizingFilter, SumOfTwoWaves
 
+### Community 306 - "Community 306"
+Cohesion: 0.17
+Nodes (3): AlternateBasis, ShowTipToTailSum, ShowVectorEquation
+
+### Community 307 - "Community 307"
+Cohesion: 0.12
+Nodes (7): FelixViewOfProjection, q_mult(), stereo_project(), stereo_project_point(), StereoProjectedSphere, StereoProjectedSphereFromHypersphere, TwoDStereographicProjection
+
+### Community 308 - "Community 308"
+Cohesion: 0.11
+Nodes (12): BigDifferenceBetweenLDAndCryptocurrencies, BlockRewards, CompareBlockTimes, EthereumLogo, Exchange, ListRecentCurrencies, LitecoinLogo, ShowLDAndOtherCurrencyExchanges (+4 more)
+
+### Community 309 - "Community 309"
+Cohesion: 0.12
+Nodes (12): TwoChallenges, BufferedCounting, ClearLeftSide, DraggedPixels, EdgeDetection, Hand, SaveEachNumber, ShowCounting (+4 more)
+
+### Community 311 - "Community 311"
+Cohesion: 0.13
+Nodes (16): delay(), deleteAllAudios(), deleteAudio(), generateAllAudios(), generateSingleAudio(), generateSpeakerNotes(), getFullAudioUrl(), loadData() (+8 more)
+
 ### Community 312 - "Community 312"
-Cohesion: 0.22
-Nodes (14): get_bit_grid(), get_bit_grid_boxes(), get_bit_mob_value(), get_bit_n_subgroup(), get_bit_n_sublist(), get_grid_position_labels(), get_one_rects(), get_ones() (+6 more)
+Cohesion: 0.16
+Nodes (7): CycloidScene, EquationsForCycloid, IntroduceCycloid, RollAlongVector, RotateWheel, SlidingObject, PathSlidingScene
 
 ### Community 313 - "Community 313"
-Cohesion: 0.12
-Nodes (14): AlmostTooGood, EndScreen, FiltrationProcess, get_youtube_slugs(), Introduction, Narrative, ProsConsOfContext, RevealingTiles (+6 more)
+Cohesion: 0.13
+Nodes (10): GlowDots, AskAboutFourSumsOfSquares, AskAboutLargeSumOfSquares, AskAboutThreeSumsOfSquares, Distributions, DotHistory, IntervalWithSample, Random3DVectors (+2 more)
 
 ### Community 314 - "Community 314"
+Cohesion: 0.12
+Nodes (7): ExternalPatternEntry, InitialDemo, LookTwoStepsAhead, PreviewGamePlay, UniformPriorExample, WordlePriorExample, WordleSceneWithAnalysis
+
+### Community 315 - "Community 315"
+Cohesion: 0.09
+Nodes (13): AppleGoogleCoop, ContactTracingMisnomer, ContactTracingWords, ExplainTracing, LastFewMonths, LDMEndScreen, MoreLinks, PiGesture1 (+5 more)
+
+### Community 316 - "Community 316"
+Cohesion: 0.17
+Nodes (9): FinalAnimation, IntroduceZeta, PreviewZetaAndContinuation, TestZetaOnFullPlane, TestZetaOnHalfPlane, TestZetaOnLine, Thumbnail, ZetaPartialSums (+1 more)
+
+### Community 317 - "Community 317"
 Cohesion: 0.15
 Nodes (6): BroadPeakFocusRectangleInsert, CenterOfMassDescription, FocusRectangleInsert, FourierRecapScene, LongAndShortSignalsInWindingMachine, DrawFrequencyPlot
 
-### Community 315 - "Community 315"
-Cohesion: 0.13
-Nodes (3): HyperdartScene, ShowExampleHit, SquareAroundTheDartBoard
-
-### Community 316 - "Community 316"
-Cohesion: 0.16
-Nodes (5): Describe2011IMO, IntroduceIMO, PerfectScoreData, ShowTinyTao, SixOnSix
-
-### Community 317 - "Community 317"
-Cohesion: 0.13
-Nodes (9): ContrastPureToneToPianoKey, DecomposeAudioSegment, get_ellipsis_vector(), get_wave_sum(), SampleRateOverlay, SignalsAsVectors, SumOfWaves, ThreeDChangeOfBasisExample (+1 more)
-
 ### Community 319 - "Community 319"
-Cohesion: 0.08
-Nodes (13): AskAboutFavoriteProof, AskAboutHittingAllPoints, BabylonianTablets, BitOfCircleGeometry, CompareToFermatsLastTheorem, ICanOnlyDrawFinitely, IntroduceTriples, PointsWeMissAreMultiplesOfOnesWeHit (+5 more)
+Cohesion: 0.14
+Nodes (7): ExplainRays, generate_prime_list(), get_gcd(), PrimeSpiralsAtScale1000, ShowClassesOfPrimeRays, SpiralScene, Thumbnail
+
+### Community 320 - "Community 320"
+Cohesion: 0.17
+Nodes (4): CombineSeveralSolutions, CycleThroughManyLinearCombinations, ShowLinearity, TemperatureGraphScene
 
 ### Community 321 - "Community 321"
-Cohesion: 0.15
-Nodes (6): bit_string_to_mobject(), IntroduceNonceOnTrasactions, IntroduceSHA256, sha256_bit_string(), sha256_tex_mob(), VariableProofOfWork
+Cohesion: 0.16
+Nodes (5): GeneralCentersOfSimilarity, MongesTheorem, SimilarDiagrams, line_intersection(), return intersection point of two lines,     each defined with a pair of vectors
 
 ### Community 322 - "Community 322"
-Cohesion: 0.13
-Nodes (15): delay(), deleteAllAudios(), deleteAudio(), generateAllAudios(), generateSingleAudio(), generateSpeakerNotes(), getFullAudioUrl(), loadData() (+7 more)
+Cohesion: 0.16
+Nodes (4): Hand, IntroduceStereographicProjection, IntroduceStereographicProjectionLinusView, ShowRotationUnderStereographicProjection
 
 ### Community 323 - "Community 323"
-Cohesion: 0.11
-Nodes (7): Returns a VGroup (collection of VMobjects) containing         the TipableVMObjec, Returns the TipableVMobject instance's (first) tip,         otherwise throws an, Meant for shared functionality between Arc and Line.     Functionality can be cl, Adds a tip to the TipableVMobject instance, recognising         that the endpoin, Stylises the tip, positions it spacially, and returns         the newly instanti, Returns a tip that has been stylistically configured,         but has not yet be, TipableVMobject
+Cohesion: 0.15
+Nodes (7): BoxCountingScene, BoxCountingSierpinski, BoxCountingWithBritain, BritainBoxCountHighZoom, CheapBoxCountingWithBritain, FineGridSameAsLargeScaling, ManyBritainCounts
 
 ### Community 324 - "Community 324"
-Cohesion: 0.15
-Nodes (10): DualOfAVector, get_projection(), get_vect_mob_projection(), ProjectBasisVectors, ProjectLineOfDots, ProjectOntoUnitVectorNumberline, ProjectSingleVectorOnUHat, ScaleUpUHat (+2 more)
-
-### Community 325 - "Community 325"
-Cohesion: 0.13
-Nodes (4): ChangeToEigenBasis, MatrixVectorMultiplication, IntroduceIdeaOfComposition, vector_coordinate_label()
+Cohesion: 0.11
+Nodes (13): Britain, CompareBritainAndNorway, ConstrastSmoothAndFractal, ExamplesOfDimension, FractalNonFractalFlowChart, IfBritainWasEventuallySmooth, Norway, RoughnessAndFractionalDimension (+5 more)
 
 ### Community 326 - "Community 326"
 Cohesion: 0.2
 Nodes (3): AddSquareSymmetries, DihedralGroupStructure, SymmetriesOfSquare
 
-### Community 328 - "Community 328"
-Cohesion: 0.18
-Nodes (3): AnalyzeCircleGeometry, CircleDiagramFromSlidingBlocks, ComputeThetaFor1e4
-
-### Community 329 - "Community 329"
-Cohesion: 0.17
-Nodes (4): CombineSeveralSolutions, CycleThroughManyLinearCombinations, ShowLinearity, TemperatureGraphScene
-
-### Community 330 - "Community 330"
-Cohesion: 0.13
-Nodes (7): FelixViewOfProjection, q_mult(), stereo_project(), stereo_project_point(), StereoProjectedSphere, StereoProjectedSphereFromHypersphere, TwoDStereographicProjection
-
-### Community 331 - "Community 331"
-Cohesion: 0.14
-Nodes (7): CylinderModel, ElectricField, FluidFlowAsHillGradient, get_charged_particles(), get_electron(), get_proton(), negative_gradient()
-
-### Community 332 - "Community 332"
-Cohesion: 0.17
-Nodes (6): EnergyOfWavesTeacherPortion, ShowEqualAngleSlices, ShowEqualAngleSlices15DegreeSlices, ShowEqualAngleSlices5DegreeSlices, UseVelocityDiagramToDeduceCurve, Animation
-
-### Community 333 - "Community 333"
-Cohesion: 0.14
-Nodes (5): DeckOfCards, Guitar, PartyHat, PlayingCard, SunGlasses
-
-### Community 334 - "Community 334"
+### Community 327 - "Community 327"
 Cohesion: 0.12
 Nodes (13): Load non-Vietnamese word mappings from CSV., Build replacement dictionary from non-Vietnamese words only.         Acronyms ar, Spell out an alphanumeric code letter by letter, digit groups as numbers., Handle uppercase codes: check acronym dict first, else spell out letter by lette, Apply transliteration to words not in the replacement map.         Only processe, Normalize Vietnamese text.                  Processing pipeline:         1. Clea, Reload dictionaries from CSV files.                  Args:             acronyms_, Vietnamese text normalizer with dictionary support and transliteration. (+5 more)
 
-### Community 335 - "Community 335"
+### Community 328 - "Community 328"
 Cohesion: 0.13
 Nodes (4): getLanguageLabel(), getOutputLanguageInstruction(), PptxService, PromptComposerService
 
-### Community 338 - "Community 338"
+### Community 330 - "Community 330"
 Cohesion: 0.16
 Nodes (6): BiggerTowers, DescribeOrderTwoPattern, DescribeTriforcePattern, IntroduceGraphStructure, ShowPathThroughGraph, SierpinskiGraphScene
 
-### Community 339 - "Community 339"
-Cohesion: 0.16
-Nodes (7): DirectionOfA2DFunctionAlongABoundary, DotsHoppingToColor, InputOutputScene, IntroduceInputOutputScene, IntroduceVectorField, PathContainingZero, WindingNumbersInInputOutputContext
-
-### Community 340 - "Community 340"
+### Community 332 - "Community 332"
 Cohesion: 0.15
-Nodes (6): IllustrateGaussMagnetic, IntroduceCurl, ShearCurl, ShorteningLongVectors, ShowCurlAtVariousPoints, two_d_curl()
+Nodes (5): IntroduceLinusTheLinelander, Linus, LinusReactions, LinusThinksAboutStretching, TextbookQuaternionDefinition
 
-### Community 341 - "Community 341"
-Cohesion: 0.15
-Nodes (10): MillionFlips, RandyThinksAboutCoin, BinaryOption, CoinSequence, FlatCoin, FlatHeads, FlatTails, UprightCoin (+2 more)
+### Community 334 - "Community 334"
+Cohesion: 0.2
+Nodes (4): ComplexExponentiationAbstract, ComplexExponentiationMultiplierHalf, ExpComplexHomomorphismPreviewAbstract, ExpComplexHomomorphismPreviewMultiplierHalf
 
-### Community 343 - "Community 343"
-Cohesion: 0.13
-Nodes (8): Footnote, Introduce, IntroduceNotation, NextVideo, SecondDerivativeAsAcceleration, SecondDerivativeGraphically, Thumbnail, TrajectoryGraphScene
-
-### Community 344 - "Community 344"
+### Community 336 - "Community 336"
 Cohesion: 0.14
 Nodes (20): burn_subtitle(), compose_scene(), concat_scenes(), extract_thumbnail(), _format_srt_time(), generate_srt(), get_duration(), get_file_size() (+12 more)
 
-### Community 345 - "Community 345"
+### Community 337 - "Community 337"
 Cohesion: 0.14
 Nodes (5): GeminiService, renderHandoutPrompt(), renderImagePromptTemplate(), renderQuizPrompt(), renderSlidePrompt()
 
-### Community 346 - "Community 346"
+### Community 338 - "Community 338"
 Cohesion: 0.12
 Nodes (11): delay(), deleteAudio(), generateAllAudios(), generateSingleAudio(), getFullAudioUrl(), handleDrop(), handleFileSelect(), handleUpload() (+3 more)
 
+### Community 339 - "Community 339"
+Cohesion: 0.11
+Nodes (4): ABC, full_range_specifier(), merge_dicts_recursively(), Creates a dict whose keyset is the union of all the     input dictionaries.  The
+
+### Community 340 - "Community 340"
+Cohesion: 0.12
+Nodes (12): add(), bring_to_back(), clear(), This is meant mostly for quick prototyping,         e.g. to add all mobjects def, remove(), remove_all_except(), temp_progress_bar(), temp_record() (+4 more)
+
+### Community 342 - "Community 342"
+Cohesion: 0.16
+Nodes (10): FourierOfTexPaths, move_submobjects_along_vector_field(), ComplexMorphingNames, FlowNameAnimation, FourierNameAnimation, ModularMultiplicationNameAnimation, NameAnimationScene, QuaternionNameAnimation (+2 more)
+
+### Community 343 - "Community 343"
+Cohesion: 0.15
+Nodes (7): AmbientQuinticSolving, CyclicAttractor, InterpretBoundaryProperty, RepeatedNewton, RepeatedNewtonCubic, RepeatedNewtonQuadratic, SimplyTendingToNearestRoot
+
+### Community 344 - "Community 344"
+Cohesion: 0.17
+Nodes (5): ExpandCountWith45, Show125Circle, SummarizeCountingRule, ThreeOutputsAsLatticePointsContinued, WriteCountingRuleWithChi
+
+### Community 345 - "Community 345"
+Cohesion: 0.14
+Nodes (5): DimensionOfKoch, DimensionOfQuadraticKoch, InfiniteKochZoom, LengthAndAreaOfSierpinski, ShowSierpinskiCurve
+
 ### Community 347 - "Community 347"
-Cohesion: 0.19
-Nodes (3): GeneralCentersOfSimilarity, MongesTheorem, SimilarDiagrams
+Cohesion: 0.14
+Nodes (8): Footnote, Introduce, IntroduceNotation, NextVideo, SecondDerivativeAsAcceleration, SecondDerivativeGraphically, Thumbnail, TrajectoryGraphScene
 
 ### Community 348 - "Community 348"
 Cohesion: 0.12
-Nodes (7): AssumeKnowledgeOfComplexNumbers, ComplexFunctionsAsTransformations, ComplexTransformationScene, ComplexValuedFunctions, RiemannFatherOfComplex, TerritoryOfExponents, VisualizingSSquared
-
-### Community 349 - "Community 349"
-Cohesion: 0.16
-Nodes (11): FaintDartboard, IndependentCoordinates, ManyDifferentFs, OldTwoKeyProperties, RationalNumbers, RescaleG, ShowPointR0, ShowXYCoordinate (+3 more)
-
-### Community 351 - "Community 351"
-Cohesion: 0.16
-Nodes (6): DiscreteSetup, DiscreteEvolutionPoint1, DiscreteEvolutionPoint25, FlatEdgesForDiscreteEvolution, FlatEdgesForDiscreteEvolutionTinySteps, ShowNewRuleAtDiscreteBoundary
-
-### Community 352 - "Community 352"
-Cohesion: 0.16
-Nodes (3): ApproximateOneRing, CircleScene, IntroduceCircle
-
-### Community 354 - "Community 354"
-Cohesion: 0.09
-Nodes (12): FromLastVideo, FunnyStory, Homework, IntroduceGraph, NewMugThumbnail, PatreonThanks, PauseIt, QuestionWrapper (+4 more)
-
-### Community 355 - "Community 355"
-Cohesion: 0.12
 Nodes (11): PPTXGeneratorService, PPTX Generator Service Core logic for generating PowerPoint presentations using, Service for generating PPTX files from templates, Add a single slide to the presentation, Initialize with templates directory, Add Agenda/Objectives slide with 2-column layout         Matches pptx_creator.py, List available template files, Get appropriate layout index for slide type (+3 more)
 
-### Community 356 - "Community 356"
+### Community 349 - "Community 349"
 Cohesion: 0.13
-Nodes (20): BaseModel, DictEntry, generate_pptx(), GeneratePPTXRequest, health_check(), inject_audio(), InjectAudioRequest, list_templates() (+12 more)
+Nodes (20): BaseModel, DictEntry, generate_pptx(), GeneratePPTXRequest, inject_audio(), InjectAudioRequest, list_templates(), normalize_text() (+12 more)
 
-### Community 359 - "Community 359"
-Cohesion: 0.16
-Nodes (6): BinaryCountingScene, CountInBinaryTo256, CountingScene, CountInTernary, IntroduceTernaryCounting, RhythmOfDecimalCounting
-
-### Community 360 - "Community 360"
-Cohesion: 0.11
-Nodes (9): IdealizedDieHistogram, ShowUncertaintyDice, BinaryChoices, RandyFlipsAndStacks, TwoDiceTableScene, VisualCovariance, DieFace, RowOfDice (+1 more)
-
-### Community 361 - "Community 361"
-Cohesion: 0.13
-Nodes (10): AmbientJulia, DescribeChaos, HighlightedJulia, JuliaFractal, JuliaStill, MandelbrotFractal, MandelbrotSetPreview, MandelbrotStill (+2 more)
-
-### Community 362 - "Community 362"
-Cohesion: 0.17
-Nodes (10): Diffusion1D, Diffusion1DStepFunction, Diffusion1DStepFunctionGraphed, Diffusion1DWith1Dot, Diffusion2D, Diffusion2D10KDots, Diffusion2D1Dot, DiffusionDeltaGraphed (+2 more)
-
-### Community 363 - "Community 363"
-Cohesion: 0.11
-Nodes (10): DecomposeMusicalNote, DecomposeTwoFrequencies, LongSine, OldCube, OldCubeWithFaces, OldOctohedron, OldSphere, OldStars (+2 more)
-
-### Community 364 - "Community 364"
+### Community 351 - "Community 351"
 Cohesion: 0.17
 Nodes (3): ChoicesForSpherePoint, FourDBorsukUlam, GeneralizeBorsukUlam
 
-### Community 366 - "Community 366"
-Cohesion: 0.21
-Nodes (3): ConcludeFiveRegions, EulersFormulaForGeneralPlanarGraph, LightUpNodes
+### Community 352 - "Community 352"
+Cohesion: 0.25
+Nodes (3): QuarantineInfectious, QuarantineInfectious50p, QuarantineInfectious80p
 
-### Community 368 - "Community 368"
-Cohesion: 0.16
-Nodes (5): Introduce3DSystem, LookAtDotProducts, SetupSimpleSystemOfEquations, ThinkOfPuzzleAsLinearCombination, Thumbnail
+### Community 353 - "Community 353"
+Cohesion: 0.17
+Nodes (6): DiscreteSetup, DiscreteEvolutionPoint1, DiscreteEvolutionPoint25, FlatEdgesForDiscreteEvolution, FlatEdgesForDiscreteEvolutionTinySteps, ShowNewRuleAtDiscreteBoundary
 
-### Community 369 - "Community 369"
-Cohesion: 0.22
-Nodes (3): AreaIsDerivative, LowerBound, s_func()
+### Community 355 - "Community 355"
+Cohesion: 0.17
+Nodes (6): CheckeredCircle, HowQuaternionsRotate3dPoints, OneDegreeOfFreedomForRotation, QuaternionRotationOverlay, ShowRotationsJustWithReferenceCircles, StereographicProjectionTitle
 
-### Community 370 - "Community 370"
-Cohesion: 0.14
-Nodes (9): get_nested_f(), get_nested_one_plus_one_over_x(), get_phi_continued_fraction(), IntroduceContinuedFractionPuzzle, ManyInfiniteExpressions, RepeatedApplicationWithPhiBro, ShowRepeatedApplication, StaticAlgebraicObject (+1 more)
+### Community 357 - "Community 357"
+Cohesion: 0.12
+Nodes (12): ShuffleThroughAllSequences, BuildNewPascalRow, graded_binomial(), graded_square(), PascalNetScene, RescaledPascalNetScene, SimplePascal, split_square() (+4 more)
 
-### Community 371 - "Community 371"
-Cohesion: 0.14
-Nodes (17): _generate_image(), _generate_via_gemini(), _generate_via_openai_api(), Imagen Renderer — Generate image using AI then render as video with Ken Burns. S, Generate image via Gemini SDK using generateContent with IMAGE modality., Generate image via AI API, then render to video with Ken Burns.     Uses CLIProx, Generate an image using the best available API provider., Generate image via OpenAI Images API compatible endpoint.     Works with CLIProx (+9 more)
+### Community 358 - "Community 358"
+Cohesion: 0.17
+Nodes (4): DeckOfCards, Guitar, PartyHat, PlayingCard
 
-### Community 372 - "Community 372"
+### Community 359 - "Community 359"
 Cohesion: 0.11
 Nodes (10): Video Generation Worker — MinIO Storage Upload/download video files to MinIO (S3, Upload thumbnail image., Upload a scene clip preview to MinIO., Get presigned URL for downloading., MinIO storage client for video files., Delete all files for a video generation., Create bucket if it doesn't exist., Upload video to MinIO, return object path. (+2 more)
 
-### Community 373 - "Community 373"
+### Community 360 - "Community 360"
+Cohesion: 0.14
+Nodes (17): _generate_image(), _generate_via_gemini(), _generate_via_openai_api(), Imagen Renderer — Generate image using AI then render as video with Ken Burns. S, Generate image via Gemini SDK using generateContent with IMAGE modality., Generate image via AI API, then render to video with Ken Burns.     Uses CLIProx, Generate an image using the best available API provider., Generate image via OpenAI Images API compatible endpoint.     Works with CLIProx (+9 more)
+
+### Community 361 - "Community 361"
 Cohesion: 0.15
 Nodes (19): _call_ai(), _call_cliproxy(), _call_gemini(), _clean_code(), _dry_run_validate(), _find_relevant_patterns(), _fix_common_mistakes(), generate_manim_code() (+11 more)
 
-### Community 376 - "Community 376"
-Cohesion: 0.12
-Nodes (4): ABC, full_range_specifier(), merge_dicts_recursively(), Creates a dict whose keyset is the union of all the     input dictionaries.  The
+### Community 363 - "Community 363"
+Cohesion: 0.18
+Nodes (4): Define2dCrossProduct, SimpleDefine2dCrossProduct, TwoDCrossProductExample, VisualExample
 
-### Community 377 - "Community 377"
-Cohesion: 0.21
-Nodes (11): Jennifer, You, Chapter0, Chapter1, Chapter10, Chapter2, Chapter3, Chapter4p1 (+3 more)
+### Community 364 - "Community 364"
+Cohesion: 0.18
+Nodes (4): LookAtDotProducts, Thumbnail, TransformingAreasXCoord, TransformingAreasYCoord
 
-### Community 378 - "Community 378"
+### Community 365 - "Community 365"
+Cohesion: 0.16
+Nodes (17): BlankScene, compute_total_frames(), get_indent(), get_module(), get_scene_classes(), get_scenes_to_render(), insert_embed_line_to_module(), is_child_scene() (+9 more)
+
+### Community 366 - "Community 366"
+Cohesion: 0.18
+Nodes (4): CylinderModel, ElectricField, FluidFlowAsHillGradient, negative_gradient()
+
+### Community 367 - "Community 367"
 Cohesion: 0.18
 Nodes (3): AngleAtZeroDerivativePoints, AnglePreservationAtAnyPairOfPoints, IntroduceAnglePreservation
 
-### Community 379 - "Community 379"
-Cohesion: 0.18
-Nodes (9): FourierOfTexPaths, ComplexMorphingNames, FlowNameAnimation, FourierNameAnimation, ModularMultiplicationNameAnimation, NameAnimationScene, QuaternionNameAnimation, RotatingNameLetters (+1 more)
+### Community 369 - "Community 369"
+Cohesion: 0.14
+Nodes (9): get_nested_f(), get_nested_one_plus_one_over_x(), get_phi_continued_fraction(), IntroduceContinuedFractionPuzzle, ManyInfiniteExpressions, RepeatedApplicationWithPhiBro, ShowRepeatedApplication, StaticAlgebraicObject (+1 more)
 
-### Community 383 - "Community 383"
+### Community 370 - "Community 370"
+Cohesion: 0.22
+Nodes (5): FiveJewelCase, IntroduceStolenNecklaceProblem, RepeatedShuffling, SixJewelCase, ThreeJewelCase
+
+### Community 371 - "Community 371"
+Cohesion: 0.12
+Nodes (9): Arrows, GawkAtEquivalence, MaxOfThreeTex, MaxProcess, Randomize, SqrtProcess, SquareAndSquareRoot, TrackingDots (+1 more)
+
+### Community 372 - "Community 372"
+Cohesion: 0.24
+Nodes (6): AnalyzeRomeoAndJulietSpace, GeometricReasoningForRomeoJuliet, get_2d_equation(), MoreShakesperianRomeoJuliet, RomeoAndJuliet, RomeoJulietVectorSpace
+
+### Community 374 - "Community 374"
 Cohesion: 0.2
-Nodes (4): Define2dCrossProduct, SimpleDefine2dCrossProduct, TwoDCrossProductExample, VisualExample
+Nodes (7): ChangingElectricField, DefineDivergence, DefineDivergenceJustFlow, get_charged_particles(), get_electron(), get_proton(), IllustrateGaussLaw
 
-### Community 385 - "Community 385"
-Cohesion: 0.18
-Nodes (9): FocusOnRhythm, get_ruler_sequence(), IntroduceSolveByCounting, ShowFiveDiskFiveBitsParallel, ShowFourDiskFourBitsParallel, ShowSixDiskSixBitsParallel, ShowThreeDiskThreeBitsParallel, SolveSixDisksByCounting (+1 more)
+### Community 375 - "Community 375"
+Cohesion: 0.12
+Nodes (6): IllustrationUseVennDiagram, MaxwellsEquations, TableOfContents, QuantumSpin, Title, TexText
 
-### Community 387 - "Community 387"
-Cohesion: 0.17
-Nodes (4): DecomposeAudioSegment, FourierCirclesScene, CombineWavesToImage_SlowFPS, DecomposeRoar_SlowFPS
-
-### Community 388 - "Community 388"
+### Community 376 - "Community 376"
 Cohesion: 0.13
 Nodes (9): ComplicatedSingleValuedFunction, ConstructPolynomialWithGivenRoots, CubeRootBehavior, FifthRootBehavior, IntroduceUnsolvability, StudySqrt, SummarizeRootsToCyclesBehavior, TableOfContents (+1 more)
 
-### Community 389 - "Community 389"
-Cohesion: 0.22
-Nodes (3): CountThroughRings, CountThroughRingsCopy, LookAtExampleRing
+### Community 377 - "Community 377"
+Cohesion: 0.11
+Nodes (19): ButOnThisLoopOverHere, CCWColorWalk, CCWColorWalkOdometer, CWColorWalk, CWColorWalkOdometer, FourTurnWalker, FourTurnWalkerOdometer, MapPiWalkerRect (+11 more)
 
-### Community 390 - "Community 390"
-Cohesion: 0.15
-Nodes (6): CountLatticePoints, EffectOfPowersOfTwo, FactorTwo, IntroduceGaussianPrimes, LatticePointScene, Show375Circle
+### Community 378 - "Community 378"
+Cohesion: 0.16
+Nodes (4): FourierTransformOfWaveFunction, ProbabalisticDetection, ExponentialValueTracker, Operates just like ValueTracker, except it encodes the value as the     exponent
 
-### Community 391 - "Community 391"
+### Community 379 - "Community 379"
+Cohesion: 0.19
+Nodes (9): RandyThinksAboutCoin, BinaryOption, CoinSequence, FlatCoin, FlatHeads, FlatTails, UprightCoin, UprightHeads (+1 more)
+
+### Community 380 - "Community 380"
 Cohesion: 0.21
 Nodes (3): chi_func(), FactorizationPattern, IntroduceChi
 
-### Community 394 - "Community 394"
+### Community 381 - "Community 381"
+Cohesion: 0.16
+Nodes (4): DefineSierpinskiDimension, DefineThreeDimensional, DefineTwoDimensional, Thumbnail
+
+### Community 384 - "Community 384"
+Cohesion: 0.16
+Nodes (11): BuildUpGaussian, AltBuildUpGaussian, AntiDerivative, BellCurveArea, CartesianSliceOverlay, CartesianSlices, CylinderIntegral, CylinderSlices (+3 more)
+
+### Community 387 - "Community 387"
 Cohesion: 0.11
 Nodes (7): AdminDashboard(), UsersPage(), AuthProvider(), AdminLayout(), LoginPage(), RegisterPage(), SubjectDetailPage()
 
-### Community 395 - "Community 395"
-Cohesion: 0.18
-Nodes (6): GeometricInterpretation, GeometricInterpretationNegative, GeometricInterpretationSwapVectors, SomeKindOfConnection, SymmetricVAndW, WhatTheVectorWantsToBe
+### Community 388 - "Community 388"
+Cohesion: 0.15
+Nodes (7): handleClearLessons(), handleCreateBridge(), handleGenerateLessons(), handleGenerateTextbook(), handleGenerateTextbookPro(), handleSaveTextbook(), loadSyllabus()
 
-### Community 396 - "Community 396"
+### Community 389 - "Community 389"
 Cohesion: 0.22
 Nodes (3): box_blur(), ConvolutionIntroduction, ImageConvolution
 
-### Community 397 - "Community 397"
-Cohesion: 0.18
-Nodes (7): ComplexDivision, ConjugateDivisionExample, DrawComplexAngleAndMagnitude, DrawSolutionsToZToTheNEqualsW, ShowComplexPower, SuccessiveComplexMultiplications, ComplexMultiplication
-
-### Community 398 - "Community 398"
-Cohesion: 0.18
-Nodes (16): compute_total_frames(), get_indent(), get_module(), get_scene_classes(), get_scenes_to_render(), insert_embed_line_to_module(), is_child_scene(), main() (+8 more)
-
-### Community 399 - "Community 399"
-Cohesion: 0.29
-Nodes (3): SecondWave, SimpleTravelSocialDistancePlusZeroTravel, SimpleTravelSocialDistancePlusZeroTravel99p
-
-### Community 400 - "Community 400"
+### Community 390 - "Community 390"
 Cohesion: 0.2
 Nodes (3): GraphBraces, SIRGraph, SIRSimulation
 
-### Community 401 - "Community 401"
-Cohesion: 0.19
-Nodes (3): get_zeta_zeros(), ZetaLogDerivSum, ZetaSum
-
-### Community 402 - "Community 402"
-Cohesion: 0.14
-Nodes (11): ShuffleThroughAllSequences, BuildNewPascalRow, graded_binomial(), graded_square(), PascalNetScene, RescaledPascalNetScene, split_square(), binary() (+3 more)
-
-### Community 403 - "Community 403"
-Cohesion: 0.17
-Nodes (4): ExamplesOfFormula, moser(), BrickRow, choose()
-
-### Community 404 - "Community 404"
-Cohesion: 0.14
-Nodes (3): CubicFormula, CubicFormulaTest, RootCoefScene
-
-### Community 405 - "Community 405"
+### Community 391 - "Community 391"
 Cohesion: 0.12
 Nodes (8): BaselThumbnail, CSThumbnail, EGraph, Eola1Thumbnail, GroupThumbnail, LinalgThumbnail, ODEThumbnail, PrimeSpirals
 
-### Community 406 - "Community 406"
-Cohesion: 0.17
-Nodes (3): DefineSierpinskiDimension, DefineTwoDimensional, Thumbnail
+### Community 392 - "Community 392"
+Cohesion: 0.14
+Nodes (3): CubicFormula, CubicFormulaTest, RootCoefScene
 
-### Community 407 - "Community 407"
-Cohesion: 0.11
-Nodes (10): Approx31, ASecondIntegralSensation, AskAboutAverageOfContinuousVariables, AverageOfFiniteSet, Chapter9OpeningQuote, Chapter9PatreonThanks, FeelsRelatedToAnIntegral, LastVideoWrapper (+2 more)
+### Community 393 - "Community 393"
+Cohesion: 0.15
+Nodes (4): ZToHalfFlowNearWall, AnalyzeZSquared, ComplexAnalysisOverlay, ComplexTransformationScene
 
-### Community 411 - "Community 411"
+### Community 394 - "Community 394"
+Cohesion: 0.24
+Nodes (11): Jennifer, You, Chapter0, Chapter1, Chapter10, Chapter2, Chapter3, Chapter4p1 (+3 more)
+
+### Community 395 - "Community 395"
+Cohesion: 0.19
+Nodes (3): get_zeta_zeros(), ZetaLogDerivSum, ZetaSum
+
+### Community 396 - "Community 396"
+Cohesion: 0.21
+Nodes (4): BringTwoRodsTogether, FourierSeriesIllustraiton, BreakDownStepFunction, StepFunctionExample
+
+### Community 398 - "Community 398"
+Cohesion: 0.21
+Nodes (5): DefineComplexNumbersPurelyAlgebraically, MultiplicationByJFromRight, ShowArbitraryMultiplication, ShowJMultiplication, ShowMultiplicationBy135Example
+
+### Community 399 - "Community 399"
+Cohesion: 0.2
+Nodes (6): MentionDopplerRadar, Plane, RadarDish, RadarOperatorUncertainty, RadarPulse, ShowPlan
+
+### Community 400 - "Community 400"
+Cohesion: 0.2
+Nodes (4): FinalWordsOnRule, GeneralizeBayesRule, Thumbnail, SampleSpaceScene
+
+### Community 401 - "Community 401"
+Cohesion: 0.18
+Nodes (6): DepressingForMedicalTestDesigners, NonchalantReactionToPositiveTest, ReceivePositiveResults, TestDiseaseCase, TestNonDiseaseCase, TestScene
+
+### Community 403 - "Community 403"
+Cohesion: 0.21
+Nodes (4): ExpGraphConvergence, ExpPolynomial, RadiusOfConvergenceForLnX, SecondExpGraphConvergence
+
+### Community 404 - "Community 404"
+Cohesion: 0.18
+Nodes (7): ComplexDivision, ConjugateDivisionExample, DrawComplexAngleAndMagnitude, DrawSolutionsToZToTheNEqualsW, ShowComplexPower, SuccessiveComplexMultiplications, ComplexMultiplication
+
+### Community 408 - "Community 408"
 Cohesion: 0.22
 Nodes (16): get_animations_numbers(), get_file_ext(), get_manim_dir(), get_output_directory(), get_resolution_from_args(), initialize_manim_config(), load_yaml(), parse_cli() (+8 more)
 
-### Community 412 - "Community 412"
+### Community 409 - "Community 409"
 Cohesion: 0.21
 Nodes (3): NumberLine, Abbreviation for number_to_point, Abbreviation for point_to_number
 
-### Community 413 - "Community 413"
-Cohesion: 0.15
-Nodes (5): CentralMarketTransitionToLowerInfection, CentralMarketTransitionToLowerInfectionAndLowerFrequency, RunSimpleSimulation, RunSimpleSimulationWithDots, SimpleSocialDistancing
-
-### Community 414 - "Community 414"
+### Community 410 - "Community 410"
 Cohesion: 0.2
-Nodes (3): ComplexExponentiation, ShowMultiplicationOfRealAndImaginaryExponentialParts, SquiggleOnExtensions
+Nodes (3): MultilayeredGlass, angle_of_vector(), Returns polar coordinate theta when vector is project on xy plane
 
-### Community 415 - "Community 415"
+### Community 411 - "Community 411"
 Cohesion: 0.14
 Nodes (11): ClipsLogo, GeneralExpositionIcon, GeometryIcon, PhysicsIcon, RantPage, SupportIcon, SupportPitch1, SupportPitch2 (+3 more)
 
-### Community 416 - "Community 416"
-Cohesion: 0.19
-Nodes (6): DifferenceOfSquares, EnumerableSaveScene, LayersOfAbstraction, LayersOfLightbulbs, Lightbulbs, Test
-
-### Community 417 - "Community 417"
+### Community 412 - "Community 412"
 Cohesion: 0.24
 Nodes (4): ContrastTwoGraphs, ShowAllSteadyStateVelocities, SimpleVelocityGraph, Test
 
-### Community 418 - "Community 418"
-Cohesion: 0.24
-Nodes (3): ContrastXChangesToTChanges, ShowDelTermsAsTinyNudges, TransitionToTempVsTime
-
-### Community 419 - "Community 419"
-Cohesion: 0.23
-Nodes (3): BringTwoRodsTogether, BreakDownStepFunction, StepFunctionExample
-
-### Community 420 - "Community 420"
-Cohesion: 0.14
-Nodes (6): IllustrationUseVennDiagram, MaxwellsEquations, TableOfContents, QuantumSpin, Title, TexText
-
-### Community 421 - "Community 421"
-Cohesion: 0.21
-Nodes (5): BrickRowScene, ShowOutcomesInBrickRow4, ShowProbsInBrickRow3, SplitTalliesIntoBrickRow4, SplitRectsInBrickWall
-
-### Community 422 - "Community 422"
+### Community 413 - "Community 413"
 Cohesion: 0.16
 Nodes (7): HappyHolidays, Cumulative, HolidayStorePromotionTime, MathematicianPlusX, NoClearCutPath, Questions, HappyHolidays
 
-### Community 423 - "Community 423"
+### Community 414 - "Community 414"
 Cohesion: 0.24
-Nodes (3): ForgetPreviousActions, PhotonsThroughPerpendicularFilters, ShowVariousFilterPairsWithPhotonsOverTime
+Nodes (3): ContrastXChangesToTChanges, ShowDelTermsAsTinyNudges, TransitionToTempVsTime
 
-### Community 424 - "Community 424"
-Cohesion: 0.14
-Nodes (12): bit_grid_to_bits(), BurstErrors, focus_scan_anim_lines(), get_image_bits(), get_sound_wave(), hamming_syndrome(), image_reveal_animation(), scan_anim() (+4 more)
+### Community 416 - "Community 416"
+Cohesion: 0.23
+Nodes (4): ScaleUpCenterOfMass, SimpleCosineWrappingAroundCircle, WriteComplexExponentialExpression, R3_to_complex()
 
-### Community 425 - "Community 425"
-Cohesion: 0.12
-Nodes (4): AdminApiKeysController, CreateApiKeyDto, UpdateApiKeyDto, UserApiKeysController
-
-### Community 429 - "Community 429"
-Cohesion: 0.17
-Nodes (6): delay(), goToStep(), handleGenerateAllAudio(), handleGenerateScript(), handleGenerateSingleAudio(), loadScenesFromVideo()
-
-### Community 430 - "Community 430"
-Cohesion: 0.15
-Nodes (7): Assuming each mobject in the list `mobjects` has a fill color         meant to r, get_color_command(), get_command_string(), get_command_string(), color_to_hex(), hex_to_int(), int_to_hex()
-
-### Community 431 - "Community 431"
-Cohesion: 0.17
-Nodes (4): apply_style_to_mobject(), _convert_point_to_3d(), handle_transform(), hash_obj()
-
-### Community 432 - "Community 432"
+### Community 418 - "Community 418"
 Cohesion: 0.19
-Nodes (8): example_function(), ExampleDeterminantAnimation, ExampleLinearTransformation, ExampleMultivariableFunction, ExampleMultivariableFunctionWithMuchZoom, ExampleMultivariableFunctionWithZoom, JacobianDeterminantAnimation, SmallJacobianDeterminant
+Nodes (6): DifferenceOfSquares, EnumerableSaveScene, LayersOfAbstraction, LayersOfLightbulbs, Lightbulbs, Test
 
-### Community 433 - "Community 433"
-Cohesion: 0.22
-Nodes (5): Project3DCube, Project4DCube, Project v1 onto the orthogonal subspace of norm, ShowRhombicDodecTesselation, TriangleAreaFormula
-
-### Community 434 - "Community 434"
-Cohesion: 0.13
-Nodes (6): flatten_field(), init_points(), pointwise_become_partial(), Returns an (nu, nv, 2) array of all pairs of u, v values, where         (nu, nv), set_image_coords_by_uv_func(), normalize_along_axis()
-
-### Community 435 - "Community 435"
+### Community 420 - "Community 420"
 Cohesion: 0.12
 Nodes (9): AmbientPermutations, CauchyFourierPoisson, InfamousCoquette, LastWordsQuote, NightBeforeQuote, NightSkyOutpaintingTransition, OutpaintTransition, TimelineTransition (+1 more)
 
-### Community 438 - "Community 438"
-Cohesion: 0.2
-Nodes (3): LetsGoInOneSentence, SuccessiveLinearTransformations, WorkOutNumerically
+### Community 421 - "Community 421"
+Cohesion: 0.12
+Nodes (4): AdminApiKeysController, CreateApiKeyDto, UpdateApiKeyDto, UserApiKeysController
 
-### Community 439 - "Community 439"
+### Community 425 - "Community 425"
+Cohesion: 0.17
+Nodes (6): delay(), goToStep(), handleGenerateAllAudio(), handleGenerateScript(), handleGenerateSingleAudio(), loadScenesFromVideo()
+
+### Community 427 - "Community 427"
 Cohesion: 0.17
 Nodes (4): # TODO: these can't be used since they change, Makes Tex resiliant to unmatched braces, Reorganize existing submojects one layer         deeper based on the structure o, SingleStringTex
 
-### Community 440 - "Community 440"
+### Community 428 - "Community 428"
 Cohesion: 0.2
-Nodes (6): StackingCoins, CoinStack, DecimalTally, HeadsStack, TailsStack, TallyStack
+Nodes (3): LetsGoInOneSentence, SuccessiveLinearTransformations, WorkOutNumerically
 
-### Community 441 - "Community 441"
-Cohesion: 0.28
-Nodes (4): DrawRadialLines, Poster, ProjectPointsOntoUnitCircle, Thumbnail
+### Community 429 - "Community 429"
+Cohesion: 0.15
+Nodes (7): Assuming each mobject in the list `mobjects` has a fill color         meant to r, get_color_command(), get_command_string(), get_command_string(), color_to_hex(), hex_to_int(), int_to_hex()
 
-### Community 443 - "Community 443"
+### Community 430 - "Community 430"
+Cohesion: 0.13
+Nodes (7): DeclareFunction, DefineOrderedPair, DefineUnorderedPair, DeformToInterval, MobiusPlaneAnalogy, RepresentPairInUnitSquare, TorusPlaneAnalogy
+
+### Community 432 - "Community 432"
+Cohesion: 0.17
+Nodes (5): InfiniteContinuousJigsawPuzzle, ManyIntersectingLinesPostSSquared, ManyIntersectingLinesPostZeta, ManyIntersectingLinesPreSSquared, ManyIntersectingLinesPreZeta
+
+### Community 433 - "Community 433"
+Cohesion: 0.22
+Nodes (5): CountRays, CountSpirals, IntroducePrimePatterns, ThickZoomOutOnPrimesWithNumbers, ZoomOutOnPrimesWithNumbers
+
+### Community 434 - "Community 434"
+Cohesion: 0.19
+Nodes (8): example_function(), ExampleDeterminantAnimation, ExampleLinearTransformation, ExampleMultivariableFunction, ExampleMultivariableFunctionWithMuchZoom, ExampleMultivariableFunctionWithZoom, JacobianDeterminantAnimation, SmallJacobianDeterminant
+
+### Community 435 - "Community 435"
+Cohesion: 0.12
+Nodes (13): AltOpeningQuote, CramerOpeningQuote, Chapter1OpeningQuote, Introduction, Chapter10OpeningQuote, Chapter1OpeningQuote, Chapter2OpeningQuote, Chapter4OpeningQuote (+5 more)
+
+### Community 436 - "Community 436"
+Cohesion: 0.17
+Nodes (9): AllFeaturedCreators, EndScreen, GeneralWrapper, InfinityPlusOneWrapper, LeiosOSWrapper, ShareWithFriends, ThinkTwiceWrapper, WelchLabsWrapper (+1 more)
+
+### Community 437 - "Community 437"
 Cohesion: 0.18
 Nodes (4): NumericalPlayOnNumberLineFromMinusPhi, NumericalPlayOnNumberLineFromOne, NumericalPlayOnNumberLineFromTau, StandardDerivativeVisual
 
+### Community 439 - "Community 439"
+Cohesion: 0.2
+Nodes (6): StackingCoins, CoinStack, DecimalTally, HeadsStack, TailsStack, TallyStack
+
+### Community 440 - "Community 440"
+Cohesion: 0.23
+Nodes (5): BrickRowScene, ShowOutcomesInBrickRow4, ShowProbsInBrickRow3, SplitTalliesIntoBrickRow4, SplitRectsInBrickWall
+
+### Community 442 - "Community 442"
+Cohesion: 0.28
+Nodes (4): DrawRadialLines, Poster, ProjectPointsOntoUnitCircle, Thumbnail
+
 ### Community 444 - "Community 444"
+Cohesion: 0.24
+Nodes (4): IntroduceNonceOnTrasactions, IntroduceSHA256, sha256_bit_string(), sha256_tex_mob()
+
+### Community 445 - "Community 445"
 Cohesion: 0.13
 Nodes (9): Video Generation Worker — Orchestrator Main pipeline coordinator: Script → Scene, Orchestrates the full video generation pipeline., Args:             progress_callback: Function(job_id, status, progress, message,, Publish generated scenes to Redis so NestJS creates VideoScene DB records., Report progress via callback., VideoOrchestrator, main(), Video Generation Worker — Redis Queue Consumer Listens for jobs on Redis queue, (+1 more)
 
-### Community 445 - "Community 445"
+### Community 446 - "Community 446"
 Cohesion: 0.2
 Nodes (14): _apply_ck_rule(), _apply_rules(), _clean_consonant_clusters(), english_to_vietnamese(), _filter_ending(), _process_syllable(), English to Vietnamese Transliterator.  Ported from nghitts/src/utils/translitera, Remove invalid consonant clusters, keeping only valid Vietnamese pairs. (+6 more)
 
-### Community 449 - "Community 449"
-Cohesion: 0.2
-Nodes (6): AskAboutConfigurations, CountInDecimal, CountTo27InTernary, DecimalCountingAtHundredsScale, DescribeSolutionByCountingToConstrained, SolveConstrainedWithTernaryCounting
+### Community 447 - "Community 447"
+Cohesion: 0.17
+Nodes (3): SystemConfigController, UpdateCLIProxyConfigDto, UpdateImageGenConfigDto
 
-### Community 450 - "Community 450"
+### Community 451 - "Community 451"
+Cohesion: 0.18
+Nodes (8): ShortestPathProblem, CircleOfIdeas, clockwise_path(), counterclockwise_path(), path_along_arc(), Same function as interpolate, but renamed to reflect     intent of being used to, arc_angle can be a single angle, or a pair of angles, in which case     the rang, straight_path()
+
+### Community 452 - "Community 452"
+Cohesion: 0.22
+Nodes (8): boolian_linear_combo(), ExampleSquareAsBinaryNumber, FourDCubeColoringFromTrees, get_vertex_sphere(), int_to_bit_coords(), IntroduceHypercube, ShowBoardRegions, Thumbnail
+
+### Community 453 - "Community 453"
+Cohesion: 0.15
+Nodes (3): AksAboutTranslatingColumns, get_small_bubble(), LinearCombinationScene
+
+### Community 454 - "Community 454"
 Cohesion: 0.17
 Nodes (6): approx_exp(), ExpPlay, Spirals, SumRotVectors, ZetaSpiral, ZetaSum
 
-### Community 451 - "Community 451"
-Cohesion: 0.2
-Nodes (4): OldTalkAboutSignOfConstantScraps, TalkAboutSignOfConstant3D, VariableC, VariableCWithF
-
-### Community 452 - "Community 452"
-Cohesion: 0.23
-Nodes (3): Returns animations to play following the contact, and total run time, TalkThroughPivotChange, WindmillScene
-
-### Community 453 - "Community 453"
-Cohesion: 0.21
-Nodes (5): MeasuringNearbyStars, Read HYG Database from a gzipped file into a numpy array          Parameters:, MeasuringNearbyStars, Read HYG Database from a gzipped file into a numpy array          Parameters:, inverse_interpolate()
-
-### Community 454 - "Community 454"
-Cohesion: 0.19
-Nodes (5): ShowMomentumConservation, ConnectionToOptics, ConnectionToOpticsTransparent, NewSceneName, RearrangeMomentumEquation
-
 ### Community 455 - "Community 455"
-Cohesion: 0.26
-Nodes (4): ChangingElectricField, DefineDivergence, DefineDivergenceJustFlow, IllustrateGaussLaw
+Cohesion: 0.17
+Nodes (8): half_plane(), LineToPlaneFunction, PlaneToLineFunction, PlaneToPlaneFunction, PlaneToPlaneFunctionSeparatePlanes, PlaneToSpaceFunction, SingleVariableFunction, SpaceToSpaceFunction
 
-### Community 457 - "Community 457"
-Cohesion: 0.23
-Nodes (3): DimensionOfKoch, DimensionOfQuadraticKoch, InfiniteKochZoom
-
-### Community 461 - "Community 461"
-Cohesion: 0.16
-Nodes (8): is_vietnamese_word(), Vietnamese Language Detector - Detects if a word is Vietnamese.  Ported from ngh, Detect if a word is Vietnamese based on structure and character analysis., Check if a word is Vietnamese., VnLanguageDetector, Vietnamese Text Normalizer - A Python library for normalizing Vietnamese text., Vietnamese Text Normalizer - Main normalization class with CSV dictionary suppor, Vietnamese Text Processor - Core text processing functionality.  Ported from ngh
-
-### Community 465 - "Community 465"
-Cohesion: 0.22
-Nodes (10): CommentFlurry, CommentFlurryBlocks, CommentFlurryFourier, CommentFlurryLinks, CommentFlurryOtherQuestions, CommentFlurryPrisms, get_vertical_screen(), LinkHighlightOverlay (+2 more)
-
-### Community 467 - "Community 467"
+### Community 456 - "Community 456"
 Cohesion: 0.26
 Nodes (3): IntroducePolarPlot, RefresherOnPolarCoordinates, ReplacePolarCoordinatesWithPrimes
 
-### Community 472 - "Community 472"
-Cohesion: 0.29
-Nodes (3): ScaleUpCenterOfMass, SimpleCosineWrappingAroundCircle, WriteComplexExponentialExpression
-
-### Community 473 - "Community 473"
+### Community 458 - "Community 458"
 Cohesion: 0.23
-Nodes (3): CountLatticePointsInBigCircle, get_radicals(), IntroduceComplexConjugate
+Nodes (4): EliminateNonPrimativeResidueClassesOf44, HighlightTwinPrimes, Label44Spirals, read_in_primes()
+
+### Community 459 - "Community 459"
+Cohesion: 0.2
+Nodes (3): BuildUpHistogram, FlashThroughHistogram, Histogram
+
+### Community 467 - "Community 467"
+Cohesion: 0.13
+Nodes (15): BorsukPatreonThanks, CryptoPatreonThanks, FractalPatreonThanks, HighDPatreonThanks, LeibnizPatreonThanks, PatreonThanksTriples, WavesPatreonThanks, Chapter10Thanks (+7 more)
+
+### Community 469 - "Community 469"
+Cohesion: 0.16
+Nodes (8): is_vietnamese_word(), Vietnamese Language Detector - Detects if a word is Vietnamese.  Ported from ngh, Detect if a word is Vietnamese based on structure and character analysis., Check if a word is Vietnamese., VnLanguageDetector, Vietnamese Text Normalizer - A Python library for normalizing Vietnamese text., Vietnamese Text Normalizer - Main normalization class with CSV dictionary suppor, Vietnamese Text Processor - Core text processing functionality.  Ported from ngh
+
+### Community 474 - "Community 474"
+Cohesion: 0.15
+Nodes (9): DelayedSocialDistancing, DelayedSocialDistancingDot, DelayedSocialDistancingProbHalf, DelayedSocialDistancingWithDots, PInfectionSlider, ReduceInfectionDuration, SocialDistanceAfterFiveDays, ValueSlider (+1 more)
 
 ### Community 475 - "Community 475"
+Cohesion: 0.2
+Nodes (4): combinationMobject(), CountingScene, GeneralizedPascalsTriangle, Note, leaves final number mobject as "number" attribute          mode can be "hi
+
+### Community 476 - "Community 476"
+Cohesion: 0.15
+Nodes (8): Cycloidify, MultivariableFunc, prime_factors(), PullCurveStraight, PythagoreanTransformation, ShowSumOfSquaresPattern, SingleVariableFunc, StraghtenCircle
+
+### Community 477 - "Community 477"
 Cohesion: 0.21
 Nodes (3): AskAboutArctanOfSmallValues, FinalCommentsOnPhaseSpace, InscribedAngleTheorem
 
-### Community 477 - "Community 477"
+### Community 479 - "Community 479"
+Cohesion: 0.26
+Nodes (4): Project3DCube, Project4DCube, Project v1 onto the orthogonal subspace of norm, ShowRhombicDodecTesselation
+
+### Community 480 - "Community 480"
+Cohesion: 0.23
+Nodes (5): ShowWritingTrajectory, ConstructKleinBottle, MobiusStripsAndKleinBottlesIn4D, PuzzleOverMobiusDiagram, bezier()
+
+### Community 481 - "Community 481"
+Cohesion: 0.29
+Nodes (3): AnalyzeFunctionWithTransformations, StabilityAndInstability, Thumbnail
+
+### Community 482 - "Community 482"
 Cohesion: 0.22
 Nodes (4): GraphicalIntuitions, GraphOnePlusOneOverX, RepeatedApplicationGraphically, RepeatedApplicationGraphicallyFromNegPhi
 
-### Community 480 - "Community 480"
+### Community 484 - "Community 484"
+Cohesion: 0.23
+Nodes (3): CountLatticePoints, NameGaussianIntegers, NameGaussianIntegersCopy
+
+### Community 485 - "Community 485"
+Cohesion: 0.24
+Nodes (3): Jewel, JewelPairPlane, MakeTwoJewelCaseContinuous
+
+### Community 487 - "Community 487"
+Cohesion: 0.14
+Nodes (6): DivergentSum, FinalSlide, OneMinusOnePoem, PowersOfTwoSmall, SimpleTex, SimpleText
+
+### Community 488 - "Community 488"
+Cohesion: 0.22
+Nodes (10): CommentFlurry, CommentFlurryBlocks, CommentFlurryFourier, CommentFlurryLinks, CommentFlurryOtherQuestions, CommentFlurryPrisms, get_vertical_screen(), LinkHighlightOverlay (+2 more)
+
+### Community 489 - "Community 489"
+Cohesion: 0.2
+Nodes (10): NearbyStars, ParalaxMeasurmentFromEarth, ParalxInSolarSystem, ShowConstellationsDuringOrbit, SimpleDotsFromPerspective, SimpleDotsParalax, TransitOfVenus, TransitOfVenusHigher (+2 more)
+
+### Community 492 - "Community 492"
+Cohesion: 0.22
+Nodes (12): add_border(), add_shading(), force_font_on_runs(), force_left_alignment(), is_code_paragraph(), postprocess_docx(), Force font on all runs via XML w:rFonts., Force LEFT alignment via direct XML - python-docx won't write LEFT because it's (+4 more)
+
+### Community 493 - "Community 493"
 Cohesion: 0.19
 Nodes (4): closeModal(), fetchTemplates(), handleDelete(), handleUpload()
 
-### Community 481 - "Community 481"
+### Community 494 - "Community 494"
 Cohesion: 0.22
 Nodes (4): LessonEditorProvider(), useLessonEditor(), Step1RawOutline(), Step5GeneratePPTX()
 
-### Community 483 - "Community 483"
+### Community 496 - "Community 496"
 Cohesion: 0.22
 Nodes (9): Exception, full_tex_to_svg(), get_full_tex(), get_tex_config(), get_tex_template_config(), latex_to_svg(), LatexError, Returns a compiler and preamble to use for rendering LaTeX (+1 more)
 
-### Community 486 - "Community 486"
+### Community 497 - "Community 497"
 Cohesion: 0.28
 Nodes (11): CircleDivisionImage, PatronImage1, PatronImage16, PatronImage163, PatronImage2, PatronImage256, PatronImage31, PatronImage4 (+3 more)
 
-### Community 487 - "Community 487"
+### Community 498 - "Community 498"
 Cohesion: 0.15
-Nodes (6): DefineOrderedPair, DefineUnorderedPair, DeformToInterval, MobiusPlaneAnalogy, RepresentPairInUnitSquare, TorusPlaneAnalogy
+Nodes (7): CentralMarketDownToZeroFrequency, CentralMarketLargePopulation, CentralMarketLessFrequent, CentralMarketLowerInfection, CentralMarketTransitionToLowerInfection, CentralMarketTransitionToLowerInfectionAndLowerFrequency, CentralMarketVeryFrequentLargePopulationDelayedSocialDistancing
 
-### Community 495 - "Community 495"
+### Community 500 - "Community 500"
+Cohesion: 0.28
+Nodes (3): EliminateNonPrimative710Residues, ShowSpiralsForWholeNumbers, PGroup
+
+### Community 503 - "Community 503"
+Cohesion: 0.19
+Nodes (7): FlippedSierpinski, PendulumPhaseSpace, ShowFlowSnake, ShowHilbertCurve, ShowSierpinski, SquareWave, Sierpinski
+
+### Community 507 - "Community 507"
 Cohesion: 0.22
 Nodes (3): Initial2dFuncSceneBase, Initial2dFuncSceneMorphing, Initial2dFuncSceneWithoutMorphing
 
-### Community 496 - "Community 496"
-Cohesion: 0.21
-Nodes (7): GenericMorphBrickRowIntoHistogram, MorphBrickRowIntoHistogram100, MorphBrickRowIntoHistogram20, MorphBrickRowIntoHistogram3, MorphBrickRowIntoHistogram500, BuildUpHistogram, OutlineableBars
+### Community 510 - "Community 510"
+Cohesion: 0.24
+Nodes (3): HangingWeightsScene, ThinkOfHeisenbergUncertainty, always_shift()
 
-### Community 497 - "Community 497"
-Cohesion: 0.23
-Nodes (4): BoringExample, FiveTwoExample, GeneralExample, OneMoreExample
+### Community 511 - "Community 511"
+Cohesion: 0.18
+Nodes (8): BayesOpeningQuote, BayesRuleInMemory, FootnoteWrapper, HowDoesPokerWork, MoreExamples, NextVideoWrapper, PatreonThanks, YourGutKnowsBayesRule
 
-### Community 498 - "Community 498"
-Cohesion: 0.19
-Nodes (5): HilbertCurvesStayStable, InfiniteObjectsEncapsulateFiniteObjects, InfiniteResultsFiniteWorld, SectionThree, StatementRemovedFromReality
-
-### Community 500 - "Community 500"
+### Community 512 - "Community 512"
 Cohesion: 0.27
-Nodes (4): CircularPhotons, FilterScene, PolarizingFilter, Circle
+Nodes (3): CountThroughRings, CountThroughRingsCopy, digest_locals()
 
-### Community 501 - "Community 501"
+### Community 513 - "Community 513"
+Cohesion: 0.24
+Nodes (3): CountLatticePointsInBigCircle, get_radicals(), IntroduceComplexConjugate
+
+### Community 515 - "Community 515"
 Cohesion: 0.24
 Nodes (10): _find_rendered_video(), _generate_text_scene(), _load_template(), Manim Renderer — Render ManimGL (3b1b) scenes headless. Uses xvfb + manimgl for, Find the rendered video file in ManimGL's output directories., Load a Manim template and fill in parameters., Generate a simple text-display ManimGL scene as fallback., Render a Manim scene to MP4 using ManimGL (3b1b version).      Args:         sce (+2 more)
 
-### Community 503 - "Community 503"
-Cohesion: 0.23
-Nodes (3): SystemConfigController, UpdateCLIProxyConfigDto, UpdateImageGenConfigDto
-
-### Community 506 - "Community 506"
-Cohesion: 0.24
-Nodes (6): handleClearLessons(), handleCreateBridge(), handleGenerateLessons(), handleGenerateTextbook(), handleSaveTextbook(), loadSyllabus()
-
-### Community 508 - "Community 508"
-Cohesion: 0.3
-Nodes (6): faulty_perp(), get_position_vectors(), OrientAModel, RadioBroadcast, S3Viking, TexturedGeometry
-
-### Community 509 - "Community 509"
-Cohesion: 0.23
-Nodes (6): ConstrainedTowersOfHanoiScene, get_ternary_ruler_sequence(), get_ternary_tex_mob(), IntroduceConstrainedTowersOfHanoi, SolveConstrainedByCounting, SolveConstrainedHanoi
-
-### Community 510 - "Community 510"
-Cohesion: 0.29
-Nodes (9): CircularFractalCreation, DiamondFractalCreation, FractalCreation, KochSnowFlakeFractalCreation, PentagonalFractalCreation, PiCreatureFractalCreation, QuadraticKochFractalCreation, SierpinskiFractalCreation (+1 more)
-
-### Community 511 - "Community 511"
-Cohesion: 0.24
-Nodes (3): TwoGradientInterpretationsIn2D, TestForMithuna, wiggle()
-
-### Community 512 - "Community 512"
-Cohesion: 0.21
-Nodes (4): gauss_func(), ConvolveTwoNormals, RepeatedConvolutionGaussian, SyncedSlicesGaussian
-
-### Community 513 - "Community 513"
-Cohesion: 0.26
-Nodes (3): TwoDBodyWithManyTemperatures, temperature_to_color(), two_d_temp_func()
-
-### Community 517 - "Community 517"
-Cohesion: 0.21
-Nodes (4): AskAboutCircleProportion, BorweinIntegrals, DoingMathVsHowMathIsPresented, PiCharts
+### Community 519 - "Community 519"
+Cohesion: 0.27
+Nodes (11): fetchCLIProxyConfig(), fetchImageGenConfig(), fetchSettings(), fetchViTTSConfig(), handleSave(), handleSaveCliproxy(), handleSaveImageGen(), handleSaveVitts() (+3 more)
 
 ### Community 520 - "Community 520"
 Cohesion: 0.21
-Nodes (6): get_intensity_colors(), get_vector_field_and_stream_lines(), Convert a value between 0 and 1 to a color using a perceptually uniform colormap, TexScratchPad, Transformation, VectorFieldSolution
-
-### Community 521 - "Community 521"
-Cohesion: 0.23
-Nodes (3): SimplePascal, combinationMobject(), GeneralizedPascalsTriangle
+Nodes (5): ModelSelector(), fetchSlides(), handleGenerate(), handleGenerateImages(), handleSaveEdit()
 
 ### Community 522 - "Community 522"
-Cohesion: 0.24
-Nodes (4): NameGaussianIntegers, NameGaussianIntegersCopy, digest_locals(), filtered_locals()
+Cohesion: 0.21
+Nodes (6): get_intensity_colors(), get_vector_field_and_stream_lines(), Convert a value between 0 and 1 to a color using a perceptually uniform colormap, TexScratchPad, Transformation, VectorFieldSolution
 
 ### Community 523 - "Community 523"
-Cohesion: 0.18
-Nodes (5): Jewel, JewelPairPlane, MentionGenerality, Necklace, Test
+Cohesion: 0.29
+Nodes (9): CircularFractalCreation, DiamondFractalCreation, FractalCreation, KochSnowFlakeFractalCreation, PentagonalFractalCreation, PiCreatureFractalCreation, QuadraticKochFractalCreation, SierpinskiFractalCreation (+1 more)
 
 ### Community 524 - "Community 524"
+Cohesion: 0.21
+Nodes (4): AskAboutCircleProportion, BorweinIntegrals, DoingMathVsHowMathIsPresented, PiCharts
+
+### Community 529 - "Community 529"
+Cohesion: 0.26
+Nodes (4): KochZoom, Return points for a Koch snowflake portion,         not including the end, TrackTheAngle, TrackTheAngleForFractal
+
+### Community 530 - "Community 530"
 Cohesion: 0.24
 Nodes (4): break_up(), SeparateFractals, ShowDiskScaling, ShowSeveralSelfSimilarityDimensions
 
-### Community 526 - "Community 526"
+### Community 531 - "Community 531"
 Cohesion: 0.21
 Nodes (3): GlimpseOfNextVideo, GraphScene, MassOfEarthEstimates
 
-### Community 529 - "Community 529"
-Cohesion: 0.33
-Nodes (3): AnalyzeFunctionWithTransformations, StabilityAndInstability, Thumbnail
-
-### Community 531 - "Community 531"
+### Community 534 - "Community 534"
 Cohesion: 0.22
 Nodes (6): Video Generation Worker — TTS Client Wrapper for viTTS API to synthesize speech., Get WAV file duration using ffprobe., Client for viTTS text-to-speech API., Create a silent WAV file as fallback., Synthesize text to speech.          Args:             text: Text to synthesize, TTSClient
 
-### Community 537 - "Community 537"
+### Community 542 - "Community 542"
 Cohesion: 0.24
 Nodes (7): ConvolveDiscreteDistributions, ConvolveMatchingDiscreteDistributions, get_bar_group(), p_mob(), ShowConvolutionOfLists, SumAlongDiagonal, dist_to_bars()
 
-### Community 538 - "Community 538"
-Cohesion: 0.18
-Nodes (6): CentralMarketDownToZeroFrequency, CentralMarketLessFrequent, PInfectionSlider, ReduceInfectionDuration, ValueSlider, NumberLine
+### Community 543 - "Community 543"
+Cohesion: 0.25
+Nodes (3): RunSimpleSimulation, RunSimpleSimulationWithDots, SimpleSocialDistancing
 
-### Community 539 - "Community 539"
+### Community 544 - "Community 544"
 Cohesion: 0.2
 Nodes (5): CreditTWo, Introduction, MobiusToPairToSurface, StripMustIntersectItself, TrivialPairCollision
 
-### Community 542 - "Community 542"
+### Community 545 - "Community 545"
 Cohesion: 0.18
 Nodes (6): Announcements, PiHoldingScreen, PowersOfTwo, QuestionsLink, Test, Thumbnail
 
-### Community 543 - "Community 543"
-Cohesion: 0.33
-Nodes (3): CountRays, CountSpirals, IntroducePrimePatterns
-
-### Community 544 - "Community 544"
-Cohesion: 0.27
-Nodes (3): AltWhereItStartsItEnds, FormalizeMiddle, WhereItStartsItEnds
-
-### Community 545 - "Community 545"
-Cohesion: 0.25
-Nodes (4): AskWhatsOnTest, ContrastToOtherOlympiadProblems, ShowTest, TraditionalDifficulty
-
-### Community 548 - "Community 548"
+### Community 546 - "Community 546"
 Cohesion: 0.18
-Nodes (5): AskAboutWhereEquationComesFrom, AskWhyRewriteIt, ContrastPDEToODE, ReactionsToInitialHeatEquation, ReferenceKhanVideo
+Nodes (5): IntegralSymbols, JustTheIntegral, MadAtMathologer, ShamelessPlug, SphereVideoWrapper
 
-### Community 550 - "Community 550"
+### Community 547 - "Community 547"
+Cohesion: 0.2
+Nodes (7): FirstStepIsToCare, InterpolatingOrientations, InterpolatingOrientationsWithQuaternions, NeverNeeded, PendulumAxes, Thanks, ThreePis
+
+### Community 551 - "Community 551"
 Cohesion: 0.44
 Nodes (10): Clacks1, Clacks100, Clacks100VectorEvolution, Clacks1e4, Clacks1e6, SlowClacks100, BlocksAndWallExampleMass1e2, CircleDiagramFromSlidingBlocks1e2 (+2 more)
 
-### Community 551 - "Community 551"
-Cohesion: 0.18
-Nodes (9): ExampleGraphHoldXConstant, ExampleGraphHoldYConstant, GradientDescentWrapper, ShowExampleFunctionGraph, ShowFunction, ShowGradient, ShowGraphWithVectors, ShowSimpleMultivariableFunction (+1 more)
-
-### Community 554 - "Community 554"
-Cohesion: 0.31
-Nodes (3): get_force_field_func(), GravityFluidFlow, IntroduceVectorField
-
-### Community 557 - "Community 557"
-Cohesion: 0.35
-Nodes (6): boolian_linear_combo(), FourDCubeColoringFromTrees, get_vertex_sphere(), int_to_bit_coords(), IntroduceHypercube, Thumbnail
-
-### Community 558 - "Community 558"
-Cohesion: 0.24
-Nodes (5): drag_pixels(), LogoGeneration, HappyTauDayWords, Welcome, LogoGeneration
-
-### Community 560 - "Community 560"
+### Community 552 - "Community 552"
 Cohesion: 0.31
 Nodes (3): ChangeProbability, ProbabilityRect, ShowProbAsProportion
 
-### Community 561 - "Community 561"
+### Community 553 - "Community 553"
 Cohesion: 0.24
 Nodes (3): ArcLengthChange, CircleConstants, LabelTracksLine
 
-### Community 565 - "Community 565"
+### Community 555 - "Community 555"
+Cohesion: 0.2
+Nodes (6): alt_mobius_strip_func(), smooth_index(), stereo_project_point(), sudanese_band_func(), torus_func(), torus_uv_to_mobius_uv()
+
+### Community 556 - "Community 556"
+Cohesion: 0.2
+Nodes (8): ForwardBackWalker, ForwardBackWalkerOdometer, OneFifthOneFifthWinderWithReset, OneFifthTwoFifthWinder, OneFifthTwoFifthWinderOdometer, PiWalker, PiWalkerCircle, SpecifiedWinder
+
+### Community 558 - "Community 558"
 Cohesion: 0.27
 Nodes (9): _convert_webm_to_mp4(), _get_ide_html(), Playwright Renderer — Record code typing in a headless browser IDE. Creates prof, Get IDE HTML template content., Convert WebM to MP4 using FFmpeg., Record code typing via Playwright headless browser.      Args:         scene: Sc, Async function to record code typing in browser., _record_code() (+1 more)
 
-### Community 566 - "Community 566"
+### Community 559 - "Community 559"
 Cohesion: 0.2
 Nodes (6): get_resolution(), JobConfig, Video Generation Worker — Configuration Environment variables, constants, and re, Get resolution config based on format., Parsed API configuration from the NestJS backend job payload.     The backend is, ResolutionConfig
 
-### Community 567 - "Community 567"
+### Community 560 - "Community 560"
 Cohesion: 0.2
 Nodes (5): Find a truly blank layout (no placeholder shapes) from the presentation., Remove all placeholder shapes from a slide.         This prevents 'CLICK TO EDIT, Add Title Slide - matches pptx_creator.py lines 54-80         Custom textbox for, Add content slide with exact pptx_creator.py layout (lines 132-177)         - Ti, Generate a PPTX presentation from template and content         Layout matches pp
 
-### Community 570 - "Community 570"
-Cohesion: 0.24
-Nodes (6): FlippedSierpinski, PendulumPhaseSpace, ShowFlowSnake, ShowHilbertCurve, ShowSierpinski, Sierpinski
+### Community 562 - "Community 562"
+Cohesion: 0.2
+Nodes (3): Rendering can be more efficient when mobjects of the         same type are group, batch_by_property(), Takes in a list, and returns a list of tuples, (batch, prop)     such that all i
 
-### Community 572 - "Community 572"
-Cohesion: 0.22
-Nodes (6): CentralMarket, DelayedSocialDistancing, DelayedSocialDistancingDot, DelayedSocialDistancingProbHalf, DelayedSocialDistancingWithDots, SocialDistanceAfterFiveDays
-
-### Community 573 - "Community 573"
-Cohesion: 0.24
-Nodes (6): QuarantineInfectious, QuarantineInfectious50p, QuarantineInfectious80p, QuarantineInfectiousTravel, QuarantineInfectiousTravel50p, QuarantineInfectiousTravel80p
-
-### Community 574 - "Community 574"
-Cohesion: 0.22
-Nodes (3): Intro, ShowLogarithmicWeighting, ShowPrimeDensity
-
-### Community 577 - "Community 577"
-Cohesion: 0.24
-Nodes (4): d_zeta(), NoteZetaFunctionAnalyticOnRightHalf, zeta(), ZetaThumbnail
-
-### Community 578 - "Community 578"
+### Community 569 - "Community 569"
 Cohesion: 0.31
 Nodes (5): DynamicProgrammingApproachSearch, get_box_highlight(), get_value_grid(), GreedyAlgorithm, RecrusiveExhaustiveSearch
 
-### Community 581 - "Community 581"
-Cohesion: 0.38
-Nodes (3): AddCubeSymmetries, DihedralCubeHomomorphism, GroupOfCubeSymmetries
+### Community 570 - "Community 570"
+Cohesion: 0.4
+Nodes (3): get_exp_graph_icon(), AlternateBreakDown, TranslateToNewLanguage
 
-### Community 583 - "Community 583"
+### Community 571 - "Community 571"
+Cohesion: 0.24
+Nodes (4): d_zeta(), NoteZetaFunctionAnalyticOnRightHalf, zeta(), ZetaThumbnail
+
+### Community 573 - "Community 573"
 Cohesion: 0.29
 Nodes (3): BucketPrimesBy44, BucketPrimesBy9, BucketPrimesByLastDigit
 
-### Community 586 - "Community 586"
-Cohesion: 0.2
-Nodes (7): connect_points(), different_points(), next_few_videos(), response_invitation(), summarize_pattern(), FormulaRelatesToPowersOfTwo, moser_function()
-
-### Community 588 - "Community 588"
-Cohesion: 0.29
-Nodes (4): get_fourier_transform(), Introduction, SummarizeTheFullTransform, Thumbnail
-
-### Community 589 - "Community 589"
+### Community 574 - "Community 574"
 Cohesion: 0.24
-Nodes (3): CoinFlippingPiCreature, FlipUpAndDown, PiCreatureCoin
+Nodes (4): PatreonLogo, BroughtToYouBy, PatreonMention, MentionQAndA
 
-### Community 591 - "Community 591"
-Cohesion: 0.38
-Nodes (3): complex_string_with_i(), DrawSingleRadialLine, PointsWeMiss
-
-### Community 593 - "Community 593"
+### Community 576 - "Community 576"
 Cohesion: 0.22
 Nodes (3): OneIn200HasDisease, RandyIsSickOrNot, SicklyPiCreature
 
-### Community 594 - "Community 594"
-Cohesion: 0.22
-Nodes (7): FirstStepIsToCare, InterpolatingOrientations, InterpolatingOrientationsWithQuaternions, NeverNeeded, PendulumAxes, Thanks, ThreePis
+### Community 580 - "Community 580"
+Cohesion: 0.24
+Nodes (5): NewtonRuleLabel, coefs_to_poly_string(), EquationToFrame, FromTwoToThree, get_newton_rule()
 
-### Community 599 - "Community 599"
+### Community 582 - "Community 582"
+Cohesion: 0.38
+Nodes (3): complex_string_with_i(), DrawSingleRadialLine, PointsWeMiss
+
+### Community 583 - "Community 583"
+Cohesion: 0.22
+Nodes (3): ComplexExponentiationAdderHalf, ExpComplexHomomorphismPreviewAdderHalf, Thumbnail
+
+### Community 585 - "Community 585"
+Cohesion: 0.38
+Nodes (3): AddCubeSymmetries, DihedralCubeHomomorphism, GroupOfCubeSymmetries
+
+### Community 588 - "Community 588"
+Cohesion: 0.22
+Nodes (3): Intro, ShowLogarithmicWeighting, ShowPrimeDensity
+
+### Community 589 - "Community 589"
 Cohesion: 0.31
 Nodes (8): _call_cliproxy(), _call_gemini(), _fallback_script(), generate_video_script(), Video Generation Worker — Script Generator Uses Gemini AI to convert slide outli, Generate a video script from lesson outline.     Uses CLIProxy (if available) or, Call CLIProxy OpenAI-compatible chat endpoint., Fallback: create minimal script when AI fails.
 
-### Community 600 - "Community 600"
+### Community 590 - "Community 590"
 Cohesion: 0.22
 Nodes (9): _detect_vietnamese(), _extract_slides_from_pptx(), parse_pptx(), parse_pptx_local(), Check if text contains Vietnamese-specific characters., Split bilingual speaker notes.     Separator: blank line (\\n\\n)     Detection:, Parse uploaded PPTX → extract slides with speaker notes + content.     Supports, Parse PPTX directly from a local shared volume path.     Saves massive memory an (+1 more)
 
-### Community 602 - "Community 602"
+### Community 594 - "Community 594"
 Cohesion: 0.25
 Nodes (3): GenerateQuestionsDto, QuestionBankController, UpdateQuestionsDto
 
-### Community 603 - "Community 603"
+### Community 595 - "Community 595"
 Cohesion: 0.22
 Nodes (3): OutlineController, SaveRawOutlineDto, UpdateDetailedOutlineDto
 
-### Community 606 - "Community 606"
+### Community 598 - "Community 598"
 Cohesion: 0.36
 Nodes (6): handleDelete(), handleSubmit(), handleToggle(), loadTemplates(), openCreateModal(), resetForm()
 
-### Community 607 - "Community 607"
-Cohesion: 0.36
-Nodes (8): fetchCLIProxyConfig(), fetchImageGenConfig(), fetchSettings(), handleSave(), handleSaveCliproxy(), handleSaveImageGen(), handleTestCliproxy(), handleTestImageGen()
-
-### Community 609 - "Community 609"
+### Community 600 - "Community 600"
 Cohesion: 0.31
-Nodes (8): auto_tag(), build_reference(), classify_scene(), extract_scenes_from_file(), Auto-detect tags based on code content., Classify scene into a template type., Build the complete reference dictionary., Extract all Scene classes from a Python file.
+Nodes (5): faulty_perp(), get_position_vectors(), RadioBroadcast, S3Viking, TexturedGeometry
 
-### Community 612 - "Community 612"
+### Community 604 - "Community 604"
 Cohesion: 0.22
 Nodes (5): SharpenFilter, SobelFilter1, SobelFilter2, SobelFilterCat, SobelFilterKirby
 
-### Community 615 - "Community 615"
-Cohesion: 0.25
-Nodes (4): ManyIntersectingLinesPostSSquared, ManyIntersectingLinesPostZeta, ManyIntersectingLinesPreSSquared, ManyIntersectingLinesPreZeta
-
-### Community 618 - "Community 618"
+### Community 605 - "Community 605"
 Cohesion: 0.31
-Nodes (3): ClassicJuliaSetDemo, get_c_dot_label(), MandelbrotIntro
+Nodes (8): auto_tag(), build_reference(), classify_scene(), extract_scenes_from_file(), Auto-detect tags based on code content., Classify scene into a template type., Build the complete reference dictionary., Extract all Scene classes from a Python file.
 
-### Community 621 - "Community 621"
-Cohesion: 0.42
-Nodes (3): EvenCase, Rotate180Argument, Rotate180ArgumentFast
-
-### Community 622 - "Community 622"
+### Community 606 - "Community 606"
 Cohesion: 0.22
-Nodes (6): ExercisesGiveLearning, Cardiod, PowersOfTwo, BrickRowScene, EntireBrickWall, MovingCameraScene
+Nodes (7): CentralMarketQuarantine, CentralMarketQuarantine80p, GraciousPi, QuarantineInfectiousLarger, QuarantineInfectiousLarger50p, QuarantineInfectiousLarger80p, QuarantineInfectiousLargerWithTail
 
-### Community 624 - "Community 624"
+### Community 607 - "Community 607"
 Cohesion: 0.39
 Nodes (4): AnimatedMidi, AnimatedMidiTrapped5m, HelpLongOnlineConverter, STFTAlgorithmOnTrapped
 
-### Community 626 - "Community 626"
-Cohesion: 0.33
-Nodes (3): FactorPolynomial, RealNewtonsMethodHigherGraph, TransitionToComplexPlane
-
-### Community 629 - "Community 629"
+### Community 609 - "Community 609"
 Cohesion: 0.25
-Nodes (3): FractionalAnalogOfLengthAndArea, LengthAndAreaOfSierpinski, ShowSierpinskiCurve
+Nodes (4): HilbertCurvesStayStable, InfiniteObjectsEncapsulateFiniteObjects, SectionThree, StatementRemovedFromReality
 
-### Community 633 - "Community 633"
+### Community 612 - "Community 612"
+Cohesion: 0.22
+Nodes (6): Cardiod, PowersOfTwo, BrickRowScene, EntireBrickWall, FromPuzzleToSolution, MovingCameraScene
+
+### Community 613 - "Community 613"
+Cohesion: 0.25
+Nodes (4): ShowMomentumConservation, ConnectionToOpticsTransparent, NewSceneName, RearrangeMomentumEquation
+
+### Community 614 - "Community 614"
+Cohesion: 0.31
+Nodes (6): TwoDScreenInOurThreeDWorld, always(), always_rotate(), assert_is_mobject_method(), f_always(), More functional version of always, where instead     of taking in args, it takes
+
+### Community 615 - "Community 615"
+Cohesion: 0.25
+Nodes (7): EquationSolver1d, FirstSqrtScene, GuaranteedZeroScene, SecondSqrtScene, TestFirstSqrtScene, TestGuaranteedZeroScene, TestSecondSqrtScene
+
+### Community 619 - "Community 619"
 Cohesion: 0.33
-Nodes (3): FiniteSample, FiniteSampleWithMoreSamplePoints, TryToAddInfinitelyManyPoints
+Nodes (6): GenericMorphBrickRowIntoHistogram, MorphBrickRowIntoHistogram100, MorphBrickRowIntoHistogram20, MorphBrickRowIntoHistogram3, MorphBrickRowIntoHistogram500, OutlineableBars
 
-### Community 634 - "Community 634"
-Cohesion: 0.28
-Nodes (4): AltThumbnail, EndScreen, Part1Wrapper, Thumbnail2
+### Community 625 - "Community 625"
+Cohesion: 0.47
+Nodes (4): _convert_skia_path_to_vmobject(), _convert_vmobject_to_skia_path(), Exclusion, Intersection
 
-### Community 648 - "Community 648"
+### Community 640 - "Community 640"
 Cohesion: 0.39
 Nodes (5): closeModal(), fetchProviders(), handleDelete(), handleSubmit(), handleToggleActive()
 
-### Community 649 - "Community 649"
+### Community 641 - "Community 641"
 Cohesion: 0.39
 Nodes (5): closeModal(), fetchPrompts(), handleDelete(), handleSubmit(), handleToggleActive()
 
-### Community 651 - "Community 651"
+### Community 642 - "Community 642"
+Cohesion: 0.43
+Nodes (3): AddTwoThetaManyTimes, CentralQuestionFor1e2, CentralQuestionFor1e3
+
+### Community 644 - "Community 644"
 Cohesion: 0.29
 Nodes (5): main(), Runs the scenes in a loop and detects when a scene reload is requested., Main entry point for ManimGL., run_scenes(), clear_cache()
 
-### Community 652 - "Community 652"
+### Community 645 - "Community 645"
 Cohesion: 0.25
 Nodes (3): Directive, ManimExampleDirective, skip_manim_node
 
-### Community 653 - "Community 653"
-Cohesion: 0.32
-Nodes (3): AddTwoRotatingVectors, Pulse, WavePlusLayerInfluence
+### Community 646 - "Community 646"
+Cohesion: 0.29
+Nodes (3): CentralMarket, SimpleTravelDelayedTravelReductionThreshold100TargetHalfPercent, SimpleTravelDelayedTravelReductionThreshold100TargetHalfPercent2
 
-### Community 656 - "Community 656"
+### Community 647 - "Community 647"
 Cohesion: 0.29
 Nodes (4): DynamicProgrammingApproachSearch, get_value_grid(), GreedyAlgorithm, RecrusiveExhaustiveSearch
 
-### Community 658 - "Community 658"
-Cohesion: 0.36
-Nodes (4): MoreAmbientChaos, ShowJuliaSetPoint, ShowJuliaSetPointWithDisk, TwoToMillionPoints
+### Community 655 - "Community 655"
+Cohesion: 0.29
+Nodes (3): MentionGenerality, Necklace, Test
 
-### Community 660 - "Community 660"
-Cohesion: 0.32
-Nodes (3): ChallengeOne, PlaySimpleRatio, QuestionAndAnswer
-
-### Community 667 - "Community 667"
+### Community 656 - "Community 656"
 Cohesion: 0.25
 Nodes (4): ScaledCubeMass, ScaledLineMass, ScaledSierpinskiMass, ScaledSquareMass
 
-### Community 668 - "Community 668"
+### Community 658 - "Community 658"
 Cohesion: 0.39
 Nodes (3): ConfusedAtParabolicData, PlotDiskBoxCounting, PlotSierpinskiBoxCounting
 
-### Community 670 - "Community 670"
-Cohesion: 0.25
-Nodes (5): BinaryCounting, get_xor(), int_to_bit_string(), MillionRatio, MultiplePerspectives
+### Community 659 - "Community 659"
+Cohesion: 0.36
+Nodes (3): DieFace, RowOfDice, TwoDiceTable
 
-### Community 671 - "Community 671"
-Cohesion: 0.33
-Nodes (4): DiagramScene, Manim Template: Diagram Scene Flowchart / architecture diagram with step-by-step, Animated flowchart/diagram with nodes and edges., Create a rounded rectangle node with label.
+### Community 661 - "Community 661"
+Cohesion: 0.32
+Nodes (3): AddTwoRotatingVectors, Pulse, WavePlusLayerInfluence
 
-### Community 672 - "Community 672"
-Cohesion: 0.38
-Nodes (3): GraphScene, Manim Template: Graph Scene Plot mathematical functions with animated axes and c, Animated function graph with labeled axes.
-
-### Community 682 - "Community 682"
-Cohesion: 0.43
-Nodes (4): fetchKeys(), handleCloseModal(), handleDelete(), handleSubmit()
-
-### Community 684 - "Community 684"
-Cohesion: 0.33
-Nodes (4): ImageOverlayScene, Manim Template: Image Overlay Display image with title, annotations, and zoom an, Display image with text overlay and pan/zoom., Create a placeholder rectangle when no image available.
-
-### Community 685 - "Community 685"
-Cohesion: 0.29
-Nodes (4): FourierCoefficients, GaussianBluMario, GaussianBlurCat, GaussianBlurCatNoPause
-
-### Community 688 - "Community 688"
-Cohesion: 0.33
-Nodes (3): Pretty hacky, but should only be redone in the context     of a broader 4d mobje, RotatingButterflyCurve, RotatingFourDButterflyCurve
-
-### Community 689 - "Community 689"
+### Community 662 - "Community 662"
 Cohesion: 0.33
 Nodes (4): Manim Template: Title Card Animated title + subtitle with professional styling., Parse color string to Manim color., Animated title card for video intro/section headers., TitleCardScene
 
-### Community 697 - "Community 697"
+### Community 663 - "Community 663"
+Cohesion: 0.33
+Nodes (4): DiagramScene, Manim Template: Diagram Scene Flowchart / architecture diagram with step-by-step, Animated flowchart/diagram with nodes and edges., Create a rounded rectangle node with label.
+
+### Community 664 - "Community 664"
 Cohesion: 0.38
-Nodes (3): ConstructKleinBottle, MobiusStripsAndKleinBottlesIn4D, PuzzleOverMobiusDiagram
+Nodes (3): GraphScene, Manim Template: Graph Scene Plot mathematical functions with animated axes and c, Animated function graph with labeled axes.
+
+### Community 665 - "Community 665"
+Cohesion: 0.33
+Nodes (4): ImageOverlayScene, Manim Template: Image Overlay Display image with title, annotations, and zoom an, Display image with text overlay and pan/zoom., Create a placeholder rectangle when no image available.
+
+### Community 675 - "Community 675"
+Cohesion: 0.43
+Nodes (4): fetchKeys(), handleCloseModal(), handleDelete(), handleSubmit()
+
+### Community 676 - "Community 676"
+Cohesion: 0.43
+Nodes (4): handleDelete(), handleSave(), handleToggleActive(), loadLinks()
+
+### Community 679 - "Community 679"
+Cohesion: 0.29
+Nodes (4): FourierCoefficients, GaussianBluMario, GaussianBlurCat, GaussianBlurCatNoPause
+
+### Community 687 - "Community 687"
+Cohesion: 0.29
+Nodes (3): OldCubeWithFaces, OldSphere, Mobject2D
+
+### Community 688 - "Community 688"
+Cohesion: 0.48
+Nodes (5): get_bars(), get_dots(), load_data(), ShotHistory, year_to_file_name()
+
+### Community 691 - "Community 691"
+Cohesion: 0.33
+Nodes (3): Pretty hacky, but should only be redone in the context     of a broader 4d mobje, RotatingButterflyCurve, RotatingFourDButterflyCurve
+
+### Community 697 - "Community 697"
+Cohesion: 0.33
+Nodes (5): _patch_pyglet(), Headless ManimGL Renderer — bypasses Pyglet shadow window hang.  The key issue:, Disable pyglet's shadow window to prevent hanging on headless servers., Render a single ManimGL scene headlessly.      Args:         scene_file: Path to, render_scene()
+
+### Community 701 - "Community 701"
+Cohesion: 0.33
+Nodes (5): add_code_box(), force_font_xml(), Build Pandoc reference.docx template for textbook export. Based on AWF skill pat, Force font family via XML to override theme fonts (Aptos etc.)., Add border and gray background to a paragraph style for code blocks.
 
 ### Community 704 - "Community 704"
 Cohesion: 0.53
 Nodes (4): formatDate(), formatDuration(), handleDelete(), loadHistory()
 
-### Community 705 - "Community 705"
-Cohesion: 0.33
-Nodes (5): _patch_pyglet(), Headless ManimGL Renderer — bypasses Pyglet shadow window hang.  The key issue:, Disable pyglet's shadow window to prevent hanging on headless servers., Render a single ManimGL scene headlessly.      Args:         scene_file: Path to, render_scene()
-
-### Community 712 - "Community 712"
-Cohesion: 0.53
-Nodes (4): fetchSlides(), handleGenerate(), handleGenerateImages(), handleSaveEdit()
-
-### Community 713 - "Community 713"
+### Community 729 - "Community 729"
 Cohesion: 0.47
 Nodes (4): Ladybug, ProbabilityCalculation, Question, Simulation
-
-### Community 720 - "Community 720"
-Cohesion: 0.47
-Nodes (3): generate_prime_list(), is_prime(), PrimesAndPi
 
 ### Community 737 - "Community 737"
 Cohesion: 0.4
@@ -2987,56 +2978,56 @@ Nodes (3): CreateVideoDto, SaveScriptDto, UpdateVideoDto
 Cohesion: 0.7
 Nodes (4): fetchSubjects(), handleCreate(), handleDelete(), resetForm()
 
-### Community 747 - "Community 747"
+### Community 748 - "Community 748"
 Cohesion: 0.4
 Nodes (3): CodeDisplayScene, Manim Template: Code Display Animated code with syntax highlighting, line-by-lin, Display code with animated typing and output.
 
-### Community 750 - "Community 750"
-Cohesion: 0.4
-Nodes (4): PlayWithRootsSeekingCycles, ShowCenterOfMassPoint, ShowCenterOfMassPointFocusIn, ThreeRootFractal
-
-### Community 751 - "Community 751"
+### Community 749 - "Community 749"
 Cohesion: 0.5
 Nodes (3): Banner, CleanBanner, ShortsBanner
 
-### Community 756 - "Community 756"
-Cohesion: 0.6
-Nodes (4): always(), assert_is_mobject_method(), f_always(), More functional version of always, where instead     of taking in args, it takes
+### Community 762 - "Community 762"
+Cohesion: 0.4
+Nodes (3): SupplementThumbnail, Thumbnail, PreviewLearning
+
+### Community 764 - "Community 764"
+Cohesion: 0.5
+Nodes (3): LongRaceGraph, PrimeRace, RaceGraph
 
 ### Community 769 - "Community 769"
 Cohesion: 0.5
-Nodes (3): Manim Validator — Validate Manim code before rendering. Checks syntax, imports,, Validate Manim Python code for syntax and safety.      Args:         code: Pytho, validate_manim_code()
+Nodes (3): Direct ManimGL renderer - bypasses CLI to avoid hanging issues., Render a single scene from a .py file using ManimGL internals., render_scene_file()
 
 ### Community 770 - "Community 770"
 Cohesion: 0.5
-Nodes (3): Direct ManimGL renderer - bypasses CLI to avoid hanging issues., Render a single scene from a .py file using ManimGL internals., render_scene_file()
+Nodes (3): Manim Validator — Validate Manim code before rendering. Checks syntax, imports,, Validate Manim Python code for syntax and safety.      Args:         code: Pytho, validate_manim_code()
 
 ### Community 776 - "Community 776"
 Cohesion: 0.5
 Nodes (3): GeneratePptxDto, GeneratePptxRequestDto, SlideContentDto
 
-### Community 784 - "Community 784"
-Cohesion: 0.5
-Nodes (3): ComparisonScene, Manim Template: Comparison Scene Side-by-side comparison of two concepts/options, Side-by-side comparison with animated items.
-
 ### Community 785 - "Community 785"
 Cohesion: 0.5
 Nodes (3): FormulaScene, Manim Template: Formula Scene Display LaTeX formula with step-by-step highlight, Display and animate LaTeX mathematical formulas.
 
+### Community 790 - "Community 790"
+Cohesion: 0.5
+Nodes (3): ComparisonScene, Manim Template: Comparison Scene Side-by-side comparison of two concepts/options, Side-by-side comparison with animated items.
+
 ## Knowledge Gaps
-- **560 isolated node(s):** `viTTS Python SDK - Simple client for viTTS API  Usage:     from vitts_client imp`, `User reference audio info.`, `viTTS API Client          Supports both system voices and custom trained voices.`, `Initialize viTTS client.                  Args:             api_key: Your viTTS`, `Make API request with error handling.` (+555 more)
+- **571 isolated node(s):** `viTTS Python SDK - Simple client for viTTS API  Usage:     from vitts_client imp`, `User reference audio info.`, `viTTS API Client          Supports both system voices and custom trained voices.`, `Initialize viTTS client.                  Args:             api_key: Your viTTS`, `Make API request with error handling.` (+566 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **341 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **342 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `ShowCreation` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 43`, `Community 44`, `Community 46`, `Community 47`, `Community 48`, `Community 49`, `Community 50`, `Community 51`, `Community 53`, `Community 54`, `Community 55`, `Community 56`, `Community 58`, `Community 59`, `Community 62`, `Community 63`, `Community 64`, `Community 65`, `Community 66`, `Community 67`, `Community 68`, `Community 69`, `Community 70`, `Community 71`, `Community 72`, `Community 74`, `Community 75`, `Community 76`, `Community 77`, `Community 78`, `Community 79`, `Community 81`, `Community 82`, `Community 83`, `Community 84`, `Community 85`, `Community 86`, `Community 87`, `Community 88`, `Community 89`, `Community 90`, `Community 91`, `Community 93`, `Community 96`, `Community 99`, `Community 101`, `Community 102`, `Community 108`, `Community 109`, `Community 110`, `Community 111`, `Community 112`, `Community 114`, `Community 115`, `Community 116`, `Community 117`, `Community 122`, `Community 124`, `Community 125`, `Community 126`, `Community 127`, `Community 128`, `Community 129`, `Community 130`, `Community 132`, `Community 134`, `Community 135`, `Community 136`, `Community 137`, `Community 138`, `Community 139`, `Community 140`, `Community 142`, `Community 143`, `Community 144`, `Community 146`, `Community 147`, `Community 149`, `Community 150`, `Community 151`, `Community 152`, `Community 153`, `Community 154`, `Community 156`, `Community 157`, `Community 158`, `Community 163`, `Community 168`, `Community 172`, `Community 173`, `Community 174`, `Community 175`, `Community 177`, `Community 178`, `Community 179`, `Community 180`, `Community 183`, `Community 184`, `Community 186`, `Community 188`, `Community 190`, `Community 192`, `Community 194`, `Community 195`, `Community 196`, `Community 197`, `Community 198`, `Community 200`, `Community 201`, `Community 204`, `Community 206`, `Community 207`, `Community 210`, `Community 211`, `Community 212`, `Community 213`, `Community 216`, `Community 217`, `Community 218`, `Community 219`, `Community 220`, `Community 223`, `Community 224`, `Community 225`, `Community 226`, `Community 232`, `Community 234`, `Community 235`, `Community 236`, `Community 237`, `Community 241`, `Community 242`, `Community 243`, `Community 244`, `Community 245`, `Community 246`, `Community 247`, `Community 248`, `Community 250`, `Community 253`, `Community 254`, `Community 255`, `Community 256`, `Community 257`, `Community 258`, `Community 260`, `Community 261`, `Community 262`, `Community 263`, `Community 264`, `Community 265`, `Community 266`, `Community 267`, `Community 268`, `Community 274`, `Community 277`, `Community 278`, `Community 279`, `Community 280`, `Community 281`, `Community 282`, `Community 283`, `Community 284`, `Community 287`, `Community 288`, `Community 289`, `Community 290`, `Community 291`, `Community 292`, `Community 293`, `Community 294`, `Community 295`, `Community 299`, `Community 300`, `Community 302`, `Community 304`, `Community 305`, `Community 306`, `Community 307`, `Community 308`, `Community 309`, `Community 310`, `Community 311`, `Community 312`, `Community 314`, `Community 315`, `Community 317`, `Community 318`, `Community 320`, `Community 321`, `Community 324`, `Community 325`, `Community 326`, `Community 327`, `Community 328`, `Community 329`, `Community 331`, `Community 332`, `Community 337`, `Community 338`, `Community 339`, `Community 340`, `Community 342`, `Community 343`, `Community 347`, `Community 348`, `Community 349`, `Community 350`, `Community 351`, `Community 352`, `Community 353`, `Community 359`, `Community 361`, `Community 364`, `Community 365`, `Community 366`, `Community 367`, `Community 368`, `Community 369`, `Community 378`, `Community 380`, `Community 381`, `Community 383`, `Community 386`, `Community 389`, `Community 390`, `Community 395`, `Community 403`, `Community 407`, `Community 414`, `Community 417`, `Community 418`, `Community 419`, `Community 420`, `Community 422`, `Community 423`, `Community 424`, `Community 432`, `Community 433`, `Community 436`, `Community 437`, `Community 441`, `Community 442`, `Community 443`, `Community 448`, `Community 452`, `Community 453`, `Community 454`, `Community 455`, `Community 456`, `Community 457`, `Community 458`, `Community 459`, `Community 460`, `Community 466`, `Community 467`, `Community 468`, `Community 469`, `Community 470`, `Community 471`, `Community 472`, `Community 473`, `Community 474`, `Community 475`, `Community 476`, `Community 477`, `Community 484`, `Community 487`, `Community 488`, `Community 489`, `Community 490`, `Community 492`, `Community 494`, `Community 495`, `Community 497`, `Community 498`, `Community 500`, `Community 508`, `Community 509`, `Community 511`, `Community 514`, `Community 516`, `Community 518`, `Community 519`, `Community 520`, `Community 522`, `Community 524`, `Community 525`, `Community 527`, `Community 528`, `Community 539`, `Community 540`, `Community 541`, `Community 542`, `Community 543`, `Community 544`, `Community 547`, `Community 552`, `Community 553`, `Community 556`, `Community 557`, `Community 559`, `Community 561`, `Community 562`, `Community 563`, `Community 564`, `Community 571`, `Community 574`, `Community 575`, `Community 577`, `Community 579`, `Community 580`, `Community 581`, `Community 582`, `Community 584`, `Community 586`, `Community 588`, `Community 590`, `Community 591`, `Community 592`, `Community 596`, `Community 597`, `Community 598`, `Community 616`, `Community 617`, `Community 619`, `Community 621`, `Community 623`, `Community 625`, `Community 628`, `Community 629`, `Community 630`, `Community 631`, `Community 632`, `Community 633`, `Community 655`, `Community 658`, `Community 661`, `Community 662`, `Community 663`, `Community 665`, `Community 666`, `Community 668`, `Community 669`, `Community 672`, `Community 683`, `Community 692`, `Community 695`, `Community 696`, `Community 699`, `Community 700`, `Community 714`, `Community 716`, `Community 719`, `Community 722`, `Community 725`, `Community 727`, `Community 729`, `Community 731`, `Community 743`, `Community 744`, `Community 745`, `Community 746`, `Community 753`, `Community 757`, `Community 758`, `Community 759`, `Community 761`, `Community 763`, `Community 765`, `Community 766`, `Community 790`, `Community 791`, `Community 803`, `Community 862`, `Community 864`, `Community 866`?**
-  _High betweenness centrality (0.150) - this node is a cross-community bridge._
-- **Why does `OldTexText` connect `Community 12` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 20`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 43`, `Community 44`, `Community 46`, `Community 47`, `Community 48`, `Community 49`, `Community 50`, `Community 51`, `Community 52`, `Community 53`, `Community 55`, `Community 58`, `Community 62`, `Community 63`, `Community 64`, `Community 67`, `Community 68`, `Community 69`, `Community 70`, `Community 71`, `Community 74`, `Community 75`, `Community 77`, `Community 78`, `Community 79`, `Community 81`, `Community 82`, `Community 84`, `Community 85`, `Community 86`, `Community 87`, `Community 88`, `Community 89`, `Community 90`, `Community 91`, `Community 92`, `Community 95`, `Community 99`, `Community 100`, `Community 101`, `Community 102`, `Community 103`, `Community 109`, `Community 110`, `Community 111`, `Community 117`, `Community 120`, `Community 121`, `Community 122`, `Community 123`, `Community 124`, `Community 126`, `Community 127`, `Community 130`, `Community 135`, `Community 136`, `Community 137`, `Community 138`, `Community 139`, `Community 140`, `Community 142`, `Community 143`, `Community 144`, `Community 145`, `Community 147`, `Community 149`, `Community 150`, `Community 151`, `Community 152`, `Community 153`, `Community 155`, `Community 156`, `Community 157`, `Community 158`, `Community 162`, `Community 163`, `Community 168`, `Community 170`, `Community 172`, `Community 173`, `Community 174`, `Community 175`, `Community 177`, `Community 178`, `Community 179`, `Community 181`, `Community 185`, `Community 186`, `Community 188`, `Community 191`, `Community 192`, `Community 195`, `Community 196`, `Community 197`, `Community 198`, `Community 199`, `Community 203`, `Community 204`, `Community 205`, `Community 206`, `Community 207`, `Community 208`, `Community 210`, `Community 212`, `Community 213`, `Community 215`, `Community 216`, `Community 218`, `Community 219`, `Community 220`, `Community 223`, `Community 224`, `Community 226`, `Community 228`, `Community 232`, `Community 233`, `Community 234`, `Community 235`, `Community 236`, `Community 241`, `Community 242`, `Community 243`, `Community 245`, `Community 246`, `Community 247`, `Community 248`, `Community 249`, `Community 253`, `Community 254`, `Community 255`, `Community 256`, `Community 257`, `Community 258`, `Community 260`, `Community 261`, `Community 262`, `Community 263`, `Community 264`, `Community 265`, `Community 267`, `Community 268`, `Community 269`, `Community 275`, `Community 278`, `Community 279`, `Community 280`, `Community 281`, `Community 282`, `Community 286`, `Community 287`, `Community 288`, `Community 289`, `Community 291`, `Community 292`, `Community 293`, `Community 294`, `Community 295`, `Community 299`, `Community 300`, `Community 301`, `Community 302`, `Community 304`, `Community 305`, `Community 308`, `Community 309`, `Community 310`, `Community 311`, `Community 312`, `Community 313`, `Community 314`, `Community 315`, `Community 316`, `Community 317`, `Community 318`, `Community 319`, `Community 320`, `Community 321`, `Community 324`, `Community 325`, `Community 326`, `Community 327`, `Community 328`, `Community 329`, `Community 331`, `Community 332`, `Community 333`, `Community 337`, `Community 339`, `Community 340`, `Community 341`, `Community 342`, `Community 343`, `Community 348`, `Community 350`, `Community 352`, `Community 354`, `Community 361`, `Community 362`, `Community 363`, `Community 364`, `Community 365`, `Community 366`, `Community 367`, `Community 368`, `Community 369`, `Community 370`, `Community 377`, `Community 378`, `Community 379`, `Community 380`, `Community 381`, `Community 383`, `Community 385`, `Community 386`, `Community 390`, `Community 391`, `Community 395`, `Community 400`, `Community 406`, `Community 407`, `Community 413`, `Community 414`, `Community 415`, `Community 416`, `Community 417`, `Community 418`, `Community 419`, `Community 420`, `Community 422`, `Community 423`, `Community 424`, `Community 435`, `Community 437`, `Community 438`, `Community 439`, `Community 442`, `Community 443`, `Community 448`, `Community 449`, `Community 452`, `Community 454`, `Community 457`, `Community 458`, `Community 459`, `Community 460`, `Community 466`, `Community 467`, `Community 468`, `Community 469`, `Community 471`, `Community 472`, `Community 473`, `Community 474`, `Community 475`, `Community 476`, `Community 477`, `Community 484`, `Community 487`, `Community 488`, `Community 489`, `Community 491`, `Community 493`, `Community 494`, `Community 496`, `Community 498`, `Community 500`, `Community 507`, `Community 509`, `Community 511`, `Community 513`, `Community 514`, `Community 515`, `Community 516`, `Community 517`, `Community 518`, `Community 519`, `Community 522`, `Community 524`, `Community 525`, `Community 526`, `Community 527`, `Community 529`, `Community 539`, `Community 540`, `Community 541`, `Community 542`, `Community 544`, `Community 545`, `Community 547`, `Community 548`, `Community 549`, `Community 552`, `Community 554`, `Community 555`, `Community 556`, `Community 557`, `Community 558`, `Community 559`, `Community 562`, `Community 563`, `Community 564`, `Community 573`, `Community 576`, `Community 578`, `Community 579`, `Community 580`, `Community 581`, `Community 583`, `Community 584`, `Community 585`, `Community 587`, `Community 588`, `Community 592`, `Community 593`, `Community 596`, `Community 597`, `Community 614`, `Community 616`, `Community 617`, `Community 620`, `Community 623`, `Community 626`, `Community 628`, `Community 629`, `Community 630`, `Community 631`, `Community 632`, `Community 633`, `Community 634`, `Community 655`, `Community 657`, `Community 658`, `Community 659`, `Community 660`, `Community 661`, `Community 662`, `Community 663`, `Community 665`, `Community 668`, `Community 669`, `Community 670`, `Community 690`, `Community 691`, `Community 692`, `Community 693`, `Community 694`, `Community 695`, `Community 699`, `Community 700`, `Community 701`, `Community 703`, `Community 716`, `Community 717`, `Community 719`, `Community 721`, `Community 722`, `Community 728`, `Community 729`, `Community 730`, `Community 741`, `Community 742`, `Community 745`, `Community 748`, `Community 752`, `Community 754`, `Community 755`, `Community 757`, `Community 759`, `Community 761`, `Community 762`, `Community 763`, `Community 764`, `Community 765`, `Community 767`, `Community 782`, `Community 787`, `Community 790`, `Community 862`, `Community 864`, `Community 865`, `Community 866`, `Community 867`?**
+- **Why does `ShowCreation` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 45`, `Community 46`, `Community 47`, `Community 49`, `Community 50`, `Community 51`, `Community 52`, `Community 53`, `Community 54`, `Community 55`, `Community 56`, `Community 60`, `Community 61`, `Community 62`, `Community 63`, `Community 64`, `Community 65`, `Community 66`, `Community 67`, `Community 68`, `Community 69`, `Community 70`, `Community 71`, `Community 73`, `Community 75`, `Community 76`, `Community 77`, `Community 78`, `Community 79`, `Community 80`, `Community 81`, `Community 82`, `Community 83`, `Community 84`, `Community 85`, `Community 86`, `Community 87`, `Community 88`, `Community 89`, `Community 92`, `Community 93`, `Community 94`, `Community 95`, `Community 96`, `Community 97`, `Community 100`, `Community 101`, `Community 102`, `Community 105`, `Community 107`, `Community 112`, `Community 113`, `Community 114`, `Community 115`, `Community 116`, `Community 117`, `Community 118`, `Community 119`, `Community 120`, `Community 121`, `Community 124`, `Community 125`, `Community 126`, `Community 128`, `Community 129`, `Community 130`, `Community 131`, `Community 133`, `Community 134`, `Community 135`, `Community 136`, `Community 137`, `Community 138`, `Community 139`, `Community 140`, `Community 141`, `Community 142`, `Community 143`, `Community 146`, `Community 147`, `Community 152`, `Community 153`, `Community 154`, `Community 155`, `Community 156`, `Community 159`, `Community 160`, `Community 163`, `Community 164`, `Community 165`, `Community 170`, `Community 171`, `Community 172`, `Community 173`, `Community 174`, `Community 176`, `Community 180`, `Community 182`, `Community 183`, `Community 184`, `Community 185`, `Community 187`, `Community 188`, `Community 189`, `Community 191`, `Community 192`, `Community 193`, `Community 194`, `Community 195`, `Community 196`, `Community 197`, `Community 198`, `Community 199`, `Community 200`, `Community 202`, `Community 203`, `Community 205`, `Community 206`, `Community 207`, `Community 208`, `Community 209`, `Community 212`, `Community 213`, `Community 214`, `Community 215`, `Community 219`, `Community 224`, `Community 225`, `Community 226`, `Community 227`, `Community 229`, `Community 230`, `Community 231`, `Community 232`, `Community 234`, `Community 236`, `Community 237`, `Community 238`, `Community 239`, `Community 241`, `Community 242`, `Community 243`, `Community 244`, `Community 245`, `Community 246`, `Community 249`, `Community 252`, `Community 253`, `Community 254`, `Community 255`, `Community 256`, `Community 257`, `Community 258`, `Community 260`, `Community 261`, `Community 262`, `Community 263`, `Community 264`, `Community 265`, `Community 266`, `Community 267`, `Community 268`, `Community 270`, `Community 271`, `Community 272`, `Community 274`, `Community 275`, `Community 276`, `Community 277`, `Community 279`, `Community 280`, `Community 284`, `Community 285`, `Community 286`, `Community 287`, `Community 288`, `Community 291`, `Community 292`, `Community 294`, `Community 295`, `Community 296`, `Community 297`, `Community 298`, `Community 299`, `Community 300`, `Community 302`, `Community 305`, `Community 306`, `Community 307`, `Community 309`, `Community 312`, `Community 315`, `Community 316`, `Community 317`, `Community 318`, `Community 319`, `Community 320`, `Community 321`, `Community 322`, `Community 323`, `Community 324`, `Community 325`, `Community 326`, `Community 330`, `Community 331`, `Community 332`, `Community 333`, `Community 334`, `Community 335`, `Community 341`, `Community 343`, `Community 344`, `Community 345`, `Community 346`, `Community 347`, `Community 351`, `Community 353`, `Community 354`, `Community 355`, `Community 363`, `Community 364`, `Community 366`, `Community 367`, `Community 368`, `Community 370`, `Community 372`, `Community 374`, `Community 375`, `Community 382`, `Community 383`, `Community 393`, `Community 396`, `Community 398`, `Community 400`, `Community 401`, `Community 402`, `Community 403`, `Community 410`, `Community 412`, `Community 413`, `Community 414`, `Community 416`, `Community 417`, `Community 419`, `Community 430`, `Community 431`, `Community 433`, `Community 434`, `Community 436`, `Community 437`, `Community 438`, `Community 441`, `Community 442`, `Community 443`, `Community 444`, `Community 451`, `Community 452`, `Community 453`, `Community 455`, `Community 456`, `Community 457`, `Community 458`, `Community 460`, `Community 462`, `Community 463`, `Community 464`, `Community 465`, `Community 468`, `Community 472`, `Community 475`, `Community 477`, `Community 478`, `Community 479`, `Community 480`, `Community 482`, `Community 483`, `Community 484`, `Community 485`, `Community 486`, `Community 495`, `Community 499`, `Community 502`, `Community 505`, `Community 506`, `Community 507`, `Community 509`, `Community 510`, `Community 511`, `Community 512`, `Community 513`, `Community 514`, `Community 521`, `Community 522`, `Community 525`, `Community 526`, `Community 527`, `Community 530`, `Community 532`, `Community 539`, `Community 540`, `Community 541`, `Community 544`, `Community 545`, `Community 546`, `Community 548`, `Community 549`, `Community 553`, `Community 554`, `Community 557`, `Community 564`, `Community 565`, `Community 566`, `Community 567`, `Community 568`, `Community 570`, `Community 571`, `Community 572`, `Community 574`, `Community 577`, `Community 579`, `Community 580`, `Community 581`, `Community 582`, `Community 584`, `Community 585`, `Community 587`, `Community 588`, `Community 601`, `Community 602`, `Community 609`, `Community 611`, `Community 616`, `Community 620`, `Community 621`, `Community 623`, `Community 624`, `Community 643`, `Community 648`, `Community 650`, `Community 653`, `Community 654`, `Community 657`, `Community 658`, `Community 660`, `Community 664`, `Community 677`, `Community 678`, `Community 681`, `Community 683`, `Community 686`, `Community 689`, `Community 690`, `Community 693`, `Community 694`, `Community 707`, `Community 709`, `Community 712`, `Community 713`, `Community 714`, `Community 715`, `Community 718`, `Community 719`, `Community 720`, `Community 721`, `Community 722`, `Community 723`, `Community 726`, `Community 739`, `Community 741`, `Community 745`, `Community 747`, `Community 753`, `Community 757`, `Community 758`, `Community 759`, `Community 761`, `Community 763`, `Community 765`, `Community 782`, `Community 783`, `Community 792`, `Community 796`, `Community 806`, `Community 811`?**
   _High betweenness centrality (0.138) - this node is a cross-community bridge._
-- **Why does `OldTex` connect `Community 14` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 20`, `Community 22`, `Community 23`, `Community 24`, `Community 26`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 36`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 43`, `Community 44`, `Community 46`, `Community 47`, `Community 48`, `Community 49`, `Community 50`, `Community 51`, `Community 52`, `Community 53`, `Community 55`, `Community 58`, `Community 62`, `Community 63`, `Community 64`, `Community 67`, `Community 68`, `Community 69`, `Community 70`, `Community 71`, `Community 72`, `Community 74`, `Community 75`, `Community 77`, `Community 78`, `Community 79`, `Community 81`, `Community 82`, `Community 84`, `Community 86`, `Community 87`, `Community 88`, `Community 89`, `Community 90`, `Community 91`, `Community 92`, `Community 94`, `Community 95`, `Community 98`, `Community 99`, `Community 100`, `Community 101`, `Community 102`, `Community 103`, `Community 109`, `Community 110`, `Community 117`, `Community 120`, `Community 122`, `Community 123`, `Community 124`, `Community 126`, `Community 130`, `Community 135`, `Community 136`, `Community 137`, `Community 138`, `Community 139`, `Community 140`, `Community 142`, `Community 143`, `Community 144`, `Community 145`, `Community 147`, `Community 149`, `Community 150`, `Community 151`, `Community 152`, `Community 153`, `Community 154`, `Community 155`, `Community 156`, `Community 157`, `Community 158`, `Community 162`, `Community 168`, `Community 170`, `Community 172`, `Community 173`, `Community 174`, `Community 175`, `Community 177`, `Community 178`, `Community 179`, `Community 181`, `Community 185`, `Community 186`, `Community 188`, `Community 189`, `Community 190`, `Community 191`, `Community 192`, `Community 195`, `Community 196`, `Community 197`, `Community 199`, `Community 204`, `Community 205`, `Community 206`, `Community 207`, `Community 208`, `Community 210`, `Community 212`, `Community 213`, `Community 214`, `Community 215`, `Community 216`, `Community 219`, `Community 220`, `Community 223`, `Community 224`, `Community 226`, `Community 231`, `Community 232`, `Community 235`, `Community 236`, `Community 241`, `Community 242`, `Community 243`, `Community 245`, `Community 246`, `Community 247`, `Community 248`, `Community 249`, `Community 253`, `Community 254`, `Community 255`, `Community 256`, `Community 257`, `Community 258`, `Community 260`, `Community 262`, `Community 264`, `Community 265`, `Community 267`, `Community 268`, `Community 269`, `Community 275`, `Community 277`, `Community 280`, `Community 281`, `Community 282`, `Community 283`, `Community 286`, `Community 287`, `Community 289`, `Community 291`, `Community 292`, `Community 294`, `Community 295`, `Community 299`, `Community 300`, `Community 301`, `Community 302`, `Community 304`, `Community 305`, `Community 306`, `Community 308`, `Community 309`, `Community 310`, `Community 311`, `Community 312`, `Community 313`, `Community 315`, `Community 316`, `Community 317`, `Community 318`, `Community 319`, `Community 320`, `Community 321`, `Community 324`, `Community 325`, `Community 326`, `Community 327`, `Community 328`, `Community 329`, `Community 330`, `Community 331`, `Community 332`, `Community 337`, `Community 339`, `Community 340`, `Community 342`, `Community 343`, `Community 348`, `Community 350`, `Community 351`, `Community 352`, `Community 353`, `Community 354`, `Community 359`, `Community 361`, `Community 362`, `Community 364`, `Community 365`, `Community 366`, `Community 367`, `Community 368`, `Community 369`, `Community 370`, `Community 376`, `Community 377`, `Community 378`, `Community 381`, `Community 383`, `Community 385`, `Community 386`, `Community 387`, `Community 388`, `Community 389`, `Community 390`, `Community 391`, `Community 395`, `Community 396`, `Community 397`, `Community 404`, `Community 405`, `Community 406`, `Community 407`, `Community 413`, `Community 414`, `Community 415`, `Community 416`, `Community 418`, `Community 419`, `Community 420`, `Community 422`, `Community 423`, `Community 424`, `Community 436`, `Community 437`, `Community 438`, `Community 439`, `Community 442`, `Community 443`, `Community 448`, `Community 449`, `Community 454`, `Community 455`, `Community 456`, `Community 457`, `Community 458`, `Community 459`, `Community 460`, `Community 466`, `Community 467`, `Community 468`, `Community 469`, `Community 470`, `Community 471`, `Community 472`, `Community 473`, `Community 475`, `Community 476`, `Community 477`, `Community 484`, `Community 487`, `Community 488`, `Community 489`, `Community 490`, `Community 492`, `Community 493`, `Community 497`, `Community 498`, `Community 499`, `Community 500`, `Community 509`, `Community 511`, `Community 513`, `Community 514`, `Community 515`, `Community 516`, `Community 517`, `Community 518`, `Community 519`, `Community 521`, `Community 522`, `Community 523`, `Community 524`, `Community 525`, `Community 526`, `Community 527`, `Community 528`, `Community 529`, `Community 539`, `Community 540`, `Community 541`, `Community 542`, `Community 544`, `Community 547`, `Community 548`, `Community 551`, `Community 552`, `Community 553`, `Community 556`, `Community 557`, `Community 559`, `Community 561`, `Community 562`, `Community 563`, `Community 575`, `Community 576`, `Community 577`, `Community 578`, `Community 579`, `Community 580`, `Community 581`, `Community 582`, `Community 585`, `Community 586`, `Community 587`, `Community 588`, `Community 590`, `Community 591`, `Community 592`, `Community 593`, `Community 594`, `Community 595`, `Community 596`, `Community 597`, `Community 598`, `Community 613`, `Community 617`, `Community 618`, `Community 621`, `Community 623`, `Community 625`, `Community 626`, `Community 630`, `Community 631`, `Community 632`, `Community 633`, `Community 655`, `Community 657`, `Community 659`, `Community 660`, `Community 661`, `Community 662`, `Community 663`, `Community 664`, `Community 665`, `Community 670`, `Community 683`, `Community 690`, `Community 692`, `Community 693`, `Community 694`, `Community 695`, `Community 696`, `Community 698`, `Community 699`, `Community 701`, `Community 702`, `Community 719`, `Community 720`, `Community 725`, `Community 726`, `Community 727`, `Community 728`, `Community 729`, `Community 730`, `Community 731`, `Community 745`, `Community 748`, `Community 752`, `Community 753`, `Community 758`, `Community 789`, `Community 790`, `Community 791`, `Community 802`, `Community 867`, `Community 868`, `Community 869`?**
-  _High betweenness centrality (0.133) - this node is a cross-community bridge._
+- **Why does `OldTexText` connect `Community 18` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 9`, `Community 10`, `Community 11`, `Community 12`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 44`, `Community 45`, `Community 46`, `Community 47`, `Community 48`, `Community 49`, `Community 51`, `Community 52`, `Community 53`, `Community 54`, `Community 55`, `Community 56`, `Community 60`, `Community 62`, `Community 64`, `Community 65`, `Community 66`, `Community 68`, `Community 69`, `Community 70`, `Community 71`, `Community 73`, `Community 76`, `Community 78`, `Community 79`, `Community 80`, `Community 81`, `Community 82`, `Community 83`, `Community 84`, `Community 85`, `Community 89`, `Community 90`, `Community 92`, `Community 93`, `Community 94`, `Community 95`, `Community 96`, `Community 97`, `Community 100`, `Community 101`, `Community 105`, `Community 111`, `Community 112`, `Community 115`, `Community 116`, `Community 117`, `Community 118`, `Community 119`, `Community 120`, `Community 125`, `Community 126`, `Community 128`, `Community 129`, `Community 130`, `Community 131`, `Community 133`, `Community 134`, `Community 135`, `Community 139`, `Community 140`, `Community 141`, `Community 142`, `Community 143`, `Community 145`, `Community 146`, `Community 147`, `Community 152`, `Community 153`, `Community 154`, `Community 155`, `Community 156`, `Community 157`, `Community 159`, `Community 160`, `Community 161`, `Community 162`, `Community 164`, `Community 165`, `Community 170`, `Community 171`, `Community 173`, `Community 177`, `Community 178`, `Community 180`, `Community 181`, `Community 182`, `Community 184`, `Community 185`, `Community 186`, `Community 189`, `Community 190`, `Community 191`, `Community 192`, `Community 193`, `Community 194`, `Community 195`, `Community 196`, `Community 197`, `Community 198`, `Community 199`, `Community 200`, `Community 203`, `Community 205`, `Community 207`, `Community 208`, `Community 212`, `Community 213`, `Community 214`, `Community 215`, `Community 219`, `Community 222`, `Community 224`, `Community 225`, `Community 226`, `Community 227`, `Community 228`, `Community 229`, `Community 230`, `Community 232`, `Community 234`, `Community 239`, `Community 240`, `Community 241`, `Community 242`, `Community 243`, `Community 244`, `Community 249`, `Community 250`, `Community 252`, `Community 253`, `Community 254`, `Community 255`, `Community 256`, `Community 258`, `Community 260`, `Community 261`, `Community 263`, `Community 264`, `Community 265`, `Community 266`, `Community 267`, `Community 268`, `Community 269`, `Community 271`, `Community 274`, `Community 275`, `Community 276`, `Community 278`, `Community 279`, `Community 280`, `Community 284`, `Community 285`, `Community 286`, `Community 287`, `Community 288`, `Community 289`, `Community 292`, `Community 294`, `Community 295`, `Community 296`, `Community 297`, `Community 299`, `Community 302`, `Community 304`, `Community 305`, `Community 306`, `Community 308`, `Community 309`, `Community 312`, `Community 314`, `Community 315`, `Community 316`, `Community 317`, `Community 318`, `Community 319`, `Community 320`, `Community 322`, `Community 323`, `Community 324`, `Community 325`, `Community 326`, `Community 331`, `Community 332`, `Community 333`, `Community 334`, `Community 335`, `Community 341`, `Community 342`, `Community 344`, `Community 345`, `Community 347`, `Community 351`, `Community 352`, `Community 354`, `Community 355`, `Community 358`, `Community 363`, `Community 364`, `Community 366`, `Community 367`, `Community 368`, `Community 369`, `Community 370`, `Community 372`, `Community 375`, `Community 378`, `Community 379`, `Community 380`, `Community 381`, `Community 383`, `Community 390`, `Community 393`, `Community 394`, `Community 396`, `Community 397`, `Community 399`, `Community 400`, `Community 401`, `Community 402`, `Community 403`, `Community 411`, `Community 412`, `Community 413`, `Community 414`, `Community 415`, `Community 416`, `Community 417`, `Community 418`, `Community 419`, `Community 420`, `Community 427`, `Community 428`, `Community 430`, `Community 432`, `Community 435`, `Community 436`, `Community 437`, `Community 438`, `Community 443`, `Community 444`, `Community 451`, `Community 452`, `Community 453`, `Community 456`, `Community 457`, `Community 458`, `Community 459`, `Community 460`, `Community 462`, `Community 463`, `Community 465`, `Community 472`, `Community 477`, `Community 480`, `Community 481`, `Community 482`, `Community 483`, `Community 484`, `Community 485`, `Community 486`, `Community 487`, `Community 499`, `Community 501`, `Community 502`, `Community 505`, `Community 506`, `Community 508`, `Community 509`, `Community 510`, `Community 511`, `Community 513`, `Community 514`, `Community 521`, `Community 524`, `Community 525`, `Community 526`, `Community 527`, `Community 528`, `Community 530`, `Community 531`, `Community 532`, `Community 539`, `Community 540`, `Community 541`, `Community 543`, `Community 544`, `Community 545`, `Community 546`, `Community 547`, `Community 549`, `Community 557`, `Community 567`, `Community 569`, `Community 572`, `Community 573`, `Community 574`, `Community 575`, `Community 576`, `Community 578`, `Community 579`, `Community 580`, `Community 583`, `Community 584`, `Community 585`, `Community 587`, `Community 601`, `Community 608`, `Community 609`, `Community 610`, `Community 611`, `Community 616`, `Community 617`, `Community 619`, `Community 620`, `Community 621`, `Community 622`, `Community 623`, `Community 624`, `Community 643`, `Community 648`, `Community 650`, `Community 653`, `Community 657`, `Community 658`, `Community 677`, `Community 678`, `Community 681`, `Community 683`, `Community 684`, `Community 685`, `Community 686`, `Community 690`, `Community 692`, `Community 693`, `Community 694`, `Community 695`, `Community 696`, `Community 705`, `Community 706`, `Community 707`, `Community 713`, `Community 714`, `Community 719`, `Community 720`, `Community 721`, `Community 722`, `Community 725`, `Community 739`, `Community 741`, `Community 751`, `Community 752`, `Community 753`, `Community 754`, `Community 756`, `Community 759`, `Community 761`, `Community 762`, `Community 767`, `Community 782`, `Community 783`, `Community 792`, `Community 795`, `Community 796`, `Community 806`, `Community 810`, `Community 873`, `Community 874`?**
+  _High betweenness centrality (0.107) - this node is a cross-community bridge._
+- **Why does `OldTex` connect `Community 12` to `Community 0`, `Community 1`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 8`, `Community 10`, `Community 11`, `Community 13`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 22`, `Community 23`, `Community 24`, `Community 25`, `Community 26`, `Community 27`, `Community 28`, `Community 29`, `Community 30`, `Community 31`, `Community 32`, `Community 33`, `Community 34`, `Community 35`, `Community 37`, `Community 38`, `Community 39`, `Community 40`, `Community 41`, `Community 42`, `Community 44`, `Community 45`, `Community 46`, `Community 47`, `Community 48`, `Community 49`, `Community 50`, `Community 51`, `Community 52`, `Community 53`, `Community 54`, `Community 55`, `Community 56`, `Community 60`, `Community 62`, `Community 64`, `Community 65`, `Community 66`, `Community 68`, `Community 69`, `Community 70`, `Community 71`, `Community 73`, `Community 76`, `Community 78`, `Community 79`, `Community 80`, `Community 81`, `Community 82`, `Community 83`, `Community 84`, `Community 85`, `Community 89`, `Community 90`, `Community 91`, `Community 92`, `Community 94`, `Community 95`, `Community 96`, `Community 100`, `Community 101`, `Community 105`, `Community 112`, `Community 115`, `Community 116`, `Community 117`, `Community 118`, `Community 120`, `Community 125`, `Community 126`, `Community 128`, `Community 129`, `Community 130`, `Community 131`, `Community 133`, `Community 134`, `Community 135`, `Community 139`, `Community 140`, `Community 141`, `Community 143`, `Community 144`, `Community 145`, `Community 146`, `Community 147`, `Community 152`, `Community 153`, `Community 154`, `Community 155`, `Community 156`, `Community 157`, `Community 159`, `Community 160`, `Community 161`, `Community 162`, `Community 164`, `Community 165`, `Community 170`, `Community 171`, `Community 173`, `Community 175`, `Community 178`, `Community 180`, `Community 182`, `Community 184`, `Community 185`, `Community 188`, `Community 189`, `Community 190`, `Community 191`, `Community 192`, `Community 193`, `Community 194`, `Community 195`, `Community 196`, `Community 197`, `Community 198`, `Community 199`, `Community 200`, `Community 203`, `Community 204`, `Community 207`, `Community 208`, `Community 212`, `Community 213`, `Community 214`, `Community 215`, `Community 219`, `Community 220`, `Community 221`, `Community 222`, `Community 224`, `Community 225`, `Community 226`, `Community 227`, `Community 228`, `Community 229`, `Community 232`, `Community 236`, `Community 239`, `Community 240`, `Community 241`, `Community 242`, `Community 243`, `Community 244`, `Community 249`, `Community 250`, `Community 252`, `Community 253`, `Community 255`, `Community 256`, `Community 258`, `Community 260`, `Community 261`, `Community 262`, `Community 263`, `Community 264`, `Community 265`, `Community 266`, `Community 267`, `Community 268`, `Community 269`, `Community 271`, `Community 272`, `Community 273`, `Community 274`, `Community 275`, `Community 276`, `Community 278`, `Community 281`, `Community 284`, `Community 285`, `Community 287`, `Community 288`, `Community 289`, `Community 291`, `Community 292`, `Community 294`, `Community 295`, `Community 296`, `Community 298`, `Community 299`, `Community 302`, `Community 304`, `Community 305`, `Community 306`, `Community 307`, `Community 308`, `Community 309`, `Community 312`, `Community 314`, `Community 316`, `Community 318`, `Community 319`, `Community 320`, `Community 323`, `Community 324`, `Community 325`, `Community 326`, `Community 331`, `Community 332`, `Community 333`, `Community 334`, `Community 335`, `Community 339`, `Community 341`, `Community 344`, `Community 345`, `Community 346`, `Community 347`, `Community 351`, `Community 354`, `Community 355`, `Community 363`, `Community 364`, `Community 366`, `Community 367`, `Community 369`, `Community 370`, `Community 372`, `Community 374`, `Community 375`, `Community 376`, `Community 380`, `Community 381`, `Community 382`, `Community 383`, `Community 389`, `Community 391`, `Community 392`, `Community 393`, `Community 394`, `Community 396`, `Community 399`, `Community 400`, `Community 401`, `Community 402`, `Community 403`, `Community 404`, `Community 410`, `Community 411`, `Community 413`, `Community 414`, `Community 416`, `Community 418`, `Community 419`, `Community 427`, `Community 428`, `Community 430`, `Community 431`, `Community 437`, `Community 438`, `Community 443`, `Community 444`, `Community 451`, `Community 452`, `Community 453`, `Community 455`, `Community 456`, `Community 457`, `Community 460`, `Community 462`, `Community 463`, `Community 464`, `Community 465`, `Community 466`, `Community 472`, `Community 475`, `Community 476`, `Community 477`, `Community 478`, `Community 481`, `Community 482`, `Community 483`, `Community 484`, `Community 485`, `Community 486`, `Community 487`, `Community 495`, `Community 499`, `Community 500`, `Community 501`, `Community 502`, `Community 503`, `Community 504`, `Community 505`, `Community 508`, `Community 510`, `Community 512`, `Community 513`, `Community 514`, `Community 521`, `Community 524`, `Community 525`, `Community 526`, `Community 527`, `Community 528`, `Community 530`, `Community 531`, `Community 532`, `Community 539`, `Community 540`, `Community 541`, `Community 543`, `Community 544`, `Community 546`, `Community 547`, `Community 548`, `Community 549`, `Community 553`, `Community 554`, `Community 557`, `Community 564`, `Community 565`, `Community 568`, `Community 569`, `Community 571`, `Community 572`, `Community 574`, `Community 575`, `Community 576`, `Community 578`, `Community 580`, `Community 581`, `Community 582`, `Community 583`, `Community 584`, `Community 585`, `Community 586`, `Community 587`, `Community 601`, `Community 602`, `Community 609`, `Community 610`, `Community 611`, `Community 615`, `Community 617`, `Community 618`, `Community 620`, `Community 621`, `Community 623`, `Community 624`, `Community 642`, `Community 643`, `Community 650`, `Community 652`, `Community 653`, `Community 655`, `Community 660`, `Community 677`, `Community 678`, `Community 680`, `Community 681`, `Community 683`, `Community 684`, `Community 685`, `Community 686`, `Community 689`, `Community 690`, `Community 693`, `Community 695`, `Community 696`, `Community 705`, `Community 706`, `Community 711`, `Community 712`, `Community 718`, `Community 719`, `Community 720`, `Community 722`, `Community 723`, `Community 724`, `Community 725`, `Community 739`, `Community 740`, `Community 741`, `Community 746`, `Community 750`, `Community 757`, `Community 758`, `Community 762`, `Community 782`, `Community 783`, `Community 787`, `Community 788`, `Community 789`, `Community 796`, `Community 806`, `Community 807`?**
+  _High betweenness centrality (0.097) - this node is a cross-community bridge._
 - **Are the 2657 inferred relationships involving `OldTexText` (e.g. with `SVGMobject` and `VGroup`) actually correct?**
   _`OldTexText` has 2657 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 2612 inferred relationships involving `OldTex` (e.g. with `SVGMobject` and `VGroup`) actually correct?**
@@ -3044,4 +3035,4 @@ _Questions this graph is uniquely positioned to answer:_
 - **Are the 2513 inferred relationships involving `ShowCreation` (e.g. with `FocusOn` and `Indicate`) actually correct?**
   _`ShowCreation` has 2513 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `viTTS Python SDK - Simple client for viTTS API  Usage:     from vitts_client imp`, `User reference audio info.`, `viTTS API Client          Supports both system voices and custom trained voices.` to the rest of the system?**
-  _560 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _571 weakly-connected nodes found - possible documentation gaps or missing edges._

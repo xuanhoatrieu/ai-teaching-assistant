@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api } from '../../lib/api';
+import { useJobPolling } from '../../hooks/useJobPolling';
 import { ModelSelector } from '../ModelSelector';
 import './Steps.css';
 
@@ -72,19 +73,47 @@ export function Step6QuestionBank() {
     };
 
     // ========== REVIEW QUESTIONS ==========
+    const generateJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingReview(false);
+            // Reload questions from DB
+            const res = await api.get(`/lessons/${lessonId}/review-questions`);
+            const questions = res.data || [];
+            setReviewQuestions(questions);
+            setMessage({ type: 'success', text: `✓ Đã tạo ${questions.length} câu hỏi ôn tập!` });
+        },
+        onError: (msg) => {
+            setIsGeneratingReview(false);
+            setMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const appendJob = useJobPolling({
+        onComplete: async () => {
+            setIsAppendingReview(false);
+            const res = await api.get(`/lessons/${lessonId}/review-questions`);
+            const questions = res.data || [];
+            setReviewQuestions(questions);
+            setMessage({ type: 'success', text: `✓ Đã thêm câu hỏi! Tổng: ${questions.length} câu` });
+        },
+        onError: (msg) => {
+            setIsAppendingReview(false);
+            setMessage({ type: 'error', text: msg });
+        },
+    });
+
     const handleGenerateReview = async () => {
         if (reviewQuestions.length > 0 && !confirm('⚠️ Thao tác này sẽ XÓA toàn bộ câu hỏi cũ và tạo mới. Tiếp tục?')) return;
         setIsGeneratingReview(true);
         setMessage(null);
         try {
             const response = await api.post(`/lessons/${lessonId}/review-questions/generate`, levelCounts);
-            const questions = response.data.questions || response.data || [];
-            setReviewQuestions(questions);
-            setMessage({ type: 'success', text: `✓ Đã tạo ${questions.length} câu hỏi ôn tập!` });
+            if (response.data?.jobId) {
+                generateJob.startPolling(response.data.jobId);
+            }
         } catch (err: any) {
-            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo câu hỏi ôn tập' });
-        } finally {
             setIsGeneratingReview(false);
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo câu hỏi ôn tập' });
         }
     };
 
@@ -93,13 +122,12 @@ export function Step6QuestionBank() {
         setMessage(null);
         try {
             const response = await api.post(`/lessons/${lessonId}/review-questions/append`, levelCounts);
-            const allQuestions = response.data.questions || response.data || [];
-            setReviewQuestions(allQuestions);
-            setMessage({ type: 'success', text: `✓ Đã thêm câu hỏi! Tổng: ${allQuestions.length} câu` });
+            if (response.data?.jobId) {
+                appendJob.startPolling(response.data.jobId);
+            }
         } catch (err: any) {
-            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo thêm câu hỏi ôn tập' });
-        } finally {
             setIsAppendingReview(false);
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo thêm câu hỏi ôn tập' });
         }
     };
 
@@ -463,7 +491,7 @@ export function Step6QuestionBank() {
                     {(isGeneratingReview || isAppendingReview) && (
                         <div className="generating-state">
                             <div className="loading-spinner"></div>
-                            <p>{isAppendingReview ? 'Đang tạo thêm câu hỏi...' : 'Đang tạo câu hỏi ôn tập...'}</p>
+                            <p>{(isAppendingReview ? appendJob.jobStatus?.message : generateJob.jobStatus?.message) || 'Đang tạo câu hỏi ôn tập...'}</p>
                             <p className="hint">Tổng số: {levelCounts.level1 + levelCounts.level2 + levelCounts.level3} câu</p>
                         </div>
                     )}

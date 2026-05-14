@@ -31,6 +31,8 @@ import { MigrationModule } from './migration/migration.module';
 import { PptxModule } from './pptx/pptx.module';
 import { PptxAudioToolModule } from './pptx-audio-tool/pptx-audio-tool.module';
 import { SyllabusModule } from './syllabus/syllabus.module';
+import { GenerationJobModule } from './generation-job/generation-job.module';
+import { UsefulLinksModule } from './useful-links/useful-links.module';
 
 @Module({
   imports: [
@@ -82,6 +84,8 @@ import { SyllabusModule } from './syllabus/syllabus.module';
     }),
     VideoGenModule,
     SyllabusModule,
+    GenerationJobModule,
+    UsefulLinksModule,
   ],
   controllers: [AppController],
   providers: [AppService],

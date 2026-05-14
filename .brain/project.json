@@ -15,7 +15,7 @@
         "description": "Hệ thống tạo bài giảng tự động sử dụng AI (Gemini, Imagen, TTS) để generate PPTX, handouts, và quizzes từ outline — 6-step workflow"
     },
     "critical_rules": {
-        "⛔ NO_AUTO_PUSH": "TUYỆT ĐỐI không được git push khi chưa được user bảo. Chỉ commit local, chờ user xác nhận rồi mới push.",
+        "⛔ NO_AUTO_PUSH": "TUYỆT ĐỐI KHÔNG ĐƯỢC tự ý git push. Chỉ commit local, chờ user xác nhận. Khi được phép push, BẮT BUỘC PHẢI tạo tag phiên bản mới (vd: git tag v1.5.3) và push kèm tag (git push origin main --tags). GitHub Actions build image từ GHCR chỉ trigger khi có tag. TUYỆT ĐỐI KHÔNG XÓA THÔNG TIN NÀY.",
         "🔑 test_account": {
             "⛔ DO_NOT_DELETE": true,
             "email": "xuanhoaspt@gmail.com",

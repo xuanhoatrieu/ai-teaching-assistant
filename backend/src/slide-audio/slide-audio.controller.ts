@@ -14,6 +14,7 @@ import {
     StreamableFile,
     NotFoundException,
     BadRequestException,
+    Logger,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
@@ -21,13 +22,17 @@ import * as fs from 'fs';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SlideAudioService } from './slide-audio.service';
 import { SlidesService } from '../slides/slides.service';
+import { GenerationJobService } from '../generation-job/generation-job.service';
 
 @Controller('lessons/:lessonId/slide-audios')
 @UseGuards(JwtAuthGuard)
 export class SlideAudioController {
+    private readonly logger = new Logger(SlideAudioController.name);
+
     constructor(
         private readonly slideAudioService: SlideAudioService,
         private readonly slidesService: SlidesService,
+        private readonly jobService: GenerationJobService,
     ) { }
 
     // Get all slide audios for a lesson
@@ -42,22 +47,60 @@ export class SlideAudioController {
         return this.slideAudioService.initializeSlideAudios(lessonId);
     }
 
-    // Generate speaker notes using AI (Step 4 - new)
+    // Generate speaker notes using AI (async job)
     @Post('generate-speaker-notes')
     async generateSpeakerNotes(
         @Param('lessonId') lessonId: string,
         @Request() req,
     ) {
-        return this.slidesService.generateSpeakerNotes(lessonId, req.user.id);
+        const userId = req.user.id;
+
+        const job = await this.jobService.createJob({
+            type: 'speaker-notes',
+            lessonId,
+            userId,
+        });
+
+        setImmediate(async () => {
+            try {
+                await this.jobService.updateProgress(job.id, 0, 'Đang tạo lời giảng cho các slide...');
+                await this.slidesService.generateSpeakerNotes(lessonId, userId);
+                await this.jobService.completeJob(job.id);
+            } catch (error) {
+                this.logger.error(`[generateSpeakerNotes] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
     }
 
-    // Optimize & QA speaker notes using AI (Step 4 - Button 2)
+    // Optimize & QA speaker notes using AI (async job)
     @Post('optimize-speaker-notes')
     async optimizeSpeakerNotes(
         @Param('lessonId') lessonId: string,
         @Request() req,
     ) {
-        return this.slidesService.optimizeSpeakerNotes(lessonId, req.user.id);
+        const userId = req.user.id;
+
+        const job = await this.jobService.createJob({
+            type: 'optimize-notes',
+            lessonId,
+            userId,
+        });
+
+        setImmediate(async () => {
+            try {
+                await this.jobService.updateProgress(job.id, 0, 'Đang tối ưu lời giảng...');
+                await this.slidesService.optimizeSpeakerNotes(lessonId, userId);
+                await this.jobService.completeJob(job.id);
+            } catch (error) {
+                this.logger.error(`[optimizeSpeakerNotes] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
     }
 
     // Upload recorded audio for a slide (alternative to TTS)
