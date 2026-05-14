@@ -247,7 +247,6 @@ export class ReviewQuestionService {
                 levelCounters[level]++;
 
                 const created = await this.createQuestion(lessonId, lessonNumber, {
-                    questionId: q.questionId || this.generateQuestionId(lessonNumber, level, levelCounters[level]),
                     level,
                     question: q.question,
                     correctAnswer: q.correctAnswer,
