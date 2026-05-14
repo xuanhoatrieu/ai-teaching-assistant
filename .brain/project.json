@@ -117,7 +117,7 @@
         "repo_url": "https://github.com/xuanhoatrieu/ai-teaching-assistant",
         "default_branch": "main",
         "commit_rule": "⛔ LUÔN HỎI TRƯỚC KHI COMMIT/PUSH",
-        "latest_tag": "v1.3.9",
+        "latest_tag": "v1.5.5",
         "ci_cd": "GitHub Actions builds Docker images on tag push"
     },
     "security": {
