@@ -1,6 +1,6 @@
 {
     "meta": {
-        "last_updated": "2026-05-13T18:41:00+07:00"
+        "last_updated": "2026-05-15T05:58:00+07:00"
     },
     "decisions": [
         {"decision": "CLIProxy as Priority 1, Gemini SDK as fallback", "reason": "CLIProxy provides free multi-model access (GPT, Claude, Gemini) via self-hosted proxy"},
@@ -75,7 +75,11 @@
         {"decision": "seed-configs.js (standalone JS) instead of prisma db seed", "reason": "prisma db seed requires ts-node in Docker production image. Standalone JS script with @prisma/client import runs directly with node."},
         {"decision": "ViTTS test connection: network error shows friendly message about VPS-only access", "reason": "ViTTS server (117.0.36.6:8888) only accessible from VPS network. Local dev will always get 'fetch failed'. Error message explains this instead of confusing admin."},
         {"decision": "Tab reorder: Đề cương → Bài giảng → Video (default still opens Bài giảng)", "reason": "Syllabus-first workflow. Tab visual order changed but activeTab default remains 'lessons' for backward compatibility."},
-        {"decision": "PrismaClient init in standalone JS script (Prisma 7.x)", "reason": "Prisma 7.x removed 'datasources' option. Standalone scripts (like seed-configs.js) MUST use the adapter pattern: const pool = new Pool({ connectionString }); const adapter = new PrismaPg(pool); const prisma = new PrismaClient({ adapter }); And must pool.end() in finally block to prevent hanging."}
+        {"decision": "PrismaClient init in standalone JS script (Prisma 7.x)", "reason": "Prisma 7.x removed 'datasources' option. Standalone scripts (like seed-configs.js) MUST use the adapter pattern: const pool = new Pool({ connectionString }); const adapter = new PrismaPg(pool); const prisma = new PrismaClient({ adapter }); And must pool.end() in finally block to prevent hanging."},
+        {"decision": "Async GenerationJob pattern for long-running AI tasks", "reason": "Cloudflare 524 timeout after 100s kills synchronous AI calls (speaker notes, review questions). Solution: POST returns jobId immediately → setImmediate() processes in background → Frontend polls /generation-jobs/:id/status every 2s via useJobPolling hook."},
+        {"decision": "Polling over WebSockets for job progress", "reason": "HTTP polling simpler than WebSocket: works behind all CDNs/reverse-proxies, no connection state, stateless horizontal scaling. 2s interval is fast enough for progress feedback."},
+        {"decision": "UsefulLinks as admin-managed external tools menu", "reason": "Admin adds/removes tool links (pdf.hoclieu.id.vn, video.hoclieu.id.vn, etc.) via Settings CRUD. Users see dropdown in navbar. Uses existing RolesGuard pattern, no custom AdminGuard needed."},
+        {"decision": "Review question questionId derived from DB count, not AI output", "reason": "AI-generated questionId or hardcoded counter causes unique constraint violation on append (existing IDs like B1-1-01 already in DB). Let createQuestion() query current count from DB and auto-increment."}
     ],
     "patterns": [
         "NestJS module structure with controller/service/module",
@@ -128,7 +132,11 @@
         "WRITE step inserts <!-- ILLUSTRATION: {...} --> HTML comment markers → ILLUSTRATE step replaces with rendered images. Extra images appended at end.",
         "CSS specificity gotcha: SyllabusPanel.css .lesson-title overridden by LessonEditorV2.css .lesson-title (28px/700). Fix: parent selector .syllabus-lessons-list .lesson-title",
         "DOCX code block styling: reference.docx (style-level) + docx_postprocess.py (run-level) dual-layer approach. Reference template sets Source Code style; post-processor force-overrides every individual run for 100% coverage.",
-        "Pandoc image embedding: markdown ![caption](/files/public/...) URLs must be converted to absolute disk paths before Pandoc. Pattern: /files/public/syllabus-textbook/X/Y → {cwd}/uploads/syllabus-textbook/X/Y"
+        "Pandoc image embedding: markdown ![caption](/files/public/...) URLs must be converted to absolute disk paths before Pandoc. Pattern: /files/public/syllabus-textbook/X/Y → {cwd}/uploads/syllabus-textbook/X/Y",
+        "Async Job pattern: Controller creates GenerationJob → returns {jobId} → setImmediate(async) → jobService.updateProgress() during work → jobService.completeJob()/failJob() at end",
+        "useJobPolling React hook: startPolling(jobId) → polls /generation-jobs/:id/status every 2s → auto-stops on done/error → calls onComplete/onError callbacks",
+        "UsefulLinksAdmin: CRUD with emoji picker, sortOrder, isActive toggle. Dark theme CSS matching AdminPage. Mounted inside SettingsPage component.",
+        "UserLayout navbar dropdown: Fetches GET /useful-links → renders 'Công cụ' dropdown with click-outside-to-close"
     ],
     "gotchas": [
         "⭐ Image model name: 'gemini-2.5-flash-image' NOT 'gemini-2.5-flash-preview-image-generation' (404 error)",
@@ -213,7 +221,11 @@
         "⭐⭐ python-docx paragraph.alignment = 0 (LEFT) is SILENTLY IGNORED — python-docx considers LEFT as 'inherit from style' and doesn't write XML. Must use direct XML: parse_xml('<w:jc w:val=left/>')",
         "⭐ Pandoc reference.docx Aptos font: Word 365+ uses Aptos as default theme font. python-docx style.font.name cannot override theme fonts. Must use w:rFonts XML with all 4 font slots (ascii, hAnsi, eastAsia, cs).",
         "⭐ Pandoc ```output language: Not recognized by Pandoc — causes code block to render as plain text without syntax highlighting. Convert to ```text before passing to Pandoc.",
-        "⭐ Frontend axios timeout:0 means NO timeout (unlimited). All AI API calls should use timeout:0 on dev server to prevent false-negative errors."
+        "⭐ Frontend axios timeout:0 means NO timeout (unlimited). All AI API calls should use timeout:0 on dev server to prevent false-negative errors.",
+        "⭐⭐ Review question append unique constraint: AI loop levelCounters start at 0 → generates questionId B1-1-01 which already exists. FIX: Remove hardcoded questionId from AI loop, let createQuestion() derive from DB count.",
+        "⭐ GenerationJobModule must be imported in every module that uses GenerationJobService (QuestionsModule, SlideAudioModule, etc.)",
+        "⭐ UsefulLinksAdmin CSS: Must use dark theme (rgba backgrounds, light text) to match AdminPage. Default CSS vars fallback to light colors which look broken.",
+        "⭐⭐ Git push MUST include tag: GitHub Actions CI/CD only triggers on tag push. Without tag, no Docker image build. Always: git tag vX.Y.Z && git push origin main --tags"
     ],
     "conventions": [
         "API routes: /lessons/:id/resource",
@@ -235,6 +247,10 @@
         "SyllabusModule imports: PrismaModule, AIModule, ApiKeysModule, ModelConfigModule, FileStorageModule. Providers: SyllabusService, MarkItDownService, MermaidService, SyllabusExportService",
         "Textbook timeout: 180s for classic, 600s for Pro (5-step pipeline). Frontend shows loading message immediately",
         "Textbook export filename: Giao_trinh_<subject_name>.docx",
-        "Textbook assets: uploads/syllabus-textbook/<syllabusId>/<lessonId>/assets/ served via /files/public/syllabus-textbook/..."
+        "Textbook assets: uploads/syllabus-textbook/<syllabusId>/<lessonId>/assets/ served via /files/public/syllabus-textbook/...",
+        "GenerationJob module: backend/src/generation-job/ with service, module, controller",
+        "UsefulLinks module: backend/src/useful-links/ with service, module, controller. Admin CRUD protected by RolesGuard",
+        "useJobPolling hook: frontend/src/hooks/useJobPolling.ts — reusable for any async AI job",
+        "Git push rule: ALWAYS tag before push. latest_tag in .brain/project.json github section must be updated."
     ]
 }

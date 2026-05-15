@@ -1,6 +1,6 @@
 {
     "meta": {
-        "last_updated": "2026-05-12T15:39:00+07:00"
+        "last_updated": "2026-05-15T05:58:00+07:00"
     },
     "modules": {
         "auth": {
@@ -23,9 +23,9 @@
                 {"name": "Step 1: Outline Input", "description": "Raw text/PDF input"},
                 {"name": "Step 2: Detailed Outline", "description": "AI-generated detailed outline with JSON editing"},
                 {"name": "Step 3: Slide Script", "description": "AI-generated slide content (20-30 slides)"},
-                {"name": "Step 4: Audio Generation", "description": "2-step speaker notes (raw → optimized) + TTS audio"},
+                {"name": "Step 4: Audio Generation", "description": "2-step speaker notes (raw → optimized) + TTS audio. Async GenerationJob with useJobPolling."},
                 {"name": "Step 5: PPTX Generation", "description": "Template selection, image generation, PPTX export"},
-                {"name": "Step 6: Question Bank", "description": "Interactive (MC/MR) + Review (Bloom taxonomy) questions + Excel export"}
+                {"name": "Step 6: Question Bank", "description": "Interactive (MC/MR) + Review (Bloom taxonomy) questions + Excel export. Async GenerationJob with useJobPolling."}
             ]
         },
         "ai_models": {
@@ -104,12 +104,30 @@
                 {"name": "Regenerate Code Flow", "description": "Editable visualDesc in UI. Backend injects updated visualDesc into AI script. Sets status=rendering to trigger polling."},
                 {"name": "Stuck Scene Self-Healing", "description": "Polling endpoint auto-detects and recovers scenes stuck in 'rendering' > 5m due to missed Redis messages (e.g., during backend hot-reloads)."}
             ]
+        },
+        "generation_jobs": {
+            "status": "implemented",
+            "features": [
+                {"name": "GenerationJob Model", "description": "Prisma model: id, type, status (pending/running/done/error), progress, message, lessonId, userId, total, payload"},
+                {"name": "GenerationJobService", "description": "createJob(), updateProgress(), completeJob(), failJob(), getJobStatus()"},
+                {"name": "Job Status Endpoint", "description": "GET /generation-jobs/:id/status — returns status, progress, message for frontend polling"},
+                {"name": "useJobPolling Hook", "description": "React hook: startPolling(jobId) → polls every 2s → auto-stops → onComplete/onError callbacks"}
+            ]
+        },
+        "useful_links": {
+            "status": "implemented",
+            "features": [
+                {"name": "UsefulLink Model", "description": "Prisma model: id, title, url, icon (emoji), description, sortOrder, isActive"},
+                {"name": "Admin CRUD", "description": "UsefulLinksController with GET/POST/PUT/DELETE. RolesGuard(ADMIN) protection."},
+                {"name": "UsefulLinksAdmin Component", "description": "Admin Settings CRUD with emoji picker, sort order, active toggle. Dark theme CSS."},
+                {"name": "Navbar Dropdown", "description": "UserLayout 'Công cụ' dropdown: fetches GET /useful-links, shows active links with icon+title+description"}
+            ]
         }
     },
     "pages": {
         "public": ["Login", "Register"],
         "user": ["Dashboard", "SubjectDetail", "LessonEditorV2 (6 steps)", "VideoStudio (5-step wizard with scene-by-scene render)", "PptxAudioTool", "UserSettings"],
-        "admin": ["AdminPage (Prompts, Settings, Users)"],
+        "admin": ["AdminPage (Prompts, Settings, Users, UsefulLinksAdmin)"],
         "planned": ["LessonStudioPro (7-step skill-powered wizard)"]
     },
     "planned_modules": {
