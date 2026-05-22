@@ -47,8 +47,12 @@ function buildQuestionXml(q: ReviewQuestionData): string {
     }
     const feedbackHtml = feedbackParts.map((p) => `<p class="cell">${p}</p>`).join('\n      ');
 
+    // Build question name: "B1-1-01: Nội dung câu hỏi" (truncate to 200 chars for readability)
+    const questionPreview = q.question.length > 200 ? q.question.substring(0, 197) + '...' : q.question;
+    const questionName = `${q.questionId}: ${questionPreview}`;
+
     return `  <question type="multichoice">
-    <name><text>${q.questionId}</text></name>
+    <name><text>${escapeForCdata(questionName)}</text></name>
     <questiontext format="html">
       <text>${cdataHtml(q.question)}</text>
     </questiontext>

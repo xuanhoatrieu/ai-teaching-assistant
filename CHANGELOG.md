@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2026-05-15] - Moodle XML Export Polish
+
+### Changed
+- **Moodle XML Question Name**: Updated XML export to include the question content preview (truncated to 200 characters) in the question name field (`B1-1-01: Nội dung câu hỏi...`) instead of just the ID. This makes questions identifiable in Moodle's question bank list.
+
 ## [v1.1.0] - 2026-02-25 - Speaker Notes Model & Question Bank Polish
 
 ### Added

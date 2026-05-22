@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api } from '../../lib/api';
+import { useJobPolling } from '../../hooks/useJobPolling';
 import { ModelSelector } from '../ModelSelector';
 import './Steps.css';
 
@@ -266,10 +267,35 @@ function OutlinePreview({ outline }: { outline: ParsedOutline }) {
 
 export function Step2BuildOutline() {
     const { lessonId, lessonData, updateDetailedOutline, refreshLessonData } = useLessonEditor();
-    const [isGenerating, setIsGenerating] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [detailedOutline, setDetailedOutline] = useState(lessonData?.detailedOutline || '');
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // Async job polling for outline generation
+    const outlineJob = useJobPolling({
+        onComplete: async (jobStatus) => {
+            await refreshLessonData();
+            const result = jobStatus as any;
+            // result field from completeJob may contain coveragePercent & warnings
+            const resultData = (result as any)?.result || {};
+            const coveragePercent = resultData?.coveragePercent;
+            const warnings = resultData?.warnings;
+            if (coveragePercent !== undefined) {
+                const warningText = warnings?.join(' ') || '';
+                setMessage({
+                    type: 'success',
+                    text: `✓ Đã tạo outline! Coverage: ${coveragePercent}% ${warningText}`
+                });
+            } else {
+                setMessage({ type: 'success', text: '✓ Đã tạo outline chi tiết thành công!' });
+            }
+        },
+        onError: (msg) => {
+            setMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const isGenerating = outlineJob.isRunning;
 
     // Track unsaved edits for auto-save on unmount
     const isDirtyRef = useRef(false);
@@ -313,34 +339,14 @@ export function Step2BuildOutline() {
     }, [lessonData?.detailedOutline]);
 
     const handleGenerate = async () => {
-        setIsGenerating(true);
         setMessage(null);
 
         try {
             const response = await api.post(`/lessons/${lessonId}/outline/generate`);
-            // Response: { detailedOutline: { content: "...", coveragePercent, warnings } }
-            const wrapper = response.data.detailedOutline || response.data;
-            const content = typeof wrapper === 'object' ? wrapper.content : wrapper;
-            setDetailedOutline(typeof content === 'string' ? content : JSON.stringify(content, null, 2));
-            isDirtyRef.current = false;
-            await refreshLessonData();
-
-            // Show coverage info if available (data is inside the wrapper)
-            const coveragePercent = wrapper?.coveragePercent ?? response.data.coveragePercent;
-            const warnings = wrapper?.warnings ?? response.data.warnings;
-            if (coveragePercent !== undefined) {
-                const warningText = warnings?.join(' ') || '';
-                setMessage({
-                    type: 'success',
-                    text: `✓ Đã tạo outline! Coverage: ${coveragePercent}% ${warningText}`
-                });
-            } else {
-                setMessage({ type: 'success', text: '✓ Đã tạo outline chi tiết thành công!' });
-            }
+            const { jobId } = response.data;
+            outlineJob.startPolling(jobId);
         } catch (err: any) {
             setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo outline' });
-        } finally {
-            setIsGenerating(false);
         }
     };
 
@@ -442,7 +448,7 @@ export function Step2BuildOutline() {
             {isGenerating && (
                 <div className="generating-state">
                     <div className="loading-spinner"></div>
-                    <p>Đang tạo outline chi tiết với AI...</p>
+                    <p>{outlineJob.jobStatus?.message || 'Đang tạo outline chi tiết với AI...'}</p>
                     <p className="hint">Quá trình này có thể mất 30-60 giây</p>
                 </div>
             )}
