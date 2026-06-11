@@ -1,52 +1,34 @@
 # 📋 HANDOVER DOCUMENT
 ## AI Teaching Assistant — Mobile UI & Responsiveness Optimization
 
-📍 **Đang làm:** Đã hoàn thành tối ưu hóa toàn bộ giao diện di động (Mobile UI) cục bộ.
-🔢 **Đến bước:** Chờ người dùng xác nhận phê duyệt để commit, đánh tag phiên bản `v1.5.9` và push lên GitHub để VPS tự động kéo Docker image mới.
+📍 **Đang làm:** Đang giám sát GitHub Actions build phiên bản `v1.5.9` sau khi sửa lỗi Buildx.
+🔢 **Đến bước:** Chờ build thành công trên GitHub Actions, kiểm tra deploy trên VPS và xem xét bật lại GHA cache.
 
 ---
 
 ### ✅ ĐÃ XONG:
-- **Tối ưu User Layout & Navigation:**
-  - Tích hợp Drawer slide-in trượt từ bên phải trên màn hình <= 768px.
-  - Tích hợp nút Hamburger mở/đóng menu và overlay làm mờ.
-  - Thu gọn padding của main content để tối ưu không gian di động.
-- **Tối ưu Admin Layout & Sidebar:**
-  - Ẩn sidebar admin bên trái mặc định và thay bằng overlay drawer trượt từ bên trái.
-  - Thêm header phụ trên di động chứa nút Toggle menu cho trang Admin.
-- **Tối ưu trang danh sách Môn học (Subjects):**
-  - Chuyển header trang sang dạng dọc.
-  - Thay đổi modal popup co giãn theo màn hình (92% width) và chuyển biểu mẫu 2 cột thành 1 cột.
-- **Tối ưu trang chi tiết Môn học (SubjectDetail):**
-  - Cho phép tabs môn học bọc dòng để không bị tràn ngang.
-  - Khắc phục sự cố nút sửa/xóa bài học bị ẩn do không hover được trên màn hình cảm ứng (chuyển sang hiển thị cố định trên di động).
-- **Tối ưu trang soạn thảo Bài giảng (LessonEditorV2):**
-  - Ẩn chữ mô tả chỉ hiển thị icon stepper trên di động để gọn màn hình.
-  - Các nút Back/Next tự động full-width và xếp cạnh nhau dưới chân trang.
-- **Tối ưu trang đăng nhập/đăng ký (Auth):**
-  - Giảm padding của auth card trên màn hình siêu nhỏ.
-- **Kiểm thử tĩnh:**
-  - Biên dịch frontend (`npm run build`) thành công 100% không phát sinh bất kỳ lỗi nào.
+- **Tối ưu Mobile UI (Phase 2):** Toàn bộ giao diện di động đã được tối ưu hóa responsive CSS thành công.
+- **Commit, Tag & Push ban đầu:** Đã commit toàn bộ thay đổi và gắn tag `v1.5.9`, push lên GitHub.
+- **Sửa lỗi Docker Buildx cache:** 
+  - Khắc phục lỗi build `error writing layer blob: not_found` bằng cách tạm thời comment các config cache (`cache-from` và `cache-to` dạng `gha`) trong file [.github/workflows/deploy.yml](file:///home/trieuhoa/ai-teaching-assistant/.github/workflows/deploy.yml).
+  - Xóa tag `v1.5.9` cũ trên cả local và remote repo, sau đó đẩy lại tag `v1.5.9` mới trỏ vào commit sửa đổi để kích hoạt build sạch (clean build) không dùng cache.
+  - Chạy `graphify update .` thành công để cập nhật lại cơ sở dữ liệu code graph.
 
 ### ⏳ CÒN LẠI / CẦN LÀM TIẾP:
-- Nhận phê duyệt từ người dùng để commit code cục bộ.
-- Tạo tag phiên bản `v1.5.9` và thực hiện push lên GitHub để kích hoạt Github Actions tự động build image Docker mới cho VPS.
-- Chạy lệnh pull Docker và reload trên VPS để kiểm thử trực tiếp trên điện thoại di động thực tế.
+- Giám sát tiến trình build trên GitHub Actions.
+- Kiểm tra tính ổn định sau khi deploy lên VPS thực tế.
+- Bật lại GHA cache trong [.github/workflows/deploy.yml](file:///home/trieuhoa/ai-teaching-assistant/.github/workflows/deploy.yml) bằng cách mở comment hai dòng cấu hình cache để các lần build tiếp theo nhanh hơn sau khi cache đã được dọn sạch.
 
-### 🔧 QUYẾT ĐỊNH QUAN TRỌNG:
+### 🔧 QUYẾT ĐỊNG QUAN TRỌNG:
+- Tắt cache GHA tạm thời trong workflow CI/CD để bỏ qua lỗi cache BuildKit bị corrupt.
 - Sử dụng Drawer trượt cạnh phải cho Menu chính và Drawer trượt cạnh trái cho Admin Sidebar để tạo cảm giác tự nhiên như app di động native.
-- Hiển thị cố định các nút sửa/xóa bài học trên màn hình cảm ứng để giải quyết triệt để vấn đề thiết bị cảm ứng không có hover.
 
 ### 📁 FILES CHÍNH ĐÃ THAY ĐỔI:
+- `~` [.github/workflows/deploy.yml](file:///home/trieuhoa/ai-teaching-assistant/.github/workflows/deploy.yml) (Tạm tắt cache Buildx)
 - `~` [UserLayout.tsx](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/UserLayout.tsx)
 - `~` [UserLayout.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/UserLayout.css)
 - `~` [AdminLayout.tsx](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/AdminLayout.tsx)
 - `~` [AdminLayout.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/AdminLayout.css)
-- `~` [Subjects.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/Subjects.css)
-- `~` [SubjectDetail.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/SubjectDetail.css)
-- `~` [LessonEditorV2.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/LessonEditorV2.css)
-- `~` [Steps.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/components/steps/Steps.css)
-- `~` [Auth.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/Auth.css)
 
 ---
 📍 Đã lưu! Để tiếp tục: Gõ /recap
