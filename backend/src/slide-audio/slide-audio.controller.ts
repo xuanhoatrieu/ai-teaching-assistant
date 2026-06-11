@@ -55,6 +55,13 @@ export class SlideAudioController {
     ) {
         const userId = req.user.id;
 
+        // Check if there is already an active job
+        const activeJob = await this.jobService.getActiveJob(lessonId, 'speaker-notes');
+        if (activeJob) {
+            this.logger.log(`[generateSpeakerNotes] Active job ${activeJob.id} already exists for lesson ${lessonId}. Re-attaching.`);
+            return { jobId: activeJob.id, status: 'processing' };
+        }
+
         const job = await this.jobService.createJob({
             type: 'speaker-notes',
             lessonId,
@@ -82,6 +89,13 @@ export class SlideAudioController {
         @Request() req,
     ) {
         const userId = req.user.id;
+
+        // Check if there is already an active job
+        const activeJob = await this.jobService.getActiveJob(lessonId, 'optimize-notes');
+        if (activeJob) {
+            this.logger.log(`[optimizeSpeakerNotes] Active job ${activeJob.id} already exists for lesson ${lessonId}. Re-attaching.`);
+            return { jobId: activeJob.id, status: 'processing' };
+        }
 
         const job = await this.jobService.createJob({
             type: 'optimize-notes',
@@ -127,7 +141,68 @@ export class SlideAudioController {
         @Param('lessonId') lessonId: string,
         @Request() req,
     ) {
-        return this.slideAudioService.generateAllAudios(lessonId, req.user.id);
+        const userId = req.user.id;
+
+        // Check if there is already an active job
+        const activeJob = await this.jobService.getActiveJob(lessonId, 'slide-audio-generate-all');
+        if (activeJob) {
+            this.logger.log(`[generateAllAudios] Active job ${activeJob.id} already exists for lesson ${lessonId}. Re-attaching.`);
+            return { jobId: activeJob.id, status: 'processing' };
+        }
+
+        const job = await this.jobService.createJob({
+            type: 'slide-audio-generate-all',
+            lessonId,
+            userId,
+        });
+
+        setImmediate(async () => {
+            try {
+                const slideAudios = await this.slideAudioService.getSlideAudios(lessonId);
+                if (slideAudios.length === 0) {
+                    throw new Error('Không tìm thấy thông tin audio cho slide. Vui lòng khởi tạo trước.');
+                }
+
+                // Filter slide audios that need generation (with speakerNote)
+                const slidesToGenerate = slideAudios.filter(s => s.speakerNote?.trim());
+                const total = slidesToGenerate.length;
+
+                if (total === 0) {
+                    await this.jobService.updateProgress(job.id, 100, 'Không có slide nào cần tạo audio.');
+                    await this.jobService.completeJob(job.id);
+                    return;
+                }
+
+                await this.jobService.updateProgress(job.id, 0, `Bắt đầu tạo audio cho ${total} slide...`);
+
+                for (let i = 0; i < total; i++) {
+                    const slideAudio = slidesToGenerate[i];
+                    await this.jobService.updateProgress(
+                        job.id,
+                        Math.round((i / total) * 100),
+                        `Đang tạo audio cho slide ${slideAudio.slideIndex + 1}/${total}...`
+                    );
+
+                    try {
+                        await this.slideAudioService.generateSingleAudio(
+                            lessonId,
+                            slideAudio.slideIndex,
+                            userId,
+                        );
+                    } catch (error) {
+                        this.logger.error(`Failed to generate audio for slide index ${slideAudio.slideIndex}:`, error);
+                    }
+                }
+
+                await this.slideAudioService.updateLessonStep(lessonId, 4);
+                await this.jobService.completeJob(job.id);
+            } catch (error) {
+                this.logger.error(`[generateAllAudios] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
     }
 
     // Generate audio for a single slide

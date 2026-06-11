@@ -11,9 +11,9 @@ import {
     UploadedFile,
     ParseFilePipe,
     MaxFileSizeValidator,
-    FileTypeValidator,
     Res,
     NotFoundException,
+    BadRequestException,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -68,14 +68,19 @@ export class SyllabusController {
             new ParseFilePipe({
                 validators: [
                     new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10MB
-                    new FileTypeValidator({
-                        fileType: /(docx|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document)/,
-                    }),
                 ],
             }),
         )
         file: Express.Multer.File,
     ) {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn file đề cương để tải lên.');
+        }
+        const ext = file.originalname.split('.').pop()?.toLowerCase();
+        if (ext !== 'docx') {
+            throw new BadRequestException('Định dạng file không hợp lệ. Chỉ chấp nhận file .docx');
+        }
+
         const apiKey = await this.apiKeysService.getActiveKey(user.id, 'GEMINI');
         const modelConfig = await this.modelConfigService.getModelForTask(user.id, 'OUTLINE');
 

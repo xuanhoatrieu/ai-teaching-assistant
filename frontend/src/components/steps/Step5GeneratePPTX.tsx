@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { ModelSelector } from '../ModelSelector';
 import { api } from '../../lib/api';
+import { useJobPolling } from '../../hooks/useJobPolling';
 import './Steps.css';
 
 type GenerationStatus = 'idle' | 'generating_content' | 'generating_images' | 'generating_pptx' | 'completed' | 'error';
@@ -41,13 +42,11 @@ export function Step5GeneratePPTX() {
     const [templates, setTemplates] = useState<Template[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
     const [slideProgress, setSlideProgress] = useState<SlideProgress[]>([]);
-    const [currentSlide, setCurrentSlide] = useState(0);
     const [totalSlides, setTotalSlides] = useState(0);
     const [pptxBlob, setPptxBlob] = useState<Blob | null>(null);
     const [pptxNoAudioBlob, setPptxNoAudioBlob] = useState<Blob | null>(null);
     const [contentGenerated, setContentGenerated] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
-    const shouldStopGenerating = useRef(false);
 
     const hasSlideScript = !!lessonData?.slideScript;
 
@@ -71,82 +70,135 @@ export function Step5GeneratePPTX() {
     }, []);
 
     // Load saved optimizedContent from database on mount
-    useEffect(() => {
-        const loadSavedContent = async () => {
-            console.log('[Step5] loadSavedContent called, lessonId:', lessonId, 'stepMountCounter:', stepMountCounter);
-            try {
-                const response = await api.get(`/lessons/${lessonId}/slides`);
-                const slides = Array.isArray(response.data) ? response.data : [];
-                console.log('[Step5] API response slides:', slides.length, 'slides');
+    const loadSavedContent = useCallback(async (isJobActive = false) => {
+        console.log('[Step5] loadSavedContent called, lessonId:', lessonId, 'stepMountCounter:', stepMountCounter, 'isJobActive:', isJobActive);
+        try {
+            const response = await api.get(`/lessons/${lessonId}/slides`);
+            const slides = Array.isArray(response.data) ? response.data : [];
+            console.log('[Step5] API response slides:', slides.length, 'slides');
 
-                if (slides.length === 0) {
-                    console.log('[Step5] No slides found, returning');
-                    return;
-                }
-
-                // Check if any slides have optimizedContentJson OR imageUrl
-                const completedSlides = slides.filter(
-                    (s: any) => {
-                        // A slide is complete if it has an image AND either:
-                        // - has optimized content, OR
-                        // - is a title/special slide that doesn't need content (no raw content)
-                        const hasImage = !!s.imageUrl;
-                        const hasOptContent = !!s.optimizedContentJson;
-                        const isTitleSlide = !s.content || s.content.trim() === '';
-                        return hasImage && (hasOptContent || isTitleSlide);
-                    }
-                );
-                const hasAnyContent = slides.some(
-                    (s: any) => (s.optimizedContentJson && s.optimizedContentJson.length > 0) || s.imageUrl
-                );
-                const remaining = slides.length - completedSlides.length;
-                console.log('[Step5] completedSlides:', completedSlides.length, '/', slides.length, 'pending:', remaining);
-
-                if (hasAnyContent) {
-                    const loadedSlideProgress: SlideProgress[] = slides.map((s: any) => {
-                        const hasImage = !!s.imageUrl;
-                        const hasOptContent = !!s.optimizedContentJson;
-                        const isTitleSlide = !s.content || s.content.trim() === '';
-                        const isComplete = hasImage && (hasOptContent || isTitleSlide);
-                        return {
-                            slideIndex: s.slideIndex,
-                            phase: isComplete ? 'complete' as const :
-                                   (hasOptContent || hasImage) ? 'error' as const : 'pending' as const,
-                            imageUrl: s.imageUrl,
-                            optimizedContent: s.optimizedContentJson
-                                ? (typeof s.optimizedContentJson === 'string'
-                                    ? JSON.parse(s.optimizedContentJson)
-                                    : s.optimizedContentJson)
-                                : undefined,
-                            title: s.title,
-                        };
-                    });
-
-                    setSlideProgress(loadedSlideProgress);
-                    setTotalSlides(slides.length);
-                    setContentGenerated(true);
-                    setPendingCount(remaining);
-                    setProgress((completedSlides.length / slides.length) * 100);
-
-                    if (remaining === 0) {
-                        setStatus('completed');
-                        setProgress(100);
-                    } else {
-                        // Partial progress — show completed state so buttons appear
-                        setStatus('completed');
-                    }
-                } else {
-                    console.log('[Step5] No content found in slides');
-                }
-            } catch (err) {
-                console.error('[Step5] Failed to load saved content:', err);
+            if (slides.length === 0) {
+                console.log('[Step5] No slides found, returning');
+                return;
             }
-        };
 
-        if (lessonId) {
-            loadSavedContent();
+            // Check if any slides have optimizedContentJson OR imageUrl
+            const completedSlides = slides.filter(
+                (s: any) => {
+                    // A slide is complete if it has an image AND either:
+                    // - has optimized content, OR
+                    // - is a title/special slide that doesn't need content (no raw content)
+                    const hasImage = !!s.imageUrl;
+                    const hasOptContent = !!s.optimizedContentJson;
+                    const isTitleSlide = !s.content || s.content.trim() === '';
+                    return hasImage && (hasOptContent || isTitleSlide);
+                }
+            );
+            const hasAnyContent = slides.some(
+                (s: any) => (s.optimizedContentJson && s.optimizedContentJson.length > 0) || s.imageUrl
+            );
+            const remaining = slides.length - completedSlides.length;
+            console.log('[Step5] completedSlides:', completedSlides.length, '/', slides.length, 'pending:', remaining);
+
+            if (hasAnyContent) {
+                const loadedSlideProgress: SlideProgress[] = slides.map((s: any) => {
+                    const hasImage = !!s.imageUrl;
+                    const hasOptContent = !!s.optimizedContentJson;
+                    const isTitleSlide = !s.content || s.content.trim() === '';
+                    const isComplete = hasImage && (hasOptContent || isTitleSlide);
+                    
+                    let phase: 'pending' | 'optimizing_content' | 'generating_image' | 'complete' | 'error' | 'skipped' = 'pending';
+                    if (isComplete) {
+                        phase = 'complete';
+                    } else if (isJobActive) {
+                        phase = hasOptContent ? 'generating_image' : 'optimizing_content';
+                    } else if (hasOptContent || hasImage) {
+                        phase = 'error';
+                    } else {
+                        phase = 'pending';
+                    }
+
+                    return {
+                        slideIndex: s.slideIndex,
+                        phase,
+                        imageUrl: s.imageUrl,
+                        optimizedContent: s.optimizedContentJson
+                            ? (typeof s.optimizedContentJson === 'string'
+                                ? JSON.parse(s.optimizedContentJson)
+                                : s.optimizedContentJson)
+                            : undefined,
+                        title: s.title,
+                    };
+                });
+
+                setSlideProgress(loadedSlideProgress);
+                setTotalSlides(slides.length);
+                setContentGenerated(true);
+                setPendingCount(remaining);
+                setProgress((completedSlides.length / slides.length) * 100);
+
+                if (remaining === 0) {
+                    if (!isJobActive) setStatus('completed');
+                    setProgress(100);
+                } else {
+                    // Partial progress — show completed state so buttons appear (unless job is active)
+                    if (!isJobActive) setStatus('completed');
+                }
+            } else {
+                console.log('[Step5] No content found in slides');
+            }
+        } catch (err) {
+            console.error('[Step5] Failed to load saved content:', err);
         }
     }, [lessonId, stepMountCounter]);
+
+    const contentJob = useJobPolling({
+        onComplete: async () => {
+            setStatus('completed');
+            setProgress(100);
+            await loadSavedContent(false);
+        },
+        onError: (msg) => {
+            setStatus('error');
+            setError(`Lỗi khi tối ưu nội dung: ${msg}`);
+            loadSavedContent(false);
+        },
+    });
+
+    const checkActiveJob = useCallback(async () => {
+        try {
+            const response = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=pptx-generate-content`);
+            if (response.data?.id) {
+                setStatus('generating_images');
+                contentJob.startPolling(response.data.id);
+                return true;
+            }
+        } catch (err) {
+            console.error('Failed to check active content job:', err);
+        }
+        return false;
+    }, [lessonId]);
+
+    // Load saved optimizedContent from database on mount
+    useEffect(() => {
+        if (lessonId) {
+            const init = async () => {
+                const isActive = await checkActiveJob();
+                await loadSavedContent(isActive);
+            };
+            init();
+        }
+    }, [lessonId, loadSavedContent, checkActiveJob]);
+
+    // Reload slide contents reactively when job progress changes
+    useEffect(() => {
+        if (contentJob.isRunning) {
+            loadSavedContent(true);
+        }
+    }, [contentJob.jobStatus?.progress, contentJob.isRunning, loadSavedContent]);
+
+    const isJobRunning = contentJob.isRunning;
+    const currentProgress = isJobRunning && contentJob.jobStatus ? contentJob.jobStatus.progress : progress;
 
     const handleGeneratePptx = useCallback(async () => {
         setStatus('generating_pptx');
@@ -210,118 +262,26 @@ export function Step5GeneratePPTX() {
         }
     }, [lessonId, selectedTemplate]);
 
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
     const handleGenerateContent = useCallback(async () => {
         setStatus('generating_images');
         setProgress(0);
         setError(null);
         setContentGenerated(false);
-        shouldStopGenerating.current = false;
 
         try {
-            // Load all slides from DB
-            const response = await api.get(`/lessons/${lessonId}/slides`);
-            const slides = Array.isArray(response.data) ? response.data : [];
-
-            if (slides.length === 0) {
-                setError('Không tìm thấy slides');
-                setStatus('error');
-                return;
+            const response = await api.post(`/lessons/${lessonId}/slides/generate-all-content`);
+            if (response.data?.jobId) {
+                contentJob.startPolling(response.data.jobId);
             }
-
-            setTotalSlides(slides.length);
-
-            // Initialize slide progress
-            const initialProgress: SlideProgress[] = slides.map((s: any) => ({
-                slideIndex: s.slideIndex,
-                phase: 'pending' as const,
-                title: s.title,
-                // Keep existing data if available
-                optimizedContent: s.optimizedContentJson
-                    ? (typeof s.optimizedContentJson === 'string'
-                        ? JSON.parse(s.optimizedContentJson)
-                        : s.optimizedContentJson)
-                    : undefined,
-                imageUrl: s.imageUrl,
-            }));
-            setSlideProgress(initialProgress);
-
-            // Determine which slides need processing
-            // (skip slides that already have BOTH content and image)
-            const slidesToProcess = slides.filter((s: any) => {
-                const hasImage = !!s.imageUrl;
-                const hasOptContent = !!s.optimizedContentJson;
-                const isTitleSlide = !s.content || s.content.trim() === '';
-                return !(hasImage && (hasOptContent || isTitleSlide));
-            });
-
-            let completedCount = slides.length - slidesToProcess.length;
-            let isFirstSlide = true;
-
-            for (const slide of slidesToProcess) {
-                if (shouldStopGenerating.current) {
-                    setError(`⏸️ Đã dừng. Hoàn thành ${completedCount}/${slides.length} slides.`);
-                    break;
-                }
-
-                const idx = slide.slideIndex;
-                setCurrentSlide(idx + 1);
-
-                // Mark as processing
-                setSlideProgress(prev => prev.map(s =>
-                    s.slideIndex === idx ? { ...s, phase: 'optimizing_content' } : s
-                ));
-
-                try {
-                    const result = await api.post(
-                        `/lessons/${lessonId}/slides/${idx}/generate-content-image`
-                    );
-
-                    // Update progress with result
-                    setSlideProgress(prev => prev.map(s =>
-                        s.slideIndex === idx ? {
-                            ...s,
-                            phase: (result.data.imageError ? 'error' : 'complete') as any,
-                            optimizedContent: result.data.optimizedContent || s.optimizedContent,
-                            imageUrl: result.data.imageUrl || s.imageUrl,
-                            title: result.data.title || s.title,
-                        } : s
-                    ));
-
-                    if (!result.data.imageError) {
-                        completedCount++;
-                    }
-                } catch (err: any) {
-                    console.error(`Error processing slide ${idx}:`, err);
-                    setSlideProgress(prev => prev.map(s =>
-                        s.slideIndex === idx ? { ...s, phase: 'error' } : s
-                    ));
-                }
-
-                setProgress((completedCount / slides.length) * 100);
-
-                // Delay between slides (like audio generation)
-                if (isFirstSlide) {
-                    await delay(8000);
-                    isFirstSlide = false;
-                } else {
-                    await delay(5000);
-                }
-            }
-
-            setContentGenerated(true);
-            setPendingCount(0);
-            setStatus('completed');
-            setProgress(100);
         } catch (err: any) {
             setStatus('error');
-            setError(err.message || 'Không thể tạo nội dung');
+            setError(err.response?.data?.message || err.message || 'Không thể bắt đầu tạo nội dung');
         }
     }, [lessonId]);
 
     const stopGenerating = () => {
-        shouldStopGenerating.current = true;
+        contentJob.stopPolling();
+        setStatus('idle');
     };
 
     // Regenerate ALL slides from scratch (clear existing data first)
@@ -545,17 +505,17 @@ export function Step5GeneratePPTX() {
                             <circle
                                 cx="50" cy="50" r="45" fill="none" stroke="#6366f1" strokeWidth="8"
                                 strokeDasharray={`${2 * Math.PI * 45}`}
-                                strokeDashoffset={`${2 * Math.PI * 45 * (1 - progress / 100)}`}
+                                strokeDashoffset={`${2 * Math.PI * 45 * (1 - currentProgress / 100)}`}
                                 strokeLinecap="round" transform="rotate(-90 50 50)"
                             />
                         </svg>
-                        <span className="progress-text">{Math.round(progress)}%</span>
+                        <span className="progress-text">{Math.round(currentProgress)}%</span>
                     </div>
                     <p className="progress-status">
-                        {status === 'generating_images' && `🖼️ Đang tạo slide ${currentSlide}/${totalSlides}...`}
+                        {status === 'generating_images' && (isJobRunning && contentJob.jobStatus ? contentJob.jobStatus.message : `🖼️ Đang tạo slide...`)}
                         {status === 'generating_pptx' && '📦 Đang đóng gói PowerPoint...'}
                     </p>
-                    {status === 'generating_images' && (
+                    {status === 'generating_images' && !isJobRunning && (
                         <button className="btn-stop" onClick={stopGenerating}>
                             ⏹️ Dừng tạo
                         </button>

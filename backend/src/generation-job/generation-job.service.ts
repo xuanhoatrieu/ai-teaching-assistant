@@ -128,4 +128,18 @@ export class GenerationJobService {
             this.logger.log(`[cleanOldJobs] Cleaned ${result.count} old jobs`);
         }
     }
+
+    /**
+     * Find active job for lesson and type.
+     */
+    async getActiveJob(lessonId: string, type: string) {
+        return this.prisma.generationJob.findFirst({
+            where: {
+                lessonId,
+                type,
+                status: { in: ['pending', 'processing'] },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+    }
 }

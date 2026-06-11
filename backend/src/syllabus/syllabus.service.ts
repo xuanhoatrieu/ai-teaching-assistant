@@ -8,16 +8,183 @@ import { FileStorageService } from '../file-storage/file-storage.service';
 
 /** Default 10 blocks matching TUAF 2026 syllabus template */
 const DEFAULT_BLOCKS = [
-    { blockType: 'header', title: 'Thông tin chung đề cương', sortOrder: 0 },
-    { blockType: 'general_info', title: 'Thông tin tổng quan học phần', sortOrder: 1 },
-    { blockType: 'lecturers', title: 'Giảng viên phụ trách', sortOrder: 2 },
-    { blockType: 'description', title: 'Mô tả học phần', sortOrder: 3 },
-    { blockType: 'clo', title: 'Chuẩn đầu ra học phần (CLO)', sortOrder: 4 },
-    { blockType: 'materials', title: 'Học liệu', sortOrder: 5 },
-    { blockType: 'student_tasks', title: 'Nhiệm vụ của sinh viên', sortOrder: 6 },
-    { blockType: 'assessment', title: 'Kế hoạch kiểm tra, đánh giá', sortOrder: 7 },
-    { blockType: 'content_detail', title: 'Nội dung chi tiết học phần', sortOrder: 8 },
-    { blockType: 'update_log', title: 'Quá trình cập nhật, bổ sung đề cương', sortOrder: 9 },
+    {
+        blockType: 'header',
+        title: 'Thông tin chung đề cương',
+        sortOrder: 0,
+        defaultContent: `|  |  |
+| --- | --- |
+| TRƯỜNG ĐẠI HỌC NÔNG LÂM  **KHOA……** | CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM  **Độc lập – Tự do – Hạnh phúc**  *Thái nguyên, ngày…tháng…năm 2026* |
+
+**ĐỀ CƯƠNG HỌC PHẦN**
+
+**Tên học phần:**
+
+**Mã học phần:**`
+    },
+    {
+        blockType: 'general_info',
+        title: 'Thông tin tổng quan học phần',
+        sortOrder: 1,
+        defaultContent: `**1. Thông tin chung về học phần**
+
+- Số tín chỉ: ……… Loại học phần: (bắt buộc, tự chọn)
+- Các học phần tiên quyết:
+- Học phần học trước:
+- Các học phần song hành:
+- Các yêu cầu đối với học phần (nếu có):
+- Bộ môn (Khoa) phụ trách học phần:
+- Số tiết quy đổi với các hoạt động:
+
+|  |  |  |  |
+| --- | --- | --- | --- |
+| Nghe giảng lý thuyết: | …..tiết | Thảo luận: | …..tiết |
+| Làm bài tập: | …..tiết | Thực hành, thí nghiệm: | …..tiết |
+| Hoạt động theo nhóm: | …..tiết | Tự học: | …..tiết |
+| Bài tập lớn (tiểu luận): | …..tiết | Tự học có hướng dẫn: | …..tiết |`
+    },
+    {
+        blockType: 'lecturers',
+        title: 'Giảng viên phụ trách',
+        sortOrder: 2,
+        defaultContent: `**2. Thông tin chung về các giảng viên**
+
+|  |  |  |  |  |
+| --- | --- | --- | --- | --- |
+| **STT** | **Học hàm, học vị, họ tên** | **Số điện thoại** | **Email** | **Ghi chú** |
+| 1 | PGS.TS. Nguyễn Văn A | 0912 | mail@tuaf.edu.vn | |
+| 2 | | | | |
+| …. | | | | |`
+    },
+    {
+        blockType: 'description',
+        title: 'Mô tả học phần',
+        sortOrder: 3,
+        defaultContent: `**3. Mô tả tóm tắt nội dung học phần, mục tiêu của học phần**
+
+Trình bày ngắn gọn vai trò, vị trí học phần, kiến thức sẽ trang bị cho sinh viên, quan hệ với các học phần khác trong chương trình đào tạo.
+
+*(Mô tả học phần cần đảm bảo rõ ràng, ngắn gọn, dễ đọc và truyền đạt lợi ích mang lại cho người học. Tránh sử dụng các đại từ như “chúng tôi” và “bạn” khi viết mô tả học phần.)*
+
+Cụ thể mục tiêu của học phần thành các mục kiến thức, kỹ năng (bao gồm cả kỹ năng số), năng lực tự chủ. Mỗi mục tiêu tách thành một ý riêng.`
+    },
+    {
+        blockType: 'clo',
+        title: 'Chuẩn đầu ra học phần (CLO)',
+        sortOrder: 4,
+        defaultContent: `**4. Chuẩn đầu ra học phần**
+
+Ma trận đóng góp của mục tiêu, chuẩn đầu ra của học phần và chuẩn đầu ra của chương trình đào tạo.
+
+|  |  |  |  |  |
+| --- | --- | --- | --- | --- |
+| **Mục tiêu của HP** | **Thứ tự chuẩn đầu ra** | **Nội dung đầu ra HP** | **Chuẩn đầu ra chương trình đào tạo** | **Mức độ đóng góp** |
+| CO1 | CLO1 | | PLO1 | |
+| CO2 | CLO2 | | PLO.. | |
+| CO3 | CLO3 | | PLOn | |
+| | …. | …….. | ….. | …. |
+
+*Lưu ý:*
+*- Chuẩn đầu ra học phần cần quy định cụ thể kiến thức, kỹ năng, năng lực tự chủ sinh viên đạt được.*
+*- Mức năng lực được đánh giá theo thang Bloom (1= Nhớ; 2= Hiểu; 3= Ứng dụng; 4= Phân tích; 5= Đánh giá; 6= Sáng tạo).*`
+    },
+    {
+        blockType: 'materials',
+        title: 'Học liệu',
+        sortOrder: 5,
+        defaultContent: `**5. Học liệu**
+
+- Tài liệu học tập chính: ghi rõ tên sách, giáo trình, năm xuất bản, nhà xuất bản (từ 01 đến 03 tài liệu). *Các giáo trình cần có mã số thư viện, trung tâm số ĐHTN hoặc đường link truy cập nếu là tài liệu mở.*
+- Tài liệu tham khảo: ghi rõ những sách, tạp chí và tư liệu thông tin liên quan đến học phần (ít nhất 04 tài liệu)
+- Học liệu điện tử (nếu có).
+
+*Chú ý:*
+- Tài liệu học tập phải đáp ứng yêu cầu của Thông tư số 35/2021/TT-BGDĐT ngày 06 tháng 12 năm 2021 của Bộ Giáo dục và Đào tạo.
+- Tài liệu học tập chính phải có sự phê duyệt của Thủ trưởng cơ sở đào tạo.
+- *Tài liệu tham khảo cần có mã số thư viện, trung tâm số ĐHTN hoặc đường link truy cập.*`
+    },
+    {
+        blockType: 'student_tasks',
+        title: 'Nhiệm vụ của sinh viên',
+        sortOrder: 6,
+        defaultContent: `**6. Nhiệm vụ của sinh viên**
+
+Mô tả các yêu cầu đối với sinh viên theo quy định chung và đặc thù của học phần.
+
+**6.1. Phần lý thuyết, bài tập, thảo luận**
+- Dự lớp ≥80% tổng số thời lượng của học phần.
+- Chuẩn bị thảo luận.
+- Hoàn thành các bài tập được giao.
+
+**6.2. Phần thí nghiệm, thực hành (nếu có)**
+- Các bài thí nghiệm, thực hành của học phần.
+- Yêu cầu cần đạt đối với phần thí nghiệm, thực hành.
+
+**6.3. Phần bài tập lớn, tiểu luận (nếu có)**
+- Tên bài tập lớn hoặc tiểu luận.
+- Yêu cầu cần đạt.`
+    },
+    {
+        blockType: 'assessment',
+        title: 'Kế hoạch kiểm tra, đánh giá',
+        sortOrder: 7,
+        defaultContent: `**7. Phương pháp kiểm tra, đánh giá người học và thang điểm**
+
+**7.1. Kế hoạch kiểm tra**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **STT** | **Nội dung** | **Thời điểm (tiết thứ)** | **Chuẩn đầu ra được đánh giá** | **Phương pháp đánh giá** | **Công cụ đánh giá** | **Tỷ lệ %** |
+| **I. Chuyên cần** | | | | | | **20%** |
+| 1 | Đi học đầy đủ, tích cực tham gia các hoạt động trong giờ | | CLO.. | Quan sát | Rubric 1 | 30% |
+| 2 | Trung bình các bài ôn tập LMS | | CLO.. | Trắc nghiệm | | 70% |
+| **II. Kiểm tra quá trình** | | | | | | **30%** |
+| 1 | Kiểm tra giữa kỳ | 12 | CLO.. | Viết tự luận | Đề thi | 100% |
+| **III. Thi cuối kỳ** | | | | | | **50%** |
+| 1 | Thi cuối kỳ | | CLO.. | Tự luận/Trắc nghiệm | Đề thi | 100% |
+
+*Lưu ý:* *Trọng số đánh giá hiện đang áp dụng*
+* *Đối với bậc đại học: 20% chuyên cần; 30% quá trình và 50% cuối kỳ;*
+
+**7.2. Các Rubric đánh giá chuẩn đầu ra của học phần**
+
+**Rubric 1: Sự tham gia và tính chủ động trong các buổi học**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi** **(8,5-10)** | **Khá** **(7,0-8,4)** | **Trung bình** **(5,5-6,9)** | **Trung bình yếu** **(4,0-5,4)** | **Kém** **<4,0** |
+| Tham dự đầy đủ | 80% | Dự lớp ≥95% | Dự lớp 90%-94% | Dự lớp 85%-89% | Dự lớp 80%-84% | Dự lớp <80% |
+| Thái độ tham gia | 20% | Tích cực phát biểu | Tương đối tích cực | Chỉ lắng nghe | Thụ động | Làm việc riêng |`
+    },
+    {
+        blockType: 'content_detail',
+        title: 'Nội dung chi tiết học phần',
+        sortOrder: 8,
+        defaultContent: `**8. Nội dung chi tiết học phần**
+
+|  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- |
+| **Tiết** | **Nội dung** | **Chuẩn đầu ra HP** | **Phương pháp dạy học** | **Phương pháp đánh giá** | **Tài liệu tham khảo** |
+| | **Chương 1: …** | | | | |
+| 1,2,3 | A. Nội dung trên lớp:<br>1. Lý thuyết: ...<br>2. Thảo luận: ... | CLO1 | Thuyết trình, Thảo luận | Kiểm tra quá trình | [1] |
+| | B. Nội dung tự học:<br>1. Chuẩn bị tài liệu...<br>2. Làm bài tập... | CLO1 | Tự học có hướng dẫn | Đánh giá chuyên cần | [2] |`
+    },
+    {
+        blockType: 'update_log',
+        title: 'Quá trình cập nhật, bổ sung đề cương',
+        sortOrder: 9,
+        defaultContent: `**9. Thời điểm ban hành đề cương chi tiết học phần**
+
+**10. Tiến trình cập nhật đề cương chi tiết (hàng năm)**
+
+|  |  |
+| --- | --- |
+| **Lần 1:** Ngày cập nhật:...<br>Nội dung cập nhật:... | **Người cập nhật ký:**<br>Trưởng Bộ môn: |
+
+| TRƯỜNG KHOA | TRƯỞNG BỘ MÔN | GIẢNG VIÊN BIÊN SOẠN |
+| --- | --- | --- |
+| | | |`
+    }
 ];
 
 /** Valid block types for mapping */
@@ -42,6 +209,15 @@ The 10 block types are:
 8. "assessment" - Grading scheme, exam structure, rubrics, assessment matrix
 9. "content_detail" - Detailed weekly/session plan with topics, CLO mapping, teaching methods
 10. "update_log" - Revision history, changelog
+
+LEGACY TEMPLATE TOLERANCE & SEMANTIC MAPPING RULES:
+- Legacy syllabus files might use different headings, section order, or terminology. You must use semantic matching to identify which parts of the legacy document belong to the 10 standard blocks.
+- Map sections named "Mục tiêu môn học", "Chuẩn đầu ra", "Mục tiêu học phần", "CĐR", "Yêu cầu năng lực", etc. to "clo" or "description" depending on the content (CLO/Competencies go to "clo", general objectives/overview go to "description").
+- Map sections named "Tài liệu học tập", "Sách tham khảo", "Giáo trình", "Tài liệu giảng dạy", etc. to "materials".
+- Map sections named "Cách đánh giá", "Thang điểm", "Hình thức kiểm tra", "Đánh giá kết quả", "Kiểm tra và đánh giá học phần", etc. to "assessment".
+- Map sections named "Phân phối chương trình", "Lịch trình giảng dạy", "Các chương bài", "Nội dung chi tiết", "Đề cương bài giảng", etc. to "content_detail".
+- Map sections named "Thông tin chung", "Tên môn học", "Số tín chỉ", "Bộ môn phụ trách" to "general_info". If the lecturer information is mixed in here, separate it and put the lecturer names/contacts in "lecturers".
+- If a section is missing, do not guess content; use an empty string "".
 
 RULES:
 - Return ONLY a valid JSON object with block types as keys and content as values.
@@ -117,7 +293,7 @@ export class SyllabusService {
                     create: DEFAULT_BLOCKS.map((b) => ({
                         blockType: b.blockType,
                         title: b.title,
-                        content: '',
+                        content: (b as any).defaultContent || '',
                         sortOrder: b.sortOrder,
                     })),
                 },

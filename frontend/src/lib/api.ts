@@ -64,8 +64,8 @@ export const authApi = {
     login: (email: string, password: string) =>
         api.post('/auth/login', { email, password }),
 
-    register: (email: string, password: string) =>
-        api.post('/auth/register', { email, password }),
+    register: (email: string, password: string, fullName: string, phone: string, organization: string) =>
+        api.post('/auth/register', { email, password, fullName, phone, organization }),
 
     getMe: () => api.get('/auth/me'),
 
@@ -78,6 +78,11 @@ export interface User {
     id: string;
     email: string;
     role: 'ADMIN' | 'USER';
+    fullName?: string;
+    phone?: string;
+    organization?: string;
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+    requireProfileUpdate?: boolean;
     createdAt: string;
 }
 

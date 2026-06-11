@@ -46,11 +46,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
                 id: true,
                 email: true,
                 role: true,
+                status: true,
             },
         });
 
         if (!user) {
             throw new UnauthorizedException('User not found');
+        }
+
+        if (user.status !== 'APPROVED') {
+            throw new UnauthorizedException('Tài khoản chưa được phê duyệt hoặc đã bị khóa');
         }
 
         return user;

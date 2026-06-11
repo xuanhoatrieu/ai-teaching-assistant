@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { PromptsService } from './prompts/prompts.service';
 import { CLIProxyProvider } from './ai/cliproxy.provider';
 import { ModelConfigService } from './model-config/model-config.service';
+import { PrismaService } from './prisma/prisma.service';
 import { join } from 'path';
 
 async function bootstrap() {
@@ -29,6 +30,24 @@ async function bootstrap() {
 
   await app.listen(process.env.PORT ?? 3001);
 
+  // Clean up any orphaned generation jobs on startup
+  try {
+    const prisma = app.get(PrismaService);
+    const result = await prisma.generationJob.updateMany({
+      where: { status: { in: ['pending', 'processing'] } },
+      data: {
+        status: 'error',
+        error: 'Hệ thống đã khởi động lại, tác vụ bị gián đoạn.',
+        message: null,
+      },
+    });
+    if (result.count > 0) {
+      logger.log(`🧹 Marked ${result.count} orphaned generation jobs as failed`);
+    }
+  } catch (error) {
+    logger.warn(`⚠️ Could not clean up orphaned jobs: ${error.message}`);
+  }
+
   // Auto-seed prompts on startup to keep database in sync with code
   try {
     const promptsService = app.get(PromptsService);
@@ -37,6 +56,7 @@ async function bootstrap() {
   } catch (error) {
     logger.warn(`⚠️ Could not auto-seed prompts: ${error.message}`);
   }
+
 
   // Auto-detect CLIProxy models on startup (text, image, TTS) — non-blocking
   try {

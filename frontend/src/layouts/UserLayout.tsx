@@ -107,6 +107,32 @@ export function UserLayout() {
                 </div>
             </header>
 
+            {user?.requireProfileUpdate && (
+                <div className="profile-update-banner" style={{
+                    backgroundColor: '#fffbeb',
+                    borderBottom: '1px solid #fef3c7',
+                    color: '#b45309',
+                    padding: '10px 20px',
+                    textAlign: 'center',
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    gap: '10px'
+                }}>
+                    <span>⚠️</span>
+                    <strong>Thông báo:</strong> Thầy/cô vui lòng bổ sung đầy đủ Họ tên, Số điện thoại và Đơn vị công tác để hoàn thiện thông tin tài khoản.
+                    <Link to="/settings" style={{
+                        color: '#d97706',
+                        textDecoration: 'underline',
+                        fontWeight: 'bold',
+                        marginLeft: '5px'
+                    }}>
+                        Cập nhật ngay
+                    </Link>
+                </div>
+            )}
+
             <main className="user-main">
                 <Outlet />
             </main>

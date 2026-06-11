@@ -11,7 +11,7 @@ import {
     UploadedFile,
     ParseFilePipe,
     MaxFileSizeValidator,
-    FileTypeValidator,
+    BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { LessonsService } from './lessons.service';
@@ -82,14 +82,18 @@ export class LessonsController {
             new ParseFilePipe({
                 validators: [
                     new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
-                    new FileTypeValidator({
-                        fileType: /(docx|md|txt|text\/plain|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|text\/markdown)/,
-                    }),
                 ],
             }),
         )
         file: Express.Multer.File,
     ) {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn file đề cương để tải lên.');
+        }
+        const ext = file.originalname.split('.').pop()?.toLowerCase();
+        if (!['docx', 'md', 'txt'].includes(ext || '')) {
+            throw new BadRequestException('Định dạng file không hợp lệ. Chỉ chấp nhận file .docx, .md, .txt');
+        }
         return this.lessonsService.uploadOutline(id, user.id, file);
     }
 

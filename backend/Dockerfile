@@ -29,8 +29,11 @@ RUN npm run build
 # Production stage - Use Node 22 for Prisma 7 compatibility
 FROM node:22-alpine AS production
 
-# Install OpenSSL for Prisma runtime
-RUN apk add --no-cache openssl
+# Install OpenSSL for Prisma runtime, plus Python3 and pip for markitdown CLI
+RUN apk add --no-cache openssl python3 py3-pip
+
+# Install markitdown via pip globally
+RUN pip install --no-cache-dir --break-system-packages markitdown
 
 WORKDIR /app
 

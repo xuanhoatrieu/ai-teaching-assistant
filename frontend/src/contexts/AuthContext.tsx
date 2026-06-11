@@ -7,7 +7,7 @@ interface AuthContextType {
     isLoading: boolean;
     isAdmin: boolean;
     login: (email: string, password: string) => Promise<void>;
-    register: (email: string, password: string) => Promise<void>;
+    register: (email: string, password: string, fullName: string, phone: string, organization: string) => Promise<any>;
     logout: () => void;
 }
 
@@ -46,13 +46,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(data.user);
     }, []);
 
-    const register = useCallback(async (email: string, password: string) => {
-        const response = await authApi.register(email, password);
-        const data: AuthResponse = response.data;
-
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
-        setUser(data.user);
+    const register = useCallback(async (email: string, password: string, fullName: string, phone: string, organization: string) => {
+        const response = await authApi.register(email, password, fullName, phone, organization);
+        return response.data;
     }, []);
 
     const logout = useCallback(() => {

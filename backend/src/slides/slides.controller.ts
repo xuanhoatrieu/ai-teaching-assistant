@@ -8,9 +8,11 @@ import {
     Param,
     UseGuards,
     Request,
+    Logger,
 } from '@nestjs/common';
 import { SlidesService } from './slides.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { GenerationJobService } from '../generation-job/generation-job.service';
 import { IsString, IsNotEmpty } from 'class-validator';
 
 // DTOs
@@ -23,7 +25,12 @@ class UpdateSlideScriptDto {
 @Controller('lessons/:lessonId/slides')
 @UseGuards(JwtAuthGuard)
 export class SlidesController {
-    constructor(private slidesService: SlidesService) { }
+    private readonly logger = new Logger(SlidesController.name);
+
+    constructor(
+        private slidesService: SlidesService,
+        private readonly jobService: GenerationJobService,
+    ) { }
 
     // GET /lessons/:lessonId/slides - Get all Slide entities from database (for Step 5)
     @Get()
@@ -109,5 +116,81 @@ export class SlidesController {
         @Param('lessonId') lessonId: string,
     ) {
         return this.slidesService.clearGeneratedContent(lessonId);
+    }
+
+    // POST /lessons/:lessonId/slides/generate-all-content
+    // Generate optimized content + images for all slides (async job)
+    @Post('generate-all-content')
+    async generateAllContent(
+        @Param('lessonId') lessonId: string,
+        @Request() req,
+    ) {
+        const userId = req.user.id;
+
+        // Check if there is already an active job
+        const activeJob = await this.jobService.getActiveJob(lessonId, 'pptx-generate-content');
+        if (activeJob) {
+            this.logger.log(`[generateAllContent] Active job ${activeJob.id} already exists for lesson ${lessonId}. Re-attaching.`);
+            return { jobId: activeJob.id, status: 'processing' };
+        }
+
+        const job = await this.jobService.createJob({
+            type: 'pptx-generate-content',
+            lessonId,
+            userId,
+        });
+
+        setImmediate(async () => {
+            try {
+                const slides = await this.slidesService.getSlides(lessonId);
+                if (slides.length === 0) {
+                    throw new Error('Không tìm thấy thông tin slide. Vui lòng khởi tạo trước.');
+                }
+
+                // Determine which slides need processing
+                const slidesToProcess = slides.filter((s: any) => {
+                    const hasImage = !!s.imageUrl;
+                    const hasOptContent = !!s.optimizedContentJson;
+                    const isTitleSlide = !s.content || s.content.trim() === '';
+                    return !(hasImage && (hasOptContent || isTitleSlide));
+                });
+
+                const total = slidesToProcess.length;
+
+                if (total === 0) {
+                    await this.jobService.updateProgress(job.id, 100, 'Không có slide nào cần tối ưu nội dung.');
+                    await this.jobService.completeJob(job.id);
+                    return;
+                }
+
+                await this.jobService.updateProgress(job.id, 0, `Bắt đầu tối ưu nội dung cho ${total} slide...`);
+
+                for (let i = 0; i < total; i++) {
+                    const slide = slidesToProcess[i];
+                    await this.jobService.updateProgress(
+                        job.id,
+                        Math.round((i / total) * 100),
+                        `Đang tạo nội dung & ảnh cho slide ${slide.slideIndex + 1}/${slides.length}...`
+                    );
+
+                    try {
+                        await this.slidesService.generateContentAndImage(
+                            lessonId,
+                            slide.slideIndex,
+                            userId,
+                        );
+                    } catch (error) {
+                        this.logger.error(`Failed to generate content/image for slide ${slide.slideIndex}:`, error);
+                    }
+                }
+
+                await this.jobService.completeJob(job.id);
+            } catch (error) {
+                this.logger.error(`[generateAllContent] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
     }
 }

@@ -2,6 +2,7 @@ import {
     Injectable,
     ConflictException,
     UnauthorizedException,
+    ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -34,21 +35,26 @@ export class AuthService {
             data: {
                 email: dto.email,
                 passwordHash,
+                fullName: dto.fullName,
+                phone: dto.phone,
+                organization: dto.organization,
+                status: 'PENDING',
             },
             select: {
                 id: true,
                 email: true,
                 role: true,
+                fullName: true,
+                phone: true,
+                organization: true,
+                status: true,
                 createdAt: true,
             },
         });
 
-        // Generate tokens
-        const tokens = await this.generateTokens(user.id, user.email, user.role);
-
         return {
+            message: 'Đăng ký thành công. Tài khoản của bạn đang chờ quản trị viên phê duyệt.',
             user,
-            ...tokens,
         };
     }
 
@@ -69,14 +75,29 @@ export class AuthService {
             throw new UnauthorizedException('Invalid credentials');
         }
 
+        // Check user status
+        if (user.status === 'PENDING') {
+            throw new ForbiddenException('Tài khoản của bạn đang chờ quản trị viên phê duyệt.');
+        }
+
+        if (user.status === 'REJECTED') {
+            throw new ForbiddenException('Tài khoản của bạn đã bị từ chối phê duyệt. Vui lòng liên hệ quản trị viên.');
+        }
+
         // Generate tokens
         const tokens = await this.generateTokens(user.id, user.email, user.role);
+        const requireProfileUpdate = !user.fullName || !user.phone || !user.organization;
 
         return {
             user: {
                 id: user.id,
                 email: user.email,
                 role: user.role,
+                fullName: user.fullName,
+                phone: user.phone,
+                organization: user.organization,
+                status: user.status,
+                requireProfileUpdate,
             },
             ...tokens,
         };
@@ -119,6 +140,10 @@ export class AuthService {
                 id: true,
                 email: true,
                 role: true,
+                fullName: true,
+                phone: true,
+                organization: true,
+                status: true,
                 createdAt: true,
                 updatedAt: true,
             },
@@ -128,6 +153,11 @@ export class AuthService {
             throw new UnauthorizedException('User not found');
         }
 
-        return user;
+        const requireProfileUpdate = !user.fullName || !user.phone || !user.organization;
+
+        return {
+            ...user,
+            requireProfileUpdate,
+        };
     }
 }

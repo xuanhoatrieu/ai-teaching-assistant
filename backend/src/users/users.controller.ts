@@ -26,6 +26,10 @@ export class UsersController {
                 id: true,
                 email: true,
                 role: true,
+                fullName: true,
+                phone: true,
+                organization: true,
+                status: true,
                 createdAt: true,
                 updatedAt: true,
             },
@@ -41,8 +45,28 @@ export class UsersController {
                 id: true,
                 email: true,
                 role: true,
+                fullName: true,
+                phone: true,
+                organization: true,
+                status: true,
                 createdAt: true,
                 updatedAt: true,
+            },
+        });
+    }
+
+    @Patch(':id/status')
+    async updateStatus(
+        @Param('id') id: string,
+        @Body() body: { status: 'PENDING' | 'APPROVED' | 'REJECTED' },
+    ) {
+        return this.prisma.user.update({
+            where: { id },
+            data: { status: body.status },
+            select: {
+                id: true,
+                email: true,
+                status: true,
             },
         });
     }

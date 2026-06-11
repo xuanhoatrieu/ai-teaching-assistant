@@ -7,9 +7,10 @@ import { ModelConfigModule } from '../model-config/model-config.module';
 import { SlideDataModule } from '../slide-data/slide-data.module';
 import { PromptsModule } from '../prompts/prompts.module';
 import { AIModule } from '../ai/ai.module';
+import { GenerationJobModule } from '../generation-job/generation-job.module';
 
 @Module({
-    imports: [PrismaModule, ApiKeysModule, ModelConfigModule, SlideDataModule, PromptsModule, AIModule],
+    imports: [PrismaModule, ApiKeysModule, ModelConfigModule, SlideDataModule, PromptsModule, AIModule, GenerationJobModule],
     controllers: [SlidesController],
     providers: [SlidesService],
     exports: [SlidesService],

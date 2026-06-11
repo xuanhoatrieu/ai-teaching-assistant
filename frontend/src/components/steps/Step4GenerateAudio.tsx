@@ -59,7 +59,6 @@ export function Step4GenerateAudio() {
     const [vittsNormalize, setVittsNormalize] = useState<boolean>(true);
     const [recordingSlide, setRecordingSlide] = useState<number | null>(null);
     const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
-    const shouldStopGenerating = useRef(false);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const chunksRef = useRef<Blob[]>([]);
 
@@ -114,6 +113,7 @@ export function Step4GenerateAudio() {
                     console.error('Error initializing slide audios:', initErr);
                 }
             }
+            await checkActiveJobs();
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -152,6 +152,44 @@ export function Step4GenerateAudio() {
             alert(`Lỗi khi tối ưu lời giảng: ${msg}`);
         },
     });
+
+    const generateAllJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingAll(false);
+            await reloadAfterJob();
+        },
+        onError: (msg) => {
+            setIsGeneratingAll(false);
+            alert(`Lỗi khi tạo audio tất cả slide: ${msg}`);
+        },
+    });
+
+    const checkActiveJobs = async () => {
+        try {
+            // Check speaker notes job
+            const resNotes = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=speaker-notes`);
+            if (resNotes.data?.id) {
+                setIsGeneratingNotes(true);
+                notesJob.startPolling(resNotes.data.id);
+            }
+
+            // Check optimize notes job
+            const resOpt = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=optimize-notes`);
+            if (resOpt.data?.id) {
+                setIsOptimizingNotes(true);
+                optimizeJob.startPolling(resOpt.data.id);
+            }
+
+            // Check generate all job
+            const resAll = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=slide-audio-generate-all`);
+            if (resAll.data?.id) {
+                setIsGeneratingAll(true);
+                generateAllJob.startPolling(resAll.data.id);
+            }
+        } catch (err) {
+            console.error('Error checking active jobs:', err);
+        }
+    };
 
     const generateSpeakerNotes = async () => {
         try {
@@ -277,55 +315,19 @@ export function Step4GenerateAudio() {
         }
     };
 
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
     const generateAllAudios = async () => {
         try {
             setIsGeneratingAll(true);
-            shouldStopGenerating.current = false;
-            const slidesToGenerate = slideAudios.filter(sa =>
-                sa.status !== 'COMPLETED' || !sa.audioUrl
-            );
-            let isFirstSlide = true;
-            for (const slideAudio of slidesToGenerate) {
-                if (shouldStopGenerating.current) break;
-                const slideIndex = slideAudio.slideIndex;
-                setSlideAudios(prev => prev.map(sa =>
-                    sa.slideIndex === slideIndex ? { ...sa, status: 'GENERATING' as const } : sa
-                ));
-                try {
-                    const response = await api.post(`/lessons/${lessonId}/slide-audios/${slideIndex}/generate`, {
-                        multilingualMode: multilingualMode || undefined,
-                        vittsMode: vittsMode || undefined,
-                        vittsDesignInstruct: vittsDesignInstruct || undefined,
-                        vittsNormalize,
-                    });
-                    const normalizedData = { ...response.data, status: normalizeStatus(response.data.status) };
-                    setSlideAudios(prev => prev.map(sa =>
-                        sa.slideIndex === slideIndex ? normalizedData : sa
-                    ));
-                } catch (slideError) {
-                    console.error(`Error generating audio for slide ${slideIndex}:`, slideError);
-                    setSlideAudios(prev => prev.map(sa =>
-                        sa.slideIndex === slideIndex ? { ...sa, status: 'ERROR' as const, errorMessage: 'Lỗi tạo audio' } : sa
-                    ));
-                }
-                if (isFirstSlide) {
-                    await delay(8000);
-                    isFirstSlide = false;
-                } else {
-                    await delay(2500);
-                }
+            const response = await api.post(`/lessons/${lessonId}/slide-audios/generate-all`);
+            if (response.data?.jobId) {
+                generateAllJob.startPolling(response.data.jobId);
             }
-        } catch (error) {
-            console.error('Error in generateAllAudios:', error);
-        } finally {
+        } catch (error: any) {
+            console.error('Error starting audio generation for all slides:', error);
             setIsGeneratingAll(false);
-            shouldStopGenerating.current = false;
+            alert('Lỗi khi bắt đầu tạo audio cho tất cả slide. Vui lòng thử lại.');
         }
     };
-
-    const stopGenerating = () => { shouldStopGenerating.current = true; };
 
     const startEdit = (slideIndex: number, currentNote: string) => {
         setEditingSlide(slideIndex);
@@ -548,16 +550,16 @@ export function Step4GenerateAudio() {
                         title={!hasSpeakerNotes ? 'Tạo lời giảng trước' : ''}
                     >
                         {isGeneratingAll ? (
-                            <><span className="spinner"></span> Đang tạo audio...</>
+                            <>
+                                <span className="spinner"></span>{' '}
+                                {generateAllJob.jobStatus?.progress !== undefined
+                                    ? `Đang tạo audio (${generateAllJob.jobStatus.progress}%)`
+                                    : 'Đang tạo audio...'}
+                            </>
                         ) : (
                             '🎙️ Tạo Audio Tất Cả'
                         )}
                     </button>
-                    {isGeneratingAll && (
-                        <button className="btn-stop" onClick={stopGenerating} title="Dừng tạo audio">
-                            ⏹️ Dừng
-                        </button>
-                    )}
                 </div>
             </div>
 

@@ -18,6 +18,12 @@ enum UserRole {
   USER
 }
 
+enum UserStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum LessonStatus {
   DRAFT
   PROCESSING
@@ -59,13 +65,17 @@ enum ContentStatus {
 // ==================== MODELS ====================
 
 model User {
-  id            String   @id @default(uuid())
-  email         String   @unique
-  passwordHash  String   @map("password_hash")
-  role          UserRole @default(USER)
-  apiKeyEnc     String?  @map("api_key_enc") // Encrypted Gemini API key
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id            String     @id @default(uuid())
+  email         String     @unique
+  passwordHash  String     @map("password_hash")
+  role          UserRole   @default(USER)
+  fullName      String?    @map("full_name")
+  phone         String?    @map("phone")
+  organization  String?    @map("organization")
+  status        UserStatus @default(APPROVED)
+  apiKeyEnc     String?    @map("api_key_enc") // Encrypted Gemini API key
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
 
   // Relations
   subjects           Subject[]

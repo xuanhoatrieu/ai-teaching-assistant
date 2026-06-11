@@ -1,232 +1,260 @@
-# 💡 Brainstorm: Cải Tiến Hệ Thống Tạo PPTX
+# 💡 BRAINSTORM & TECHNICAL RESEARCH v2: Resilient Background Processing
 
-**Mục tiêu:** So sánh kiến trúc tạo PPTX hiện tại của platform với 4 nguồn tham khảo, tìm ra cơ hội cải tiến thực tế.
+**Ngày cập nhật:** 2026-05-31
+**Chủ đề:** Chuyển đổi các tác vụ nặng sang chạy nền — User tắt máy, khi quay lại F5 là thấy kết quả.
+**Ràng buộc:** Schema DB giữ nguyên. Luồng dữ liệu lưu DB không thay đổi.
 
 ---
 
-## 1. Bản Đồ So Sánh Kiến Trúc
+## 1. PHÂN TÍCH HIỆN TRẠNG
 
-### Hệ thống hiện tại của mình
+### 1.1. Các tác vụ đã chạy ngầm (OK) ✅
+Các bước sau đã dùng `setImmediate()` + `GenerationJob` + `useJobPolling`:
+- Step 2: Tạo Outline Chi Tiết
+- Step 3: Kịch Bản Slide (generate)
+- Step 4: Tạo Lời Giảng RAW & Tối Ưu
+- Step 6: Ngân Hàng Câu Hỏi
+
+**Vấn đề còn lại:** Khi user reload/F5, frontend mất `jobId` → không biết backend vẫn đang chạy.
+
+### 1.2. Các tác vụ CHƯA chạy ngầm (CẦN SỬA) ❌
+
+| Tác vụ | Hiện trạng | Vấn đề |
+|:---|:---|:---|
+| **Tạo Audio tất cả slide** | Frontend loop gọi API tuần tự từng slide | Nếu tắt tab → dừng hoàn toàn, phải bấm lại |
+| **Tạo nội dung + ảnh PPTX** | Frontend loop gọi API tuần tự từng slide | Tương tự, mất tiến trình khi tắt tab |
+| **Tạo file PPTX** | HTTP POST chờ buffer trả về | Cloudflare timeout 524, file nặng timeout |
+
+### 1.3. Frontend "Generate All" hiện tại
+
+Cả Step 4 (Audio) và Step 5 (PPTX content+images) đều dùng **cùng pattern**:
+```
+Frontend: for (slide of slides) {
+    await api.post(`/slides/${idx}/generate`)  // Chờ từng slide
+    await delay(2500)
+}
+```
+→ Vòng lặp chạy **ở browser**, tắt tab = dừng. Backend chỉ xử lý đơn lẻ 1 slide/request.
+
+---
+
+## 2. NGHIÊN CỨU CÔNG NGHỆ
+
+### 2.1. So sánh 3 phương án queue
+
+| Tiêu chí | **Phương án A:**<br/>DB Polling<br/>(GenerationJob hiện tại) | **Phương án B:**<br/>BullMQ + Redis | **Phương án C:**<br/>pg-boss |
+|:---|:---|:---|:---|
+| **Hạ tầng cần thêm** | Không cần | Redis (**đã có** trong docker-compose) | Không cần (dùng PostgreSQL sẵn) |
+| **Nỗ lực code** | 🟢 Thấp nhất<br/>Giữ nguyên pattern hiện tại | 🟡 Trung bình<br/>Cần cài @nestjs/bullmq, tạo workers | 🟡 Trung bình<br/>Cần cài pg-boss, tạo wrappers |
+| **Khôi phục khi restart** | ❌ `setImmediate` mất khi restart | ✅ Redis giữ queue, worker tự resume | ✅ PostgreSQL giữ job, worker tự resume |
+| **Concurrency control** | ❌ Tự code | ✅ Built-in (configurable workers) | ✅ Built-in |
+| **Rate limiting** | ❌ Tự code | ✅ Built-in | ⚠️ Cơ bản |
+| **Retry tự động** | ❌ Tự code | ✅ Built-in (backoff strategies) | ✅ Built-in |
+| **NestJS integration** | ✅ Đã có sẵn | ✅ Official `@nestjs/bullmq` | ⚠️ Community, cần wrapper |
+| **Throughput** | Đủ dùng (~10-50 jobs/giờ) | Rất cao (5k+ jobs/sec) | Trung bình |
+| **Phù hợp dự án** | ✅ Nhanh triển khai ngay | ✅ Chuyên nghiệp nhất | ⚠️ Ít lợi thế so với A |
+
+### 2.2. Đánh giá chi tiết
+
+#### Phương án A: Giữ setImmediate + cải tiến GenerationJob
+```
+Ưu điểm: Zero code mới, chỉ cần di chuyển vòng lặp từ frontend → backend
+Nhược điểm: Restart server = mất job đang chạy (nhưng data đã lưu DB vẫn còn)
+```
+**Cách hoạt động:**
+1. Frontend gọi `POST /slide-audios/generate-all` → Backend tạo `GenerationJob`, trả `jobId` ngay
+2. Backend `setImmediate()` chạy vòng lặp sinh audio từng slide
+3. Frontend dùng `useJobPolling` theo dõi tiến trình
+4. User tắt tab → Backend vẫn chạy → User quay lại F5 → Thấy kết quả đã hoàn thành
+
+**Risk:** Nếu server restart giữa chừng → job mất. Nhưng dữ liệu (audio files, slide data) đã lưu vào DB/disk vẫn còn nguyên. User chỉ cần bấm "Tiếp tục tạo" cho các slide chưa xong.
+
+#### Phương án B: BullMQ + Redis
+```
+Ưu điểm: Production-grade, restart-safe, concurrency control
+Nhược điểm: Cần cài thêm packages, thay đổi architecture
+```
+**Cách hoạt động:**
+1. Frontend gọi API → Backend add job vào Redis Queue
+2. BullMQ Worker tự động pick job, xử lý
+3. Worker cập nhật `GenerationJob` trong DB (giữ nguyên schema)
+4. Frontend polling `GenerationJob` như cũ
 
 ```mermaid
 graph LR
-    A[NestJS Backend] -->|REST API| B[Python FastAPI<br/>python-pptx]
-    A -->|Content Optimization| C[AI / Gemini]
-    A -->|Image Generation| D[Flux / ComfyUI]
-    B -->|Template .pptx| E[Final .pptx]
-    style B fill:#f96,stroke:#333
+    FE[Frontend] -->|POST /generate-all| API[NestJS Controller]
+    API -->|Add to Queue| Redis[(Redis)]
+    API -->|Return jobId| FE
+    Redis -->|Pick job| Worker[BullMQ Worker]
+    Worker -->|Process| TTS[TTS/AI Service]
+    Worker -->|Update progress| DB[(PostgreSQL<br/>GenerationJob)]
+    FE -->|Poll /jobs/:id/status| DB
 ```
 
-| Thành phần | Công nghệ | Vai trò |
-|-----------|-----------|---------|
-| PPTX Engine | `python-pptx` (Python) | Tạo file PowerPoint từ template |
-| Orchestration | NestJS `PptxService` | Tối ưu content, sinh ảnh, gọi Python service |
-| Template System | `.pptx` file + background images | Branding, layout |
-| Communication | REST API (port 3002) | Backend → Python microservice |
-
-### Bốn nguồn tham khảo
-
-| Nguồn | Công nghệ chính | Cách tiếp cận | Điểm mạnh |
-|-------|-----------------|---------------|-----------|
-| **MiniMax Skill** | `PptxGenJS` (JS) + `markitdown` | Tạo PPTX thuần từ JS, mỗi slide = 1 file JS module | Design System hoàn chỉnh (theme, style recipes), QA process |
-| **OpenAI Codex** | `python-pptx` (tương tự mình) | Agent tự viết code để edit/tạo slides | Slide-by-slide layout rules, AI-driven edits |
-| **PptxGenJS** | `pptxgenjs` (JS thuần) | Thư viện JS tạo PPTX trực tiếp | Chạy mọi nơi (browser, Node, React), không cần Python, charts/tables/SVG |
-| **MarkItDown** | Python converter | Chuyển PPTX → Markdown để AI đọc/phân tích | Đọc ngược file PPTX, OCR images trong slides |
+#### Phương án C: pg-boss
+```
+Ưu điểm: Dùng PostgreSQL sẵn có, ACID transactions
+Nhược điểm: Ít community support NestJS, tương tự setImmediate đã có
+```
+**Đánh giá:** Với dự án này (~10-50 jobs/giờ), pg-boss không mang lại lợi thế đáng kể so với Phương án A (đã có GenerationJob table tương đương). Chỉ nên dùng nếu cần transactional integrity rất cao.
 
 ---
 
-## 2. Phân Tích GAP: Mình Có Gì, Thiếu Gì?
+## 3. ĐỀ XUẤT: 2 GIAI ĐOẠN TRIỂN KHAI
 
-### ✅ Điểm mạnh của hệ thống hiện tại
+### 🚀 Giai đoạn 1: Quick Win — Đưa vòng lặp về backend (Phương án A)
+**Thời gian:** ~2-3 ngày | **Nỗ lực:** Thấp | **Hiệu quả:** Rất cao
 
-| Khả năng | Mô tả |
-|---------|-------|
-| **Template-based generation** | Sử dụng template `.pptx` thật với background images → output chuyên nghiệp |
-| **Auto-play audio embedding** | Nhúng audio + tự động phát khi trình chiếu (XML timing injection) |
-| **AI Content Optimization** | 2-pass: Content Refinement → Image Generation |
-| **Multi-provider TTS** | Gemini, Vbee, ViTTS OmniVoice |
-| **Per-slide granular control** | User có thể làm lại 1 slide riêng lẻ |
-| **SSE Real-time streaming** | Progress trực tiếp cho user trong quá trình gen |
+#### Backend changes:
+1. **Endpoint mới:** `GET /generation-jobs/active/:lessonId` — Trả danh sách jobs đang chạy cho lesson
+2. **Di chuyển "Generate All Audio" về backend:**
+   - Endpoint `POST /slide-audios/generate-all` → tạo `GenerationJob`, trả `jobId`
+   - `setImmediate()` chạy vòng lặp sinh audio (giữ nguyên logic `generateSingleAudio`)
+   - Cập nhật `jobService.updateProgress()` sau mỗi slide
+3. **Di chuyển "Generate PPTX Content+Images" về backend:**
+   - Endpoint `POST /slides/generate-all-content` → tạo `GenerationJob`, trả `jobId`
+   - `setImmediate()` chạy vòng lặp optimize + image cho từng slide
+4. **PPTX file generation:**
+   - `POST /pptx/generate` → tạo `GenerationJob`, sinh file, lưu MinIO/disk
+   - Khi xong: `result: { downloadUrl: '...' }`
+   - Endpoint mới `GET /pptx/download/:lessonId` để tải file tĩnh
 
-### ❌ Điểm yếu / Thiếu sót
-
-| Gap | Mô tả | Nguồn tham khảo |
-|-----|-------|-----------------|
-| **Phụ thuộc Python service** | Cần chạy riêng 1 Python container (port 3002), tăng phức tạp deploy | PptxGenJS chạy thuần JS, không cần service riêng |
-| **Không có Design System** | Layout hardcoded trong `pptx_service.py`, không có theme object contract | MiniMax có cả Color Palette + Font + Style Recipes |
-| **Không đọc ngược PPTX** | Không thể import/phân tích PowerPoint có sẵn của user | MarkItDown giải quyết được |
-| **Layout cứng nhắc** | Chỉ có 2 layout: Title + Content (split/full). Thiếu TOC, Section Divider, Summary | MiniMax có 5 loại: Cover, TOC, Section Divider, Content, Summary |
-| **Charts/Tables** | Không hỗ trợ biểu đồ, bảng trong slides | PptxGenJS hỗ trợ charts (bar, line, pie…), tables |
-| **Không edit PPTX có sẵn** | Chỉ tạo mới, không sửa file PPTX đã có | MiniMax editing.md hướng dẫn XML manipulation |
-
----
-
-## 3. Đề Xuất Cải Tiến — Xếp Hạng Theo Giá Trị
-
-### 🔴 Ưu tiên CAO (High Impact, Achievable)
-
-#### 3.1. Chuyển sang PptxGenJS — Loại bỏ Python service
-
-> [!IMPORTANT]
-> Đây là cải tiến chiến lược lớn nhất có thể thay đổi toàn bộ kiến trúc deploy.
-
-| Khía cạnh | Hiện tại (python-pptx) | Đề xuất (PptxGenJS) |
-|-----------|----------------------|---------------------|
-| **Runtime** | Python microservice riêng | Chạy ngay trong NestJS (Node.js) |
-| **Deploy** | 3 containers: backend, frontend, pptx-gen | 2 containers: backend+pptx, frontend |
-| **Maintainability** | 2 ngôn ngữ (TS + Python) | 1 ngôn ngữ (TypeScript) |
-| **Template** | `.pptx` template files | Code-defined themes + Slide Masters |
-| **Charts** | ❌ Không hỗ trợ | ✅ Bar, Line, Pie, Doughnut, Scatter |
-| **SVG** | ❌ Không hỗ trợ | ✅ Native SVG support |
-| **Output** | File only | File, Buffer, Blob, Stream, base64 |
-| **Audio embed** | ✅ XML injection | ⚠️ Cần tự inject XML (tương tự) |
-
-**Rủi ro:**
-- PptxGenJS **KHÔNG hỗ trợ load template .pptx có sẵn** — chỉ tạo mới từ code
-- Phải build lại toàn bộ template system bằng JS (Slide Masters, backgrounds)
-- Audio auto-play cần custom XML injection (cả 2 thư viện đều thiếu native)
-- Cần effort lớn: **~2-3 tuần**
-
-**Phương án lai (Hybrid — KHUYẾN NGHỊ):**
-```
-Giữ python-pptx cho template-based generation hiện tại
-+ Thêm PptxGenJS cho "Quick Create" mode (không cần template)
-```
-→ User chọn: "Dùng template có sẵn" vs "Tạo nhanh (AI design)"
-
-#### 3.2. Thêm Slide Types (Cover, TOC, Section Divider, Summary)
-
-Hiện tại chỉ có 2 loại: **Title** + **Content**. Theo kiến trúc MiniMax, một bài giảng chuyên nghiệp cần:
-
-| Loại slide | Mục đích | Hiện tại |
-|-----------|---------|----------|
-| **Cover** | Trang bìa với tiêu đề bài giảng | ✅ Có (Title slide) |
-| **TOC / Agenda** | Mục lục các phần | ⚠️ Dùng content slide, chưa chuyên biệt |
-| **Section Divider** | Trang chuyển phần (giữa các topic) | ❌ Hoàn toàn thiếu |
-| **Content** | Nội dung chính | ✅ Có |
-| **Summary / Kết luận** | Tóm tắt cuối cùng | ❌ Dùng content slide bình thường |
-
-**Effort:** ~3-5 ngày. Sửa `pptx_service.py` thêm layouts + sửa prompt AI để tag `slideType`.
-
-#### 3.3. Design System cho Template
-
-Học hỏi từ MiniMax, tạo một **Theme Object Contract** cho hệ thống:
-
-```typescript
-interface PptxTheme {
-  primary: string;    // Màu chủ đạo (tiêu đề)
-  secondary: string;  // Màu phụ (body text)
-  accent: string;     // Điểm nhấn
-  light: string;      // Nền nhạt
-  bg: string;         // Background
-
-  fontTitle: string;     // Font tiêu đề
-  fontBody: string;      // Font nội dung
-  fontCode?: string;     // Font code (nếu có)
-
-  style: 'sharp' | 'soft' | 'rounded' | 'pill'; // Border radius style
-}
-```
-
-Lưu vào DB (SystemConfig hoặc Template metadata) → Phục vụ cả PptxGenJS lẫn python-pptx.
+#### Frontend changes:
+1. **Auto-Resume khi reload:**
+   - Mỗi Step component mount → gọi `GET /generation-jobs/active/:lessonId`
+   - Nếu có job `processing` phù hợp type → tự `startPolling(jobId)`
+2. **Step 4:** Thay vòng lặp frontend bằng 1 API call → poll tiến trình
+3. **Step 5:** Thay vòng lặp frontend bằng 1 API call → poll tiến trình
+4. **Step 5 PPTX:** Thay fetch blob bằng poll → hiện nút download khi xong
 
 ---
 
-### 🟡 Ưu tiên TRUNG BÌNH
+### 🏗️ Giai đoạn 2: BullMQ Queue (Phương án B) — Optional upgrade
+**Thời gian:** ~3-5 ngày | **Khi nào làm:** Khi cần scale hoặc restart-safe
 
-#### 3.4. Tích hợp MarkItDown — Import PPTX có sẵn
+#### Thay đổi:
+1. Cài `@nestjs/bullmq`, tạo `QueueModule`
+2. Thay `setImmediate()` bằng `queue.add(jobName, payload)`
+3. Tạo Worker classes cho mỗi loại job
+4. Workers vẫn ghi vào `GenerationJob` table → Frontend KHÔNG cần thay đổi
 
-Cho phép user upload file PPTX đã có → chuyển thành Markdown → AI phân tích → tạo bài giảng mới.
-
-```
-User uploads existing.pptx
-    → MarkItDown converts to Markdown
-    → AI analyzes structure + content
-    → System creates new lesson with slides pre-populated
-```
-
-**Use case thực tế cho giảng viên:**
-- "Tôi có file PowerPoint cũ, muốn nâng cấp thành bài giảng tự động có audio"
-- "Tôi muốn trích xuất nội dung từ slide để tạo câu hỏi kiểm tra"
-
-**Effort:** ~2-3 ngày. `pip install markitdown[pptx]` → endpoint mới `/api/pptx/import`.
-
-#### 3.5. Hỗ trợ Charts / Biểu đồ trong Slides
-
-Hiện tại slides thuần text + images. Với dữ liệu số, charts sẽ nâng tầm bài giảng:
-
-- AI phân tích nội dung → detect data tables/statistics → auto-generate chart
-- Template: `slideType: 'chart'` with data payload
-- PptxGenJS hỗ trợ native: BAR, LINE, PIE, DOUGHNUT
-
-**Effort:** ~1 tuần (cần PptxGenJS hoặc python-pptx chart API).
-
-#### 3.6. Multiple Layout Patterns cho Content Slides
-
-Thay vì chỉ 2 layout (full-width vs split), thêm:
-
-| Layout | Mô tả |
-|--------|-------|
-| `two-column` | 2 cột text song song |
-| `image-left` | Ảnh trái, text phải (nghịch hiện tại) |
-| `full-image` | Ảnh full slide + overlay text |
-| `comparison` | So sánh 2 concepts |
-| `timeline` | Dòng thời gian |
-| `quote` | Câu trích dẫn nổi bật |
-
-AI prompt sẽ suggest layout phù hợp cho từng slide dựa trên nội dung.
+**Lợi ích thêm:**
+- Server restart → Redis giữ queue → Worker tự tiếp tục
+- Concurrency limit: chỉ cho 2 job AI chạy đồng thời
+- Retry: tự thử lại 3 lần nếu TTS timeout
 
 ---
 
-### 🟢 Ưu tiên THẤP (Nice-to-have)
+## 4. SƠ ĐỒ LUỒNG DỮ LIỆU SAU CẢI TIẾN
 
-#### 3.7. Edit PPTX Có Sẵn (XML Manipulation)
-
-Theo hướng dẫn MiniMax `editing.md`: unzip PPTX → sửa XML → repack.
-Phức tạp, nhiều edge cases — chỉ nên cân nhắc khi có nhu cầu rõ ràng.
-
-#### 3.8. Export PDF/Video từ PPTX
-
-Chuyển PPTX → PDF hoặc video bài giảng (slide + audio synchronized).
-Cần LibreOffice headless hoặc công cụ bên thứ 3. Effort cao.
-
-#### 3.9. Browser-side Preview (PptxGenJS)
-
-Dùng PptxGenJS ở frontend để render preview trước khi download.
-Giảm tải server, user thấy kết quả real-time.
-
----
-
-## 4. Lộ Trình Đề Xuất
+### Flow: User bấm "Tạo Audio tất cả" → Tắt máy → Quay lại
 
 ```mermaid
-gantt
-    title Lộ trình cải tiến PPTX Engine
-    dateFormat  YYYY-MM-DD
-    section Phase 1 (Quick Wins)
-        Thêm Slide Types          :a1, 2026-04-20, 5d
-        Design System / Theme     :a2, after a1, 3d
-    section Phase 2 (Architecture)
-        MarkItDown Import         :b1, after a2, 3d
-        Multiple Layouts          :b2, after b1, 5d
-    section Phase 3 (Major)
-        PptxGenJS Hybrid Mode     :c1, after b2, 14d
-        Charts Support            :c2, after c1, 7d
+sequenceDiagram
+    participant U as User (Browser)
+    participant API as NestJS Backend
+    participant DB as PostgreSQL
+    participant TTS as TTS Service
+
+    U->>API: POST /slide-audios/generate-all
+    API->>DB: CREATE GenerationJob (status=pending)
+    API-->>U: { jobId: "abc123" }
+    Note over API: setImmediate() bắt đầu
+
+    loop Mỗi slide
+        API->>TTS: Gọi TTS API
+        TTS-->>API: Audio file
+        API->>DB: UPDATE SlideAudio (audioUrl, status=done)
+        API->>DB: UPDATE GenerationJob (progress=40%)
+    end
+
+    Note over U: ❌ User TẮT MÁY ở đây
+    Note over API: Backend VẪN CHẠY ↓↓↓
+
+    API->>DB: UPDATE GenerationJob (status=done, progress=100%)
+
+    Note over U: ✅ User QUAY LẠI sau 30 phút
+
+    U->>API: GET /generation-jobs/active/:lessonId
+    API->>DB: Query jobs status
+    DB-->>API: Job "abc123" status=done
+    API-->>U: { jobs: [{ id: "abc123", status: "done" }] }
+
+    U->>API: GET /slide-audios
+    API->>DB: Query SlideAudios
+    DB-->>U: Tất cả audio đã sẵn sàng ✅
+```
+
+### Flow: PPTX file generation
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API as Backend
+    participant DB as PostgreSQL
+    participant S3 as MinIO/Disk
+
+    U->>API: POST /pptx/generate {templateId}
+    API->>DB: CREATE GenerationJob (type=generate-pptx)
+    API-->>U: { jobId: "xyz789" }
+
+    Note over API: setImmediate() tạo PPTX
+
+    API->>S3: Lưu file presentation.pptx
+    API->>DB: UPDATE GenerationJob (status=done, result={downloadUrl})
+
+    Note over U: User quay lại
+
+    U->>API: GET /generation-jobs/active/:lessonId
+    API-->>U: Job done, downloadUrl available
+    U->>S3: GET /download/presentation.pptx
+    S3-->>U: 📥 File PPTX
 ```
 
 ---
 
-## 5. Kết Luận & Câu Hỏi Cần Trả Lời
+## 5. DANH SÁCH CÁC ENDPOINT CẦN THAY ĐỔI
+
+### Backend (Thêm/Sửa):
+
+| Endpoint | Thay đổi | Mô tả |
+|:---|:---|:---|
+| `GET /generation-jobs/active/:lessonId` | **MỚI** | Trả danh sách jobs đang chạy/vừa xong |
+| `POST /slide-audios/generate-all` | **SỬA** | Chuyển từ sync → async job |
+| `POST /slides/generate-all-content` | **MỚI** | Backend loop tạo content+image cho tất cả slides |
+| `POST /pptx/generate` | **SỬA** | Chuyển từ sync stream → async job + static file |
+| `GET /pptx/download/:lessonId` | **MỚI** | Tải file PPTX tĩnh đã được sinh |
+
+### Frontend (Thay đổi):
+
+| Component | Thay đổi |
+|:---|:---|
+| `Step4GenerateAudio.tsx` | Thay vòng lặp `generateAllAudios` bằng 1 API call + `useJobPolling` |
+| `Step5GeneratePPTX.tsx` | Thay vòng lặp `handleGenerateContent` bằng 1 API call + `useJobPolling` |
+| `Step5GeneratePPTX.tsx` | Thay `handleGeneratePptx` (fetch blob) bằng poll + download link |
+| Mỗi Step component | Thêm `useEffect` gọi `/active/:lessonId` để auto-resume |
+
+---
+
+## 6. CÂU HỎI MỞ ĐỂ THẢO LUẬN
+
+> [!IMPORTANT]
+> **Q1:** Anh muốn triển khai Giai đoạn 1 (Quick Win, setImmediate) trước? Hay muốn đi thẳng BullMQ luôn?
+> 
+> **Đề xuất:** Giai đoạn 1 trước vì:
+> - Nhanh triển khai (~2-3 ngày)
+> - Schema DB giữ nguyên
+> - Frontend chỉ cần sửa nhẹ (thay loop → poll)
+> - Giải quyết 95% vấn đề UX (tắt tab vẫn chạy)
+> - Giai đoạn 2 (BullMQ) có thể làm sau, frontend KHÔNG cần sửa lại
 
 > [!NOTE]
-> Hệ thống hiện tại đã rất mature ở phần template-based generation + audio embedding. Các cải tiến nên tập trung vào **đa dạng hóa layout** và **giảm phức tạp deploy** thay vì viết lại từ đầu.
+> **Q2:** File PPTX tĩnh nên lưu ở đâu?
+> - **A)** Lưu trên disk `/uploads/exports/` (đơn giản, nhanh)
+> - **B)** Lưu trên MinIO S3 (chuyên nghiệp hơn, nhưng cần cấu hình)
+> 
+> Hiện tại MinIO đã dùng cho audio files → đề xuất dùng MinIO luôn cho consistency.
 
-### Câu hỏi cho anh:
-
-1. **PptxGenJS Hybrid**: Anh có muốn thêm mode "Tạo nhanh không cần template" (PptxGenJS) song song với hệ thống template hiện tại? Hay anh muốn giữ nguyên python-pptx?
-
-2. **Import PPTX**: Giảng viên của anh có nhu cầu upload PowerPoint cũ để nâng cấp không? Nếu có, MarkItDown là quick win.
-
-3. **Slide Types**: Anh muốn ưu tiên thêm loại slide nào trước? Em nghĩ **Section Divider** là quan trọng nhất (tách chương/phần rõ ràng trong bài giảng dài).
-
-4. **Charts**: Bài giảng của anh có nhiều dữ liệu số cần biểu đồ không?
+> [!NOTE]
+> **Q3:** Có cần chính sách tự động xóa file PPTX cũ (retention policy) không?
+> Ví dụ: xóa file PPTX export sau 7 ngày để tiết kiệm dung lượng VPS.

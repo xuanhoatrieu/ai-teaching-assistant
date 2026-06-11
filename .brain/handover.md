@@ -1,39 +1,43 @@
 # 📋 HANDOVER DOCUMENT
-## AI Teaching Assistant — Textbook Export & Timeout Fix
+## AI Teaching Assistant — Background Jobs & VPS Docker Hotfix
 
-📍 **Đang làm:** DOCX Export Quality + Remove ALL frontend timeouts
-🔢 **Đến bước:** Export polish — pending verification
+📍 **Đang làm:** Sửa lỗi luồng chạy nền PPTX Step 5 & Khắc phục lỗi upload tài liệu trên VPS Docker
+🔢 **Đến bước:** Đã hoàn thành sửa lỗi & Kiểm thử cục bộ thành công 100% — Chờ người dùng build lại Docker image và triển khai lên VPS.
 
 ---
 
 ### ✅ ĐÃ XONG:
-- **AWF Prompt Compliance:** 5-sentence paragraphs, Stanford Clarity, Anti-AI vocabulary in WRITE_PROMPT & REVIEW_FIX_PROMPT
-- **Frontend timeout removal:** ALL axios timeouts → 0 (unlimited): speaker-notes, optimize-notes, importDocx, uploadReference, generateLessons, textbook, textbook-pro
-- **DOCX Image support:** URL `/files/public/syllabus-textbook/...` → absolute disk path for Pandoc embedding
-- **DOCX Code blocks:** `--highlight-style=tango` + python-docx post-processor (gray background, borders, Consolas, LEFT alignment)
-- **AWF reference.docx template:** Times New Roman 13pt ALL styles (override Aptos theme via XML w:rFonts), A4, justified body, LEFT headings
-- **Critical path bug fixed:** `process.cwd()` = `backend/` → post-process script path was `backend/backend/assets/` (DOUBLE). Script never ran before!
-- **python-docx LEFT alignment bug:** `alignment=0` silently ignored → fixed with direct XML `<w:jc w:val="left"/>`
+- **Hotfix Luồng Chạy Nền Step 5 (Frontend):**
+  - Sửa lỗi ghi đè trạng thái trong `loadSavedContent` ở `Step5GeneratePPTX.tsx`: Tránh đặt status thành `'completed'` khi có tác vụ chạy nền đang hoạt động.
+  * Tối ưu hóa phase hiển thị của slide cards ở frontend để hiển thị `'optimizing_content'` hoặc `'generating_image'` tương ứng thay vì hiển thị `'error'` khi job đang chạy.
+- **Dọn dẹp Tác vụ Mồ côi (Backend Startup):**
+  - Thêm logic dọn dẹp các background job bị kẹt ở trạng thái `pending`/`processing` when NestJS khởi động lại (trong `main.ts`).
+- **API Guard Tránh Trùng lặp (Backend Controller):**
+  - Thêm chốt chặn duplicate job trong `SlideAudioController` ở backend.
+- **Khắc phục lỗi Mimetype & MarkItDown trên VPS Docker:**
+  - Thay thế `FileTypeValidator` ở API `importSyllabus` và `uploadOutline` bằng hàm kiểm tra phần mở rộng file (Extension Check) case-insensitive trực tiếp ở logic controller.
+  - Cập nhật `Dockerfile` cài đặt `python3`, `py3-pip` và thư viện CLI `markitdown` ở stage `production`.
+- **Hỗ trợ Import Đề Cương Cũ & Điền Mẫu Mới (Option 1):**
+  - Tối ưu hóa System Prompt `SYLLABUS_PARSE_SYSTEM_PROMPT` giúp AI nhận diện ngữ nghĩa linh hoạt từ các đề cương mẫu cũ sang 10 mục chuẩn mới.
+- **Tạo Đề Cương Mới Theo Định Dạng Bảng Chuẩn:**
+  - Thiết lập định dạng bảng biểu, cấu trúc và tiêu đề mẫu mặc định (`defaultContent`) cho 10 mục đề cương chi tiết (theo mẫu chuẩn TUAF 2026) khi tạo mới thay vì để trống text đơn thuần.
 
-### ⏳ CÒN LẠI:
-- Verify DOCX export (code LEFT-aligned, TNR font, images embedded)
-- E2E test textbook PRO full pipeline
-- Install mermaid-cli (mmdc) on VPS
-- Git commit/push (CẦN HỎI USER)
+### ⏳ CÒN LẠI / CẦN LÀM TIẾP:
+- Đã được user phê duyệt push code. Tiến hành commit, tạo tag `v1.5.8` và push lên GitHub để kích hoạt Github Actions build image mới cho VPS.
 
 ### 🔧 QUYẾT ĐỊNH QUAN TRỌNG:
-- AWF dual-layer DOCX styling: reference.docx (style-level) + docx_postprocess.py (run-level)
-- python-docx XML override for fonts and alignment (python-docx API insufficient)
-- Timeout: 0 = unlimited for ALL AI API calls on dev server
+- Bỏ qua `FileTypeValidator` của NestJS khi upload tài liệu do trình duyệt gửi mimetype thiếu chính xác. Dùng case-insensitive extension check là giải pháp an toàn nhất.
+- Đóng gói đầy đủ python + markitdown vào container môi trường production của backend.
+- Sử dụng AI semantic mapping cho đề cương cũ thay vì viết code parser thủ công.
 
 ### 📁 FILES CHÍNH ĐÃ THAY ĐỔI:
-- `backend/src/syllabus/syllabus-export.service.ts` — image path conversion + code block fix + post-process integration
-- `backend/src/syllabus/syllabus.service.ts` — AWF prompt upgrades
-- `backend/assets/build_reference.py` — AWF template builder
-- `backend/assets/docx_postprocess.py` — Code block styling post-processor
-- `backend/assets/reference.docx` — Rebuilt Pandoc template
-- `frontend/src/lib/syllabus-api.ts` — ALL timeouts → 0
-- `frontend/src/components/steps/Step4GenerateAudio.tsx` — Speaker notes timeouts → 0
+- `~` [backend/src/main.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/main.ts)
+- `~` [backend/src/slide-audio/slide-audio.controller.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/slide-audio/slide-audio.controller.ts)
+- `~` [backend/src/syllabus/syllabus.controller.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/syllabus/syllabus.controller.ts)
+- `~` [backend/src/syllabus/syllabus.service.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/syllabus/syllabus.service.ts)
+- `~` [backend/src/lessons/lessons.controller.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/lessons/lessons.controller.ts)
+- `~` [backend/Dockerfile](file:///home/trieuhoa/ai-teaching-assistant/backend/Dockerfile)
+- `~` [frontend/src/components/steps/Step5GeneratePPTX.tsx](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/components/steps/Step5GeneratePPTX.tsx)
 
 ---
 📍 Đã lưu! Để tiếp tục: Gõ /recap

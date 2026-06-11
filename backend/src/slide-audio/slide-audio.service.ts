@@ -499,34 +499,12 @@ export class SlideAudioService {
         }
     }
 
-    // Generate audio for all slides
-    async generateAllAudios(lessonId: string, userId: string) {
-        const slideAudios = await this.getSlideAudios(lessonId);
-
-        if (slideAudios.length === 0) {
-            throw new BadRequestException('No slide audios found. Initialize first.');
-        }
-
-        const results: any[] = [];
-        for (const slideAudio of slideAudios) {
-            if (slideAudio.speakerNote?.trim()) {
-                try {
-                    const result = await this.generateSingleAudio(lessonId, slideAudio.slideIndex, userId);
-                    results.push(result);
-                } catch (error) {
-                    this.logger.error(`Failed slide ${slideAudio.slideIndex}:`, error.message);
-                    results.push({ ...slideAudio, status: 'error', errorMessage: error.message });
-                }
-            }
-        }
-
-        // Update lesson step
-        await this.prisma.lesson.update({
+    // Update lesson step
+    async updateLessonStep(lessonId: string, step: number) {
+        return this.prisma.lesson.update({
             where: { id: lessonId },
-            data: { currentStep: 4 },
+            data: { currentStep: step },
         });
-
-        return results;
     }
 
     // Delete audio for a single slide (reset to pending)
