@@ -30,6 +30,7 @@ implemented until tests or validation evidence exist.
 | Phase-08 | Create Lesson Bridge: POST /syllabus/:id/lessons/:lessonId/bridge. Creates Lesson with pre-filled title+outline, links via lessonId | no | no | no | no | implemented | tsc pass (backend + frontend) |
 | Phase-09 | AI Textbook Generation: POST /syllabus/:id/lessons/:lessonId/textbook. AI generates 2000-4000 word academic chapter. Status tracking (none→generating→done/error) | no | no | no | no | implemented | tsc pass (backend + frontend) |
 | Phase-10 | Textbook Preview/Edit + Export: PUT save textbook content, GET export all chapters as DOCX. Editable textarea with save/cancel | no | no | no | no | implemented | tsc pass (backend + frontend) |
+| US-011 | Mobile UI & Responsiveness: collapsing layouts, drawers, single columns for mobile screens (<= 768px) | no | no | no | no | implemented | tsc pass + viewport manual verification |
 
 ## Evidence Rules
 

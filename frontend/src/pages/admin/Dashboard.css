@@ -98,3 +98,44 @@
 .action-btn span {
     font-size: 20px;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .dashboard-header {
+        margin-bottom: 20px;
+    }
+
+    .dashboard-header h1 {
+        font-size: 22px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+        margin-bottom: 24px;
+    }
+
+    .stat-card {
+        padding: 16px;
+    }
+
+    .stat-icon {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+    }
+
+    .stat-value {
+        font-size: 22px;
+    }
+
+    .actions-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .action-btn {
+        padding: 14px 16px;
+        min-height: 44px;
+    }
+}

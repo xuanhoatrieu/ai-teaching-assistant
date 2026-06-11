@@ -193,3 +193,48 @@
 .image-upload-group input[type="file"] {
     font-size: 0.85rem;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .templates-page {
+        padding: 1rem;
+    }
+
+    .templates-page .page-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .templates-table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .templates-table table {
+        min-width: 500px;
+    }
+
+    .templates-table th,
+    .templates-table td {
+        padding: 0.75rem;
+        font-size: 0.85rem;
+    }
+
+    .image-upload-row,
+    .image-preview-row {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    .template-modal {
+        max-width: 95%;
+        width: 95%;
+    }
+
+    .actions button {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 0.6rem;
+    }
+}

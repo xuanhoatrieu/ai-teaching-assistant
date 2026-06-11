@@ -1,43 +1,52 @@
 # 📋 HANDOVER DOCUMENT
-## AI Teaching Assistant — Background Jobs & VPS Docker Hotfix
+## AI Teaching Assistant — Mobile UI & Responsiveness Optimization
 
-📍 **Đang làm:** Sửa lỗi luồng chạy nền PPTX Step 5 & Khắc phục lỗi upload tài liệu trên VPS Docker
-🔢 **Đến bước:** Đã hoàn thành sửa lỗi & Kiểm thử cục bộ thành công 100% — Chờ người dùng build lại Docker image và triển khai lên VPS.
+📍 **Đang làm:** Đã hoàn thành tối ưu hóa toàn bộ giao diện di động (Mobile UI) cục bộ.
+🔢 **Đến bước:** Chờ người dùng xác nhận phê duyệt để commit, đánh tag phiên bản `v1.5.9` và push lên GitHub để VPS tự động kéo Docker image mới.
 
 ---
 
 ### ✅ ĐÃ XONG:
-- **Hotfix Luồng Chạy Nền Step 5 (Frontend):**
-  - Sửa lỗi ghi đè trạng thái trong `loadSavedContent` ở `Step5GeneratePPTX.tsx`: Tránh đặt status thành `'completed'` khi có tác vụ chạy nền đang hoạt động.
-  * Tối ưu hóa phase hiển thị của slide cards ở frontend để hiển thị `'optimizing_content'` hoặc `'generating_image'` tương ứng thay vì hiển thị `'error'` khi job đang chạy.
-- **Dọn dẹp Tác vụ Mồ côi (Backend Startup):**
-  - Thêm logic dọn dẹp các background job bị kẹt ở trạng thái `pending`/`processing` when NestJS khởi động lại (trong `main.ts`).
-- **API Guard Tránh Trùng lặp (Backend Controller):**
-  - Thêm chốt chặn duplicate job trong `SlideAudioController` ở backend.
-- **Khắc phục lỗi Mimetype & MarkItDown trên VPS Docker:**
-  - Thay thế `FileTypeValidator` ở API `importSyllabus` và `uploadOutline` bằng hàm kiểm tra phần mở rộng file (Extension Check) case-insensitive trực tiếp ở logic controller.
-  - Cập nhật `Dockerfile` cài đặt `python3`, `py3-pip` và thư viện CLI `markitdown` ở stage `production`.
-- **Hỗ trợ Import Đề Cương Cũ & Điền Mẫu Mới (Option 1):**
-  - Tối ưu hóa System Prompt `SYLLABUS_PARSE_SYSTEM_PROMPT` giúp AI nhận diện ngữ nghĩa linh hoạt từ các đề cương mẫu cũ sang 10 mục chuẩn mới.
-- **Tạo Đề Cương Mới Theo Định Dạng Bảng Chuẩn:**
-  - Thiết lập định dạng bảng biểu, cấu trúc và tiêu đề mẫu mặc định (`defaultContent`) cho 10 mục đề cương chi tiết (theo mẫu chuẩn TUAF 2026) khi tạo mới thay vì để trống text đơn thuần.
+- **Tối ưu User Layout & Navigation:**
+  - Tích hợp Drawer slide-in trượt từ bên phải trên màn hình <= 768px.
+  - Tích hợp nút Hamburger mở/đóng menu và overlay làm mờ.
+  - Thu gọn padding của main content để tối ưu không gian di động.
+- **Tối ưu Admin Layout & Sidebar:**
+  - Ẩn sidebar admin bên trái mặc định và thay bằng overlay drawer trượt từ bên trái.
+  - Thêm header phụ trên di động chứa nút Toggle menu cho trang Admin.
+- **Tối ưu trang danh sách Môn học (Subjects):**
+  - Chuyển header trang sang dạng dọc.
+  - Thay đổi modal popup co giãn theo màn hình (92% width) và chuyển biểu mẫu 2 cột thành 1 cột.
+- **Tối ưu trang chi tiết Môn học (SubjectDetail):**
+  - Cho phép tabs môn học bọc dòng để không bị tràn ngang.
+  - Khắc phục sự cố nút sửa/xóa bài học bị ẩn do không hover được trên màn hình cảm ứng (chuyển sang hiển thị cố định trên di động).
+- **Tối ưu trang soạn thảo Bài giảng (LessonEditorV2):**
+  - Ẩn chữ mô tả chỉ hiển thị icon stepper trên di động để gọn màn hình.
+  - Các nút Back/Next tự động full-width và xếp cạnh nhau dưới chân trang.
+- **Tối ưu trang đăng nhập/đăng ký (Auth):**
+  - Giảm padding của auth card trên màn hình siêu nhỏ.
+- **Kiểm thử tĩnh:**
+  - Biên dịch frontend (`npm run build`) thành công 100% không phát sinh bất kỳ lỗi nào.
 
 ### ⏳ CÒN LẠI / CẦN LÀM TIẾP:
-- Đã được user phê duyệt push code. Tiến hành commit, tạo tag `v1.5.8` và push lên GitHub để kích hoạt Github Actions build image mới cho VPS.
+- Nhận phê duyệt từ người dùng để commit code cục bộ.
+- Tạo tag phiên bản `v1.5.9` và thực hiện push lên GitHub để kích hoạt Github Actions tự động build image Docker mới cho VPS.
+- Chạy lệnh pull Docker và reload trên VPS để kiểm thử trực tiếp trên điện thoại di động thực tế.
 
 ### 🔧 QUYẾT ĐỊNH QUAN TRỌNG:
-- Bỏ qua `FileTypeValidator` của NestJS khi upload tài liệu do trình duyệt gửi mimetype thiếu chính xác. Dùng case-insensitive extension check là giải pháp an toàn nhất.
-- Đóng gói đầy đủ python + markitdown vào container môi trường production của backend.
-- Sử dụng AI semantic mapping cho đề cương cũ thay vì viết code parser thủ công.
+- Sử dụng Drawer trượt cạnh phải cho Menu chính và Drawer trượt cạnh trái cho Admin Sidebar để tạo cảm giác tự nhiên như app di động native.
+- Hiển thị cố định các nút sửa/xóa bài học trên màn hình cảm ứng để giải quyết triệt để vấn đề thiết bị cảm ứng không có hover.
 
 ### 📁 FILES CHÍNH ĐÃ THAY ĐỔI:
-- `~` [backend/src/main.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/main.ts)
-- `~` [backend/src/slide-audio/slide-audio.controller.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/slide-audio/slide-audio.controller.ts)
-- `~` [backend/src/syllabus/syllabus.controller.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/syllabus/syllabus.controller.ts)
-- `~` [backend/src/syllabus/syllabus.service.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/syllabus/syllabus.service.ts)
-- `~` [backend/src/lessons/lessons.controller.ts](file:///home/trieuhoa/ai-teaching-assistant/backend/src/lessons/lessons.controller.ts)
-- `~` [backend/Dockerfile](file:///home/trieuhoa/ai-teaching-assistant/backend/Dockerfile)
-- `~` [frontend/src/components/steps/Step5GeneratePPTX.tsx](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/components/steps/Step5GeneratePPTX.tsx)
+- `~` [UserLayout.tsx](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/UserLayout.tsx)
+- `~` [UserLayout.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/UserLayout.css)
+- `~` [AdminLayout.tsx](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/AdminLayout.tsx)
+- `~` [AdminLayout.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/AdminLayout.css)
+- `~` [Subjects.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/Subjects.css)
+- `~` [SubjectDetail.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/SubjectDetail.css)
+- `~` [LessonEditorV2.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/LessonEditorV2.css)
+- `~` [Steps.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/components/steps/Steps.css)
+- `~` [Auth.css](file:///home/trieuhoa/ai-teaching-assistant/frontend/src/pages/Auth.css)
 
 ---
 📍 Đã lưu! Để tiếp tục: Gõ /recap

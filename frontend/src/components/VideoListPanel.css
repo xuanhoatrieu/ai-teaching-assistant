@@ -174,3 +174,40 @@
     color: #94a3b8;
     line-height: 1.4;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .video-card {
+        padding: 10px 12px;
+        gap: 12px;
+    }
+
+    .video-card-actions {
+        opacity: 1; /* Always visible on touch */
+    }
+
+    .video-card-thumbnail {
+        width: 64px;
+        height: 42px;
+    }
+
+    .video-card-title {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .input-type-options {
+        grid-template-columns: 1fr;
+    }
+
+    .input-type-card {
+        flex-direction: row;
+        text-align: left;
+        gap: 12px;
+    }
+
+    .input-type-icon {
+        font-size: 24px;
+    }
+}

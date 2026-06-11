@@ -8,6 +8,7 @@ interface AuthContextType {
     isAdmin: boolean;
     login: (email: string, password: string) => Promise<void>;
     register: (email: string, password: string, fullName: string, phone: string, organization: string) => Promise<any>;
+    updateProfile: (fullName: string, phone: string, organization: string) => Promise<void>;
     logout: () => void;
 }
 
@@ -51,6 +52,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return response.data;
     }, []);
 
+    const updateProfile = useCallback(async (fullName: string, phone: string, organization: string) => {
+        const response = await authApi.updateProfile(fullName, phone, organization);
+        setUser(response.data);
+    }, []);
+
     const logout = useCallback(() => {
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
@@ -65,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin: user?.role === 'ADMIN',
         login,
         register,
+        updateProfile,
         logout,
     };
 

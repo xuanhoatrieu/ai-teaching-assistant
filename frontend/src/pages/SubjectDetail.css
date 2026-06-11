@@ -357,3 +357,59 @@
     transform: none;
     box-shadow: none;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .subject-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        width: 100%;
+        gap: 6px;
+    }
+
+    .tab-btn {
+        flex: 1 1 auto;
+        justify-content: center;
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    .tab-header {
+        justify-content: flex-start;
+        margin-bottom: 12px;
+    }
+
+    .lesson-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .lesson-link {
+        padding: 16px;
+    }
+
+    .lesson-meta {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .lesson-actions {
+        opacity: 1 !important; /* Always visible on mobile touch screens */
+        justify-content: flex-end;
+        padding: 8px 16px 12px;
+        border-top: 1px solid rgba(148, 163, 184, 0.08);
+    }
+
+    .form-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .modal-large,
+    .delete-confirm-modal {
+        max-width: 92% !important;
+        width: 92%;
+        padding: 24px 20px;
+        box-sizing: border-box;
+    }
+}

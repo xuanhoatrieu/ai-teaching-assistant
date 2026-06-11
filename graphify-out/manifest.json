@@ -716,12 +716,12 @@
     "hash": "e72fd5092d32de35ad1143dd04d1501a"
   },
   "/home/trieuhoa/ai-teaching-assistant/backend/src/auth/auth.service.ts": {
-    "mtime": 1781151058.046075,
-    "hash": "d35036d2a16cbd1a7c78e4611b2ef920"
+    "mtime": 1781176807.9551425,
+    "hash": "55120d6953c79d48e35c1ffd2b8dac1d"
   },
   "/home/trieuhoa/ai-teaching-assistant/backend/src/auth/auth.controller.ts": {
-    "mtime": 1777298226.318954,
-    "hash": "0cf0e81ea7f78c12bb6ae007ef037bc2"
+    "mtime": 1781176814.421228,
+    "hash": "7dc3db9c6d767f6cdd8608b32bd06d70"
   },
   "/home/trieuhoa/ai-teaching-assistant/backend/src/auth/auth.module.ts": {
     "mtime": 1777298226.318954,
@@ -1008,12 +1008,12 @@
     "hash": "c01890a26b1f0f3579f7dfbe1100306f"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/UserLayout.tsx": {
-    "mtime": 1781151199.5338464,
-    "hash": "3bb8b6a4086cb364716ce385d9f9e2ab"
+    "mtime": 1781176339.80566,
+    "hash": "7507bd9f2b6263876fe4c2081eb3bb69"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/layouts/AdminLayout.tsx": {
-    "mtime": 1777298246.4791358,
-    "hash": "46a174ec10e61f1c18efcc96cd24fde8"
+    "mtime": 1781176359.0989435,
+    "hash": "372760224f8fbbf6a80287b22c25c9ac"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/pages/LessonEditor.tsx": {
     "mtime": 1777298246.4811354,
@@ -1032,8 +1032,8 @@
     "hash": "2d91e08904ad663d013b2723bb32e601"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/pages/UserSettings.tsx": {
-    "mtime": 1777712801.5390294,
-    "hash": "984b972fa96ff253e2c1d75889b3fa3e"
+    "mtime": 1781176836.788522,
+    "hash": "1b4a6b0abc026030fbd709edb8206fe4"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/pages/Login.tsx": {
     "mtime": 1777298246.481648,
@@ -1092,8 +1092,8 @@
     "hash": "9cd5015e4c95597281ca86ac4ff28840"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/contexts/AuthContext.tsx": {
-    "mtime": 1781151157.3325973,
-    "hash": "e2d0c9fffe9ee2d04598f163b01c1e81"
+    "mtime": 1781176827.8654048,
+    "hash": "83e85976e4117336394e5b5a4d05a97c"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/contexts/LessonEditorContext.tsx": {
     "mtime": 1777298246.478031,
@@ -1116,8 +1116,8 @@
     "hash": "5ce208babb1f7e2c4e0398e027644697"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/lib/api.ts": {
-    "mtime": 1781151143.70952,
-    "hash": "12383b56e66542ffa4321dc7ad9c2c95"
+    "mtime": 1781176819.9513006,
+    "hash": "0d8ab68a83156eecf70303ca31fbbf90"
   },
   "/home/trieuhoa/ai-teaching-assistant/frontend/src/lib/subjects-api.ts": {
     "mtime": 1777298246.4801607,
@@ -3336,7 +3336,7 @@
     "hash": "b0e62f10f35a8556aff8c8debdeba8ab"
   },
   "/home/trieuhoa/ai-teaching-assistant/graphify-out/converted/HUONG_DAN_SU_DUNG_b5c29d8c.md": {
-    "mtime": 1781174485.9023635,
+    "mtime": 1781176920.41327,
     "hash": "a8f2b173b4618b6ea7428a14e3917fab"
   },
   "/home/trieuhoa/ai-teaching-assistant/PROJECT_OVERVIEW.md": {
@@ -3360,7 +3360,7 @@
     "hash": "0477fa1f080817654ba769385be89aea"
   },
   "/home/trieuhoa/ai-teaching-assistant/graphify-out/converted/Mau_De_cuong_2026_f4d712d7.md": {
-    "mtime": 1781174486.1954465,
+    "mtime": 1781176920.5842803,
     "hash": "1b4801472bc2564aa532852b5a335dec"
   },
   "/home/trieuhoa/ai-teaching-assistant/HUONG_DAN_SU_DUNG.md": {
@@ -3552,8 +3552,8 @@
     "hash": "d414e8563d8ae87efee525520b5f9552"
   },
   "/home/trieuhoa/ai-teaching-assistant/docs/TEST_MATRIX.md": {
-    "mtime": 1778430056.6680274,
-    "hash": "82a64fbf8112b8964148337bb3c63832"
+    "mtime": 1781176479.0776677,
+    "hash": "6428b1a8144281d0f44ae948f9b11eb3"
   },
   "/home/trieuhoa/ai-teaching-assistant/docs/FEATURE_INTAKE.md": {
     "mtime": 1778376696.8861587,
@@ -3566,6 +3566,10 @@
   "/home/trieuhoa/ai-teaching-assistant/docs/product/README.md": {
     "mtime": 1778376697.3067315,
     "hash": "bb6f7d09bbd6a17bb06de547a9272355"
+  },
+  "/home/trieuhoa/ai-teaching-assistant/docs/stories/US-011-mobile-responsive-ui.md": {
+    "mtime": 1781176474.2766,
+    "hash": "357b4cf0e0f38a08e90a3e4391f8d8a3"
   },
   "/home/trieuhoa/ai-teaching-assistant/docs/stories/US-010-useful-tools-menu.md": {
     "mtime": 1778757761.192574,
@@ -3716,7 +3720,7 @@
     "hash": "151408de525d7ea9c12cce80d05796a6"
   },
   "/home/trieuhoa/ai-teaching-assistant/graphify-out/converted/reference_a84244be.md": {
-    "mtime": 1781174486.9253705,
+    "mtime": 1781176921.5794232,
     "hash": "7f0b065bce00170c836c364a0a57c82b"
   },
   "/home/trieuhoa/ai-teaching-assistant/plans/plan.md": {

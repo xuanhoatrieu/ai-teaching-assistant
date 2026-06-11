@@ -491,3 +491,92 @@
     opacity: 0;
     cursor: pointer;
 }
+
+/* ═══ Mobile Responsive ═══ */
+@media (max-width: 768px) {
+    .user-settings {
+        padding: 16px;
+    }
+
+    .settings-header h1 {
+        font-size: 22px;
+    }
+
+    .section-header {
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .settings-section {
+        padding: 16px;
+    }
+
+    .service-status-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .model-config-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .user-key-item {
+        flex-wrap: wrap;
+    }
+
+    .user-key-item .key-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .user-key-item .key-actions button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 8px 14px;
+    }
+
+    /* Modal full width */
+    .modal-overlay {
+        padding: 12px;
+        align-items: flex-end;
+    }
+
+    .modal-content {
+        max-width: 100%;
+        width: 100%;
+        border-radius: 16px 16px 0 0;
+        max-height: 85vh;
+        overflow-y: auto;
+    }
+
+    .modal-actions {
+        flex-direction: column;
+    }
+
+    .btn-cancel,
+    .btn-save {
+        min-height: 44px;
+    }
+
+    /* Touch-friendly buttons */
+    .btn-add {
+        min-height: 44px;
+        width: 100%;
+    }
+
+    .btn-save-config {
+        min-height: 44px;
+        width: 100%;
+    }
+
+    .btn-discover {
+        min-height: 44px;
+    }
+
+    .model-config-actions {
+        flex-direction: column;
+    }
+
+    .template-previews {
+        flex-wrap: wrap;
+    }
+}

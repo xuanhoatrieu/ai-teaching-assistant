@@ -69,6 +69,9 @@ export const authApi = {
 
     getMe: () => api.get('/auth/me'),
 
+    updateProfile: (fullName: string, phone: string, organization: string) =>
+        api.put('/auth/profile', { fullName, phone, organization }),
+
     refresh: (refreshToken: string) =>
         api.post('/auth/refresh', { refreshToken }),
 };

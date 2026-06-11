@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import './AdminLayout.css';
@@ -16,14 +17,43 @@ export function AdminLayout() {
     const { user, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
+    const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState(false);
 
     const handleExitAdmin = () => {
         navigate('/');
     };
 
+    // Close admin sidebar when route changes
+    useEffect(() => {
+        setIsAdminSidebarOpen(false);
+    }, [location]);
+
     return (
         <div className="admin-layout">
-            <aside className="admin-sidebar">
+            {/* Mobile Admin Header */}
+            <header className="admin-mobile-header">
+                <button 
+                    className="admin-menu-toggle"
+                    onClick={() => setIsAdminSidebarOpen(!isAdminSidebarOpen)}
+                    aria-label="Toggle admin menu"
+                >
+                    ☰ Menu
+                </button>
+                <div className="admin-mobile-title">
+                    <span>AI Teaching</span>
+                    <span className="admin-badge">Admin</span>
+                </div>
+            </header>
+
+            {/* Mobile Admin Overlay */}
+            {isAdminSidebarOpen && (
+                <div 
+                    className="admin-sidebar-overlay"
+                    onClick={() => setIsAdminSidebarOpen(false)}
+                />
+            )}
+
+            <aside className={`admin-sidebar ${isAdminSidebarOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
                     <h1>AI Teaching</h1>
                     <span className="admin-badge">Admin</span>
@@ -35,6 +65,7 @@ export function AdminLayout() {
                             key={item.path}
                             to={item.path}
                             className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
+                            onClick={() => setIsAdminSidebarOpen(false)}
                         >
                             <span className="nav-icon">{item.icon}</span>
                             <span className="nav-label">{item.label}</span>

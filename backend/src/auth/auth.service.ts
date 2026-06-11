@@ -160,4 +160,26 @@ export class AuthService {
             requireProfileUpdate,
         };
     }
+
+    async updateProfile(userId: string, dto: { fullName: string; phone: string; organization: string }) {
+        const user = await this.prisma.user.update({
+            where: { id: userId },
+            data: {
+                fullName: dto.fullName,
+                phone: dto.phone,
+                organization: dto.organization,
+            },
+        });
+        const requireProfileUpdate = !user.fullName || !user.phone || !user.organization;
+        return {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            fullName: user.fullName,
+            phone: user.phone,
+            organization: user.organization,
+            status: user.status,
+            requireProfileUpdate,
+        };
+    }
 }

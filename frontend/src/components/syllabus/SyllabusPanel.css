@@ -955,3 +955,93 @@
     margin: 0.75rem 0;
     display: block;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .syllabus-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+    }
+
+    .syllabus-header-left {
+        flex-wrap: wrap;
+    }
+
+    .syllabus-header-actions {
+        flex-wrap: wrap;
+    }
+
+    .syllabus-header-actions button {
+        min-height: 44px;
+        flex: 1;
+    }
+
+    .block-header {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .block-actions {
+        margin-left: 0;
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    .block-actions button {
+        min-height: 40px;
+        padding: 0.5rem 0.8rem;
+    }
+
+    .block-content-editor {
+        min-height: 100px;
+    }
+
+    /* Lesson cards */
+    .syllabus-lesson-card .btn-inline-edit {
+        opacity: 0.7; /* Always visible on touch */
+    }
+
+    .btn-bridge {
+        min-height: 40px;
+        padding: 0.5rem 1rem;
+    }
+
+    .syllabus-lesson-actions {
+        flex-wrap: wrap;
+    }
+
+    /* Reference panel */
+    .ref-header {
+        flex-wrap: wrap;
+    }
+
+    .ref-delete-btn {
+        opacity: 0.7;
+        min-width: 40px;
+        min-height: 40px;
+    }
+
+    /* Textbook */
+    .textbook-textarea {
+        min-height: 200px;
+    }
+
+    .textbook-edit-actions {
+        flex-wrap: wrap;
+    }
+
+    .textbook-edit-actions button {
+        min-height: 40px;
+        flex: 1;
+    }
+
+    /* Syllabus empty */
+    .syllabus-empty-actions {
+        flex-direction: column;
+    }
+
+    .syllabus-empty-actions button {
+        min-height: 44px;
+    }
+}

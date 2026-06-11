@@ -4,6 +4,11 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
 html,
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -12,10 +17,12 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
 #root {
   min-height: 100vh;
+  min-height: -webkit-fill-available;
 }
 
 a {
@@ -23,6 +30,21 @@ a {
   text-decoration: none;
 }
 
-button {
+button,
+a,
+[role="button"] {
   font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
+  font-size: 16px; /* prevents iOS zoom on focus */
+}
+
+@media (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px;
+  }
 }

@@ -1025,9 +1025,120 @@
 /* ═══════ RESPONSIVE ═══════ */
 
 @media (max-width: 768px) {
+    .pptx-audio-tool {
+        padding: 12px;
+    }
+
+    .page-title {
+        font-size: 22px;
+    }
+
     .step-label { display: none; }
     .step-btn { padding: 8px 10px; }
     .audio-header { flex-direction: column; }
     .header-actions { width: 100%; }
     .question-config { flex-direction: column; }
+
+    /* Card header */
+    .pptx-audio-tool .card-header {
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 12px 14px;
+    }
+
+    .pptx-audio-tool .card-body {
+        padding: 12px 14px;
+    }
+
+    .pptx-audio-tool .card-footer {
+        padding: 10px 14px;
+    }
+
+    /* Playback - touch friendly */
+    .pptx-audio-tool .btn-play,
+    .pptx-audio-tool .btn-stop-play {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 14px;
+        font-size: 16px;
+    }
+
+    .pptx-audio-tool .btn-download,
+    .pptx-audio-tool .btn-delete-small {
+        min-height: 36px;
+        padding: 6px 12px;
+    }
+
+    .pptx-audio-tool .playback-controls {
+        gap: 6px;
+    }
+
+    .pptx-audio-tool .btn-generate {
+        min-height: 44px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .pptx-audio-tool .audio-actions {
+        flex-direction: column;
+    }
+
+    /* History items */
+    .history-item {
+        padding: 14px 16px;
+        min-height: 56px;
+    }
+
+    .history-delete {
+        min-width: 44px;
+        min-height: 44px;
+        padding: 8px 12px;
+    }
+
+    /* Summary table */
+    .summary-table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Download */
+    .download-actions {
+        padding: 0 16px;
+    }
+
+    .btn-download-pptx {
+        width: 100%;
+        min-height: 48px;
+    }
+
+    /* Generate all button */
+    .pptx-audio-tool .btn-generate-all,
+    .btn-generate-questions {
+        min-height: 44px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .pptx-audio-tool .btn-stop {
+        min-height: 44px;
+        width: 100%;
+        justify-content: center;
+    }
+
+    /* Language toggle */
+    .language-toggle {
+        width: 100%;
+    }
+
+    .lang-btn {
+        flex: 1;
+        text-align: center;
+        min-height: 40px;
+    }
+
+    /* Questions */
+    .question-card {
+        padding: 12px 14px;
+    }
 }

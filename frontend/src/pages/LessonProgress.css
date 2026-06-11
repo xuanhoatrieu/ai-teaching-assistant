@@ -88,3 +88,50 @@
     gap: 12px;
     justify-content: center;
 }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .progress-container {
+        padding: 24px 16px;
+    }
+
+    .progress-header h1 {
+        font-size: 22px;
+    }
+
+    .progress-subtitle {
+        margin-bottom: 24px;
+    }
+
+    .step {
+        padding: 12px 14px;
+        gap: 12px;
+    }
+
+    .step-icon {
+        font-size: 20px;
+    }
+
+    .step-label {
+        font-size: 14px;
+    }
+
+    .generation-steps {
+        margin-bottom: 24px;
+    }
+
+    .actions {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .actions button,
+    .actions a {
+        width: 100%;
+        min-height: 44px;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}

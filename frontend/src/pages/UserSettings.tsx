@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api, API_BASE_URL } from '../lib/api';
+import { useAuth } from '../contexts/AuthContext';
 import './UserSettings.css';
 
 interface UserApiKey {
@@ -459,6 +460,92 @@ const SERVICE_OPTIONS = [
     { value: 'IMAGEN' as APIService, label: 'Imagen', icon: '🖼️', desc: 'Tạo hình ảnh minh họa' },
 ];
 
+function ProfileSection() {
+    const { user, updateProfile } = useAuth();
+    const [fullName, setFullName] = useState(user?.fullName || '');
+    const [phone, setPhone] = useState(user?.phone || '');
+    const [organization, setOrganization] = useState(user?.organization || '');
+    const [isSaving, setIsSaving] = useState(false);
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (user) {
+            setFullName(user.fullName || '');
+            setPhone(user.phone || '');
+            setOrganization(user.organization || '');
+        }
+    }, [user]);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSaving(true);
+        setError('');
+        setMessage('');
+
+        try {
+            await updateProfile(fullName, phone, organization);
+            setMessage('Đã cập nhật thông tin cá nhân thành công!');
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Lỗi khi cập nhật thông tin');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <section className="settings-section">
+            <h2>👤 Thông tin cá nhân</h2>
+            <p className="section-desc">
+                Cập nhật Họ tên, Số điện thoại và Đơn vị công tác của thầy/cô
+            </p>
+
+            {error && <div className="settings-message error">{error}</div>}
+            {message && <div className="settings-message success">{message}</div>}
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-row">
+                    <div className="form-group">
+                        <label>Họ và tên *</label>
+                        <input
+                            type="text"
+                            value={fullName}
+                            onChange={e => setFullName(e.target.value)}
+                            placeholder="Nhập họ và tên"
+                            required
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Số điện thoại *</label>
+                        <input
+                            type="text"
+                            value={phone}
+                            onChange={e => setPhone(e.target.value)}
+                            placeholder="Nhập số điện thoại"
+                            required
+                        />
+                    </div>
+                </div>
+                <div className="form-group">
+                    <label>Đơn vị công tác (Trường học, Cơ quan) *</label>
+                    <input
+                        type="text"
+                        value={organization}
+                        onChange={e => setOrganization(e.target.value)}
+                        placeholder="Nhập tên trường học hoặc đơn vị công tác"
+                        required
+                    />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button type="submit" className="btn-save-config" disabled={isSaving}>
+                        {isSaving ? '⏳ Đang lưu...' : '💾 Lưu thông tin'}
+                    </button>
+                </div>
+            </form>
+        </section>
+    );
+}
+
 export function UserSettingsPage() {
     const [keys, setKeys] = useState<UserApiKey[]>([]);
     const [serviceStatus, setServiceStatus] = useState<Record<string, boolean>>({});
@@ -603,6 +690,9 @@ export function UserSettingsPage() {
 
             {error && <div className="settings-message error">{error}</div>}
             {successMsg && <div className="settings-message success">{successMsg}</div>}
+
+            {/* Profile Info Section */}
+            <ProfileSection />
 
             {/* Service Status Cards */}
             <section className="settings-section">

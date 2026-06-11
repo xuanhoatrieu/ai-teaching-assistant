@@ -135,3 +135,18 @@
 .auth-footer a:hover {
   color: #60a5fa;
 }
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 24px 20px;
+  }
+
+  .auth-header {
+    margin-bottom: 24px;
+  }
+
+  .auth-header h1 {
+    font-size: 22px;
+  }
+}

@@ -23,6 +23,7 @@ export function UserLayout() {
     const location = useLocation();
     const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -37,6 +38,11 @@ export function UserLayout() {
         fetchLinks();
     }, []);
 
+    // Close mobile menu when changing location
+    useEffect(() => {
+        setIsMobileMenuOpen(false);
+    }, [location]);
+
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -50,60 +56,86 @@ export function UserLayout() {
     return (
         <div className="user-layout">
             <header className="user-header">
-                <div className="header-left">
+                <div className="header-logo">
                     <h1>AI Teaching Assistant</h1>
-                    <nav className="header-nav">
-                        {menuItems.map((item) => (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
-                            >
-                                <span>{item.icon}</span>
-                                {item.label}
-                            </Link>
-                        ))}
-                        
-                        {usefulLinks.length > 0 && (
-                            <div className="nav-dropdown" ref={dropdownRef}>
-                                <button 
-                                    className={`nav-link dropdown-toggle ${isDropdownOpen ? 'open' : ''}`}
-                                    onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                                >
-                                    <span>🧰</span>
-                                    Công cụ
-                                    <span className="dropdown-arrow">▼</span>
-                                </button>
-                                {isDropdownOpen && (
-                                    <div className="dropdown-menu">
-                                        {usefulLinks.map(link => (
-                                            <a 
-                                                key={link.id} 
-                                                href={link.url} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer"
-                                                className="dropdown-item"
-                                            >
-                                                <span className="item-icon">{link.icon}</span>
-                                                <div className="item-content">
-                                                    <span className="item-title">{link.title}</span>
-                                                    {link.description && <span className="item-desc">{link.description}</span>}
-                                                </div>
-                                            </a>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </nav>
                 </div>
 
-                <div className="header-right">
-                    <span className="user-email">{user?.email}</span>
-                    {user?.role === 'ADMIN' && (
-                        <Link to="/admin" className="admin-link">Admin</Link>
-                    )}
-                    <button className="logout-btn" onClick={logout}>Logout</button>
+                {/* Hamburger menu button */}
+                <button 
+                    className={`mobile-menu-toggle ${isMobileMenuOpen ? 'active' : ''}`}
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    aria-label="Toggle menu"
+                >
+                    <span className="bar"></span>
+                    <span className="bar"></span>
+                    <span className="bar"></span>
+                </button>
+
+                {/* Mobile menu overlay */}
+                {isMobileMenuOpen && (
+                    <div 
+                        className="mobile-menu-overlay" 
+                        onClick={() => setIsMobileMenuOpen(false)}
+                    />
+                )}
+
+                <div className={`header-navigation-wrapper ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+                    <div className="header-left">
+                        <nav className="header-nav">
+                            {menuItems.map((item) => (
+                                <Link
+                                    key={item.path}
+                                    to={item.path}
+                                    className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
+                                    onClick={() => setIsMobileMenuOpen(false)}
+                                >
+                                    <span>{item.icon}</span>
+                                    {item.label}
+                                </Link>
+                            ))}
+                            
+                            {usefulLinks.length > 0 && (
+                                <div className="nav-dropdown" ref={dropdownRef}>
+                                    <button 
+                                        className={`nav-link dropdown-toggle ${isDropdownOpen ? 'open' : ''}`}
+                                        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                    >
+                                        <span>🧰</span>
+                                        Công cụ
+                                        <span className="dropdown-arrow">▼</span>
+                                    </button>
+                                    {isDropdownOpen && (
+                                        <div className="dropdown-menu">
+                                            {usefulLinks.map(link => (
+                                                <a 
+                                                    key={link.id} 
+                                                    href={link.url} 
+                                                    target="_blank" 
+                                                    rel="noopener noreferrer"
+                                                    className="dropdown-item"
+                                                    onClick={() => setIsMobileMenuOpen(false)}
+                                                >
+                                                    <span className="item-icon">{link.icon}</span>
+                                                    <div className="item-content">
+                                                        <span className="item-title">{link.title}</span>
+                                                        {link.description && <span className="item-desc">{link.description}</span>}
+                                                    </div>
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </nav>
+                    </div>
+
+                    <div className="header-right">
+                        <span className="user-email">{user?.email}</span>
+                        {user?.role === 'ADMIN' && (
+                            <Link to="/admin" className="admin-link" onClick={() => setIsMobileMenuOpen(false)}>Admin</Link>
+                        )}
+                        <button className="logout-btn" onClick={() => { setIsMobileMenuOpen(false); logout(); }}>Logout</button>
+                    </div>
                 </div>
             </header>
 

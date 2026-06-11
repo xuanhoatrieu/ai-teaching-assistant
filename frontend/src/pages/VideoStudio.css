@@ -65,6 +65,108 @@
 @media (max-width: 768px) {
     .wizard-step-label { display: none; }
     .wizard-step { padding: 10px 14px; }
+
+    .video-studio-page {
+        max-width: 100%;
+    }
+
+    .step-actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .step-actions button {
+        width: 100%;
+        min-height: 44px;
+    }
+
+    .video-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .stat-item {
+        padding: 10px;
+    }
+
+    .stat-value {
+        font-size: 15px;
+    }
+
+    .script-action-bar {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .script-action-bar-info {
+        flex-wrap: wrap;
+    }
+
+    .script-action-bar-buttons {
+        flex-wrap: wrap;
+    }
+
+    .script-action-bar-buttons button {
+        min-height: 44px;
+        flex: 1;
+    }
+
+    .scene-render-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .scene-render-actions {
+        flex-wrap: wrap;
+    }
+
+    .scene-render-actions button {
+        min-height: 40px;
+        flex: 1;
+    }
+
+    .output-actions {
+        flex-direction: column;
+    }
+
+    .output-actions button,
+    .output-actions a {
+        width: 100%;
+        min-height: 44px;
+        text-align: center;
+        justify-content: center;
+    }
+
+    .config-summary {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .text-edit-modal {
+        width: 95%;
+        padding: 16px;
+    }
+
+    .generate-btn {
+        width: 100%;
+        font-size: 15px;
+        padding: 12px 20px;
+    }
+
+    .render-btn {
+        width: 100%;
+    }
+
+    .step-actions-right {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .step-actions-right button {
+        flex: 1;
+    }
 }
 
 /* ─── Studio Step ────────────────────── */

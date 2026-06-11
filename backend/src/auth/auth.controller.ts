@@ -2,6 +2,7 @@ import {
     Controller,
     Post,
     Get,
+    Put,
     Body,
     UseGuards,
     HttpCode,
@@ -50,5 +51,15 @@ export class AuthController {
     @Roles(UserRole.ADMIN)
     async getAdminData() {
         return { message: 'This is admin-only data' };
+    }
+
+    @Put('profile')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async updateProfile(
+        @CurrentUser('id') userId: string,
+        @Body() dto: { fullName: string; phone: string; organization: string }
+    ) {
+        return this.authService.updateProfile(userId, dto);
     }
 }
