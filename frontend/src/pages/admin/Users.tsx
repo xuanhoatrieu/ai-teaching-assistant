@@ -21,6 +21,13 @@ export function UsersPage() {
     const [error, setError] = useState('');
     const [actionLoading, setActionLoading] = useState<string | null>(null);
 
+    // Reset password modal state
+    const [resettingUser, setResettingUser] = useState<User | null>(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [resetSuccess, setResetSuccess] = useState('');
+    const [resetError, setResetError] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+
     useEffect(() => {
         fetchUsers();
     }, []);
@@ -72,6 +79,44 @@ export function UsersPage() {
             setError(err.response?.data?.message || 'Xóa tài khoản thất bại.');
         } finally {
             setActionLoading(null);
+        }
+    };
+
+    const handleOpenResetModal = (user: User) => {
+        setResettingUser(user);
+        setNewPassword('');
+        setResetSuccess('');
+        setResetError('');
+    };
+
+    const handleCloseResetModal = () => {
+        setResettingUser(null);
+    };
+
+    const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!resettingUser) return;
+        if (newPassword.length < 6) {
+            setResetError('Mật khẩu phải từ 6 ký tự trở lên.');
+            return;
+        }
+
+        setIsResetting(true);
+        setResetError('');
+        setResetSuccess('');
+
+        try {
+            await api.patch(`/admin/users/${resettingUser.id}/reset-password`, {
+                password: newPassword,
+            });
+            setResetSuccess(`Đã đặt lại mật khẩu thành công cho tài khoản ${resettingUser.email}`);
+            setTimeout(() => {
+                handleCloseResetModal();
+            }, 2000);
+        } catch (err: any) {
+            setResetError(err.response?.data?.message || 'Có lỗi xảy ra khi đặt lại mật khẩu.');
+        } finally {
+            setIsResetting(false);
         }
     };
 
@@ -171,6 +216,21 @@ export function UsersPage() {
                                                     </button>
                                                 </>
                                             )}
+                                            <button
+                                                onClick={() => handleOpenResetModal(user)}
+                                                disabled={actionLoading !== null}
+                                                style={{
+                                                    padding: '4px 8px',
+                                                    backgroundColor: '#3b82f6',
+                                                    color: 'white',
+                                                    border: 'none',
+                                                    borderRadius: '4px',
+                                                    cursor: 'pointer',
+                                                    fontSize: '0.8rem'
+                                                }}
+                                            >
+                                                Reset MK
+                                            </button>
                                             {user.id !== currentUser?.id && (
                                                 <button
                                                     onClick={() => handleDelete(user.id, user.email)}
@@ -196,6 +256,68 @@ export function UsersPage() {
                     </tbody>
                 </table>
             </div>
+
+            {/* Reset Password Modal */}
+            {resettingUser && (
+                <div className="modal-overlay" onClick={handleCloseResetModal} style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 1000
+                }}>
+                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{
+                        backgroundColor: 'white',
+                        padding: '24px',
+                        borderRadius: '8px',
+                        width: '400px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                    }}>
+                        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Đặt lại mật khẩu</h2>
+                            <button onClick={handleCloseResetModal} style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0 }}>×</button>
+                        </div>
+
+                        <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '16px', marginTop: 0 }}>
+                            Thay đổi mật khẩu cho tài khoản: <strong>{resettingUser.email}</strong>
+                        </p>
+
+                        {resetError && <div className="error-banner" style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '4px', fontSize: '0.85rem' }}>{resetError}</div>}
+                        {resetSuccess && <div className="success-banner" style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '4px', fontSize: '0.85rem' }}>{resetSuccess}</div>}
+
+                        {!resetSuccess && (
+                            <form onSubmit={handleResetPasswordSubmit}>
+                                <div className="form-group" style={{ marginBottom: '16px' }}>
+                                    <label htmlFor="new-pass" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '6px', textAlign: 'left' }}>Mật khẩu mới *</label>
+                                    <input
+                                        id="new-pass"
+                                        type="text"
+                                        value={newPassword}
+                                        onChange={e => setNewPassword(e.target.value)}
+                                        placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
+                                        required
+                                        style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+
+                                <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                                    <button type="button" className="secondary-btn" onClick={handleCloseResetModal} style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        Hủy
+                                    </button>
+                                    <button type="submit" disabled={isResetting} style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', background: '#3b82f6', color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                        {isResetting ? 'Đang cập nhật...' : 'Xác nhận'}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

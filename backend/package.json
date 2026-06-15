@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "1.5.9",
+  "version": "1.5.10",
   "description": "",
   "author": "",
   "private": true,
@@ -48,6 +48,7 @@
     "marked": "^18.0.3",
     "minio": "^8.0.7",
     "multer": "^2.0.2",
+    "nodemailer": "^9.0.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "pg": "^8.17.2",
@@ -68,6 +69,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
+    "@types/nodemailer": "^8.0.1",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",

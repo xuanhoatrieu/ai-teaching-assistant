@@ -101,6 +101,30 @@ export class SystemConfigService {
     }
 
     /**
+     * Get SMTP specific configs
+     */
+    async getSMTPConfig(): Promise<{
+        enabled: boolean;
+        host: string;
+        port: string;
+        user: string;
+        pass: string;
+        from: string;
+    }> {
+        const configs = await this.getByPrefix('smtp.');
+        const configMap = new Map(configs.map(c => [c.key, c.value]));
+
+        return {
+            enabled: configMap.get('smtp.enabled') === 'true',
+            host: configMap.get('smtp.host') || '',
+            port: configMap.get('smtp.port') || '587',
+            user: configMap.get('smtp.user') || '',
+            pass: configMap.get('smtp.pass') || '',
+            from: configMap.get('smtp.from') || '',
+        };
+    }
+
+    /**
      * Initialize default CLIProxy config
      */
     async initializeCLIProxyDefaults(): Promise<void> {

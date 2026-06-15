@@ -1,10 +1,12 @@
-import { Controller, Get, Put, Body, UseGuards, Logger } from '@nestjs/common';
+import { Controller, Get, Put, Body, UseGuards, Logger, Req } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemConfigService } from './system-config.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { EmailService } from '../common/email.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 export class UpdateCLIProxyConfigDto {
     @IsOptional()
@@ -53,6 +55,32 @@ export class UpdateImageGenConfigDto {
     steps?: number;
 }
 
+export class UpdateSMTPConfigDto {
+    @IsOptional()
+    @IsBoolean()
+    enabled?: boolean;
+
+    @IsOptional()
+    @IsString()
+    host?: string;
+
+    @IsOptional()
+    @IsString()
+    port?: string;
+
+    @IsOptional()
+    @IsString()
+    user?: string;
+
+    @IsOptional()
+    @IsString()
+    pass?: string;
+
+    @IsOptional()
+    @IsString()
+    from?: string;
+}
+
 @Controller('admin/config')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
@@ -62,6 +90,7 @@ export class SystemConfigController {
     constructor(
         private readonly configService: SystemConfigService,
         private readonly apiKeysService: ApiKeysService,
+        private readonly emailService: EmailService,
     ) { }
 
     /**
@@ -493,6 +522,63 @@ export class SystemConfigController {
                 success: false,
                 message: `❌ ViTTS error: ${msg}`,
             };
+        }
+    }
+
+    /**
+     * Get SMTP configuration
+     */
+    @Get('smtp')
+    async getSMTPConfig() {
+        const config = await this.configService.getSMTPConfig();
+        return {
+            ...config,
+            pass: config.pass ? '***' + config.pass.slice(-3) : '',
+        };
+    }
+
+    /**
+     * Update SMTP configuration
+     */
+    @Put('smtp')
+    async updateSMTPConfig(@Body() dto: UpdateSMTPConfigDto) {
+        this.logger.log(`Updating SMTP config: ${JSON.stringify({ ...dto, pass: dto.pass ? '***' : undefined })}`);
+
+        if (dto.enabled !== undefined) {
+            await this.configService.set('smtp.enabled', String(dto.enabled));
+        }
+        if (dto.host !== undefined) {
+            await this.configService.set('smtp.host', dto.host);
+        }
+        if (dto.port !== undefined) {
+            await this.configService.set('smtp.port', dto.port);
+        }
+        if (dto.user !== undefined) {
+            await this.configService.set('smtp.user', dto.user);
+        }
+        if (dto.pass !== undefined) {
+            await this.configService.set('smtp.pass', dto.pass);
+        }
+        if (dto.from !== undefined) {
+            await this.configService.set('smtp.from', dto.from);
+        }
+
+        return { success: true, message: 'SMTP configuration updated' };
+    }
+
+    /**
+     * Test SMTP connection by sending a test email to the current admin user
+     */
+    @Get('smtp/test')
+    async testSMTPConnection(@CurrentUser('email') email: string) {
+        if (!email) {
+            return { success: false, message: 'Không xác định được email người nhận (Admin).' };
+        }
+        try {
+            await this.emailService.sendTestEmail(email);
+            return { success: true, message: `✅ Đã gửi email test thành công tới ${email}` };
+        } catch (error: any) {
+            return { success: false, message: error.message };
         }
     }
 }

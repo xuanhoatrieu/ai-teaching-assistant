@@ -546,6 +546,100 @@ function ProfileSection() {
     );
 }
 
+function ChangePasswordSection() {
+    const [oldPassword, setOldPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setMessage('');
+
+        if (newPassword !== confirmPassword) {
+            setError('Mật khẩu xác nhận không trùng khớp.');
+            return;
+        }
+
+        if (newPassword.length < 6) {
+            setError('Mật khẩu mới phải có ít nhất 6 ký tự.');
+            return;
+        }
+
+        setIsSaving(true);
+
+        try {
+            await api.post('/auth/change-password', {
+                oldPassword,
+                newPassword,
+            });
+            setMessage('Đổi mật khẩu thành công!');
+            setOldPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Lỗi khi đổi mật khẩu.');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <section className="settings-section">
+            <h2>🔑 Đổi mật khẩu</h2>
+            <p className="section-desc">
+                Cập nhật mật khẩu để bảo vệ tài khoản của thầy/cô
+            </p>
+
+            {error && <div className="settings-message error">{error}</div>}
+            {message && <div className="settings-message success">{message}</div>}
+
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
+                    <label>Mật khẩu hiện tại *</label>
+                    <input
+                        type="password"
+                        value={oldPassword}
+                        onChange={e => setOldPassword(e.target.value)}
+                        placeholder="Nhập mật khẩu hiện tại"
+                        required
+                    />
+                </div>
+                <div className="form-row">
+                    <div className="form-group">
+                        <label>Mật khẩu mới *</label>
+                        <input
+                            type="password"
+                            value={newPassword}
+                            onChange={e => setNewPassword(e.target.value)}
+                            placeholder="Ít nhất 6 ký tự"
+                            required
+                        />
+                    </div>
+                    <div className="form-group">
+                        <label>Xác nhận mật khẩu mới *</label>
+                        <input
+                            type="password"
+                            value={confirmPassword}
+                            onChange={e => setConfirmPassword(e.target.value)}
+                            placeholder="Nhập lại mật khẩu mới"
+                            required
+                        />
+                    </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                    <button type="submit" className="btn-save-config" disabled={isSaving}>
+                        {isSaving ? '⏳ Đang lưu...' : '💾 Đổi mật khẩu'}
+                    </button>
+                </div>
+            </form>
+        </section>
+    );
+}
+
 export function UserSettingsPage() {
     const [keys, setKeys] = useState<UserApiKey[]>([]);
     const [serviceStatus, setServiceStatus] = useState<Record<string, boolean>>({});
@@ -693,6 +787,9 @@ export function UserSettingsPage() {
 
             {/* Profile Info Section */}
             <ProfileSection />
+
+            {/* Change Password Section */}
+            <ChangePasswordSection />
 
             {/* Service Status Cards */}
             <section className="settings-section">

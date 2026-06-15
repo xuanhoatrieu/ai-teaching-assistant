@@ -67,6 +67,12 @@ export function LoginPage() {
                         />
                     </div>
 
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-8px', marginBottom: '16px' }}>
+                        <Link to="/forgot-password" style={{ fontSize: '0.875rem', textDecoration: 'none', color: '#2563eb' }}>
+                            Quên mật khẩu?
+                        </Link>
+                    </div>
+
                     <button type="submit" className="auth-button" disabled={isLoading}>
                         {isLoading ? 'Signing in...' : 'Sign In'}
                     </button>

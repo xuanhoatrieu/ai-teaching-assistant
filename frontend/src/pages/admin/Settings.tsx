@@ -74,12 +74,38 @@ export function SettingsPage() {
     const [isTestingVitts, setIsTestingVitts] = useState(false);
     const [isSavingVitts, setIsSavingVitts] = useState(false);
 
+    // SMTP state
+    const [smtpEnabled, setSmtpEnabled] = useState(false);
+    const [smtpHost, setSmtpHost] = useState('');
+    const [smtpPort, setSmtpPort] = useState('587');
+    const [smtpUser, setSmtpUser] = useState('');
+    const [smtpPass, setSmtpPass] = useState('');
+    const [smtpFrom, setSmtpFrom] = useState('');
+    const [smtpTestResult, setSmtpTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [isTestingSmtp, setIsTestingSmtp] = useState(false);
+    const [isSavingSmtp, setIsSavingSmtp] = useState(false);
+
     useEffect(() => {
         fetchSettings();
         fetchCLIProxyConfig();
         fetchImageGenConfig();
         fetchViTTSConfig();
+        fetchSMTPConfig();
     }, []);
+
+    const fetchSMTPConfig = async () => {
+        try {
+            const response = await api.get('/admin/config/smtp');
+            const config = response.data;
+            setSmtpEnabled(config.enabled);
+            setSmtpHost(config.host || '');
+            setSmtpPort(config.port || '587');
+            setSmtpUser(config.user || '');
+            setSmtpFrom(config.from || '');
+        } catch (err) {
+            console.error('Failed to fetch SMTP config:', err);
+        }
+    };
 
     const fetchSettings = async () => {
         try {
@@ -326,6 +352,55 @@ export function SettingsPage() {
             });
         } finally {
             setIsTestingVitts(false);
+        }
+    };
+
+    const handleSaveSMTP = async () => {
+        setIsSavingSmtp(true);
+        setMessage('');
+        try {
+            await api.put('/admin/config/smtp', {
+                enabled: smtpEnabled,
+                host: smtpHost || undefined,
+                port: smtpPort || undefined,
+                user: smtpUser || undefined,
+                pass: smtpPass || undefined,
+                from: smtpFrom || undefined,
+            });
+            setMessage('Đã lưu cấu hình SMTP thành công!');
+            setSmtpPass('');
+            await fetchSMTPConfig();
+        } catch (err: any) {
+            setMessage(err.response?.data?.message || 'Không thể lưu cấu hình SMTP');
+        } finally {
+            setIsSavingSmtp(false);
+        }
+    };
+
+    const handleTestSMTP = async () => {
+        setIsTestingSmtp(true);
+        setSmtpTestResult(null);
+        try {
+            await api.put('/admin/config/smtp', {
+                enabled: smtpEnabled,
+                host: smtpHost || undefined,
+                port: smtpPort || undefined,
+                user: smtpUser || undefined,
+                pass: smtpPass || undefined,
+                from: smtpFrom || undefined,
+            });
+            setSmtpPass('');
+
+            const response = await api.get('/admin/config/smtp/test');
+            setSmtpTestResult(response.data);
+            await fetchSMTPConfig();
+        } catch (err: any) {
+            setSmtpTestResult({
+                success: false,
+                message: err.response?.data?.message || 'Test kết nối SMTP thất bại',
+            });
+        } finally {
+            setIsTestingSmtp(false);
         }
     };
 
@@ -672,6 +747,112 @@ export function SettingsPage() {
                         {vittsTestResult && (
                             <div className={`test-result ${vittsTestResult.success ? 'success' : 'error'}`}>
                                 {vittsTestResult.success ? '✅' : '❌'} {vittsTestResult.message}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* SMTP Config Section */}
+            <div className="settings-section cliproxy-section">
+                <h2>📧 SMTP Email Configuration</h2>
+                <p className="section-desc">
+                    Cấu hình máy chủ gửi thư SMTP để phục vụ tính năng Quên mật khẩu và Khôi phục tài khoản.
+                </p>
+
+                <div className="setting-group">
+                    <label className="toggle-label">
+                        <input
+                            type="checkbox"
+                            checked={smtpEnabled}
+                            onChange={(e) => setSmtpEnabled(e.target.checked)}
+                        />
+                        <span>Kích hoạt SMTP</span>
+                        {smtpEnabled && <span className="status-badge enabled">Hoạt động</span>}
+                        {!smtpEnabled && <span className="status-badge disabled">Tắt</span>}
+                    </label>
+                </div>
+
+                {smtpEnabled && (
+                    <>
+                        <div className="form-row" style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                            <div className="setting-group" style={{ flex: 3, marginBottom: 0 }}>
+                                <label htmlFor="smtp-host">SMTP Host</label>
+                                <input
+                                    id="smtp-host"
+                                    type="text"
+                                    value={smtpHost}
+                                    onChange={(e) => setSmtpHost(e.target.value)}
+                                    placeholder="VD: smtp.gmail.com"
+                                />
+                            </div>
+                            <div className="setting-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label htmlFor="smtp-port">Port</label>
+                                <input
+                                    id="smtp-port"
+                                    type="text"
+                                    value={smtpPort}
+                                    onChange={(e) => setSmtpPort(e.target.value)}
+                                    placeholder="587"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="form-row" style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                            <div className="setting-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label htmlFor="smtp-user">Username / Email</label>
+                                <input
+                                    id="smtp-user"
+                                    type="text"
+                                    value={smtpUser}
+                                    onChange={(e) => setSmtpUser(e.target.value)}
+                                    placeholder="VD: user@gmail.com"
+                                />
+                            </div>
+                            <div className="setting-group" style={{ flex: 1, marginBottom: 0 }}>
+                                <label htmlFor="smtp-pass">Password</label>
+                                <input
+                                    id="smtp-pass"
+                                    type="password"
+                                    value={smtpPass}
+                                    onChange={(e) => setSmtpPass(e.target.value)}
+                                    placeholder="Nhập mật khẩu (hoặc App Password)"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="smtp-from">Email gửi từ (Sender Email / Name)</label>
+                            <input
+                                id="smtp-from"
+                                type="text"
+                                value={smtpFrom}
+                                onChange={(e) => setSmtpFrom(e.target.value)}
+                                placeholder='VD: "AI Teaching Assistant" <sender@gmail.com>'
+                            />
+                            <p className="help-text">Định dạng chuẩn: "Tên hiển thị" &lt;email@gmail.com&gt;</p>
+                        </div>
+
+                        <div className="button-group">
+                            <button
+                                className="secondary-btn"
+                                onClick={handleTestSMTP}
+                                disabled={isTestingSmtp}
+                            >
+                                {isTestingSmtp ? '⏳ Đang thử...' : '🔍 Gửi Email Test'}
+                            </button>
+                            <button
+                                className="primary-btn"
+                                onClick={handleSaveSMTP}
+                                disabled={isSavingSmtp}
+                            >
+                                {isSavingSmtp ? 'Đang lưu...' : 'Lưu Cấu Hình SMTP'}
+                            </button>
+                        </div>
+
+                        {smtpTestResult && (
+                            <div className={`test-result ${smtpTestResult.success ? 'success' : 'error'}`}>
+                                {smtpTestResult.success ? '✅' : '❌'} {smtpTestResult.message}
                             </div>
                         )}
                     </>

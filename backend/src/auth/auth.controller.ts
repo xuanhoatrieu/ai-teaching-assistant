@@ -7,10 +7,14 @@ import {
     UseGuards,
     HttpCode,
     HttpStatus,
+    Headers,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
@@ -61,5 +65,30 @@ export class AuthController {
         @Body() dto: { fullName: string; phone: string; organization: string }
     ) {
         return this.authService.updateProfile(userId, dto);
+    }
+
+    @Post('change-password')
+    @UseGuards(JwtAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async changePassword(
+        @CurrentUser('id') userId: string,
+        @Body() dto: ChangePasswordDto
+    ) {
+        return this.authService.changePassword(userId, dto);
+    }
+
+    @Post('forgot-password')
+    @HttpCode(HttpStatus.OK)
+    async forgotPassword(
+        @Body() dto: ForgotPasswordDto,
+        @Headers('origin') origin: string
+    ) {
+        return this.authService.forgotPassword(dto, origin);
+    }
+
+    @Post('reset-password')
+    @HttpCode(HttpStatus.OK)
+    async resetPassword(@Body() dto: ResetPasswordDto) {
+        return this.authService.resetPassword(dto);
     }
 }

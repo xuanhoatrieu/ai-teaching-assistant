@@ -6,12 +6,14 @@ import {
     Param,
     Body,
     UseGuards,
+    BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 
 @Controller('admin/users')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -83,6 +85,25 @@ export class UsersController {
                 id: true,
                 email: true,
                 role: true,
+            },
+        });
+    }
+
+    @Patch(':id/reset-password')
+    async resetPassword(
+        @Param('id') id: string,
+        @Body() body: { password?: string },
+    ) {
+        if (!body.password || body.password.length < 6) {
+            throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự.');
+        }
+        const passwordHash = await bcrypt.hash(body.password, 10);
+        return this.prisma.user.update({
+            where: { id },
+            data: { passwordHash },
+            select: {
+                id: true,
+                email: true,
             },
         });
     }
