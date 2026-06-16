@@ -1045,3 +1045,230 @@
         min-height: 44px;
     }
 }
+
+/* ================================================
+   Visual Table Editor Styles
+   ================================================ */
+
+.editor-mode-selector {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 0.75rem;
+}
+
+.btn-mode-toggle {
+    padding: 0.4rem 0.8rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-mode-toggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+.btn-mode-toggle.active {
+    background: rgba(100, 181, 246, 0.15);
+    border-color: rgba(100, 181, 246, 0.3);
+    color: #90caf9;
+    font-weight: 500;
+}
+
+.visual-table-editor-wrapper {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+.table-text-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+
+.table-text-field .field-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 500;
+}
+
+.table-text-input {
+    width: 100%;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.88rem;
+    box-sizing: border-box;
+}
+
+.table-text-input:focus {
+    outline: none;
+    border-color: rgba(100, 181, 246, 0.4);
+}
+
+.table-text-textarea {
+    width: 100%;
+    padding: 0.5rem;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: #fff;
+    font-size: 0.88rem;
+    font-family: inherit;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.table-text-textarea:focus {
+    outline: none;
+    border-color: rgba(100, 181, 246, 0.4);
+}
+
+.table-editor-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.btn-table-action {
+    padding: 0.35rem 0.7rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-table-action:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.table-editor-scrollable {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.visual-table-editor-grid {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.visual-table-editor-grid th,
+.visual-table-editor-grid td {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.4rem;
+    vertical-align: middle;
+}
+
+.visual-table-editor-grid th {
+    background: rgba(100, 181, 246, 0.08);
+    color: #90caf9;
+    font-weight: 600;
+}
+
+.table-editor-header-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.table-editor-header-input {
+    flex: 1;
+    min-width: 80px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 2px 4px;
+}
+
+.table-editor-header-input:focus {
+    outline: none;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(100, 181, 246, 0.3);
+    border-radius: 4px;
+}
+
+.btn-delete-col {
+    background: none;
+    border: none;
+    color: rgba(244, 67, 54, 0.6);
+    cursor: pointer;
+    font-size: 0.75rem;
+    padding: 2px 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.btn-delete-col:hover {
+    background: rgba(244, 67, 54, 0.15);
+    color: #ff8a80;
+}
+
+.table-editor-cell-textarea {
+    width: 100%;
+    min-width: 120px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    padding: 4px;
+    resize: vertical;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.table-editor-cell-textarea:focus {
+    outline: none;
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(100, 181, 246, 0.3);
+    border-radius: 4px;
+}
+
+.action-col-header {
+    width: 45px;
+    text-align: center;
+}
+
+.action-col-cell {
+    text-align: center;
+}
+
+.btn-delete-row {
+    background: none;
+    border: none;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    font-size: 0.85rem;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.btn-delete-row:hover {
+    opacity: 1;
+    background: rgba(244, 67, 54, 0.15);
+}
+
