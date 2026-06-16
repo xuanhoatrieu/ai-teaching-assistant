@@ -20,7 +20,7 @@ NC='\033[0m' # No Color
 
 # ── Service definitions ──
 start_backend() {
-    echo -e "${BLUE}🔧 Starting Backend (NestJS :3001)...${NC}"
+    echo -e "${BLUE}🔧 Starting Backend (NestJS :3003)...${NC}"
     cd "$BASE_DIR/backend"
     nohup npm run start:dev > "$LOGS_DIR/backend.log" 2>&1 &
     echo $! > "$PIDS_DIR/backend.pid"
@@ -69,7 +69,7 @@ stop_all() {
         fi
     done
     # Also kill any leftover processes on our ports
-    for port in 3001 3002 5173; do
+    for port in 3003 3002 5173; do
         pids=$(lsof -ti :$port 2>/dev/null)
         if [ -n "$pids" ]; then
             echo "$pids" | xargs kill 2>/dev/null
@@ -89,7 +89,7 @@ stop_all() {
 check_status() {
     echo -e "${BLUE}📊 Service Status:${NC}"
     echo "─────────────────────────────────────"
-    for svc_info in "backend:3001:NestJS" "frontend:5173:Vite" "pptx:3002:Uvicorn" "worker:0:Vid-Worker"; do
+    for svc_info in "backend:3003:NestJS" "frontend:5173:Vite" "pptx:3002:Uvicorn" "worker:0:Vid-Worker"; do
         svc=$(echo "$svc_info" | cut -d: -f1)
         port=$(echo "$svc_info" | cut -d: -f2)
         label=$(echo "$svc_info" | cut -d: -f3)
@@ -123,9 +123,10 @@ case "${1:-start}" in
         stop_all 2>/dev/null
         echo ""
         # Install any new dependencies
-        echo -e "${BLUE}📦 Installing dependencies...${NC}"
-        cd "$BASE_DIR/backend" && npm install --silent 2>/dev/null
-        cd "$BASE_DIR/frontend" && npm install --silent 2>/dev/null
+        echo -e "${BLUE}📦 Checking and installing backend dependencies (this may take a moment)...${NC}"
+        cd "$BASE_DIR/backend" && npm install --no-audit --no-fund
+        echo -e "${BLUE}📦 Checking and installing frontend dependencies (this may take a moment)...${NC}"
+        cd "$BASE_DIR/frontend" && npm install --no-audit --no-fund
 
         # Sync database schema (adds new tables/columns, NEVER drops existing data)
         echo -e "${BLUE}🗄️  Syncing database schema...${NC}"
@@ -144,7 +145,7 @@ case "${1:-start}" in
         echo "═══════════════════════════════════════════════════"
         echo -e "${GREEN}✅ All services started!${NC}"
         echo ""
-        echo -e "   🔧 Backend:   ${BLUE}http://localhost:3001${NC}"
+        echo -e "   🔧 Backend:   ${BLUE}http://localhost:3003${NC}"
         echo -e "   🎨 Frontend:  ${BLUE}http://localhost:5173${NC}"
         echo -e "   📄 PPTX:      ${BLUE}http://localhost:3002${NC}"
         echo -e "   🎬 Worker:    ${GREEN}vid-worker (Redis queue)${NC}"

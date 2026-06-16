@@ -8,7 +8,7 @@ export default defineConfig({
     host: true, // Listen on all local IPs
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3003',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
         // Increase proxy timeout for long-running AI requests (speaker notes, optimization)
@@ -29,7 +29,7 @@ export default defineConfig({
       },
       // Proxy /files to backend for serving static files (audio, images)
       '/files': {
-        target: 'http://localhost:3001',
+        target: 'http://localhost:3003',
         changeOrigin: true,
       },
     },

@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiProviderService } from '../ai/ai-provider.service';
 import { ImagenService } from '../ai/imagen.service';
@@ -358,8 +358,20 @@ export class SyllabusService {
     /**
      * Upload a reference file, convert via MarkItDown, save to DB.
      */
-    async uploadReference(syllabusId: string, file: Express.Multer.File) {
+    async uploadReference(syllabusId: string, userId: string, file: Express.Multer.File) {
         this.logger.log(`Uploading reference for syllabus ${syllabusId}: ${file.originalname}`);
+
+        // Step 0: Validate syllabus existence and ownership
+        const syllabus = await this.prisma.syllabus.findUnique({
+            where: { id: syllabusId },
+            include: { subject: { select: { userId: true } } },
+        });
+        if (!syllabus) {
+            throw new BadRequestException('Đề cương không tồn tại hoặc đã bị xóa. Vui lòng tải lại trang.');
+        }
+        if (syllabus.subject.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền truy cập đề cương này.');
+        }
 
         // Save file to disk
         const { writeFile, mkdir } = await import('fs/promises');
@@ -383,23 +395,24 @@ export class SyllabusService {
             },
         });
 
-        // Convert via MarkItDown (async, update status when done)
-        try {
-            const markdown = await this.markItDown.convertToMarkdown(file.buffer, file.originalname);
-            await this.prisma.syllabusReference.update({
-                where: { id: ref.id },
-                data: { markdownContent: markdown, status: 'done' },
+        // Convert via MarkItDown asynchronously in the background to prevent HTTP timeouts
+        this.markItDown.convertToMarkdown(file.buffer, file.originalname)
+            .then(async (markdown) => {
+                await this.prisma.syllabusReference.update({
+                    where: { id: ref.id },
+                    data: { markdownContent: markdown, status: 'done' },
+                });
+                this.logger.log(`Reference ${ref.id}: MarkItDown done (${markdown.length} chars)`);
+            })
+            .catch(async (err) => {
+                this.logger.error(`Reference ${ref.id}: MarkItDown failed: ${err.message}`);
+                await this.prisma.syllabusReference.update({
+                    where: { id: ref.id },
+                    data: { status: 'error' },
+                });
             });
-            this.logger.log(`Reference ${ref.id}: MarkItDown done (${markdown.length} chars)`);
-            return this.prisma.syllabusReference.findUnique({ where: { id: ref.id } });
-        } catch (err: any) {
-            this.logger.error(`Reference ${ref.id}: MarkItDown failed: ${err.message}`);
-            await this.prisma.syllabusReference.update({
-                where: { id: ref.id },
-                data: { status: 'error' },
-            });
-            return this.prisma.syllabusReference.findUnique({ where: { id: ref.id } });
-        }
+
+        return ref;
     }
 
     /**
@@ -460,8 +473,20 @@ export class SyllabusService {
      * 4. Bulk update blocks with parsed content.
      * 5. Return updated syllabus.
      */
-    async importFromDocx(subjectId: string, file: Express.Multer.File, modelName: string, userApiKey?: string) {
+    async importFromDocx(subjectId: string, userId: string, file: Express.Multer.File, modelName: string, userApiKey?: string) {
         this.logger.log(`Importing DOCX syllabus for subject ${subjectId}: ${file.originalname}`);
+
+        // Step 0: Validate subject existence and ownership
+        const subject = await this.prisma.subject.findUnique({
+            where: { id: subjectId },
+            select: { userId: true },
+        });
+        if (!subject) {
+            throw new BadRequestException('Môn học không tồn tại hoặc đã bị xóa. Vui lòng tải lại trang.');
+        }
+        if (subject.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền truy cập môn học này.');
+        }
 
         // Step 1: Ensure syllabus exists
         let syllabus = await this.getSyllabus(subjectId);

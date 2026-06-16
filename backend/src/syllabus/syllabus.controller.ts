@@ -86,6 +86,7 @@ export class SyllabusController {
 
         return this.syllabusService.importFromDocx(
             subjectId,
+            user.id,
             file,
             modelConfig.modelName,
             apiKey || undefined,
@@ -156,6 +157,7 @@ export class SyllabusController {
     @UseInterceptors(FileInterceptor('file'))
     async uploadReference(
         @Param('syllabusId') syllabusId: string,
+        @CurrentUser() user: { id: string },
         @UploadedFile(
             new ParseFilePipe({
                 validators: [
@@ -165,7 +167,7 @@ export class SyllabusController {
         )
         file: Express.Multer.File,
     ) {
-        return this.syllabusService.uploadReference(syllabusId, file);
+        return this.syllabusService.uploadReference(syllabusId, user.id, file);
     }
 
     /**
