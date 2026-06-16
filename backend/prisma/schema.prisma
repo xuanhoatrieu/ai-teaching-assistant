@@ -168,7 +168,7 @@ model PPTXTemplate {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   lessons      Lesson[]
-  user         User?    @relation(fields: [userId], references: [id])
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("pptx_templates")
 }
@@ -352,7 +352,7 @@ model VideoGeneration {
   updatedAt      DateTime     @updatedAt @map("updated_at")
   lesson         Lesson?      @relation(fields: [lessonId], references: [id])
   subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id])
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   scenes         VideoScene[]
 
   @@index([subjectId])
@@ -447,7 +447,7 @@ model SyllabusLesson {
   textbookImages  Json?    @map("textbook_images")
   textbookPhase   String?  @map("textbook_phase")
   textbookPlan    String?  @map("textbook_plan")
-  lesson          Lesson?  @relation(fields: [lessonId], references: [id])
+  lesson          Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   syllabus        Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
 
   @@map("syllabus_lessons")
