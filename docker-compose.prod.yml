@@ -70,7 +70,8 @@ services:
       NODE_ENV: production
       PORT: 3001
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres123}@postgres:5432/${POSTGRES_DB:-ai_teaching}
-      REDIS_URL: redis://redis:6379
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-prod}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-your-32-char-encryption-key!!}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
