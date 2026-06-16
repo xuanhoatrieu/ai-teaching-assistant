@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import './ModelSelector.css';
 
-type Provider = 'GEMINI' | 'CLIPROXY' | 'VBEE' | 'VITTS';
+type Provider = 'GEMINI' | 'CLIPROXY' | 'VBEE' | 'VITTS' | string;
 type ViTTSMode = 'auto' | 'clone' | 'design';
 
 interface AvailableModel {
@@ -10,6 +10,7 @@ interface AvailableModel {
     displayName: string;
     description?: string;
     supportedTasks: string[];
+    source?: string;
 }
 
 interface VoiceLibEntry {
@@ -111,21 +112,40 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 .map((m: AvailableModel) => ({ ...m, source: 'CLIProxy' }));
 
             const allTTSModels = [...cliproxyTTS, ...geminiTTS];
+
+            // Discover Custom dynamic models
+            Object.keys(modelsRes.data.models || {}).forEach(key => {
+                if (['GEMINI', 'CLIPROXY', 'IMAGE_GEN', 'VITTS', 'VBEE'].includes(key)) return;
+                
+                const list = modelsRes.data.models[key] || [];
+                const customTTS = list
+                    .filter((m: AvailableModel) => m.supportedTasks.includes('TTS'))
+                    .map((m: AvailableModel) => ({ ...m, source: key }));
+                if (customTTS.length > 0) {
+                    allTTSModels.push(...customTTS);
+                }
+            });
+
             setTtsModels(allTTSModels);
 
             const allVoices = geminiModels.filter((m: AvailableModel) =>
-                m.supportedTasks.includes('TTS_VOICE')
+                m.supportedTasks.includes('TTS_VOICE') ||
+                m.name.startsWith('vbee:') ||
+                m.name.startsWith('vitts:') ||
+                m.name.startsWith('custom_openai:')
             );
             setVoices(allVoices);
 
             // Try to load saved TTS config
             try {
                 const configRes = await api.get('/user/model-config');
-                const savedConfigs = configRes.data || [];
-                const ttsConfig = savedConfigs.find((c: any) => c.taskType === 'TTS');
+                const configs = configRes.data?.configs || {};
+                const defaults = configRes.data?.defaults || {};
+                const ttsConfig = configs.TTS || defaults.TTS;
 
                 if (ttsConfig && ttsConfig.modelName) {
                     const savedVoice = ttsConfig.modelName;
+                    const currentProvider = ttsConfig.provider;
 
                     if (savedVoice.startsWith('vbee:')) {
                         setProvider('VBEE');
@@ -137,18 +157,45 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                         if (savedVoice.startsWith('vitts:ref:')) setVittsMode('clone');
                         else if (savedVoice === 'vitts:design') setVittsMode('design');
                         else if (savedVoice === 'vitts:auto') setVittsMode('auto');
+                    } else if (savedVoice.startsWith('custom_openai:')) {
+                        const parts = savedVoice.split(':');
+                        const providerId = parts[1].toUpperCase();
+                        setProvider(providerId);
+                        setSelectedVoice(savedVoice);
                     } else if (savedVoice.startsWith('gemini-voice:')) {
-                        setProvider(cliproxyTTS.length > 0 ? 'CLIPROXY' : 'GEMINI');
+                        setProvider(currentProvider || (cliproxyTTS.length > 0 ? 'CLIPROXY' : 'GEMINI'));
+                        setSelectedVoice(savedVoice);
+                    } else {
+                        setProvider(currentProvider);
                         setSelectedVoice(savedVoice);
                     }
 
                     if (allTTSModels.length > 0) {
-                        setSelectedModel(allTTSModels[0].name);
+                        const providerPrefix = currentProvider === 'GEMINI' ? '' : 
+                                               currentProvider === 'CLIPROXY' ? 'cliproxy:' : 
+                                               `custom_openai:${currentProvider.toLowerCase()}:`;
+                       
+                        let matchedModel;
+                        if (currentProvider === 'SHOPAIKEY' || (!['GEMINI', 'CLIPROXY', 'VBEE', 'VITTS'].includes(currentProvider))) {
+                            // Determine model based on saved voice type
+                            const isGeminiVoice = ['zephyr', 'puck', 'charon', 'kore', 'aoede'].some(name => savedVoice.toLowerCase().endsWith(':' + name.toLowerCase()));
+                            const modelSuffix = isGeminiVoice ? 'gemini-tts' : 'tts-1';
+                            matchedModel = allTTSModels.find(m => m.name === `custom_openai:${currentProvider.toLowerCase()}:${modelSuffix}`);
+                        }
+                        
+                        if (!matchedModel) {
+                            matchedModel = allTTSModels.find(m => 
+                                providerPrefix === '' 
+                                    ? (!m.name.startsWith('cliproxy:') && !m.name.startsWith('custom_openai:'))
+                                    : m.name.startsWith(providerPrefix)
+                            );
+                        }
+                        setSelectedModel(matchedModel?.name || allTTSModels[0].name);
                     }
                     return;
                 }
             } catch (configErr) {
-                console.log('No saved TTS config found, using defaults');
+                console.log('No saved TTS config found, using defaults', configErr);
             }
 
             // Set defaults
@@ -203,18 +250,26 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 provider: currentProvider,
             };
 
+            const isCustom = !['GEMINI', 'CLIPROXY', 'VBEE', 'VITTS'].includes(currentProvider);
+
             // Voice logic handling
             if (currentProvider === 'VITTS') {
                 if (mode === 'design') {
                     payload.modelName = 'vitts:design';
                     payload.voiceDesignInstruct = buildDesignInstruct();
-                } else if (mode === 'clone' && voice.includes('ref:')) {
-                    // voice is either "ref:UUID" or "vitts:ref:UUID"
-                    const refId = voice.replace('vitts:', '').replace('ref:', '');
-                    payload.modelName = `vitts:ref:${refId}`;
-                } else if (mode === 'auto') {
+                } else if (mode === 'clone') {
+                    // voice is either "ref:UUID", "vitts:ref:UUID" or raw "UUID"
+                    const refId = voice ? voice.replace('vitts:', '').replace('ref:', '') : '';
+                    if (refId) {
+                        payload.modelName = `vitts:ref:${refId}`;
+                    } else {
+                        payload.modelName = 'vitts:auto';
+                    }
+                } else {
                     payload.modelName = 'vitts:auto';
                 }
+            } else if (isCustom) {
+                payload.modelName = voice;
             } else {
                 payload.modelName = voice || (currentProvider === 'GEMINI' ? 'gemini-voice:Puck' : 'vbee:hn_female_thutrang_news_48k-fhg');
             }
@@ -252,6 +307,8 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         let newVoice = '';
         let newModel = selectedModel;
 
+        const isCustom = !['GEMINI', 'CLIPROXY', 'VBEE', 'VITTS'].includes(newProvider);
+
         if (newProvider === 'GEMINI' || newProvider === 'CLIPROXY') {
             const geminiVoices = voices.filter(v => v.name.startsWith('gemini-voice:'));
             newVoice = geminiVoices[0]?.name || '';
@@ -259,7 +316,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 const cliproxyTTS = ttsModels.filter(m => m.name.startsWith('cliproxy:'));
                 newModel = cliproxyTTS[0]?.name || selectedModel;
             } else {
-                const geminiTTS = ttsModels.filter(m => !m.name.startsWith('cliproxy:'));
+                const geminiTTS = ttsModels.filter(m => !m.name.startsWith('cliproxy:') && !m.name.startsWith('custom_openai:'));
                 newModel = geminiTTS[0]?.name || selectedModel;
             }
         } else if (newProvider === 'VBEE') {
@@ -269,15 +326,50 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         } else if (newProvider === 'VITTS') {
             newVoice = 'vitts:auto';
             newModel = 'vitts';
+        } else if (isCustom) {
+            const customVoices = voices.filter(v => v.name.startsWith(`custom_openai:${newProvider.toLowerCase()}:`));
+            const customModels = ttsModels.filter(m => m.name.startsWith(`custom_openai:${newProvider.toLowerCase()}:`));
+            newModel = customModels[0]?.name || selectedModel;
+            
+            let availableVoices = customVoices;
+            if (newProvider === 'SHOPAIKEY') {
+                const isGeminiModel = newModel.endsWith(':gemini-tts') || newModel.includes('gemini');
+                const geminiNames = ['zephyr', 'puck', 'charon', 'kore', 'aoede'];
+                availableVoices = customVoices.filter(v => {
+                    const isGeminiVoice = geminiNames.some(name => v.name.toLowerCase().endsWith(':' + name.toLowerCase()));
+                    return isGeminiModel ? isGeminiVoice : !isGeminiVoice;
+                });
+            }
+            newVoice = availableVoices[0]?.name || '';
         }
 
         setSelectedVoice(newVoice);
+        setSelectedModel(newModel);
         saveConfig(newProvider, newModel, newVoice);
     };
 
     const handleModelChange = (modelName: string) => {
         setSelectedModel(modelName);
-        saveConfig(provider, modelName, selectedVoice);
+        
+        let newVoice = selectedVoice;
+        if (provider === 'SHOPAIKEY') {
+            const isGeminiModel = modelName.endsWith(':gemini-tts') || modelName.includes('gemini');
+            const geminiNames = ['zephyr', 'puck', 'charon', 'kore', 'aoede'];
+            
+            const customVoices = voices.filter(v => v.name.startsWith(`custom_openai:${provider.toLowerCase()}:`));
+            const availableVoices = customVoices.filter(v => {
+                const isGeminiVoice = geminiNames.some(name => v.name.toLowerCase().endsWith(':' + name.toLowerCase()));
+                return isGeminiModel ? isGeminiVoice : !isGeminiVoice;
+            });
+            
+            const isCurrentVoiceValid = availableVoices.some(v => v.name === selectedVoice);
+            if (!isCurrentVoiceValid && availableVoices.length > 0) {
+                newVoice = availableVoices[0].name;
+                setSelectedVoice(newVoice);
+            }
+        }
+        
+        saveConfig(provider, modelName, newVoice);
     };
 
     const handleVoiceChange = (voiceName: string) => {
@@ -308,11 +400,32 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         saveConfig('VITTS', 'vitts', 'vitts:design', 'design');
     };
 
-    const filteredVoices = (provider === 'GEMINI' || provider === 'CLIPROXY')
-        ? voices.filter(v => v.name.startsWith('gemini-voice:'))
-        : provider === 'VBEE'
-            ? voices.filter(v => v.name.startsWith('vbee:'))
-            : voices.filter(v => v.name.startsWith('vitts:'));
+
+    const getFilteredVoices = () => {
+        if (provider === 'GEMINI' || provider === 'CLIPROXY') {
+            return voices.filter(v => v.name.startsWith('gemini-voice:'));
+        }
+        if (provider === 'VBEE') {
+            return voices.filter(v => v.name.startsWith('vbee:'));
+        }
+        if (provider === 'VITTS') {
+            return voices.filter(v => v.name.startsWith('vitts:'));
+        }
+        
+        const allCustomVoices = voices.filter(v => v.name.startsWith(`custom_openai:${provider.toLowerCase()}:`));
+        if (provider === 'SHOPAIKEY') {
+            const isGeminiModel = selectedModel.endsWith(':gemini-tts') || selectedModel.includes('gemini');
+            const geminiNames = ['zephyr', 'puck', 'charon', 'kore', 'aoede'];
+            
+            return allCustomVoices.filter(v => {
+                const isGeminiVoice = geminiNames.some(name => v.name.toLowerCase().endsWith(':' + name.toLowerCase()));
+                return isGeminiModel ? isGeminiVoice : !isGeminiVoice;
+            });
+        }
+        return allCustomVoices;
+    };
+
+    const filteredVoices = getFilteredVoices();
 
     if (isLoading) {
         return (
@@ -349,14 +462,28 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                     >
                         🎙️ ViTTS Local
                     </button>
+                    {Array.from(new Set(
+                        ttsModels
+                            .filter(m => m.source && !['Gemini SDK', 'CLIProxy'].includes(m.source))
+                            .map(m => m.source as string)
+                    )).map((cp) => (
+                        <button
+                            key={cp}
+                            className={`provider-btn ${provider === cp ? 'active' : ''}`}
+                            onClick={() => handleProviderChange(cp)}
+                            disabled={isSaving}
+                        >
+                            ⚡ {cp}
+                        </button>
+                    ))}
                 </div>
                 {saveStatus === 'success' && <span className="save-status success">✓ Đã lưu</span>}
                 {saveStatus === 'error' && <span className="save-status error">✗ Lỗi lưu</span>}
                 {isSaving && <span className="save-status saving">⏳</span>}
             </div>
 
-            {/* Model Selection (Gemini only) */}
-            {(provider === 'GEMINI' || provider === 'CLIPROXY') && ttsModels.length > 0 && (
+            {/* Model Selection */}
+            {(provider === 'GEMINI' || provider === 'CLIPROXY' || !['VBEE', 'VITTS'].includes(provider)) && ttsModels.length > 0 && (
                 <div className="tts-row">
                     <label className="tts-label">🔧 Model:</label>
                     <select
@@ -365,11 +492,17 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                         onChange={(e) => handleModelChange(e.target.value)}
                         disabled={isSaving}
                     >
-                        {ttsModels.map((model) => (
-                            <option key={model.name} value={model.name}>
-                                [{(model as any).source || 'Gemini SDK'}] {model.displayName}
-                            </option>
-                        ))}
+                        {ttsModels
+                            .filter(model => {
+                                if (provider === 'GEMINI') return model.source === 'Gemini SDK';
+                                if (provider === 'CLIPROXY') return model.source === 'CLIProxy';
+                                return model.source === provider;
+                            })
+                            .map((model) => (
+                                <option key={model.name} value={model.name}>
+                                    [{model.source}] {model.displayName}
+                                </option>
+                            ))}
                     </select>
                 </div>
             )}

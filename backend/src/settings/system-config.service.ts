@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface SystemConfigValue {
@@ -7,7 +7,7 @@ export interface SystemConfigValue {
 }
 
 @Injectable()
-export class SystemConfigService {
+export class SystemConfigService implements OnModuleInit {
     private readonly logger = new Logger(SystemConfigService.name);
 
     constructor(private readonly prisma: PrismaService) { }
@@ -226,5 +226,30 @@ export class SystemConfigService {
         }
 
         this.logger.log('ImageGen defaults initialized');
+    }
+
+    /**
+     * Initialize custom OpenAI compatible providers defaults
+     */
+    async initializeCustomOpenAIDefaults(): Promise<void> {
+        const existing = await this.get('custom_openai.providers');
+        if (existing === null) {
+            await this.set('custom_openai.providers', '[]');
+            this.logger.log('Custom OpenAI providers config initialized');
+        }
+    }
+
+    /**
+     * Auto initialize all defaults on module initialization
+     */
+    async onModuleInit() {
+        try {
+            await this.initializeCLIProxyDefaults();
+            await this.initializeImageGenDefaults();
+            await this.initializeCustomOpenAIDefaults();
+            this.logger.log('System configurations auto-initialized');
+        } catch (error) {
+            this.logger.warn(`Failed to auto-initialize configs: ${error.message}`);
+        }
     }
 }

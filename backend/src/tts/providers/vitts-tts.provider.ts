@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, BadRequestException } from '@nestjs/common';
 import axios from 'axios';
 import {
     ITTSProvider,
@@ -104,11 +104,31 @@ export class ViTTSTTSProvider implements ITTSProvider {
             const errInfo: any = { message: error.message, code: error.code };
             if (error.response) {
                 errInfo.status = error.response.status;
+                let bodyObj: any = null;
                 try {
-                    errInfo.body = Buffer.from(error.response.data).toString('utf-8').substring(0, 500);
+                    if (typeof error.response.data === 'string') {
+                        errInfo.body = error.response.data.substring(0, 500);
+                        bodyObj = JSON.parse(error.response.data);
+                    } else if (Buffer.isBuffer(error.response.data)) {
+                        const bodyStr = error.response.data.toString('utf-8');
+                        errInfo.body = bodyStr.substring(0, 500);
+                        bodyObj = JSON.parse(bodyStr);
+                    } else if (typeof error.response.data === 'object' && error.response.data !== null) {
+                        errInfo.body = JSON.stringify(error.response.data).substring(0, 500);
+                        bodyObj = error.response.data;
+                    }
                 } catch { }
+
+                this.logger.error(`ViTTS error: ${JSON.stringify(errInfo)}`);
+
+                if (error.response.status === 404 && (bodyObj?.detail === 'Reference audio file not found' || bodyObj?.detail?.includes('not found'))) {
+                    throw new BadRequestException(
+                        'Không tìm thấy file âm thanh mẫu (ref 9/cthinh) trên máy chủ ViTTS Local. Vui lòng mở trang OmniVoice Studio (ViTTS Local) và tải lên lại file mẫu.'
+                    );
+                }
+            } else {
+                this.logger.error(`ViTTS error: ${JSON.stringify(errInfo)}`);
             }
-            this.logger.error(`ViTTS error: ${JSON.stringify(errInfo)}`);
             throw error;
         }
     }

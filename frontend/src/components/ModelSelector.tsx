@@ -67,13 +67,28 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
             if (finalConfig) {
                 let modelName = finalConfig.modelName;
                 const isCliproxy = finalConfig.provider === 'CLIPROXY';
+                const isCustom = modelName.startsWith('custom_openai:');
+                
                 if (isCliproxy && !modelName.startsWith('cliproxy:')) {
                     modelName = `cliproxy:${modelName}`;
                 }
                 setSelectedModel(modelName);
+                
                 // Create display name with source label
-                const sourceLabel = isCliproxy ? '[CLIProxy]' : '[Gemini SDK]';
-                const cleanName = modelName.replace('cliproxy:', '');
+                let sourceLabel = '[Gemini SDK]';
+                let cleanName = modelName;
+                
+                if (isCliproxy) {
+                    sourceLabel = '[CLIProxy]';
+                    cleanName = modelName.replace('cliproxy:', '');
+                } else if (isCustom) {
+                    const parts = modelName.split(':');
+                    sourceLabel = `[${parts[1].toUpperCase()}]`;
+                    cleanName = parts.slice(2).join(':');
+                } else if (finalConfig.provider === 'IMAGE_GEN') {
+                    sourceLabel = '[ImageGen]';
+                }
+                
                 setSelectedModelDisplay(`${sourceLabel} ${cleanName}`);
             }
 
@@ -103,6 +118,8 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
             setIsLoadingModels(true);
             const modelsRes = await api.get('/user/model-config/discover');
 
+            const allModels: AvailableModel[] = [];
+
             // Tag each model with its source for display
             const geminiModels = (modelsRes.data.models?.GEMINI || []).map((m: AvailableModel) => ({
                 ...m,
@@ -117,8 +134,21 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                 source: 'ImageGen',
             }));
 
+            allModels.push(...imageGenModels, ...cliproxyModels, ...geminiModels);
+
+            // Add Custom dynamic models
+            Object.keys(modelsRes.data.models || {}).forEach(key => {
+                if (['GEMINI', 'CLIPROXY', 'IMAGE_GEN', 'VITTS', 'VBEE'].includes(key)) return;
+                
+                const list = modelsRes.data.models[key] || [];
+                const mapped = list.map((m: AvailableModel) => ({
+                    ...m,
+                    source: key, // e.g. 'SHOPAIKEY'
+                }));
+                allModels.push(...mapped);
+            });
+
             // Merge and filter models that support this task
-            const allModels = [...imageGenModels, ...cliproxyModels, ...geminiModels]; // ImageGen first
             const filteredModels = allModels.filter((m: AvailableModel) =>
                 m.supportedTasks.includes(taskType)
             );
@@ -144,7 +174,11 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
             // Update display name from discovered models
             const currentModel = sortedModels.find(m => m.name === selectedModel);
             if (currentModel) {
-                const sourceLabel = currentModel.source === 'CLIProxy' ? '[CLIProxy]' : '[Gemini SDK]';
+                let sourceLabel = '[Gemini SDK]';
+                if (currentModel.source === 'CLIProxy') sourceLabel = '[CLIProxy]';
+                else if (currentModel.source && currentModel.source !== 'Gemini SDK' && currentModel.source !== 'ImageGen') {
+                    sourceLabel = `[${currentModel.source}]`;
+                }
                 setSelectedModelDisplay(`${sourceLabel} ${currentModel.displayName}`);
             }
         } catch (err) {
@@ -175,7 +209,8 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
         const provider = model.name.startsWith('imagegen:') ? 'IMAGE_GEN' :
             model.name.startsWith('cliproxy:') ? 'CLIPROXY' :
             model.name.startsWith('vbee:') ? 'VBEE' :
-                model.name.startsWith('google-tts:') ? 'GOOGLE_TTS' : 'GEMINI';
+            model.name.startsWith('google-tts:') ? 'GOOGLE_TTS' :
+            model.name.startsWith('custom_openai:') ? model.name.split(':')[1].toUpperCase() : 'GEMINI';
 
         // Save to backend
         try {
@@ -233,7 +268,7 @@ export function ModelSelector({ taskType, label, onChange, compact = false }: Mo
                                 >
                                     <div className="model-name">
                                         <span className="model-source-badge" style={{
-                                            color: model.source === 'ImageGen' ? '#ffb74d' : model.source === 'CLIProxy' ? '#4fc3f7' : '#81c784',
+                                            color: model.source === 'ImageGen' ? '#ffb74d' : model.source === 'CLIProxy' ? '#4fc3f7' : model.source === 'Gemini SDK' ? '#81c784' : '#e040fb',
                                             fontWeight: 600,
                                             fontSize: '0.8em',
                                             marginRight: '6px',

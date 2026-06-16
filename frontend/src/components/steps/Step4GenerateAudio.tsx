@@ -300,9 +300,16 @@ export function Step4GenerateAudio() {
             if (response.data.audioUrl) {
                 playAudio(slideIndex, response.data.audioUrl);
             }
-        } catch (error: unknown) {
+        } catch (error: any) {
             console.error('Error generating audio:', error);
-            const message = error instanceof Error ? error.message : 'Lỗi không xác định';
+            let message = 'Lỗi không xác định';
+            if (error && typeof error === 'object') {
+                if (error.response?.data?.message) {
+                    message = error.response.data.message;
+                } else if (error.message) {
+                    message = error.message;
+                }
+            }
             setSlideAudios(prev => prev.map(sa =>
                 sa.slideIndex === slideIndex ? { ...sa, status: 'ERROR' as const, errorMessage: message } : sa
             ));

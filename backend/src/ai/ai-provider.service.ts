@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { CLIProxyProvider } from './cliproxy.provider';
+import { CustomOpenAIProvider } from './custom-openai.provider';
 
-export type AIProviderType = 'cliproxy' | 'gemini';
+export type AIProviderType = 'cliproxy' | 'gemini' | string;
 
 export interface AIProviderResult {
     content: string;
@@ -17,6 +18,7 @@ export class AiProviderService {
 
     constructor(
         private readonly cliproxy: CLIProxyProvider,
+        private readonly customOpenAI: CustomOpenAIProvider,
     ) { }
 
     /**
@@ -31,6 +33,13 @@ export class AiProviderService {
         if (modelName.startsWith('gemini:')) {
             return modelName.replace('gemini:', '');
         }
+        if (modelName.startsWith('custom_openai:')) {
+            const parts = modelName.split(':');
+            if (parts.length >= 3) {
+                return parts.slice(2).join(':');
+            }
+            return modelName.replace('custom_openai:', '');
+        }
         return modelName;
     }
 
@@ -44,6 +53,20 @@ export class AiProviderService {
         userApiKey?: string,
         options?: { maxTokens?: number },
     ): Promise<AIProviderResult> {
+        // Check if this is a dynamic custom OpenAI model
+        if (modelName.startsWith('custom_openai:')) {
+            const parts = modelName.split(':');
+            const providerId = parts[1];
+            const realModel = parts.slice(2).join(':');
+            this.logger.log(`Routing to Custom OpenAI provider: ${providerId}, model: ${realModel}`);
+            const content = await this.customOpenAI.generateText(providerId, prompt, realModel, { maxTokens: options?.maxTokens });
+            return {
+                content,
+                provider: `custom_openai:${providerId}`,
+                model: realModel,
+            };
+        }
+
         // Normalize model name (strip provider prefix)
         const normalizedModel = this.normalizeModelName(modelName);
 
@@ -116,6 +139,25 @@ export class AiProviderService {
         modelName: string,
         userApiKey?: string,
     ): Promise<AIProviderResult> {
+        // Check if this is a dynamic custom OpenAI model
+        if (modelName.startsWith('custom_openai:')) {
+            const parts = modelName.split(':');
+            const providerId = parts[1];
+            const realModel = parts.slice(2).join(':');
+            this.logger.log(`Routing with system prompt to Custom OpenAI provider: ${providerId}, model: ${realModel}`);
+            const content = await this.customOpenAI.generateTextWithSystem(
+                providerId,
+                systemPrompt,
+                userPrompt,
+                realModel
+            );
+            return {
+                content,
+                provider: `custom_openai:${providerId}`,
+                model: realModel,
+            };
+        }
+
         // Normalize model name (strip provider prefix)
         const normalizedModel = this.normalizeModelName(modelName);
 
@@ -179,19 +221,48 @@ export class AiProviderService {
      * Get available models from CLIProxy
      */
     async getAvailableModels(): Promise<{ id: string; owned_by?: string }[]> {
+        let models: { id: string; owned_by?: string }[] = [];
+
+        // 1. Fetch dynamic Custom OpenAI models
+        try {
+            const providers = await this.customOpenAI.getProviders();
+            for (const provider of providers) {
+                if (provider.enabled) {
+                    try {
+                        const providerModels = await this.customOpenAI.listModels(provider.id);
+                        const prefixed = providerModels.map(m => ({
+                            id: `custom_openai:${provider.id}:${m.id}`,
+                            owned_by: provider.name,
+                        }));
+                        models = [...models, ...prefixed];
+                    } catch (err) {
+                        this.logger.warn(`Failed to list models for dynamic provider ${provider.name}: ${err.message}`);
+                    }
+                }
+            }
+        } catch (error) {
+            this.logger.warn(`Failed to load custom openai providers in list: ${error.message}`);
+        }
+
+        // 2. Fetch CLIProxy models
         if (await this.cliproxy.isEnabled()) {
             try {
-                return await this.cliproxy.listModels();
+                const cliproxyModels = await this.cliproxy.listModels();
+                models = [...models, ...cliproxyModels];
             } catch (error) {
                 this.logger.warn(`Failed to list CLIProxy models: ${error}`);
             }
         }
 
-        // Default Gemini models
-        return [
-            { id: 'gemini-2.5-flash' },
-            { id: 'gemini-2.5-pro' },
-            { id: 'gemini-2.0-flash' },
-        ];
+        // 3. Fallback Gemini models if nothing else
+        if (models.length === 0) {
+            return [
+                { id: 'gemini-2.5-flash' },
+                { id: 'gemini-2.5-pro' },
+                { id: 'gemini-2.0-flash' },
+            ];
+        }
+
+        return models;
     }
 }

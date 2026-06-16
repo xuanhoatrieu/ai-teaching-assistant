@@ -85,12 +85,130 @@ export function SettingsPage() {
     const [isTestingSmtp, setIsTestingSmtp] = useState(false);
     const [isSavingSmtp, setIsSavingSmtp] = useState(false);
 
+    // Custom OpenAI Providers state
+    const [customProviders, setCustomProviders] = useState<any[]>([]);
+    const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
+    const [customName, setCustomName] = useState('');
+    const [customUrl, setCustomUrl] = useState('');
+    const [customApiKey, setCustomApiKey] = useState('');
+    const [customEnabled, setCustomEnabled] = useState(true);
+    const [customTtsType, setCustomTtsType] = useState<'none' | 'openai' | 'shopaikey'>('none');
+    const [editingCustomId, setEditingCustomId] = useState<string | null>(null);
+    const [customTestResults, setCustomTestResults] = useState<Record<string, { success: boolean; message: string; loading?: boolean }>>({});
+
+    const fetchCustomProviders = async () => {
+        try {
+            const response = await api.get('/admin/config/custom-openai');
+            setCustomProviders(response.data);
+        } catch (err) {
+            console.error('Failed to fetch custom providers:', err);
+        }
+    };
+
+    const handleOpenCustomModal = (provider?: any) => {
+        if (provider) {
+            setEditingCustomId(provider.id);
+            setCustomName(provider.name);
+            setCustomUrl(provider.url);
+            setCustomApiKey('***');
+            setCustomEnabled(provider.enabled);
+            setCustomTtsType(provider.ttsType);
+        } else {
+            setEditingCustomId(null);
+            setCustomName('');
+            setCustomUrl('');
+            setCustomApiKey('');
+            setCustomEnabled(true);
+            setCustomTtsType('none');
+        }
+        setIsCustomModalOpen(true);
+    };
+
+    const handleSaveCustomProvider = async () => {
+        if (!customName || !customUrl) {
+            alert('Vui lòng nhập đầy đủ Tên và URL.');
+            return;
+        }
+
+        try {
+            const payload = {
+                name: customName,
+                url: customUrl,
+                apiKey: customApiKey || undefined,
+                enabled: customEnabled,
+                ttsType: customTtsType,
+            };
+
+            if (editingCustomId) {
+                await api.put(`/admin/config/custom-openai/${editingCustomId}`, payload);
+            } else {
+                await api.post('/admin/config/custom-openai', payload);
+            }
+
+            setIsCustomModalOpen(false);
+            setMessage(editingCustomId ? 'Đã cập nhật cấu hình thành công' : 'Đã thêm nhà cung cấp mới thành công');
+            fetchCustomProviders();
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Có lỗi xảy ra khi lưu cấu hình.');
+        }
+    };
+
+    const handleDeleteCustomProvider = async (id: string) => {
+        if (!window.confirm('Bạn có chắc chắn muốn xóa nhà cung cấp này không?')) return;
+        try {
+            await api.delete(`/admin/config/custom-openai/${id}`);
+            setMessage('Đã xóa nhà cung cấp thành công');
+            fetchCustomProviders();
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Xóa nhà cung cấp thất bại.');
+        }
+    };
+
+    const handleTestCustomProvider = async (id: string) => {
+        setCustomTestResults(prev => ({ ...prev, [id]: { success: false, message: 'Đang thử...', loading: true } }));
+        try {
+            const response = await api.get(`/admin/config/custom-openai/${id}/test`);
+            setCustomTestResults(prev => ({
+                ...prev,
+                [id]: {
+                    success: response.data.success,
+                    message: response.data.message,
+                    loading: false
+                }
+            }));
+            fetchCustomProviders();
+        } catch (err: any) {
+            setCustomTestResults(prev => ({
+                ...prev,
+                [id]: {
+                    success: false,
+                    message: err.response?.data?.message || 'Kết nối thất bại.',
+                    loading: false
+                }
+            }));
+        }
+    };
+
+    const handleToggleCustomProvider = async (provider: any) => {
+        try {
+            await api.put(`/admin/config/custom-openai/${provider.id}`, {
+                ...provider,
+                enabled: !provider.enabled,
+                apiKey: '***'
+            });
+            fetchCustomProviders();
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể thay đổi trạng thái.');
+        }
+    };
+
     useEffect(() => {
         fetchSettings();
         fetchCLIProxyConfig();
         fetchImageGenConfig();
         fetchViTTSConfig();
         fetchSMTPConfig();
+        fetchCustomProviders();
     }, []);
 
     const fetchSMTPConfig = async () => {
@@ -545,6 +663,158 @@ export function SettingsPage() {
                             </div>
                         )}
                     </>
+                )}
+            </div>
+
+            {/* Custom OpenAI Providers Section */}
+            <div className="settings-section cliproxy-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <h2 style={{ margin: 0 }}>🌐 Custom OpenAI Compatible Providers</h2>
+                    <button className="primary-btn" onClick={() => handleOpenCustomModal()} style={{ padding: '8px 16px', fontSize: '14px', margin: 0 }}>
+                        ➕ Add Provider
+                    </button>
+                </div>
+                <p className="section-desc">
+                    Thêm các nhà cung cấp AI tương thích chuẩn OpenAI SDK (như ShopAIKey, DeepSeek, local LLMs) để sử dụng cho sinh văn bản và sinh âm thanh TTS.
+                </p>
+
+                {customProviders.length === 0 ? (
+                    <div className="empty-state" style={{ padding: '24px', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', color: '#888' }}>
+                        Chưa cấu hình nhà cung cấp tùy chọn nào. Bấm nút "Add Provider" để thêm.
+                    </div>
+                ) : (
+                    <div className="providers-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        {customProviders.map((provider) => (
+                            <div key={provider.id} className="provider-item-card" style={{ padding: '16px', border: '1px solid #3d3d3d', borderRadius: '8px', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
+                                    <div>
+                                        <h3 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                            {provider.name}
+                                            <span className={`status-badge ${provider.enabled ? 'enabled' : 'disabled'}`} style={{ fontSize: '11px', padding: '2px 6px', margin: 0 }}>
+                                                {provider.enabled ? 'Enabled' : 'Disabled'}
+                                            </span>
+                                            {provider.ttsType !== 'none' && (
+                                                <span className="status-badge" style={{ fontSize: '11px', padding: '2px 6px', backgroundColor: '#1976d2', color: 'white', margin: 0 }}>
+                                                    🎙️ TTS ({provider.ttsType})
+                                                </span>
+                                            )}
+                                        </h3>
+                                        <div style={{ fontSize: '13px', color: '#aaa', wordBreak: 'break-all' }}>
+                                            <strong>URL:</strong> {provider.url}
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button className="secondary-btn" onClick={() => handleTestCustomProvider(provider.id)} disabled={customTestResults[provider.id]?.loading} style={{ padding: '4px 8px', fontSize: '12px', margin: 0 }}>
+                                            {customTestResults[provider.id]?.loading ? 'Testing...' : '⚡ Test'}
+                                        </button>
+                                        <button className="secondary-btn" onClick={() => handleOpenCustomModal(provider)} style={{ padding: '4px 8px', fontSize: '12px', margin: 0 }}>
+                                            ✏️ Edit
+                                        </button>
+                                        <button className="secondary-btn" onClick={() => handleDeleteCustomProvider(provider.id)} style={{ padding: '4px 8px', fontSize: '12px', borderColor: '#d32f2f', color: '#ff6666', margin: 0 }}>
+                                            🗑️ Delete
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <label className="toggle-label" style={{ margin: 0, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={provider.enabled}
+                                            onChange={() => handleToggleCustomProvider(provider)}
+                                        />
+                                        <span>Kích hoạt</span>
+                                    </label>
+                                </div>
+
+                                {customTestResults[provider.id] && (
+                                    <div className={`test-result ${customTestResults[provider.id].success ? 'success' : 'error'}`} style={{ marginTop: '12px', fontSize: '13px', padding: '8px' }}>
+                                        {customTestResults[provider.id].success ? '✅' : '❌'} {customTestResults[provider.id].message}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Modal Form */}
+                {isCustomModalOpen && (
+                    <div className="custom-modal-backdrop" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+                        <div className="custom-modal-content" style={{ width: '90%', maxWidth: '500px', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #3d3d3d', padding: '24px', boxSizing: 'border-box' }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '20px', borderBottom: '1px solid #3d3d3d', paddingBottom: '10px', color: 'white' }}>
+                                {editingCustomId ? '✏️ Edit OpenAI Provider' : '➕ Add Custom OpenAI Provider'}
+                            </h3>
+
+                            <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>Tên nhà cung cấp</label>
+                                <input
+                                    type="text"
+                                    value={customName}
+                                    onChange={(e) => setCustomName(e.target.value)}
+                                    placeholder="Ví dụ: ShopAIKey, DeepSeek, LocalLLM..."
+                                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #3d3d3d', borderRadius: '4px' }}
+                                />
+                            </div>
+
+                            <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>Base API URL</label>
+                                <input
+                                    type="text"
+                                    value={customUrl}
+                                    onChange={(e) => setCustomUrl(e.target.value)}
+                                    placeholder="Ví dụ: https://api.shopaikey.com hoặc http://localhost:8000"
+                                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #3d3d3d', borderRadius: '4px' }}
+                                />
+                            </div>
+
+                            <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>API Key</label>
+                                <input
+                                    type="password"
+                                    value={customApiKey}
+                                    onChange={(e) => setCustomApiKey(e.target.value)}
+                                    placeholder={editingCustomId ? 'Nhập API key mới để cập nhật' : 'Nhập API key'}
+                                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #3d3d3d', borderRadius: '4px' }}
+                                />
+                            </div>
+
+                            <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>Cấu hình TTS (Text-to-Speech)</label>
+                                <select
+                                    value={customTtsType}
+                                    onChange={(e) => setCustomTtsType(e.target.value as any)}
+                                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #3d3d3d', borderRadius: '4px' }}
+                                >
+                                    <option value="none">Không hỗ trợ TTS</option>
+                                    <option value="openai">OpenAI TTS Standard (/v1/audio/speech)</option>
+                                    <option value="shopaikey">ShopAIKey Custom TTS (Google/OpenAI REST API)</option>
+                                </select>
+                                <p className="help-text" style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
+                                    Chọn cách nhà cung cấp xử lý việc sinh giọng nói. ShopAIKey sử dụng API trả về URL file S3.
+                                </p>
+                            </div>
+
+                            <div className="setting-group" style={{ marginBottom: '20px' }}>
+                                <label className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={customEnabled}
+                                        onChange={(e) => setCustomEnabled(e.target.checked)}
+                                    />
+                                    <span>Kích hoạt nhà cung cấp</span>
+                                </label>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                                <button className="secondary-btn" onClick={() => setIsCustomModalOpen(false)} style={{ margin: 0 }}>
+                                    Hủy
+                                </button>
+                                <button className="primary-btn" onClick={handleSaveCustomProvider} style={{ margin: 0 }}>
+                                    Lưu lại
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
 

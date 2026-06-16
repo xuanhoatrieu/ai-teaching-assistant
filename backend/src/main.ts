@@ -28,7 +28,7 @@ async function bootstrap() {
   // Enable CORS for frontend
   app.enableCors();
 
-  const server = await app.listen(process.env.PORT ?? 3001);
+  const server = await app.listen(process.env.PORT ?? 3001, '0.0.0.0');
   server.setTimeout(600000); // 10 minutes timeout
   server.keepAliveTimeout = 610000;
   server.headersTimeout = 620000;

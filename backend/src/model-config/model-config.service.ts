@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { CLIProxyProvider } from '../ai/cliproxy.provider';
 import { SystemConfigService } from '../settings/system-config.service';
+import { CustomOpenAIProvider } from '../ai/custom-openai.provider';
 
 // Task types for model configuration - must match Prisma TaskType enum
 export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'IMAGE', 'TTS'] as const;
@@ -43,6 +44,7 @@ export class ModelConfigService {
         private apiKeysService: ApiKeysService,
         private cliproxy?: CLIProxyProvider,
         private systemConfigService?: SystemConfigService,
+        private customOpenAI?: CustomOpenAIProvider,
     ) { }
 
     /**
@@ -231,80 +233,73 @@ export class ModelConfigService {
      */
     async discoverGeminiModels(userId: string): Promise<AvailableModel[]> {
         const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+        let discoveredModels: AvailableModel[] = [];
+        const seenNames = new Set<string>();
 
         if (!apiKey) {
-            // No key available — return known models list instead of throwing
-            this.logger.warn('No Gemini API key available, returning known models only');
-            const knownModels: AvailableModel[] = Object.entries(this.KNOWN_GEMINI_MODELS)
-                .map(([name, info]) => ({ name, ...info }));
-            // Also add TTS voices
-            knownModels.push(
-                { name: 'gemini-voice:Zephyr', displayName: 'Zephyr (Nữ - Tươi sáng)', description: 'Giọng nữ tươi sáng', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Puck', displayName: 'Puck (Nam - Rộn ràng)', description: 'Giọng nam rộn ràng', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Charon', displayName: 'Charon (Cung cấp nhiều thông tin)', description: 'Giọng trầm ấm', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Kore', displayName: 'Kore (Chắc chắn)', description: 'Giọng chắc chắn', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Fenrir', displayName: 'Fenrir (Dễ kích động)', description: 'Giọng sôi nổi', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Aoede', displayName: 'Aoede (Nhẹ nhàng)', description: 'Giọng nhẹ nhàng', supportedTasks: ['TTS_VOICE'] },
-            );
-            return knownModels;
-        }
+            // No key available — use known models list
+            this.logger.warn('No Gemini API key available, using known models only');
+            for (const [name, info] of Object.entries(this.KNOWN_GEMINI_MODELS)) {
+                discoveredModels.push({ name, ...info });
+                seenNames.add(name);
+            }
+        } else {
+            try {
+                // Dynamically fetch models from Gemini API
+                const response = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=100`
+                );
 
-        try {
-            // Dynamically fetch models from Gemini API
-            const response = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}&pageSize=100`
-            );
+                if (response.ok) {
+                    const data = await response.json();
+                    const apiModels = data.models || [];
 
-            const discoveredModels: AvailableModel[] = [];
-            const seenNames = new Set<string>();
+                    for (const model of apiModels) {
+                        // model.name is like "models/gemini-2.5-pro" — extract the ID
+                        const modelId = (model.name || '').replace('models/', '');
+                        if (!modelId || seenNames.has(modelId)) continue;
 
-            if (response.ok) {
-                const data = await response.json();
-                const apiModels = data.models || [];
+                        // Classify tasks
+                        const supportedTasks = this.classifyGeminiModel(modelId);
+                        if (supportedTasks.length === 0) continue; // Skip embeddings etc.
 
-                for (const model of apiModels) {
-                    // model.name is like "models/gemini-2.5-pro" — extract the ID
-                    const modelId = (model.name || '').replace('models/', '');
-                    if (!modelId || seenNames.has(modelId)) continue;
+                        // Use known display name if available, otherwise format from ID
+                        const known = this.KNOWN_GEMINI_MODELS[modelId];
+                        discoveredModels.push({
+                            name: modelId,
+                            displayName: known?.displayName || this.formatModelDisplayName(modelId),
+                            description: known?.description || model.description || model.displayName || '',
+                            supportedTasks: known?.supportedTasks || supportedTasks,
+                        });
+                        seenNames.add(modelId);
+                    }
 
-                    // Classify tasks
-                    const supportedTasks = this.classifyGeminiModel(modelId);
-                    if (supportedTasks.length === 0) continue; // Skip embeddings etc.
+                    this.logger.log(`Discovered ${discoveredModels.length} Gemini models from API`);
 
-                    // Use known display name if available, otherwise format from ID
-                    const known = this.KNOWN_GEMINI_MODELS[modelId];
-                    discoveredModels.push({
-                        name: modelId,
-                        displayName: known?.displayName || this.formatModelDisplayName(modelId),
-                        description: known?.description || model.description || model.displayName || '',
-                        supportedTasks: known?.supportedTasks || supportedTasks,
-                    });
-                    seenNames.add(modelId);
+                    // Save best models per category to DB for other services to use dynamically
+                    if (this.systemConfigService) {
+                        const bestImage = discoveredModels.find(m => m.supportedTasks.includes('IMAGE'));
+                        const bestTTS = discoveredModels.find(m => m.supportedTasks.includes('TTS'));
+                        const bestText = discoveredModels.find(m =>
+                            m.supportedTasks.includes('OUTLINE') && m.name.includes('pro'),
+                        ) || discoveredModels.find(m => m.supportedTasks.includes('OUTLINE'));
+
+                        if (bestImage) {
+                            await this.systemConfigService.setDiscoveredGeminiModel('image', bestImage.name);
+                        }
+                        if (bestTTS) {
+                            await this.systemConfigService.setDiscoveredGeminiModel('tts', bestTTS.name);
+                        }
+                        if (bestText) {
+                            await this.systemConfigService.setDiscoveredGeminiModel('text', bestText.name);
+                        }
+                        this.logger.log(`Saved discovered Gemini models: text=${bestText?.name}, image=${bestImage?.name}, tts=${bestTTS?.name}`);
+                    }
+                } else {
+                    this.logger.warn(`Gemini API listModels returned ${response.status}, falling back to known models`);
                 }
-
-                this.logger.log(`Discovered ${discoveredModels.length} Gemini models from API`);
-
-                // Save best models per category to DB for other services to use dynamically
-                if (this.systemConfigService) {
-                    const bestImage = discoveredModels.find(m => m.supportedTasks.includes('IMAGE'));
-                    const bestTTS = discoveredModels.find(m => m.supportedTasks.includes('TTS'));
-                    const bestText = discoveredModels.find(m =>
-                        m.supportedTasks.includes('OUTLINE') && m.name.includes('pro'),
-                    ) || discoveredModels.find(m => m.supportedTasks.includes('OUTLINE'));
-
-                    if (bestImage) {
-                        await this.systemConfigService.setDiscoveredGeminiModel('image', bestImage.name);
-                    }
-                    if (bestTTS) {
-                        await this.systemConfigService.setDiscoveredGeminiModel('tts', bestTTS.name);
-                    }
-                    if (bestText) {
-                        await this.systemConfigService.setDiscoveredGeminiModel('text', bestText.name);
-                    }
-                    this.logger.log(`Saved discovered Gemini models: text=${bestText?.name}, image=${bestImage?.name}, tts=${bestTTS?.name}`);
-                }
-            } else {
-                this.logger.warn(`Gemini API listModels returned ${response.status}, falling back to known models`);
+            } catch (error: any) {
+                this.logger.error(`Failed to dynamically fetch models from Gemini API: ${error.message}`);
             }
 
             // If API returned models, use them; otherwise fall back to known list
@@ -321,51 +316,101 @@ export class ModelConfigService {
                     discoveredModels.push({ name, ...info });
                 }
             }
-
-            // Always add TTS voices (static, not from API)
-            discoveredModels.push(
-                // Gemini TTS Voices - Full 30 voices
-                { name: 'gemini-voice:Zephyr', displayName: 'Zephyr (Nữ - Tươi sáng)', description: 'Giọng nữ tươi sáng', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Puck', displayName: 'Puck (Nam - Rộn ràng)', description: 'Giọng nam rộn ràng', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Charon', displayName: 'Charon (Cung cấp nhiều thông tin)', description: 'Giọng trầm ấm', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Kore', displayName: 'Kore (Chắc chắn)', description: 'Giọng chắc chắn', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Fenrir', displayName: 'Fenrir (Dễ kích động)', description: 'Giọng sôi nổi', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Leda', displayName: 'Leda (Trẻ trung)', description: 'Giọng trẻ trung', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Orus', displayName: 'Orus (Chắc chắn)', description: 'Giọng đanh thép', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Aoede', displayName: 'Aoede (Nhẹ nhàng)', description: 'Giọng nhẹ nhàng', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Callirrhoe', displayName: 'Callirrhoe (Dễ tính)', description: 'Giọng dễ nghe', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Autonoe', displayName: 'Autonoe (Tươi sáng)', description: 'Giọng vui vẻ', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Enceladus', displayName: 'Enceladus (Thì thầm)', description: 'Giọng thì thầm', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Iapetus', displayName: 'Iapetus (Rõ ràng)', description: 'Giọng rõ ràng', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Umbriel', displayName: 'Umbriel (Dễ tính)', description: 'Giọng thân thiện', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Algieba', displayName: 'Algieba (Mượt mà)', description: 'Giọng mượt mà', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Despina', displayName: 'Despina (Mượt mà)', description: 'Giọng êm dịu', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Erinome', displayName: 'Erinome (Rõ ràng)', description: 'Giọng sắc bén', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Algenib', displayName: 'Algenib (Trầm)', description: 'Giọng trầm', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Rasalgethi', displayName: 'Rasalgethi (Cung cấp nhiều thông tin)', description: 'Giọng thông thái', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Laomedeia', displayName: 'Laomedeia (Rộn ràng)', description: 'Giọng vui tươi', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Achernar', displayName: 'Achernar (Mềm mại)', description: 'Giọng mềm mại', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Alnilam', displayName: 'Alnilam (Chắc chắn)', description: 'Giọng mạnh mẽ', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Schedar', displayName: 'Schedar (Đều đặn)', description: 'Giọng đều đặn', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Gacrux', displayName: 'Gacrux (Trưởng thành)', description: 'Giọng trưởng thành', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Pulcherrima', displayName: 'Pulcherrima (Chuyển tiếp)', description: 'Giọng linh hoạt', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Achird', displayName: 'Achird (Thân thiện)', description: 'Giọng thân thiện', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Zubenelgenubi', displayName: 'Zubenelgenubi (Bình thường)', description: 'Giọng tự nhiên', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Vindemiatrix', displayName: 'Vindemiatrix (Dịu dàng)', description: 'Giọng dịu dàng', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Sadachbia', displayName: 'Sadachbia (Sôi nổi)', description: 'Giọng năng động', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Sadaltager', displayName: 'Sadaltager (Hiểu biết)', description: 'Giọng thông minh', supportedTasks: ['TTS_VOICE'] },
-                { name: 'gemini-voice:Sulafat', displayName: 'Sulafat (Ấm áp)', description: 'Giọng ấm áp', supportedTasks: ['TTS_VOICE'] },
-                // Vbee TTS Voices - Sample voices
-                { name: 'vbee:hn_female_thutrang_news_48k-1', displayName: 'Vbee - Thu Trang (Nữ HN)', description: 'Giọng nữ Hà Nội - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
-                { name: 'vbee:sg_male_minhhoang_news_48k-1', displayName: 'Vbee - Minh Hoàng (Nam SG)', description: 'Giọng nam Sài Gòn - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
-                { name: 'vbee:hn_female_maingoc_news_48k-1', displayName: 'Vbee - Mai Ngọc (Nữ HN)', description: 'Giọng nữ Hà Nội - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
-            );
-
-            return discoveredModels;
-        } catch (error: any) {
-            this.logger.error(`Failed to discover models: ${error.message}`);
-            throw new Error(`Failed to get models: ${error.message}`);
         }
+
+        // Always add Gemini static TTS voices
+        discoveredModels.push(
+            // Gemini TTS Voices - Full 30 voices
+            { name: 'gemini-voice:Zephyr', displayName: 'Zephyr (Nữ - Tươi sáng)', description: 'Giọng nữ tươi sáng', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Puck', displayName: 'Puck (Nam - Rộn ràng)', description: 'Giọng nam rộn ràng', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Charon', displayName: 'Charon (Cung cấp nhiều thông tin)', description: 'Giọng trầm ấm', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Kore', displayName: 'Kore (Chắc chắn)', description: 'Giọng chắc chắn', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Fenrir', displayName: 'Fenrir (Dễ kích động)', description: 'Giọng sôi nổi', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Leda', displayName: 'Leda (Trẻ trung)', description: 'Giọng trẻ trung', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Orus', displayName: 'Orus (Chắc chắn)', description: 'Giọng đanh thép', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Aoede', displayName: 'Aoede (Nhẹ nhàng)', description: 'Giọng nhẹ nhàng', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Callirrhoe', displayName: 'Callirrhoe (Dễ tính)', description: 'Giọng dễ nghe', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Autonoe', displayName: 'Autonoe (Tươi sáng)', description: 'Giọng vui vẻ', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Enceladus', displayName: 'Enceladus (Thì thầm)', description: 'Giọng thì thầm', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Iapetus', displayName: 'Iapetus (Rõ ràng)', description: 'Giọng rõ ràng', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Umbriel', displayName: 'Umbriel (Dễ tính)', description: 'Giọng thân thiện', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Algieba', displayName: 'Algieba (Mượt mà)', description: 'Giọng mượt mà', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Despina', displayName: 'Despina (Mượt mà)', description: 'Giọng êm dịu', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Erinome', displayName: 'Erinome (Rõ ràng)', description: 'Giọng sắc bén', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Algenib', displayName: 'Algenib (Trầm)', description: 'Giọng trầm', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Rasalgethi', displayName: 'Rasalgethi (Cung cấp nhiều thông tin)', description: 'Giọng thông thái', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Laomedeia', displayName: 'Laomedeia (Rộn ràng)', description: 'Giọng vui tươi', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Achernar', displayName: 'Achernar (Mềm mại)', description: 'Giọng mềm mại', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Alnilam', displayName: 'Alnilam (Chắc chắn)', description: 'Giọng mạnh mẽ', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Schedar', displayName: 'Schedar (Đều đặn)', description: 'Giọng đều đặn', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Gacrux', displayName: 'Gacrux (Trưởng thành)', description: 'Giọng trưởng thành', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Pulcherrima', displayName: 'Pulcherrima (Chuyển tiếp)', description: 'Giọng linh hoạt', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Achird', displayName: 'Achird (Thân thiện)', description: 'Giọng thân thiện', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Zubenelgenubi', displayName: 'Zubenelgenubi (Bình thường)', description: 'Giọng tự nhiên', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Vindemiatrix', displayName: 'Vindemiatrix (Dịu dàng)', description: 'Giọng dịu dàng', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Sadachbia', displayName: 'Sadachbia (Sôi nổi)', description: 'Giọng năng động', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Sadaltager', displayName: 'Sadaltager (Hiểu biết)', description: 'Giọng thông minh', supportedTasks: ['TTS_VOICE'] },
+            { name: 'gemini-voice:Sulafat', displayName: 'Sulafat (Ấm áp)', description: 'Giọng ấm áp', supportedTasks: ['TTS_VOICE'] },
+            // Vbee TTS Voices - Sample voices
+            { name: 'vbee:hn_female_thutrang_news_48k-1', displayName: 'Vbee - Thu Trang (Nữ HN)', description: 'Giọng nữ Hà Nội - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
+            { name: 'vbee:sg_male_minhhoang_news_48k-1', displayName: 'Vbee - Minh Hoàng (Nam SG)', description: 'Giọng nam Sài Gòn - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
+            { name: 'vbee:hn_female_maingoc_news_48k-1', displayName: 'Vbee - Mai Ngọc (Nữ HN)', description: 'Giọng nữ Hà Nội - Vbee TTS', supportedTasks: ['TTS_VOICE'] },
+        );
+
+        // Add Custom OpenAI dynamic voices
+        if (this.customOpenAI) {
+            try {
+                const customProviders = await this.customOpenAI.getProviders();
+                for (const cp of customProviders) {
+                    if (cp.enabled && cp.ttsType !== 'none') {
+                        if (cp.ttsType === 'shopaikey') {
+                            const voicesList = [
+                                { id: 'Zephyr', displayName: 'Gemini - Zephyr (Nữ)', gender: 'female', desc: 'Giọng nữ tươi sáng (Google)' },
+                                { id: 'Puck', displayName: 'Gemini - Puck (Nam)', gender: 'male', desc: 'Giọng nam trầm ấm (Google)' },
+                                { id: 'Charon', displayName: 'Gemini - Charon (Ấm áp)', gender: 'male', desc: 'Giọng trầm ấm (Google)' },
+                                { id: 'Kore', displayName: 'Gemini - Kore (Chắc chắn)', gender: 'male', desc: 'Giọng chắc chắn (Google)' },
+                                { id: 'Aoede', displayName: 'Gemini - Aoede (Nhẹ nhàng)', gender: 'female', desc: 'Giọng nhẹ nhàng (Google)' },
+                                { id: 'alloy', displayName: 'OpenAI - Alloy (Trung tính)', gender: 'male', desc: 'Giọng OpenAI Alloy' },
+                                { id: 'echo', displayName: 'OpenAI - Echo (Nam)', gender: 'male', desc: 'Giọng OpenAI Echo' },
+                                { id: 'fable', displayName: 'OpenAI - Fable (Nam)', gender: 'male', desc: 'Giọng OpenAI Fable' },
+                                { id: 'onyx', displayName: 'OpenAI - Onyx (Nam)', gender: 'male', desc: 'Giọng OpenAI Onyx' },
+                                { id: 'nova', displayName: 'OpenAI - Nova (Nữ)', gender: 'female', desc: 'Giọng OpenAI Nova' },
+                                { id: 'shimmer', displayName: 'OpenAI - Shimmer (Nữ)', gender: 'female', desc: 'Giọng OpenAI Shimmer' }
+                            ];
+                            voicesList.forEach(v => {
+                                discoveredModels.push({
+                                    name: `custom_openai:${cp.id}:${v.id}`,
+                                    displayName: `${v.displayName}`,
+                                    description: `${v.desc} - via ${cp.name}`,
+                                    supportedTasks: ['TTS_VOICE']
+                                });
+                            });
+                        } else if (cp.ttsType === 'openai') {
+                            const voicesList = [
+                                { id: 'alloy', displayName: 'Alloy (Trung tính)', gender: 'male', desc: 'Giọng trung tính' },
+                                { id: 'echo', displayName: 'Echo (Nam)', gender: 'male', desc: 'Giọng nam' },
+                                { id: 'fable', displayName: 'Fable (Nam)', gender: 'male', desc: 'Giọng nam' },
+                                { id: 'onyx', displayName: 'Onyx (Nam)', gender: 'male', desc: 'Giọng nam' },
+                                { id: 'nova', displayName: 'Nova (Nữ)', gender: 'female', desc: 'Giọng nữ' },
+                                { id: 'shimmer', displayName: 'Shimmer (Nữ)', gender: 'female', desc: 'Giọng nữ' }
+                            ];
+                            voicesList.forEach(v => {
+                                discoveredModels.push({
+                                    name: `custom_openai:${cp.id}:${v.id}`,
+                                    displayName: `${v.displayName}`,
+                                    description: `${v.desc} - via ${cp.name}`,
+                                    supportedTasks: ['TTS_VOICE']
+                                });
+                            });
+                        }
+                    }
+                }
+            } catch (err: any) {
+                this.logger.warn(`Failed to add custom voices to discoverGeminiModels: ${err.message}`);
+            }
+        }
+
+        return discoveredModels;
     }
 
     /**
@@ -739,6 +784,69 @@ export class ModelConfigService {
             }
         } catch (error: any) {
             this.logger.warn(`ImageGen model discovery failed: ${error.message}`);
+        }
+
+        // Discover Custom OpenAI models if enabled
+        if (this.customOpenAI) {
+            try {
+                const customProviders = await this.customOpenAI.getProviders();
+                for (const cp of customProviders) {
+                    if (cp.enabled) {
+                        const customModelsList: AvailableModel[] = [];
+                        const providerKey = cp.id.toUpperCase();
+
+                        // Add TTS models if enabled and supports TTS
+                        if (cp.ttsType !== 'none') {
+                            if (cp.ttsType === 'shopaikey') {
+                                customModelsList.push(
+                                    {
+                                        name: `custom_openai:${cp.id}:tts-1`,
+                                        displayName: 'OpenAI TTS (Default)',
+                                        description: `OpenAI text-to-speech model via ${cp.name}`,
+                                        supportedTasks: ['TTS'],
+                                    },
+                                    {
+                                        name: `custom_openai:${cp.id}:gemini-tts`,
+                                        displayName: 'Gemini TTS (Default)',
+                                        description: `Gemini text-to-speech model via ${cp.name}`,
+                                        supportedTasks: ['TTS'],
+                                    }
+                                );
+                            } else {
+                                customModelsList.push({
+                                    name: `custom_openai:${cp.id}:tts-1`,
+                                    displayName: 'OpenAI TTS',
+                                    description: `OpenAI text-to-speech model via ${cp.name}`,
+                                    supportedTasks: ['TTS'],
+                                });
+                            }
+                        }
+
+                        // Add default chat models for LLM tasks
+                        customModelsList.push(
+                            {
+                                name: `custom_openai:${cp.id}:gpt-4o-mini`,
+                                displayName: 'GPT-4o Mini',
+                                description: `Chat model via ${cp.name}`,
+                                supportedTasks: ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS'],
+                            },
+                            {
+                                name: `custom_openai:${cp.id}:gpt-4o`,
+                                displayName: 'GPT-4o',
+                                description: `Chat model via ${cp.name}`,
+                                supportedTasks: ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS'],
+                            }
+                        );
+
+                        if (customModelsList.length > 0) {
+                            models[providerKey] = customModelsList;
+                            this.logger.log(`Added dynamic provider ${providerKey} with ${customModelsList.length} models`);
+                        }
+                    }
+                }
+            } catch (error: any) {
+                this.logger.warn(`Custom OpenAI models discovery failed: ${error.message}`);
+            }
         }
 
         return models;

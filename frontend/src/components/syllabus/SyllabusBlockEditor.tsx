@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { SyllabusBlock } from '../../lib/syllabus-api';
 import { syllabusApi } from '../../lib/syllabus-api';
-import { parseMarkdownTable, formatMarkdownTable } from '../../lib/markdown-table';
+import { parseMarkdownTable, formatMarkdownTable, getCellSpan } from '../../lib/markdown-table';
 
 interface Props {
     block: SyllabusBlock;
@@ -127,6 +127,66 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
         }
     };
 
+    // Table Merging Operations
+    const mergeRight = (r: number, c: number) => {
+        const span = getCellSpan(tableRows, r, c);
+        const targetColIndex = c + span.colSpan;
+        if (targetColIndex >= (tableRows[0]?.length || 0)) {
+            alert('Không thể gộp sang phải ngoài phạm vi bảng.');
+            return;
+        }
+
+        const updatedRows = tableRows.map((row, ri) => {
+            if (ri >= r && ri < r + span.rowSpan) {
+                const newRow = [...row];
+                newRow[targetColIndex] = '>';
+                return newRow;
+            }
+            return row;
+        });
+        setTableRows(updatedRows);
+    };
+
+    const mergeDown = (r: number, c: number) => {
+        const span = getCellSpan(tableRows, r, c);
+        const targetRowIndex = r + span.rowSpan;
+        if (targetRowIndex >= tableRows.length) {
+            alert('Không thể gộp xuống dưới ngoài phạm vi bảng.');
+            return;
+        }
+
+        const updatedRows = tableRows.map((row, ri) => {
+            if (ri === targetRowIndex) {
+                const newRow = [...row];
+                newRow[c] = '^';
+                for (let i = 1; i < span.colSpan; i++) {
+                    newRow[c + i] = '>';
+                }
+                return newRow;
+            }
+            return row;
+        });
+        setTableRows(updatedRows);
+    };
+
+    const splitCell = (r: number, c: number) => {
+        const span = getCellSpan(tableRows, r, c);
+        if (span.colSpan === 1 && span.rowSpan === 1) return;
+
+        const updatedRows = tableRows.map((row, ri) => {
+            if (ri >= r && ri < r + span.rowSpan) {
+                const newRow = [...row];
+                for (let ci = c; ci < c + span.colSpan; ci++) {
+                    if (ri === r && ci === c) continue;
+                    newRow[ci] = '';
+                }
+                return newRow;
+            }
+            return row;
+        });
+        setTableRows(updatedRows);
+    };
+
     const handleSave = async () => {
         setIsSaving(true);
         setError('');
@@ -155,6 +215,59 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
         setTitle(block.title);
         setIsEditing(false);
         setError('');
+    };
+
+    // Render Table View Mode with Merged Cells support
+    const renderTableView = (parsed: ReturnType<typeof parseMarkdownTable>) => {
+        if (!parsed) return null;
+        return (
+            <div className="custom-table-view-container">
+                {parsed.beforeText && (
+                    <div className="table-before-text">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.beforeText}</ReactMarkdown>
+                    </div>
+                )}
+                
+                <div className="table-responsive">
+                    <table className="custom-syllabus-table">
+                        <thead>
+                            <tr>
+                                {parsed.headers.map((header, i) => (
+                                    <th key={i}>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{header}</ReactMarkdown>
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {parsed.rows.map((row, rowIndex) => (
+                                <tr key={rowIndex}>
+                                    {row.map((cell, colIndex) => {
+                                        const span = getCellSpan(parsed.rows, rowIndex, colIndex);
+                                        if (span.isMerged) return null;
+                                        return (
+                                            <td 
+                                                key={colIndex} 
+                                                colSpan={span.colSpan} 
+                                                rowSpan={span.rowSpan}
+                                            >
+                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{cell || ' '}</ReactMarkdown>
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+
+                {parsed.afterText && (
+                    <div className="table-after-text" style={{ marginTop: '12px' }}>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.afterText}</ReactMarkdown>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     return (
@@ -272,17 +385,64 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                                         <tbody>
                                             {tableRows.map((row, rowIndex) => (
                                                 <tr key={rowIndex}>
-                                                    {row.map((cell, colIndex) => (
-                                                        <td key={colIndex}>
-                                                            <textarea
-                                                                className="table-editor-cell-textarea"
-                                                                value={cell}
-                                                                onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                                                                rows={2}
-                                                                placeholder="Nhập nội dung ô..."
-                                                            />
-                                                        </td>
-                                                    ))}
+                                                    {row.map((cell, colIndex) => {
+                                                        const span = getCellSpan(tableRows, rowIndex, colIndex);
+                                                        if (span.isMerged) return null;
+                                                        
+                                                        const showMergeRight = colIndex + span.colSpan < (tableRows[0]?.length || 0);
+                                                        const showMergeDown = rowIndex + span.rowSpan < tableRows.length;
+                                                        const isMergedCell = span.colSpan > 1 || span.rowSpan > 1;
+
+                                                        return (
+                                                            <td 
+                                                                key={colIndex}
+                                                                colSpan={span.colSpan}
+                                                                rowSpan={span.rowSpan}
+                                                            >
+                                                                <div className="table-editor-cell-wrapper">
+                                                                    <textarea
+                                                                        className="table-editor-cell-textarea"
+                                                                        value={cell}
+                                                                        onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
+                                                                        rows={Math.max(2, span.rowSpan * 2)}
+                                                                        placeholder="Nhập nội dung ô..."
+                                                                    />
+                                                                    <div className="cell-merge-toolbar">
+                                                                        {showMergeRight && (
+                                                                            <button 
+                                                                                type="button"
+                                                                                className="btn-merge-action" 
+                                                                                onClick={() => mergeRight(rowIndex, colIndex)}
+                                                                                title="Gộp ô sang phải"
+                                                                            >
+                                                                                ➡️
+                                                                            </button>
+                                                                        )}
+                                                                        {showMergeDown && (
+                                                                            <button 
+                                                                                type="button"
+                                                                                className="btn-merge-action" 
+                                                                                onClick={() => mergeDown(rowIndex, colIndex)}
+                                                                                title="Gộp ô xuống dưới"
+                                                                            >
+                                                                                ⬇️
+                                                                            </button>
+                                                                        )}
+                                                                        {isMergedCell && (
+                                                                            <button 
+                                                                                type="button"
+                                                                                className="btn-merge-action btn-split" 
+                                                                                onClick={() => splitCell(rowIndex, colIndex)}
+                                                                                title="Hủy gộp ô"
+                                                                            >
+                                                                                🔓
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
                                                     <td className="action-col-cell">
                                                         <button 
                                                             type="button"
@@ -323,9 +483,17 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                 ) : (
                     <div className="block-content-view">
                         {hasContent ? (
-                            <div className="markdown-content block-markdown">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
-                            </div>
+                            (() => {
+                                const parsed = parseMarkdownTable(block.content);
+                                if (parsed) {
+                                    return renderTableView(parsed);
+                                }
+                                return (
+                                    <div className="markdown-content block-markdown">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
+                                    </div>
+                                );
+                            })()
                         ) : (
                             <p className="block-empty">Chưa có nội dung. Nhấn ✏️ Sửa để thêm.</p>
                         )}

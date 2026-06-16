@@ -1,5 +1,6 @@
-import { Controller, Get, Put, Body, UseGuards, Logger, Req } from '@nestjs/common';
+import { Controller, Get, Put, Post, Delete, Param, Body, UseGuards, Logger, Req, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { IsBoolean, IsOptional, IsString } from 'class-validator';
+import { CustomOpenAIProvider } from '../ai/custom-openai.provider';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -81,6 +82,45 @@ export class UpdateSMTPConfigDto {
     from?: string;
 }
 
+export class CreateCustomProviderDto {
+    @IsString()
+    name: string;
+
+    @IsString()
+    url: string;
+
+    @IsString()
+    apiKey: string;
+
+    @IsBoolean()
+    enabled: boolean;
+
+    @IsString()
+    ttsType: 'none' | 'openai' | 'shopaikey';
+}
+
+export class UpdateCustomProviderDto {
+    @IsOptional()
+    @IsString()
+    name?: string;
+
+    @IsOptional()
+    @IsString()
+    url?: string;
+
+    @IsOptional()
+    @IsString()
+    apiKey?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    enabled?: boolean;
+
+    @IsOptional()
+    @IsString()
+    ttsType?: 'none' | 'openai' | 'shopaikey';
+}
+
 @Controller('admin/config')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
@@ -91,6 +131,8 @@ export class SystemConfigController {
         private readonly configService: SystemConfigService,
         private readonly apiKeysService: ApiKeysService,
         private readonly emailService: EmailService,
+        @Inject(forwardRef(() => CustomOpenAIProvider))
+        private readonly customOpenAI: CustomOpenAIProvider,
     ) { }
 
     /**
@@ -579,6 +621,104 @@ export class SystemConfigController {
             return { success: true, message: `✅ Đã gửi email test thành công tới ${email}` };
         } catch (error: any) {
             return { success: false, message: error.message };
+        }
+    }
+
+    // ==========================================
+    // Dynamic Custom OpenAI Providers Endpoints
+    // ==========================================
+
+    @Get('custom-openai')
+    async getCustomProviders() {
+        const providers = await this.customOpenAI.getProviders();
+        return providers.map(p => ({
+            ...p,
+            apiKey: p.apiKey ? '***' + p.apiKey.slice(-4) : '',
+        }));
+    }
+
+    @Post('custom-openai')
+    async createCustomProvider(@Body() dto: CreateCustomProviderDto) {
+        const providers = await this.customOpenAI.getProviders();
+        const id = dto.name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+        if (providers.some(p => p.id === id)) {
+            throw new BadRequestException(`Provider với tên "${dto.name}" đã tồn tại.`);
+        }
+
+        const newProvider = {
+            id,
+            name: dto.name,
+            url: dto.url,
+            apiKey: dto.apiKey,
+            enabled: dto.enabled,
+            ttsType: dto.ttsType,
+        };
+
+        providers.push(newProvider);
+        await this.customOpenAI.saveProviders(providers);
+        return { success: true, provider: newProvider };
+    }
+
+    @Put('custom-openai/:id')
+    async updateCustomProvider(@Param('id') id: string, @Body() dto: UpdateCustomProviderDto) {
+        const providers = await this.customOpenAI.getProviders();
+        const index = providers.findIndex(p => p.id === id);
+
+        if (index === -1) {
+            throw new BadRequestException(`Không tìm thấy provider với ID "${id}".`);
+        }
+
+        const current = providers[index];
+        const updatedApiKey = dto.apiKey && dto.apiKey !== '***' ? dto.apiKey : current.apiKey;
+
+        providers[index] = {
+            ...current,
+            name: dto.name ?? current.name,
+            url: dto.url ?? current.url,
+            apiKey: updatedApiKey,
+            enabled: dto.enabled ?? current.enabled,
+            ttsType: dto.ttsType ?? current.ttsType,
+        };
+
+        await this.customOpenAI.saveProviders(providers);
+        return { success: true, provider: providers[index] };
+    }
+
+    @Delete('custom-openai/:id')
+    async deleteCustomProvider(@Param('id') id: string) {
+        const providers = await this.customOpenAI.getProviders();
+        const filtered = providers.filter(p => p.id !== id);
+
+        if (filtered.length === providers.length) {
+            throw new BadRequestException(`Không tìm thấy provider với ID "${id}".`);
+        }
+
+        await this.customOpenAI.saveProviders(filtered);
+        return { success: true, message: 'Đã xóa nhà cung cấp thành công' };
+    }
+
+    @Get('custom-openai/:id/test')
+    async testCustomProvider(@Param('id') id: string) {
+        const provider = await this.customOpenAI.getProvider(id);
+        if (!provider) {
+            return { success: false, message: '❌ Không tìm thấy nhà cung cấp' };
+        }
+
+        try {
+            this.logger.log(`Testing connection for Custom OpenAI Provider: ${provider.name} (${provider.url})...`);
+            const models = await this.customOpenAI.listModels(id);
+            return {
+                success: true,
+                message: `✅ Kết nối thành công tới ${provider.name}! Phát hiện ${models.length} model.`,
+                modelsCount: models.length,
+                models,
+            };
+        } catch (error: any) {
+            return {
+                success: false,
+                message: `❌ Kết nối thất bại tới ${provider.name}: ${error.message}`,
+            };
         }
     }
 }

@@ -15,6 +15,7 @@ import { TTSResult, Voice, TTSCredentials } from './interfaces/tts-provider.inte
 import { encrypt, decrypt } from '../common/crypto.util';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { CLIProxyProvider } from '../ai/cliproxy.provider';
+import { CustomOpenAIProvider } from '../ai/custom-openai.provider';
 
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
 
@@ -28,6 +29,7 @@ export class TTSService {
         @Inject(forwardRef(() => ApiKeysService))
         private readonly apiKeysService: ApiKeysService,
         private readonly cliproxy: CLIProxyProvider,
+        private readonly customOpenAI: CustomOpenAIProvider,
     ) { }
 
     // ========== ADMIN: TTS Provider Management ==========
@@ -165,8 +167,63 @@ export class TTSService {
 
         let provider;
 
+        // Auto-resolve provider if missing but voiceId is a custom OpenAI format
+        if (!dto.provider && dto.voiceId?.startsWith('custom_openai:')) {
+            const parts = dto.voiceId.split(':');
+            if (parts[1]) {
+                dto.provider = parts[1].toUpperCase();
+                this.logger.log(`[FIX] Auto-resolved missing provider to "${dto.provider}" based on voice "${dto.voiceId}"`);
+            }
+        }
+
         // Route based on provider parameter
-        if (dto.provider === 'VBEE') {
+        const customProviders = await this.customOpenAI.getProviders();
+        const matchingProvider = customProviders.find(p => p.id.toUpperCase() === dto.provider?.toUpperCase() && p.enabled && p.ttsType !== 'none');
+
+        if (matchingProvider) {
+            // FIX: Correct wrong or missing model name for custom providers
+            let model = dto.model;
+            const isWrongModel = !model || !model.startsWith(`custom_openai:${matchingProvider.id}:`);
+            
+            if (isWrongModel && dto.voiceId) {
+                const voiceId = dto.voiceId;
+                if (matchingProvider.id === 'shopaikey') {
+                    const isGeminiVoice = ['zephyr', 'puck', 'charon', 'kore', 'aoede'].some(name => voiceId.toLowerCase().endsWith(':' + name.toLowerCase()));
+                    const modelSuffix = isGeminiVoice ? 'gemini-tts' : 'tts-1';
+                    model = `custom_openai:shopaikey:${modelSuffix}`;
+                } else {
+                    model = `custom_openai:${matchingProvider.id}:tts-1`;
+                }
+                this.logger.log(`[FIX] Auto-resolved wrong model "${dto.model}" to "${model}" based on voice "${dto.voiceId}"`);
+                dto.model = model;
+            }
+
+            this.logger.log(`Using Custom OpenAI TTS (${matchingProvider.name}) with model: ${dto.model}, voice: ${dto.voiceId}`);
+            try {
+                const cleanModel = dto.model?.replace(`custom_openai:${matchingProvider.id}:`, '') || '';
+                const result = await this.customOpenAI.generateTTS(
+                    matchingProvider.id,
+                    dto.text,
+                    cleanModel,
+                    dto.voiceId
+                );
+                return {
+                    audio: result.audio,
+                    format: result.format,
+                    provider: `${matchingProvider.name} TTS`,
+                };
+            } catch (error: any) {
+                this.logger.error(`Custom OpenAI TTS (${matchingProvider.name}) failed: ${error.message}`);
+                // Fallback to Gemini SDK
+                this.logger.warn('Falling back to Gemini SDK for TTS');
+                const geminiApiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+                if (!geminiApiKey) {
+                    throw new Error(`TTS failed and no Gemini API key configured for fallback: ${error.message}`);
+                }
+                provider = this.ttsFactory.getDefaultProvider(geminiApiKey);
+                dto.model = 'gemini-2.5-flash-preview-tts';
+            }
+        } else if (dto.provider === 'VBEE') {
             // Get Vbee credentials (stored as JSON: {"token": "xxx", "appId": "yyy"})
             const vbeeCredentialsJson = await this.apiKeysService.getActiveKey(userId, 'VBEE' as any);
 
@@ -364,6 +421,43 @@ export class TTSService {
             },
         ];
         results.push({ provider: 'ViTTS', voices: vittsVoices });
+
+        // Dynamic Custom OpenAI Providers voices
+        try {
+            const customProvidersList = await this.customOpenAI.getProviders();
+            for (const cp of customProvidersList) {
+                if (cp.enabled && cp.ttsType !== 'none') {
+                    const cpVoices: Voice[] = [];
+                    if (cp.ttsType === 'shopaikey') {
+                        cpVoices.push(
+                            { id: 'Zephyr', name: 'Gemini - Zephyr (Nữ)', gender: 'female', languageCode: 'vi-VN', description: 'Giọng nữ tươi sáng (Google)' },
+                            { id: 'Puck', name: 'Gemini - Puck (Nam)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng nam trầm ấm (Google)' },
+                            { id: 'Charon', name: 'Gemini - Charon (Ấm áp)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng trầm ấm (Google)' },
+                            { id: 'Kore', name: 'Gemini - Kore (Chắc chắn)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng chắc chắn (Google)' },
+                            { id: 'Aoede', name: 'Gemini - Aoede (Nhẹ nhàng)', gender: 'female', languageCode: 'vi-VN', description: 'Giọng nhẹ nhàng (Google)' },
+                            { id: 'alloy', name: 'OpenAI - Alloy (Trung tính)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng OpenAI Alloy' },
+                            { id: 'echo', name: 'OpenAI - Echo (Nam)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng OpenAI Echo' },
+                            { id: 'fable', name: 'OpenAI - Fable (Nam)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng OpenAI Fable' },
+                            { id: 'onyx', name: 'OpenAI - Onyx (Nam)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng OpenAI Onyx' },
+                            { id: 'nova', name: 'OpenAI - Nova (Nữ)', gender: 'female', languageCode: 'vi-VN', description: 'Giọng OpenAI Nova' },
+                            { id: 'shimmer', name: 'OpenAI - Shimmer (Nữ)', gender: 'female', languageCode: 'vi-VN', description: 'Giọng OpenAI Shimmer' }
+                        );
+                    } else if (cp.ttsType === 'openai') {
+                        cpVoices.push(
+                            { id: 'alloy', name: 'Alloy (Trung tính)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng trung tính' },
+                            { id: 'echo', name: 'Echo (Nam)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng nam' },
+                            { id: 'fable', name: 'Fable (Nam)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng nam' },
+                            { id: 'onyx', name: 'Onyx (Nam)', gender: 'male', languageCode: 'vi-VN', description: 'Giọng nam' },
+                            { id: 'nova', name: 'Nova (Nữ)', gender: 'female', languageCode: 'vi-VN', description: 'Giọng nữ' },
+                            { id: 'shimmer', name: 'Shimmer (Nữ)', gender: 'female', languageCode: 'vi-VN', description: 'Giọng nữ' }
+                        );
+                    }
+                    results.push({ provider: `${cp.name}`, voices: cpVoices });
+                }
+            }
+        } catch (error) {
+            this.logger.warn(`Failed to add custom providers voices to list: ${error.message}`);
+        }
 
         return results;
     }

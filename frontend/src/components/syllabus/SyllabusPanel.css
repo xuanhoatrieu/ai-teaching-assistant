@@ -1272,3 +1272,100 @@
     background: rgba(244, 67, 54, 0.15);
 }
 
+/* Cell Merging Toolbar and Grid Enhancements */
+.table-editor-cell-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.table-editor-cell-wrapper:hover .cell-merge-toolbar {
+    opacity: 1;
+}
+
+.cell-merge-toolbar {
+    position: absolute;
+    bottom: -8px;
+    right: 2px;
+    background: rgba(30, 41, 59, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    display: flex;
+    gap: 1px;
+    padding: 1px;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 10;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.btn-merge-action {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 2px 4px;
+    border-radius: 2px;
+    color: #fff;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-merge-action:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-merge-action.btn-split {
+    color: #ff8a80;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    margin-left: 1px;
+}
+
+.btn-merge-action.btn-split:hover {
+    background: rgba(244, 67, 54, 0.2);
+}
+
+/* Custom Table View Mode (colSpan & rowSpan rendering) */
+.custom-table-view-container {
+    width: 100%;
+    margin: 1rem 0;
+}
+
+.custom-syllabus-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+    font-family: 'Times New Roman', serif;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    background: rgba(255, 255, 255, 0.01);
+}
+
+.custom-syllabus-table th,
+.custom-syllabus-table td {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    padding: 0.5rem 0.75rem;
+    vertical-align: top;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.custom-syllabus-table th {
+    background: rgba(59, 130, 246, 0.1);
+    color: #93c5fd;
+    font-weight: bold;
+    text-align: center;
+}
+
+.custom-syllabus-table td p {
+    margin: 0 0 0.5em 0;
+}
+
+.custom-syllabus-table td p:last-child {
+    margin-bottom: 0;
+}
+
+

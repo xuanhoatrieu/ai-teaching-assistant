@@ -1,17 +1,491 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider      = "prisma-client-js"
-  engineType    = "library"
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  engineType    = "library"
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-// ==================== ENUMS ====================
+model User {
+  id                   String             @id @default(uuid())
+  email                String             @unique
+  passwordHash         String             @map("password_hash")
+  role                 UserRole           @default(USER)
+  apiKeyEnc            String?            @map("api_key_enc")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+  fullName             String?            @map("full_name")
+  organization         String?            @map("organization")
+  phone                String?            @map("phone")
+  status               UserStatus         @default(APPROVED)
+  resetPasswordExpires DateTime?          @map("reset_password_expires")
+  resetPasswordToken   String?            @map("reset_password_token")
+  apiKeys              ApiKey[]
+  modelConfigs         ModelConfig[]
+  pptxAudioSessions    PptxAudioSession[]
+  templates            PPTXTemplate[]
+  subjects             Subject[]
+  ttsConfigs           UserTTSConfig[]
+  videoGenerations     VideoGeneration[]
+
+  @@map("users")
+}
+
+model Subject {
+  id                String            @id @default(uuid())
+  userId            String            @map("user_id")
+  name              String
+  description       String?
+  institutionType   String?           @map("institution_type")
+  expertiseArea     String?           @map("expertise_area")
+  courseName        String?           @map("course_name")
+  targetAudience    String?           @map("target_audience")
+  majorName         String?           @map("major_name")
+  additionalContext String?           @map("additional_context")
+  language          String            @default("vi")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  lessons           Lesson[]
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syllabus          Syllabus?
+  videoGenerations  VideoGeneration[]
+
+  @@map("subjects")
+}
+
+model Lesson {
+  id                   String                @id @default(uuid())
+  subjectId            String                @map("subject_id")
+  templateId           String?               @map("template_id")
+  title                String
+  outlineRaw           String?               @map("outline_raw")
+  status               LessonStatus          @default(DRAFT)
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  detailedOutline      String?               @map("detailed_outline")
+  slideScript          String?               @map("slide_script")
+  currentStep          Int                   @default(1) @map("current_step")
+  generatedContents    GeneratedContent[]
+  interactiveQuestions InteractiveQuestion[]
+  subject              Subject               @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  template             PPTXTemplate?         @relation(fields: [templateId], references: [id])
+  questionBank         QuestionBank?
+  reviewQuestions      ReviewQuestion[]
+  slideAudios          SlideAudio[]
+  slides               Slide[]
+  syllabusLesson       SyllabusLesson?
+  videoGenerations     VideoGeneration[]
+
+  @@map("lessons")
+}
+
+model Prompt {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  name      String
+  content   String
+  variables String[]
+  version   Int      @default(1)
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("prompts")
+}
+
+model TTSProvider {
+  id             String          @id @default(uuid())
+  name           String          @unique
+  type           TTSProviderType
+  endpoint       String?
+  requiredFields String[]        @map("required_fields")
+  isSystem       Boolean         @default(false) @map("is_system")
+  isActive       Boolean         @default(true) @map("is_active")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  userConfigs    UserTTSConfig[]
+
+  @@map("tts_providers")
+}
+
+model UserTTSConfig {
+  id             String      @id @default(uuid())
+  userId         String      @map("user_id")
+  providerId     String      @map("provider_id")
+  credentialsEnc String      @map("credentials_enc")
+  isDefault      Boolean     @default(false) @map("is_default")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  provider       TTSProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, providerId])
+  @@map("user_tts_configs")
+}
+
+model ApiKey {
+  id           String     @id @default(uuid())
+  name         String
+  keyEncrypted String     @map("key_encrypted")
+  service      APIService
+  isSystem     Boolean    @default(false) @map("is_system")
+  userId       String?    @map("user_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+  user         User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model GeneratedContent {
+  id          String        @id @default(uuid())
+  lessonId    String        @map("lesson_id")
+  type        ContentType
+  contentJson String?       @map("content_json")
+  fileUrl     String?       @map("file_url")
+  status      ContentStatus @default(PENDING)
+  errorMsg    String?       @map("error_msg")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  lesson      Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("generated_contents")
+}
+
+model PPTXTemplate {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  titleBgUrl   String   @map("title_bg_url")
+  contentBgUrl String   @map("content_bg_url")
+  thumbnailUrl String?  @map("thumbnail_url")
+  fileUrl      String?  @map("file_url")
+  stylingJson  String?  @map("styling_json")
+  isSystem     Boolean  @default(false) @map("is_system")
+  isDefault    Boolean  @default(false) @map("is_default")
+  isActive     Boolean  @default(true) @map("is_active")
+  userId       String?  @map("user_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  lessons      Lesson[]
+  user         User?    @relation(fields: [userId], references: [id])
+
+  @@map("pptx_templates")
+}
+
+model QuestionBank {
+  id            String   @id @default(uuid())
+  lessonId      String   @unique @map("lesson_id")
+  questionsJson String   @map("questions_json")
+  levelCounts   String?  @map("level_counts")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("question_banks")
+}
+
+model ModelConfig {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  taskType  TaskType @map("task_type")
+  provider  String
+  modelName String   @map("model_name")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskType])
+  @@map("model_configs")
+}
+
+model SlideAudio {
+  id            String   @id @default(uuid())
+  lessonId      String   @map("lesson_id")
+  slideIndex    Int      @map("slide_index")
+  slideTitle    String?  @map("slide_title")
+  speakerNote   String
+  audioFileName String?  @map("audio_file_name")
+  audioUrl      String?  @map("audio_url")
+  audioDuration Float?   @map("audio_duration")
+  voiceId       String?  @map("voice_id")
+  status        String   @default("pending")
+  errorMessage  String?  @map("error_message")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, slideIndex])
+  @@map("slide_audios")
+}
+
+model Slide {
+  id                   String   @id @default(uuid())
+  lessonId             String   @map("lesson_id")
+  slideIndex           Int      @map("slide_index")
+  slideType            String   @default("content")
+  title                String
+  content              String?
+  optimizedContentJson String?  @map("optimized_content_json")
+  visualIdea           String?  @map("visual_idea")
+  speakerNote          String?  @map("speaker_note")
+  imagePrompt          String?  @map("image_prompt")
+  imageUrl             String?  @map("image_url")
+  audioUrl             String?  @map("audio_url")
+  audioDuration        Float?   @map("audio_duration")
+  status               String   @default("draft")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  lesson               Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, slideIndex])
+  @@map("slides")
+}
+
+model InteractiveQuestion {
+  id                String   @id @default(uuid())
+  lessonId          String   @map("lesson_id")
+  questionOrder     Int      @default(0) @map("question_order")
+  questionType      String   @default("MC") @map("question_type")
+  questionText      String   @map("question_text")
+  imageUrl          String?  @map("image_url")
+  videoUrl          String?  @map("video_url")
+  audioUrl          String?  @map("audio_url")
+  answer1           String?  @map("answer_1")
+  answer2           String?  @map("answer_2")
+  answer3           String?  @map("answer_3")
+  answer4           String?  @map("answer_4")
+  answer5           String?  @map("answer_5")
+  answer6           String?  @map("answer_6")
+  answer7           String?  @map("answer_7")
+  answer8           String?  @map("answer_8")
+  answer9           String?  @map("answer_9")
+  answer10          String?  @map("answer_10")
+  correctFeedback   String?  @map("correct_feedback")
+  incorrectFeedback String?  @map("incorrect_feedback")
+  points            Int      @default(1)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  lesson            Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("interactive_questions")
+}
+
+model ReviewQuestion {
+  id            String   @id @default(uuid())
+  lessonId      String   @map("lesson_id")
+  questionId    String   @map("question_id")
+  questionOrder Int      @default(0) @map("question_order")
+  level         Int      @default(1)
+  question      String
+  correctAnswer String   @map("correct_answer")
+  optionB       String   @map("option_b")
+  optionC       String   @map("option_c")
+  optionD       String   @map("option_d")
+  explanation   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, questionId])
+  @@map("review_questions")
+}
+
+model SystemConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_configs")
+}
+
+model PptxAudioSession {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  fileName      String   @map("file_name")
+  filePath      String   @map("file_path")
+  slidesJson    String?  @map("slides_json")
+  contentJson   String?  @map("content_json")
+  questionsJson String?  @map("questions_json")
+  language      String   @default("vi")
+  status        String   @default("uploaded")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("pptx_audio_sessions")
+}
+
+model VideoGeneration {
+  id             String       @id @default(uuid())
+  subjectId      String       @map("subject_id")
+  lessonId       String?      @map("lesson_id")
+  userId         String       @map("user_id")
+  title          String       @default("Video mới")
+  inputType      String       @default("manual") @map("input_type")
+  inputText      String?      @map("input_text")
+  inputFilesJson Json?        @map("input_files_json")
+  format         String       @default("horizontal")
+  resolution     String       @default("1080p")
+  style          String       @default("auto")
+  narrationLang  String       @default("vi") @map("narration_lang")
+  subtitleLang   String       @default("vi") @map("subtitle_lang")
+  narrationSpeed Float        @default(1.0) @map("narration_speed")
+  videoScript    Json?        @map("video_script")
+  editedScript   Json?        @map("edited_script")
+  scriptStatus   String       @default("none") @map("script_status")
+  wizardStep     Int          @default(1) @map("wizard_step")
+  status         String       @default("draft")
+  progress       Int          @default(0)
+  renderStep     String?      @map("render_step")
+  totalScenes    Int          @default(0) @map("total_scenes")
+  doneScenes     Int          @default(0) @map("done_scenes")
+  errorMessage   String?      @map("error_message")
+  videoUrl       String?      @map("video_url")
+  subtitleUrl    String?      @map("subtitle_url")
+  thumbnailUrl   String?      @map("thumbnail_url")
+  duration       Float?
+  fileSize       Int?         @map("file_size")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  lesson         Lesson?      @relation(fields: [lessonId], references: [id])
+  subject        Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
+  scenes         VideoScene[]
+
+  @@index([subjectId])
+  @@index([lessonId])
+  @@index([userId])
+  @@index([status])
+  @@map("video_generations")
+}
+
+model VideoScene {
+  id            String          @id @default(uuid())
+  videoGenId    String          @map("video_gen_id")
+  sceneIndex    Int             @map("scene_index")
+  title         String
+  approach      String
+  narrationText String          @map("narration_text")
+  subtitleText  String?         @map("subtitle_text")
+  visualDesc    String?         @map("visual_desc")
+  imagePrompt   String?         @map("image_prompt")
+  imageUrl      String?         @map("image_url")
+  manimCode     String?         @map("manim_code")
+  codeLines     Json?           @map("code_lines")
+  clipUrl       String?         @map("clip_url")
+  audioUrl      String?         @map("audio_url")
+  duration      Float?
+  status        String          @default("pending")
+  errorMessage  String?         @map("error_message")
+  retryCount    Int             @default(0) @map("retry_count")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  approved      Boolean         @default(false)
+  videoGen      VideoGeneration @relation(fields: [videoGenId], references: [id], onDelete: Cascade)
+
+  @@unique([videoGenId, sceneIndex])
+  @@index([videoGenId])
+  @@map("video_scenes")
+}
+
+model Syllabus {
+  id         String              @id @default(uuid())
+  subjectId  String              @unique @map("subject_id")
+  status     String              @default("draft")
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+  subject    Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  blocks     SyllabusBlock[]
+  lessons    SyllabusLesson[]
+  references SyllabusReference[]
+
+  @@map("syllabi")
+}
+
+model SyllabusBlock {
+  id         String   @id @default(uuid())
+  syllabusId String   @map("syllabus_id")
+  blockType  String   @map("block_type")
+  title      String
+  content    String   @default("")
+  metadata   Json?
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  syllabus   Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+
+  @@map("syllabus_blocks")
+}
+
+model SyllabusReference {
+  id              String   @id @default(uuid())
+  syllabusId      String   @map("syllabus_id")
+  fileName        String   @map("file_name")
+  fileUrl         String   @map("file_url")
+  fileSize        Int?     @map("file_size")
+  markdownContent String?  @map("markdown_content")
+  status          String   @default("pending")
+  createdAt       DateTime @default(now()) @map("created_at")
+  syllabus        Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+
+  @@map("syllabus_references")
+}
+
+model SyllabusLesson {
+  id              String   @id @default(uuid())
+  syllabusId      String   @map("syllabus_id")
+  sortOrder       Int      @map("sort_order")
+  title           String
+  outline         String
+  textbookContent String?  @map("textbook_content")
+  textbookStatus  String   @default("none") @map("textbook_status")
+  lessonId        String?  @unique @map("lesson_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  textbookImages  Json?    @map("textbook_images")
+  textbookPhase   String?  @map("textbook_phase")
+  textbookPlan    String?  @map("textbook_plan")
+  lesson          Lesson?  @relation(fields: [lessonId], references: [id])
+  syllabus        Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+
+  @@map("syllabus_lessons")
+}
+
+model GenerationJob {
+  id        String   @id @default(uuid())
+  type      String
+  lessonId  String   @map("lesson_id")
+  userId    String   @map("user_id")
+  status    String   @default("pending")
+  progress  Int      @default(0)
+  total     Int      @default(0)
+  message   String?
+  result    Json?
+  error     String?
+  payload   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([lessonId])
+  @@index([status])
+  @@map("generation_jobs")
+}
+
+model UsefulLink {
+  id          String   @id @default(uuid())
+  title       String
+  url         String
+  icon        String   @default("🔗")
+  description String?
+  sortOrder   Int      @default(0) @map("sort_order")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("useful_links")
+}
 
 enum UserRole {
   ADMIN
@@ -62,598 +536,11 @@ enum ContentStatus {
   FAILED
 }
 
-// ==================== MODELS ====================
-
-model User {
-  id            String     @id @default(uuid())
-  email         String     @unique
-  passwordHash  String     @map("password_hash")
-  role          UserRole   @default(USER)
-  fullName      String?    @map("full_name")
-  phone         String?    @map("phone")
-  organization  String?    @map("organization")
-  status        UserStatus @default(APPROVED)
-  apiKeyEnc     String?    @map("api_key_enc") // Encrypted Gemini API key
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
-  resetPasswordToken   String?    @map("reset_password_token")
-  resetPasswordExpires DateTime?  @map("reset_password_expires")
-
-  // Relations
-  subjects           Subject[]
-  ttsConfigs         UserTTSConfig[]
-  apiKeys            ApiKey[]
-  templates          PPTXTemplate[]
-  modelConfigs       ModelConfig[]
-  pptxAudioSessions  PptxAudioSession[]
-  videoGenerations   VideoGeneration[]
-
-  @@map("users")
-}
-
-model Subject {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  name        String
-  description String?
-
-  // Role definition fields for AI prompt context
-  institutionType   String?  @map("institution_type")   // Đại học, Cao đẳng, THPT, Doanh nghiệp
-  expertiseArea     String?  @map("expertise_area")     // Lĩnh vực chuyên môn của giảng viên
-  courseName        String?  @map("course_name")        // Tên môn học đầy đủ
-  targetAudience    String?  @map("target_audience")    // Đối tượng học viên
-  majorName         String?  @map("major_name")         // Ngành học
-  additionalContext String?  @map("additional_context") @db.Text // Yêu cầu bổ sung
-
-  // Language setting for AI output
-  language          String   @default("vi")  // "vi" | "en" | "vi-en" (bilingual: slides EN, speaker notes VI)
-
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lessons Lesson[]
-  videoGenerations VideoGeneration[]
-  syllabus Syllabus?
-
-  @@map("subjects")
-}
-
-model Lesson {
-  id         String       @id @default(uuid())
-  subjectId  String       @map("subject_id")
-  templateId String?      @map("template_id")
-  title      String
-  outlineRaw String?      @map("outline_raw") @db.Text
-  status     LessonStatus @default(DRAFT)
-  createdAt  DateTime     @default(now()) @map("created_at")
-  updatedAt  DateTime     @updatedAt @map("updated_at")
-
-  // Step-by-step workflow data
-  detailedOutline String?  @map("detailed_outline") @db.Text  // Step 2 output
-  slideScript     String?  @map("slide_script") @db.Text      // Step 3 output (deprecated, use slides[])
-  currentStep     Int      @default(1) @map("current_step")   // Track progress (1-6)
-
-  // Relations
-  subject           Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  template          PPTXTemplate?      @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  generatedContents GeneratedContent[]
-  questionBank      QuestionBank?      // Deprecated: use interactiveQuestions + reviewQuestions
-  slideAudios       SlideAudio[]       // Step 4: Audio per slide (deprecated, use slides[])
-  
-  // New structured data
-  slides               Slide[]               // Step 3: Structured slide data
-  interactiveQuestions InteractiveQuestion[] // Step 6: Interactive questions during lesson
-  reviewQuestions      ReviewQuestion[]      // Step 6: Review questions (Bloom taxonomy)
-  videoGenerations     VideoGeneration[]
-  syllabusLesson       SyllabusLesson?
-
-  @@map("lessons")
-}
-
-model Prompt {
-  id        String   @id @default(uuid())
-  slug      String   @unique // e.g., "pptx_content", "handout", "quiz"
-  name      String
-  content   String   @db.Text
-  variables String[] // e.g., ["{lesson_title}", "{subject_name}"]
-  version   Int      @default(1)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("prompts")
-}
-
-model TTSProvider {
-  id             String          @id @default(uuid())
-  name           String          @unique
-  type           TTSProviderType
-  endpoint       String?
-  requiredFields String[]        @map("required_fields") // e.g., ["api_key", "voice_id"]
-  isSystem       Boolean         @default(false) @map("is_system")
-  isActive       Boolean         @default(true) @map("is_active")
-  createdAt      DateTime        @default(now()) @map("created_at")
-
-  // Relations
-  userConfigs UserTTSConfig[]
-
-  @@map("tts_providers")
-}
-
-model UserTTSConfig {
-  id             String   @id @default(uuid())
-  userId         String   @map("user_id")
-  providerId     String   @map("provider_id")
-  credentialsEnc String   @map("credentials_enc") @db.Text // Encrypted JSON
-  isDefault      Boolean  @default(false) @map("is_default")
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  // Relations
-  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  provider TTSProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, providerId])
-  @@map("user_tts_configs")
-}
-
-model ApiKey {
-  id           String     @id @default(uuid())
-  name         String // e.g., "System Gemini Key", "User's Gemini Key"
-  keyEncrypted String     @map("key_encrypted") @db.Text
-  service      APIService
-  isSystem     Boolean    @default(false) @map("is_system")
-  userId       String?    @map("user_id") // null = system key
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
-
-  // Relations
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("api_keys")
-}
-
-model GeneratedContent {
-  id          String        @id @default(uuid())
-  lessonId    String        @map("lesson_id")
-  type        ContentType
-  contentJson String?       @map("content_json") @db.Text // JSON structure of generated content
-  fileUrl     String?       @map("file_url") // MinIO URL
-  status      ContentStatus @default(PENDING)
-  errorMsg    String?       @map("error_msg")
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-
-  @@map("generated_contents")
-}
-
-model PPTXTemplate {
-  id           String   @id @default(uuid())
-  name         String
-  description  String?
-  titleBgUrl   String   @map("title_bg_url")
-  contentBgUrl String   @map("content_bg_url")
-  thumbnailUrl String?  @map("thumbnail_url")
-  fileUrl      String?  @map("file_url")  // Path to uploaded PPTX template file
-  stylingJson  String?  @map("styling_json") @db.Text // JSON: fonts, colors, sizes
-  isSystem     Boolean  @default(false) @map("is_system")
-  isDefault    Boolean  @default(false) @map("is_default")
-  isActive     Boolean  @default(true) @map("is_active")
-  userId       String?  @map("user_id")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  lessons Lesson[]
-
-  @@map("pptx_templates")
-}
-
-// Question Bank for lesson quizzes (Step 5 of workflow)
-model QuestionBank {
-  id            String   @id @default(uuid())
-  lessonId      String   @unique @map("lesson_id")  // One-to-one with Lesson
-  questionsJson String   @map("questions_json") @db.Text  // Full question data as JSON
-  levelCounts   String?  @map("level_counts")             // {"level1": 5, "level2": 3, "level3": 2}
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-
-  @@map("question_banks")
-}
-
-// Task types for AI model configuration
 enum TaskType {
-  OUTLINE        // Raw outline -> Detailed outline
-  SLIDES         // Detailed outline -> Slide script
-  SPEAKER_NOTES  // Generate speaker notes for slides
-  QUESTIONS      // Generate quiz questions
-  IMAGE          // Generate images for slides
-  TTS            // Text-to-speech for audio
-}
-
-// User's AI model preference per task type
-model ModelConfig {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  taskType  TaskType @map("task_type")
-  provider  String   // GEMINI, IMAGEN, GOOGLE_TTS, etc.
-  modelName String   @map("model_name") // gemini-1.5-flash, gemini-2.0-flash, etc.
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, taskType])
-  @@map("model_configs")
-}
-
-// Audio per slide for Step 4: Generate Audio
-model SlideAudio {
-  id            String   @id @default(uuid())
-  lessonId      String   @map("lesson_id")
-  slideIndex    Int      @map("slide_index")      // 1-based, following slide order
-  slideTitle    String?  @map("slide_title")
-  speakerNote   String   @db.Text
-  audioFileName String?  @map("audio_file_name")  // slide_00.mp3, slide_01.mp3...
-  audioUrl      String?  @map("audio_url")        // Full URL for playback
-  audioDuration Float?   @map("audio_duration")   // seconds
-  voiceId       String?  @map("voice_id")
-  status        String   @default("pending")      // pending | generating | done | error
-  errorMessage  String?  @map("error_message")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-
-  @@unique([lessonId, slideIndex])
-  @@map("slide_audios")
-}
-
-// ==================== NEW STRUCTURED MODELS ====================
-
-// Structured slide data (replaces slideScript TEXT)
-model Slide {
-  id          String   @id @default(uuid())
-  lessonId    String   @map("lesson_id")
-  slideIndex  Int      @map("slide_index")      // 1-based
-  slideType   String   @default("content")      // title, content, objectives, summary
-  title       String                            // Slide title
-  content     String?  @db.Text                 // Raw bullet points from Step 3
-  optimizedContentJson String? @map("optimized_content_json") @db.Text // AI-optimized bullets [JSON array]
-  visualIdea  String?  @map("visual_idea") @db.Text  // Image concept description
-  speakerNote String?  @map("speaker_note") @db.Text // Speaker notes/transcript
-  imagePrompt String?  @map("image_prompt") @db.Text // Prompt used to generate image
-  imageUrl    String?  @map("image_url")        // Generated image URL
-  audioUrl    String?  @map("audio_url")        // Generated audio URL
-  audioDuration Float? @map("audio_duration")   // Audio duration in seconds
-  status      String   @default("draft")        // draft, image_done, audio_done, complete
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-
-  @@unique([lessonId, slideIndex])
-  @@map("slides")
-}
-
-// Interactive questions during lesson (MC/MR, check focus)
-model InteractiveQuestion {
-  id                String   @id @default(uuid())
-  lessonId          String   @map("lesson_id")
-  questionOrder     Int      @default(0) @map("question_order")
-  
-  // MC (Multiple Choice - 1 answer) | MR (Multiple Response - multiple answers)
-  questionType      String   @default("MC") @map("question_type")
-  questionText      String   @map("question_text") @db.Text
-  
-  // Media attachments (optional)
-  imageUrl          String?  @map("image_url")
-  videoUrl          String?  @map("video_url")
-  audioUrl          String?  @map("audio_url")
-  
-  // Answers (up to 10, correct answers start with *)
-  answer1           String?  @map("answer_1")
-  answer2           String?  @map("answer_2")
-  answer3           String?  @map("answer_3")
-  answer4           String?  @map("answer_4")
-  answer5           String?  @map("answer_5")
-  answer6           String?  @map("answer_6")
-  answer7           String?  @map("answer_7")
-  answer8           String?  @map("answer_8")
-  answer9           String?  @map("answer_9")
-  answer10          String?  @map("answer_10")
-  
-  // Feedback
-  correctFeedback   String?  @map("correct_feedback") @db.Text
-  incorrectFeedback String?  @map("incorrect_feedback") @db.Text
-  points            Int      @default(1)
-  
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  
-  // Relations
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  
-  @@map("interactive_questions")
-}
-
-// Review questions with Bloom's taxonomy levels
-model ReviewQuestion {
-  id              String   @id @default(uuid())
-  lessonId        String   @map("lesson_id")
-  
-  // Question ID format: B1-1-01 (LessonNum-Level-Order)
-  questionId      String   @map("question_id")
-  questionOrder   Int      @default(0) @map("question_order")
-  
-  // Bloom's level: 1=Biết (Remember), 2=Hiểu (Understand), 3=Vận dụng (Apply)
-  level           Int      @default(1)
-  
-  // Content
-  question        String   @db.Text
-  
-  // Answers - Option A is ALWAYS the correct answer
-  correctAnswer   String   @map("correct_answer")  // Option A (always correct)
-  optionB         String   @map("option_b")
-  optionC         String   @map("option_c")
-  optionD         String   @map("option_d")
-  
-  // Explanation of why A is correct
-  explanation     String?  @db.Text
-  
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  // Relations
-  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  
-  @@unique([lessonId, questionId])
-  @@map("review_questions")
-}
-
-// ==================== SYSTEM CONFIG ====================
-
-model SystemConfig {
-  id        String   @id @default(uuid())
-  key       String   @unique
-  value     String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  
-  @@map("system_configs")
-}
-
-// ==================== PPTX AUDIO TOOL ====================
-
-// Standalone session for PPTX Audio Tool (no Lesson/Subject dependency)
-model PptxAudioSession {
-  id            String   @id @default(uuid())
-  userId        String   @map("user_id")
-  fileName      String   @map("file_name")           // Original PPTX filename
-  filePath      String   @map("file_path")            // Server path to uploaded PPTX
-  slidesJson    String?  @map("slides_json") @db.Text // [{index, title, noteFull, noteEN, noteVN, hasDual, audioUrl, audioDuration, audioStatus}]
-  contentJson   String?  @map("content_json") @db.Text // [{index, title, content[]}]
-  questionsJson String?  @map("questions_json") @db.Text // Generated questions JSON
-  language      String   @default("vi")                // "vi" or "en" — active language for TTS
-  status        String   @default("uploaded")          // uploaded | notes_extracted | audio_done | completed
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  // Relations
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("pptx_audio_sessions")
-}
-
-// ==================== VIDEO GENERATION MODELS ====================
-
-model VideoGeneration {
-  id              String   @id @default(uuid())
-  subjectId       String   @map("subject_id")
-  subject         Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  lessonId        String?  @map("lesson_id")
-  lesson          Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-  userId          String   @map("user_id")
-  user            User     @relation(fields: [userId], references: [id])
-
-  // Video title (editable by user)
-  title           String   @default("Video mới")
-
-  // Input source
-  inputType       String   @default("manual") @map("input_type") // lesson | manual | upload
-  inputText       String?  @map("input_text") @db.Text           // Raw input text / outline
-  inputFilesJson  Json?    @map("input_files_json")              // [{name, url, type}] uploaded files
-
-  // Config
-  format          String   @default("horizontal")
-  resolution      String   @default("1080p")
-  style           String   @default("auto")
-  narrationLang   String   @default("vi") @map("narration_lang")
-  subtitleLang    String   @default("vi") @map("subtitle_lang")
-  narrationSpeed  Float    @default(1.0)  @map("narration_speed")
-
-  // Script (editable by user before render)
-  videoScript     Json?    @map("video_script")     // AI-generated script
-  editedScript    Json?    @map("edited_script")    // User-edited version (takes priority)
-  scriptStatus    String   @default("none") @map("script_status") // none | generating | ready | edited
-
-  // Wizard step tracking
-  wizardStep      Int      @default(1) @map("wizard_step") // 1=input, 2=script, 3=scenes, 4=render, 5=output
-
-  // Render status tracking
-  status          String   @default("draft") // draft | pending | script | rendering | composing | uploading | done | error
-  progress        Int      @default(0)
-  renderStep      String?  @map("render_step")  // Current render step message
-  totalScenes     Int      @default(0) @map("total_scenes")
-  doneScenes      Int      @default(0) @map("done_scenes")
-  errorMessage    String?  @map("error_message")
-
-  // Output
-  videoUrl        String?  @map("video_url")
-  subtitleUrl     String?  @map("subtitle_url")
-  thumbnailUrl    String?  @map("thumbnail_url")
-  duration        Float?
-  fileSize        Int?     @map("file_size")
-
-  // Relations
-  scenes          VideoScene[]
-
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt      @map("updated_at")
-
-  @@index([subjectId])
-  @@index([lessonId])
-  @@index([userId])
-  @@index([status])
-  @@map("video_generations")
-}
-
-model VideoScene {
-  id              String   @id @default(uuid())
-  videoGenId      String   @map("video_gen_id")
-  videoGen        VideoGeneration @relation(fields: [videoGenId], references: [id], onDelete: Cascade)
-
-  sceneIndex      Int      @map("scene_index")
-  title           String
-  approach        String
-  narrationText   String   @map("narration_text") @db.Text
-  subtitleText    String?  @map("subtitle_text") @db.Text
-  visualDesc      String?  @map("visual_desc") @db.Text
-  imagePrompt     String?  @map("image_prompt") @db.Text
-  imageUrl        String?  @map("image_url")
-  manimCode       String?  @map("manim_code") @db.Text
-  codeLines       Json?    @map("code_lines")
-
-  // Output
-  clipUrl         String?  @map("clip_url")
-  audioUrl        String?  @map("audio_url")
-  duration        Float?
-  status          String   @default("pending")
-  errorMessage    String?  @map("error_message")
-  retryCount      Int      @default(0) @map("retry_count")
-  approved        Boolean  @default(false)
-
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  @@index([videoGenId])
-  @@unique([videoGenId, sceneIndex])
-  @@map("video_scenes")
-}
-
-// ==================== SYLLABUS PIPELINE ====================
-
-model Syllabus {
-  id        String   @id @default(uuid())
-  subjectId String   @unique @map("subject_id")
-  status    String   @default("draft") // draft, complete
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  subject    Subject           @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  blocks     SyllabusBlock[]
-  references SyllabusReference[]
-  lessons    SyllabusLesson[]
-
-  @@map("syllabi")
-}
-
-model SyllabusBlock {
-  id         String   @id @default(uuid())
-  syllabusId String   @map("syllabus_id")
-  blockType  String   @map("block_type") // header, general_info, lecturers, description, clo, materials, student_tasks, assessment, content_detail, update_log
-  title      String
-  content    String   @default("") @db.Text
-  metadata   Json?    // Structured data for tables (lecturers, CLO, assessment matrix)
-  sortOrder  Int      @default(0) @map("sort_order")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  syllabus Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
-
-  @@map("syllabus_blocks")
-}
-
-model SyllabusReference {
-  id              String   @id @default(uuid())
-  syllabusId      String   @map("syllabus_id")
-  fileName        String   @map("file_name")
-  fileUrl         String   @map("file_url") // MinIO object path
-  fileSize        Int?     @map("file_size")
-  markdownContent String?  @map("markdown_content") @db.Text
-  status          String   @default("pending") // pending, processing, done, error
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  syllabus Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
-
-  @@map("syllabus_references")
-}
-
-model SyllabusLesson {
-  id              String   @id @default(uuid())
-  syllabusId      String   @map("syllabus_id")
-  sortOrder       Int      @map("sort_order")
-  title           String
-  outline         String   @db.Text
-  textbookContent String?  @map("textbook_content") @db.Text
-  textbookStatus  String   @default("none") @map("textbook_status") // none, generating, done, error
-  textbookPlan    String?  @map("textbook_plan") @db.Text            // Backward Design plan (JSON)
-  textbookPhase   String?  @map("textbook_phase")                    // extracting, planning, writing, illustrating, reviewing, done, error
-  textbookImages  Json?    @map("textbook_images")                   // [{url, caption, type: 'mermaid'|'ai_image'}]
-  lessonId        String?  @unique @map("lesson_id") // Optional 1:1 link to existing Lesson
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  syllabus Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
-  lesson   Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
-
-  @@map("syllabus_lessons")
-}
-
-// ==================== ASYNC GENERATION JOBS ====================
-
-model GenerationJob {
-  id        String   @id @default(uuid())
-  type      String   // review-questions | speaker-notes | optimize-notes | append-questions
-  lessonId  String   @map("lesson_id")
-  userId    String   @map("user_id")
-  status    String   @default("pending") // pending | processing | done | error
-  progress  Int      @default(0)         // 0-100
-  total     Int      @default(0)         // total items to process
-  message   String?                      // progress message for UI
-  result    Json?                        // optional result data
-  error     String?  @db.Text            // error message if failed
-  payload   Json?                        // input params (levelCounts, etc.)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@index([lessonId])
-  @@index([status])
-  @@map("generation_jobs")
-}
-
-// ==================== USEFUL TOOLS LINKS ====================
-
-model UsefulLink {
-  id          String   @id @default(uuid())
-  title       String
-  url         String
-  icon        String   @default("🔗")
-  description String?
-  sortOrder   Int      @default(0) @map("sort_order")
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  @@map("useful_links")
+  OUTLINE
+  SLIDES
+  SPEAKER_NOTES
+  QUESTIONS
+  IMAGE
+  TTS
 }

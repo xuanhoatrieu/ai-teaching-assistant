@@ -22,7 +22,7 @@ NC='\033[0m' # No Color
 start_backend() {
     echo -e "${BLUE}🔧 Starting Backend (NestJS :3003)...${NC}"
     cd "$BASE_DIR/backend"
-    nohup npm run start:dev > "$LOGS_DIR/backend.log" 2>&1 &
+    nohup node dist/src/main.js > "$LOGS_DIR/backend.log" 2>&1 & disown
     echo $! > "$PIDS_DIR/backend.pid"
     echo -e "${GREEN}   ✅ Backend PID: $!${NC}"
 }
@@ -30,7 +30,7 @@ start_backend() {
 start_frontend() {
     echo -e "${BLUE}🎨 Starting Frontend (Vite :5173)...${NC}"
     cd "$BASE_DIR/frontend"
-    nohup npm run dev > "$LOGS_DIR/frontend.log" 2>&1 &
+    nohup ./node_modules/.bin/vite > "$LOGS_DIR/frontend.log" 2>&1 & disown
     echo $! > "$PIDS_DIR/frontend.pid"
     echo -e "${GREEN}   ✅ Frontend PID: $!${NC}"
 }
@@ -38,7 +38,7 @@ start_frontend() {
 start_pptx() {
     echo -e "${BLUE}📄 Starting PPTX Service (Uvicorn :3002)...${NC}"
     cd "$BASE_DIR/backend/utils/pptx_generator"
-    nohup "$BASE_DIR/backend/utils/pptx_generator/venv/bin/uvicorn" main:app --port 3002 > "$LOGS_DIR/pptx.log" 2>&1 &
+    nohup "$BASE_DIR/backend/utils/pptx_generator/venv/bin/uvicorn" main:app --port 3002 > "$LOGS_DIR/pptx.log" 2>&1 & disown
     echo $! > "$PIDS_DIR/pptx.pid"
     echo -e "${GREEN}   ✅ PPTX PID: $!${NC}"
 }
@@ -46,7 +46,7 @@ start_pptx() {
 start_worker() {
     echo -e "${BLUE}🎬 Starting Vid-Worker (Python)...${NC}"
     cd "$BASE_DIR/vid-worker"
-    nohup "$BASE_DIR/vid-worker/venv/bin/python" worker.py > "$LOGS_DIR/vid-worker.log" 2>&1 &
+    nohup "$BASE_DIR/vid-worker/venv/bin/python" worker.py > "$LOGS_DIR/vid-worker.log" 2>&1 & disown
     echo $! > "$PIDS_DIR/worker.pid"
     echo -e "${GREEN}   ✅ Worker PID: $!${NC}"
 }

@@ -125,3 +125,41 @@ export function formatMarkdownTable(parsed: ParsedTable): string {
 
     return lines.join('\n');
 }
+
+/**
+ * Calculates the colspan and rowspan for a cell at (rowIndex, colIndex) in a table grid.
+ * Returns { isMerged: true } if the cell itself is merged into another cell (i.e. contains '>' or '^').
+ */
+export function getCellSpan(rows: string[][], rowIndex: number, colIndex: number) {
+    const value = rows[rowIndex]?.[colIndex];
+    if (value === '>' || value === '^') {
+        return { isMerged: true, colSpan: 1, rowSpan: 1 };
+    }
+
+    let colSpan = 1;
+    let rowSpan = 1;
+    const numRows = rows.length;
+    const numCols = rows[0]?.length || 0;
+
+    // Calculate colspan (horizontal merge with right cells containing '>')
+    for (let c = colIndex + 1; c < numCols; c++) {
+        if (rows[rowIndex][c] === '>') {
+            colSpan++;
+        } else {
+            break;
+        }
+    }
+
+    // Calculate rowspan (vertical merge with bottom cells containing '^')
+    for (let r = rowIndex + 1; r < numRows; r++) {
+        // Only merge down if it hasn't hit a different column boundary
+        if (rows[r][colIndex] === '^') {
+            rowSpan++;
+        } else {
+            break;
+        }
+    }
+
+    return { isMerged: false, colSpan, rowSpan };
+}
+

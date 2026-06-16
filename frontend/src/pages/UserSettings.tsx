@@ -307,15 +307,16 @@ function ModelConfigSection() {
             // Build summary message
             const counts: string[] = [];
             const m = res.data.models || {};
-            if (m.CLIPROXY?.length) counts.push(`CLIProxy: ${m.CLIPROXY.length}`);
-            if (m.GEMINI?.length) counts.push(`Gemini: ${m.GEMINI.length}`);
-            if (m.IMAGE_GEN?.length) counts.push(`ImageGen: ${m.IMAGE_GEN.length}`);
-            if (m.VITTS?.length) counts.push(`ViTTS: ${m.VITTS.length}`);
-            if (m.VBEE?.length) counts.push(`Vbee: ${m.VBEE.length}`);
+            
+            Object.keys(m).forEach(key => {
+                if (m[key]?.length) {
+                    counts.push(`${key}: ${m[key].length}`);
+                }
+            });
 
             const total = Object.values(m).reduce((sum: number, arr: any) => sum + (arr?.length || 0), 0);
             if (total === 0) {
-                setError('Không tìm thấy model nào. Kiểm tra API key (Gemini hoặc CLIProxy) trong Admin Settings.');
+                setError('Không tìm thấy model nào. Kiểm tra API key (Gemini, CLIProxy hoặc Custom Providers) trong Admin Settings.');
             } else {
                 let msg = `✅ Tìm thấy ${total} models (${counts.join(', ')})`;
                 // Warn if CLIProxy is missing but enabled
@@ -338,6 +339,10 @@ function ModelConfigSection() {
         else if (modelName.startsWith('imagegen:')) provider = 'IMAGE_GEN';
         else if (modelName.startsWith('vitts:')) provider = 'VITTS';
         else if (modelName.startsWith('vbee:')) provider = 'VBEE';
+        else if (modelName.startsWith('custom_openai:')) {
+            const parts = modelName.split(':');
+            provider = parts[1].toUpperCase();
+        }
         else if (modelName.includes('imagen')) provider = 'IMAGEN';
         else if (modelName.includes('Neural') || modelName.includes('vi-VN')) provider = 'GOOGLE_TTS';
 
@@ -366,14 +371,16 @@ function ModelConfigSection() {
     };
 
     const getModelsForTask = (taskType: string): AvailableModel[] => {
-        // Merge models from ALL providers: GEMINI, CLIPROXY, IMAGE_GEN, VITTS, VBEE
-        const allModels: AvailableModel[] = [
-            ...(availableModels.GEMINI || []),
-            ...(availableModels.CLIPROXY || []),
-            ...(availableModels.IMAGE_GEN || []),
-            ...(availableModels.VITTS || []),
-            ...(availableModels.VBEE || []),
-        ];
+        // Merge models from ALL dynamic and standard providers
+        const allModels: AvailableModel[] = [];
+        
+        Object.keys(availableModels).forEach(key => {
+            const list = availableModels[key];
+            if (Array.isArray(list)) {
+                allModels.push(...list);
+            }
+        });
+
         return allModels.filter(model => model.supportedTasks.includes(taskType));
     };
 
