@@ -181,7 +181,7 @@ export class PptxService {
                 const optimizedContent = await this.optimizeSlideContent(
                     slide.title,
                     slide.content || '',
-                    apiKey || '',
+                    userId,
                     contentModel.modelName,
                     lesson.subjectId,
                     subjectLanguage
@@ -244,15 +244,15 @@ export class PptxService {
     private async optimizeSlideContent(
         title: string,
         rawContent: string,
-        apiKey: string,
+        userId: string,
         modelName: string,
         subjectId?: string,
         subjectLanguage?: string
     ): Promise<OptimizedBullet[]> {
-        this.logger.log(`[DEBUG] optimizeSlideContent called: title="${title.substring(0, 50)}", rawContent=${rawContent?.length || 0} chars, apiKey=${apiKey?.length || 0} chars, model=${modelName}, lang=${subjectLanguage}`);
+        this.logger.log(`[DEBUG] optimizeSlideContent called: title="${title.substring(0, 50)}", rawContent=${rawContent?.length || 0} chars, userId=${userId}, model=${modelName}, lang=${subjectLanguage}`);
 
-        if (!rawContent || !apiKey) {
-            this.logger.warn(`[SKIP] Content optimization skipped: rawContent=${!!rawContent}, apiKey=${!!apiKey}`);
+        if (!rawContent || !userId) {
+            this.logger.warn(`[SKIP] Content optimization skipped: rawContent=${!!rawContent}, userId=${!!userId}`);
             return [];
         }
 
@@ -280,7 +280,7 @@ export class PptxService {
 
             // Call AI (routes through CLIProxy if enabled, falls back to Gemini SDK)
             this.logger.log(`[DEBUG] Calling AI with model ${modelName}...`);
-            const aiResult = await this.aiProvider.generateText(prompt, modelName, apiKey);
+            const aiResult = await this.aiProvider.generateText(prompt, modelName, userId);
             const result = aiResult.content;
             this.logger.log(`[DEBUG] AI response (${aiResult.provider}): ${result?.length || 0} chars, preview: ${result?.substring(0, 200) || 'null'}`);
 

@@ -84,9 +84,6 @@ export class SlidesService {
             throw new BadRequestException('Detailed outline is required before generating slide script');
         }
 
-        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
-        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-
         // Get configured model for SLIDES task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
 
@@ -103,7 +100,7 @@ export class SlidesService {
         this.logger.debug(`Generated prompt for slides (${prompt.length} chars)`);
 
         // Use AiProviderService (CLIProxy → Gemini SDK fallback)
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
         const result = aiResult.content;
         this.logger.log(`Slides generated via ${aiResult.provider} (${aiResult.model})`);
 
@@ -322,9 +319,6 @@ export class SlidesService {
             return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual: ${s.visualIdea}` : ''}`;
         }).join('\n\n');
 
-        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
-        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
 
         // Build prompt using the new focused speaker-notes prompt
@@ -340,7 +334,7 @@ export class SlidesService {
         this.logger.debug(`Generated speaker notes prompt (${prompt.length} chars)`);
 
         // Generate using AI
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
         const result = aiResult.content;
         this.logger.log(`Speaker notes generated via ${aiResult.provider} (${aiResult.model})`);
 
@@ -498,9 +492,6 @@ export class SlidesService {
             return `--- Slide ${s.slideIndex} ---\n${s.speakerNote || '(chưa có speaker note)'}`;
         }).join('\n\n');
 
-        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
-        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
 
         // Build prompt using the optimize-notes prompt
@@ -516,7 +507,7 @@ export class SlidesService {
         this.logger.debug(`Generated optimize notes prompt (${prompt.length} chars)`);
 
         // Generate using AI
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
         const result = aiResult.content;
         this.logger.log(`Speaker notes optimized via ${aiResult.provider} (${aiResult.model})`);
 
@@ -626,9 +617,6 @@ export class SlidesService {
             throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
         }
 
-        // Get API key (can be null — AiProviderService handles CLIProxy fallback)
-        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
 
         // Build prompt for content optimization (same prompt as Step 5 generation)
@@ -642,7 +630,7 @@ export class SlidesService {
         );
 
         // Use AiProviderService for content optimization
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
         const result = aiResult.content;
 
         // Parse JSON result (same cleaning logic as PptxService)
@@ -740,7 +728,6 @@ export class SlidesService {
 
         // Phase 1: Optimize content
         try {
-            const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
             const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
 
             const prompt = await this.promptComposer.buildFullPrompt(
@@ -752,7 +739,7 @@ export class SlidesService {
                 },
             );
 
-            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, apiKey || undefined);
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
             const rawResult = aiResult.content;
 
             // Parse JSON

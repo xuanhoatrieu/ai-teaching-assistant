@@ -131,7 +131,8 @@ export class SlideImageGeneratorService {
                     imagePrompt,
                     '1:1',  // Square ratio (12cm x 12cm)
                     effectiveModelName,
-                    effectiveApiKey || undefined
+                    effectiveApiKey || undefined,
+                    userId
                 );
                 
                 // If it successfully returned a real image (not a placeholder SVG), break the loop

@@ -179,41 +179,59 @@ export class TTSService {
         // Route based on provider parameter
         const customProviders = await this.customOpenAI.getProviders();
         const matchingProvider = customProviders.find(p => p.id.toUpperCase() === dto.provider?.toUpperCase() && p.enabled && p.ttsType !== 'none');
+        const isPersonalOpenAI = dto.provider?.toUpperCase() === 'PERSONAL';
 
-        if (matchingProvider) {
+        if (matchingProvider || isPersonalOpenAI) {
+            const pid = matchingProvider ? matchingProvider.id : 'personal';
+            const pname = matchingProvider ? matchingProvider.name : 'Personal OpenAI';
+
             // FIX: Correct wrong or missing model name for custom providers
             let model = dto.model;
-            const isWrongModel = !model || !model.startsWith(`custom_openai:${matchingProvider.id}:`);
+            const isWrongModel = !model || (!model.startsWith(`custom_openai:${pid}:`) && model !== 'tts-1' && model !== 'gemini-tts');
             
             if (isWrongModel && dto.voiceId) {
                 const voiceId = dto.voiceId;
-                if (matchingProvider.id === 'shopaikey') {
-                    const isGeminiVoice = ['zephyr', 'puck', 'charon', 'kore', 'aoede'].some(name => voiceId.toLowerCase().endsWith(':' + name.toLowerCase()));
+                // Auto-detect if base URL points to shopaikey (if personal)
+                let isShopaikey = matchingProvider?.ttsType === 'shopaikey';
+                if (isPersonalOpenAI) {
+                    const userKeyJson = await this.apiKeysService.getActiveKey(userId, 'OPENAI' as any);
+                    if (userKeyJson) {
+                        try {
+                            const parsed = JSON.parse(userKeyJson);
+                            const baseUrl = parsed.baseUrl || '';
+                            isShopaikey = baseUrl.toLowerCase().includes('shopaikey');
+                        } catch {}
+                    }
+                }
+
+                if (isShopaikey) {
+                    const isGeminiVoice = ['zephyr', 'puck', 'charon', 'kore', 'aoede'].some(name => voiceId.toLowerCase().endsWith(':' + name.toLowerCase()) || voiceId.toLowerCase() === name.toLowerCase());
                     const modelSuffix = isGeminiVoice ? 'gemini-tts' : 'tts-1';
-                    model = `custom_openai:shopaikey:${modelSuffix}`;
+                    model = `custom_openai:${pid}:${modelSuffix}`;
                 } else {
-                    model = `custom_openai:${matchingProvider.id}:tts-1`;
+                    model = `custom_openai:${pid}:tts-1`;
                 }
                 this.logger.log(`[FIX] Auto-resolved wrong model "${dto.model}" to "${model}" based on voice "${dto.voiceId}"`);
                 dto.model = model;
             }
 
-            this.logger.log(`Using Custom OpenAI TTS (${matchingProvider.name}) with model: ${dto.model}, voice: ${dto.voiceId}`);
+            this.logger.log(`Using Custom OpenAI TTS (${pname}) with model: ${dto.model}, voice: ${dto.voiceId}`);
             try {
-                const cleanModel = dto.model?.replace(`custom_openai:${matchingProvider.id}:`, '') || '';
+                const cleanModel = dto.model?.replace(`custom_openai:${pid}:`, '') || '';
                 const result = await this.customOpenAI.generateTTS(
-                    matchingProvider.id,
+                    pid,
                     dto.text,
                     cleanModel,
-                    dto.voiceId
+                    dto.voiceId,
+                    userId
                 );
                 return {
                     audio: result.audio,
                     format: result.format,
-                    provider: `${matchingProvider.name} TTS`,
+                    provider: `${pname} TTS`,
                 };
             } catch (error: any) {
-                this.logger.error(`Custom OpenAI TTS (${matchingProvider.name}) failed: ${error.message}`);
+                this.logger.error(`Custom OpenAI TTS (${pname}) failed: ${error.message}`);
                 // Fallback to Gemini SDK
                 this.logger.warn('Falling back to Gemini SDK for TTS');
                 const geminiApiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');

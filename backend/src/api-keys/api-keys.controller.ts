@@ -41,6 +41,15 @@ class UpdateApiKeyDto {
     key?: string;
 }
 
+class TestApiKeyDto {
+    @IsEnum(APIService)
+    service: APIService;
+
+    @IsString()
+    @IsNotEmpty()
+    key: string;
+}
+
 // ========== ADMIN CONTROLLER ==========
 
 @Controller('admin/api-keys')
@@ -95,6 +104,52 @@ export class UserApiKeysController {
     @Delete(':id')
     async delete(@Request() req, @Param('id') id: string) {
         return this.apiKeysService.deleteUserKey(req.user.id, id);
+    }
+
+    @Post('test')
+    async testKey(@Body() dto: TestApiKeyDto) {
+        if (dto.service === ('OPENAI' as any)) {
+            try {
+                const creds = JSON.parse(dto.key);
+                const apiKey = creds.apiKey;
+                const baseUrl = creds.baseUrl || 'https://api.openai.com/v1';
+                
+                if (!apiKey) {
+                    return { success: false, message: 'Thiếu API Key' };
+                }
+
+                const response = await fetch(`${baseUrl}/v1/models`, {
+                    headers: { 'Authorization': `Bearer ${apiKey}` },
+                    signal: AbortSignal.timeout(10000),
+                });
+
+                if (response.ok) {
+                    return { success: true, message: 'Kết nối thành công!' };
+                } else {
+                    const errorText = await response.text();
+                    return { success: false, message: `Lỗi từ server: HTTP ${response.status} - ${errorText.substring(0, 100)}` };
+                }
+            } catch (err: any) {
+                return { success: false, message: `Lỗi kết nối: ${err.message}` };
+            }
+        }
+        
+        if (dto.service === 'GEMINI') {
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${dto.key}`, {
+                    signal: AbortSignal.timeout(10000),
+                });
+                if (response.ok) {
+                    return { success: true, message: 'Kết nối thành công!' };
+                } else {
+                    return { success: false, message: `Lỗi kết nối: HTTP ${response.status}` };
+                }
+            } catch (err: any) {
+                return { success: false, message: `Lỗi kết nối: ${err.message}` };
+            }
+        }
+
+        return { success: true, message: 'Dịch vụ này hiện chưa hỗ trợ kiểm tra kết nối trực tiếp.' };
     }
 
     // Check if user has a key for a specific service (including system fallback)

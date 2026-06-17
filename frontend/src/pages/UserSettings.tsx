@@ -6,12 +6,12 @@ import './UserSettings.css';
 interface UserApiKey {
     id: string;
     name: string;
-    service: 'GEMINI' | 'GOOGLE_CLOUD_TTS' | 'IMAGEN' | 'VBEE' | 'VITTS';
+    service: 'GEMINI' | 'GOOGLE_CLOUD_TTS' | 'IMAGEN' | 'VBEE' | 'VITTS' | 'OPENAI';
     hasKey: boolean;
     createdAt: string;
 }
 
-type APIService = 'GEMINI' | 'GOOGLE_CLOUD_TTS' | 'IMAGEN' | 'VBEE' | 'VITTS';
+type APIService = 'GEMINI' | 'GOOGLE_CLOUD_TTS' | 'IMAGEN' | 'VBEE' | 'VITTS' | 'OPENAI';
 
 interface AvailableModel {
     name: string;
@@ -461,6 +461,7 @@ function ModelConfigSection() {
 
 const SERVICE_OPTIONS = [
     { value: 'GEMINI' as APIService, label: 'Gemini AI', icon: '🤖', desc: 'Tạo nội dung, hình ảnh, giọng nói' },
+    { value: 'OPENAI' as APIService, label: 'OpenAI (Cá nhân)', icon: '⚡', desc: 'Sử dụng API key OpenAI cá nhân của bạn' },
     { value: 'VBEE' as APIService, label: 'Vbee TTS', icon: '🇻🇳', desc: 'Giọng đọc tiếng Việt chất lượng cao' },
     { value: 'VITTS' as APIService, label: 'ViTTS Local', icon: '🎙️', desc: 'Giọng đọc tiếng Việt local server' },
     { value: 'GOOGLE_CLOUD_TTS' as APIService, label: 'Google Cloud TTS', icon: '🔊', desc: 'Giọng đọc đa ngôn ngữ' },
@@ -655,6 +656,8 @@ export function UserSettingsPage() {
     const [successMsg, setSuccessMsg] = useState('');
     const [showModal, setShowModal] = useState(false);
     const [editingKey, setEditingKey] = useState<UserApiKey | null>(null);
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
     const [formData, setFormData] = useState<{
         name: string;
         service: APIService;
@@ -663,6 +666,8 @@ export function UserSettingsPage() {
         vbeeAppId: string;
         vittsApiKey: string;
         vittsBaseUrl: string;
+        openaiApiKey: string;
+        openaiBaseUrl: string;
     }>({
         name: '',
         service: 'GEMINI',
@@ -671,6 +676,8 @@ export function UserSettingsPage() {
         vbeeAppId: '',
         vittsApiKey: '',
         vittsBaseUrl: 'http://117.0.36.6:8000',
+        openaiApiKey: '',
+        openaiBaseUrl: 'https://api.openai.com/v1',
     });
 
     const fetchData = async () => {
@@ -699,12 +706,33 @@ export function UserSettingsPage() {
     }, []);
 
     const handleOpenModal = (key?: UserApiKey) => {
+        setTestResult(null);
         if (key) {
             setEditingKey(key);
-            setFormData({ name: key.name, service: key.service, key: '', vbeeToken: '', vbeeAppId: '', vittsApiKey: '', vittsBaseUrl: 'http://117.0.36.6:8000' });
+            setFormData({
+                name: key.name,
+                service: key.service,
+                key: '',
+                vbeeToken: '',
+                vbeeAppId: '',
+                vittsApiKey: '',
+                vittsBaseUrl: 'http://117.0.36.6:8000',
+                openaiApiKey: '',
+                openaiBaseUrl: 'https://api.openai.com/v1',
+            });
         } else {
             setEditingKey(null);
-            setFormData({ name: '', service: 'GEMINI', key: '', vbeeToken: '', vbeeAppId: '', vittsApiKey: '', vittsBaseUrl: 'http://117.0.36.6:8000' });
+            setFormData({
+                name: '',
+                service: 'GEMINI',
+                key: '',
+                vbeeToken: '',
+                vbeeAppId: '',
+                vittsApiKey: '',
+                vittsBaseUrl: 'http://117.0.36.6:8000',
+                openaiApiKey: '',
+                openaiBaseUrl: 'https://api.openai.com/v1',
+            });
         }
         setShowModal(true);
     };
@@ -712,6 +740,53 @@ export function UserSettingsPage() {
     const handleCloseModal = () => {
         setShowModal(false);
         setEditingKey(null);
+        setTestResult(null);
+    };
+
+    useEffect(() => {
+        setTestResult(null);
+    }, [formData.service]);
+
+    const handleTestConnection = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+        let keyToSubmit = formData.key;
+        
+        if (formData.service === 'OPENAI') {
+            if (!formData.openaiApiKey) {
+                setTestResult({ success: false, message: 'Vui lòng nhập OpenAI API Key trước khi test.' });
+                setIsTesting(false);
+                return;
+            }
+            keyToSubmit = JSON.stringify({
+                apiKey: formData.openaiApiKey,
+                baseUrl: formData.openaiBaseUrl || 'https://api.openai.com/v1'
+            });
+        } else if (formData.service === 'GEMINI') {
+            if (!formData.key) {
+                setTestResult({ success: false, message: 'Vui lòng nhập Gemini API Key trước khi test.' });
+                setIsTesting(false);
+                return;
+            }
+        }
+        
+        try {
+            const res = await api.post('/user/api-keys/test', {
+                service: formData.service,
+                key: keyToSubmit
+            });
+            setTestResult({
+                success: res.data.success,
+                message: res.data.message
+            });
+        } catch (err: any) {
+            setTestResult({
+                success: false,
+                message: err.response?.data?.message || 'Lỗi không xác định khi kiểm tra kết nối'
+            });
+        } finally {
+            setIsTesting(false);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -738,6 +813,15 @@ export function UserSettingsPage() {
             keyToSubmit = JSON.stringify({
                 apiKey: formData.vittsApiKey,
                 baseUrl: formData.vittsBaseUrl || 'http://117.0.36.6:8000'
+            });
+        } else if (formData.service === 'OPENAI') {
+            if (!formData.openaiApiKey) {
+                setError('Vui lòng nhập OpenAI API Key');
+                return;
+            }
+            keyToSubmit = JSON.stringify({
+                apiKey: formData.openaiApiKey,
+                baseUrl: formData.openaiBaseUrl || 'https://api.openai.com/v1'
             });
         }
 
@@ -949,6 +1033,28 @@ export function UserSettingsPage() {
                                         />
                                     </div>
                                 </>
+                            ) : formData.service === 'OPENAI' ? (
+                                <>
+                                    <div className="form-group">
+                                        <label>OpenAI API Key {editingKey && '(để trống nếu không đổi)'}</label>
+                                        <input
+                                            type="password"
+                                            value={formData.openaiApiKey}
+                                            onChange={e => setFormData({ ...formData, openaiApiKey: e.target.value })}
+                                            placeholder="sk-xxxxxxxxxxxx"
+                                            required={!editingKey}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Base URL</label>
+                                        <input
+                                            type="text"
+                                            value={formData.openaiBaseUrl}
+                                            onChange={e => setFormData({ ...formData, openaiBaseUrl: e.target.value })}
+                                            placeholder="https://api.openai.com/v1"
+                                        />
+                                    </div>
+                                </>
                             ) : (
                                 <div className="form-group">
                                     <label>API Key {editingKey && '(để trống nếu không đổi)'}</label>
@@ -961,7 +1067,26 @@ export function UserSettingsPage() {
                                     />
                                 </div>
                             )}
+
+                            {/* Test Connection Result */}
+                            {testResult && (
+                                <div className={`test-connection-result ${testResult.success ? 'success' : 'error'}`}>
+                                    {testResult.success ? '✓' : '✗'} {testResult.message}
+                                </div>
+                            )}
+
                             <div className="modal-actions">
+                                {(formData.service === 'GEMINI' || formData.service === 'OPENAI') && (
+                                    <button
+                                        type="button"
+                                        className="btn-test-connection"
+                                        onClick={handleTestConnection}
+                                        disabled={isTesting}
+                                        style={{ marginRight: 'auto' }}
+                                    >
+                                        {isTesting ? '⏳ Đang kiểm tra...' : '⚡ Kiểm tra kết nối'}
+                                    </button>
+                                )}
                                 <button type="button" className="btn-cancel" onClick={handleCloseModal}>
                                     Hủy
                                 </button>

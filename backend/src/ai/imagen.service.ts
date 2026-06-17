@@ -1,7 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { GoogleGenAI, Part, Content, GenerateContentConfig } from '@google/genai';
 import { CLIProxyProvider } from './cliproxy.provider';
 import { SystemConfigService } from '../settings/system-config.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { CustomOpenAIProvider } from './custom-openai.provider';
+import { CryptoUtil } from '../common/crypto.util';
 
 export interface GeneratedImage {
     base64: string;
@@ -19,10 +22,13 @@ export class ImagenService {
     private readonly logger = new Logger(ImagenService.name);
     private client: GoogleGenAI | null = null;
     private lastApiKey: string = '';
+    private readonly crypto = new CryptoUtil();
 
     constructor(
-        private readonly cliproxy?: CLIProxyProvider,
-        private readonly systemConfigService?: SystemConfigService,
+        @Optional() private readonly cliproxy?: CLIProxyProvider,
+        @Optional() private readonly systemConfigService?: SystemConfigService,
+        @Optional() private readonly prisma?: PrismaService,
+        @Optional() private readonly customOpenAI?: CustomOpenAIProvider,
     ) {
         // Check at startup but will re-check on each call
         const apiKey = this.getApiKey();
@@ -96,11 +102,23 @@ export class ImagenService {
         prompt: string,
         aspectRatio: string = '16:9',
         modelName?: string,
-        apiKey?: string
+        apiKey?: string,
+        userId?: string,
     ): Promise<GeneratedImage> {
         const geminiImageModel = await this.getGeminiImageModel();
         const effectiveModel = modelName || geminiImageModel;
         const effectiveApiKey = apiKey || this.getApiKey();
+
+        // Check if this is a custom OpenAI model
+        if (effectiveModel.startsWith('custom_openai:')) {
+            this.logger.log(`Routing to Custom OpenAI Images API for model=${effectiveModel}`);
+            try {
+                return await this.generateImageWithCustomOpenAI(prompt, aspectRatio, effectiveModel, userId);
+            } catch (error: any) {
+                this.logger.warn(`Custom OpenAI image generation failed: ${error.message}, trying fallback to placeholder`);
+                return this.generatePlaceholder(prompt);
+            }
+        }
 
         // Validate API key is real (not a placeholder)
         const hasValidApiKey = effectiveApiKey &&
@@ -597,5 +615,120 @@ Generate the image now.`;
             this.logger.warn(`Model "${model}" failed: ${error}`);
             return null;
         }
+    }
+
+    private getCleanUrl(baseUrl: string): string {
+        let url = baseUrl.trim();
+        if (url.endsWith('/')) {
+            url = url.slice(0, -1);
+        }
+        if (url.endsWith('/v1')) {
+            url = url.slice(0, -3);
+        }
+        return url;
+    }
+
+    async generateImageWithCustomOpenAI(
+        prompt: string,
+        aspectRatio: string,
+        modelName: string,
+        userId?: string,
+    ): Promise<GeneratedImage> {
+        const parts = modelName.split(':');
+        const providerId = parts[1];
+        let model = parts.slice(2).join(':');
+
+        let apiKey = '';
+        let url = '';
+        let providerName = 'Custom OpenAI';
+
+        if (providerId === 'personal' && userId && this.prisma) {
+            const userKeyJson = await this.prisma.apiKey.findFirst({
+                where: {
+                    userId,
+                    service: 'OPENAI' as any,
+                    isSystem: false,
+                }
+            });
+            if (userKeyJson?.keyEncrypted) {
+                try {
+                    const decrypted = await this.crypto.decrypt(userKeyJson.keyEncrypted);
+                    const userCreds = JSON.parse(decrypted);
+                    if (userCreds.apiKey) {
+                        apiKey = userCreds.apiKey;
+                        url = userCreds.baseUrl || 'https://api.openai.com/v1';
+                        providerName = 'Personal OpenAI';
+                    }
+                } catch (err: any) {
+                    this.logger.error(`Failed to parse user personal OpenAI key for Imagen: ${err.message}`);
+                }
+            }
+        } else if (this.customOpenAI) {
+            const providers = await this.customOpenAI.getProviders();
+            const cp = providers.find(p => p.id === providerId);
+            if (cp && cp.enabled) {
+                apiKey = cp.apiKey;
+                url = cp.url;
+                providerName = cp.name;
+            }
+        }
+
+        if (!apiKey || !url) {
+            throw new Error(`Custom OpenAI provider "${providerId}" is not configured or missing API key`);
+        }
+
+        const cleanUrl = this.getCleanUrl(url);
+        const endpoint = `${cleanUrl}/v1/images/generations`;
+        const size = this.aspectRatioToSize(aspectRatio);
+
+        this.logger.log(`Custom OpenAI Image generation (${providerName}): model=${model}, size=${size}, url=${endpoint}`);
+
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+                model,
+                prompt,
+                size,
+                n: 1,
+            }),
+            signal: AbortSignal.timeout(60000),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Custom OpenAI Image API HTTP ${response.status}: ${errorText}`);
+        }
+
+        const data = await response.json();
+        if (data?.data?.[0]?.url) {
+            const imageUrl = data.data[0].url;
+            this.logger.log(`Custom OpenAI Image returned URL: ${imageUrl.substring(0, 80)}...`);
+            const imageResponse = await fetch(imageUrl);
+            if (!imageResponse.ok) {
+                throw new Error(`Failed to download image from ${imageUrl}: HTTP ${imageResponse.status}`);
+            }
+            const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+            const contentType = imageResponse.headers.get('content-type') || 'image/png';
+            const ext = contentType.includes('jpeg') || contentType.includes('jpg') ? 'jpg' : 'png';
+            return {
+                base64: imageBuffer.toString('base64'),
+                mimeType: contentType,
+                filename: `openai_img_${Date.now()}.${ext}`,
+            };
+        }
+
+        if (data?.data?.[0]?.b64_json) {
+            return {
+                base64: data.data[0].b64_json,
+                mimeType: 'image/png',
+                filename: `openai_img_${Date.now()}.png`,
+            };
+        }
+
+        throw new Error('No image URL or base64 returned by Custom OpenAI API');
     }
 }

@@ -844,6 +844,125 @@ export class ModelConfigService {
                         }
                     }
                 }
+
+                // Discover personal OpenAI models if configured
+                const personalKeyJson = await this.apiKeysService.getActiveKey(userId, 'OPENAI' as any);
+                if (personalKeyJson) {
+                    try {
+                        const parsed = JSON.parse(personalKeyJson);
+                        if (parsed.apiKey) {
+                            const apiKey = parsed.apiKey;
+                            const rawBaseUrl = parsed.baseUrl || 'https://api.openai.com/v1';
+                            
+                            // Normalize base URL to prevent doubled /v1
+                            let cleanBaseUrl = rawBaseUrl.trim();
+                            if (cleanBaseUrl.endsWith('/')) {
+                                cleanBaseUrl = cleanBaseUrl.slice(0, -1);
+                            }
+                            if (cleanBaseUrl.endsWith('/v1')) {
+                                cleanBaseUrl = cleanBaseUrl.slice(0, -3);
+                            }
+                            
+                            this.logger.log(`Fetching personal OpenAI models from ${cleanBaseUrl}`);
+                            const response = await fetch(`${cleanBaseUrl}/v1/models`, {
+                                headers: { 'Authorization': `Bearer ${apiKey}` },
+                                signal: AbortSignal.timeout(10000),
+                            });
+                            
+                            if (response.ok) {
+                                const data = await response.json();
+                                const rawModels = data.data || [];
+                                const customModelsList: AvailableModel[] = [];
+                                
+                                const isShopaikey = cleanBaseUrl.toLowerCase().includes('shopaikey');
+                                if (isShopaikey) {
+                                    customModelsList.push(
+                                        {
+                                            name: `custom_openai:personal:tts-1`,
+                                            displayName: '🧠 OpenAI TTS (Cá nhân)',
+                                            description: `OpenAI text-to-speech model via Personal Key`,
+                                            supportedTasks: ['TTS'],
+                                        },
+                                        {
+                                            name: `custom_openai:personal:gemini-tts`,
+                                            displayName: '🧠 Gemini TTS (Cá nhân)',
+                                            description: `Gemini text-to-speech model via Personal Key`,
+                                            supportedTasks: ['TTS'],
+                                        }
+                                    );
+                                    
+                                    const voicesList = [
+                                        { id: 'Zephyr', displayName: 'Gemini - Zephyr (Nữ)' },
+                                        { id: 'Puck', displayName: 'Gemini - Puck (Nam)' },
+                                        { id: 'Charon', displayName: 'Gemini - Charon (Ấm áp)' },
+                                        { id: 'Kore', displayName: 'Gemini - Kore (Chắc chắn)' },
+                                        { id: 'Aoede', displayName: 'Gemini - Aoede (Nhẹ nhàng)' },
+                                        { id: 'alloy', displayName: 'OpenAI - Alloy (Trung tính)' },
+                                        { id: 'echo', displayName: 'OpenAI - Echo (Nam)' },
+                                        { id: 'fable', displayName: 'OpenAI - Fable (Nam)' },
+                                        { id: 'onyx', displayName: 'OpenAI - Onyx (Nam)' },
+                                        { id: 'nova', displayName: 'OpenAI - Nova (Nữ)' },
+                                        { id: 'shimmer', displayName: 'OpenAI - Shimmer (Nữ)' }
+                                    ];
+                                    for (const v of voicesList) {
+                                        customModelsList.push({
+                                            name: `custom_openai:personal:${v.id}`,
+                                            displayName: `🔊 ${v.displayName} (Cá nhân)`,
+                                            description: `via Personal Key (${rawBaseUrl})`,
+                                            supportedTasks: ['TTS_VOICE'],
+                                        });
+                                    }
+                                } else {
+                                    const voicesList = [
+                                        { id: 'alloy', displayName: 'Alloy (Trung tính)' },
+                                        { id: 'echo', displayName: 'Echo (Nam)' },
+                                        { id: 'fable', displayName: 'Fable (Nam)' },
+                                        { id: 'onyx', displayName: 'Onyx (Nam)' },
+                                        { id: 'nova', displayName: 'Nova (Nữ)' },
+                                        { id: 'shimmer', displayName: 'Shimmer (Nữ)' }
+                                    ];
+                                    for (const v of voicesList) {
+                                        customModelsList.push({
+                                            name: `custom_openai:personal:${v.id}`,
+                                            displayName: `🔊 ${v.displayName} (Cá nhân)`,
+                                            description: `via Personal Key (${rawBaseUrl})`,
+                                            supportedTasks: ['TTS_VOICE'],
+                                        });
+                                    }
+                                }
+
+                                for (const m of rawModels) {
+                                    const modelId = m.id;
+                                    const isEmbeddingOrModeration = modelId.includes('embed') || modelId.includes('mod');
+                                    if (isEmbeddingOrModeration) continue;
+
+                                    const tasks = this.classifyCLIProxyModel(modelId);
+                                    if (tasks.length === 0) continue;
+
+                                    let emoji = '🧠';
+                                    if (tasks.includes('IMAGE')) emoji = '🎨';
+                                    else if (tasks.includes('TTS')) emoji = '🔊';
+
+                                    customModelsList.push({
+                                        name: `custom_openai:personal:${modelId}`,
+                                        displayName: `${emoji} ${this.formatModelDisplayName(modelId)} (Cá nhân)`,
+                                        description: `via Personal Key (${rawBaseUrl})`,
+                                        supportedTasks: tasks,
+                                    });
+                                }
+                                
+                                if (customModelsList.length > 0) {
+                                    models['OPENAI_PERSONAL'] = customModelsList;
+                                    this.logger.log(`Added personal OpenAI provider with ${customModelsList.length} models for user ${userId}`);
+                                }
+                            } else {
+                                this.logger.warn(`Failed to fetch personal OpenAI models: HTTP ${response.status}`);
+                            }
+                        }
+                    } catch (err: any) {
+                        this.logger.warn(`Failed to discover personal OpenAI models: ${err.message}`);
+                    }
+                }
             } catch (error: any) {
                 this.logger.warn(`Custom OpenAI models discovery failed: ${error.message}`);
             }

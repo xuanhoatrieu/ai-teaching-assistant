@@ -92,8 +92,20 @@ export const syllabusApi = {
         api.delete(`/syllabus/${syllabusId}/references/${refId}`),
 
     // Lessons
-    generateLessons: (syllabusId: string, numberOfLessons?: number) =>
-        api.post<SyllabusLessonItem[]>(`/syllabus/${syllabusId}/lessons/generate`, { numberOfLessons }, { timeout: 0 }),
+    generateLessons: (
+        syllabusId: string,
+        numberOfLessons?: number,
+        theoryLessons?: number,
+        practiceLessons?: number,
+    ) =>
+        api.post<SyllabusLessonItem[]>(
+            `/syllabus/${syllabusId}/lessons/generate`,
+            { numberOfLessons, theoryLessons, practiceLessons },
+            { timeout: 0 },
+        ),
+
+    reorderLessons: (syllabusId: string, lessonIds: string[]) =>
+        api.put<SyllabusLessonItem[]>(`/syllabus/${syllabusId}/lessons/reorder`, { lessonIds }),
 
     clearLessons: (syllabusId: string) =>
         api.delete(`/syllabus/${syllabusId}/lessons`),

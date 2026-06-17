@@ -359,6 +359,7 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                                     <table className="visual-table-editor-grid">
                                         <thead>
                                             <tr>
+                                                <th className="action-col-header">Xóa</th>
                                                 {tableHeaders.map((header, colIndex) => (
                                                     <th key={colIndex}>
                                                         <div className="table-editor-header-cell">
@@ -379,12 +380,21 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                                                         </div>
                                                     </th>
                                                 ))}
-                                                <th className="action-col-header">Xóa</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {tableRows.map((row, rowIndex) => (
                                                 <tr key={rowIndex}>
+                                                    <td className="action-col-cell">
+                                                        <button 
+                                                            type="button"
+                                                            className="btn-delete-row"
+                                                            onClick={() => deleteRow(rowIndex)}
+                                                            title="Xóa hàng"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </td>
                                                     {row.map((cell, colIndex) => {
                                                         const span = getCellSpan(tableRows, rowIndex, colIndex);
                                                         if (span.isMerged) return null;
@@ -443,16 +453,6 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                                                             </td>
                                                         );
                                                     })}
-                                                    <td className="action-col-cell">
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-delete-row"
-                                                            onClick={() => deleteRow(rowIndex)}
-                                                            title="Xóa hàng"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    </td>
                                                 </tr>
                                             ))}
                                         </tbody>

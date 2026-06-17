@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { syllabusApi } from '../../lib/syllabus-api';
 import type { SyllabusReference } from '../../lib/syllabus-api';
 
@@ -26,6 +26,19 @@ export function ReferencePanel({ syllabusId, references, onUpdated }: Props) {
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const hasProcessing = references.some(
+            (ref) => ref.status === 'processing' || ref.status === 'pending'
+        );
+        if (!hasProcessing) return;
+
+        const interval = setInterval(() => {
+            onUpdated();
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [references, onUpdated]);
 
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

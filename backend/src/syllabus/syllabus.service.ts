@@ -5,6 +5,7 @@ import { ImagenService } from '../ai/imagen.service';
 import { MarkItDownService } from './markitdown.service';
 import { MermaidService } from './mermaid.service';
 import { FileStorageService } from '../file-storage/file-storage.service';
+import { ApiKeysService } from '../api-keys/api-keys.service';
 
 /** Default 10 blocks matching TUAF 2026 syllabus template */
 const DEFAULT_BLOCKS = [
@@ -251,6 +252,7 @@ export class SyllabusService {
         private readonly mermaid: MermaidService,
         private readonly imagen: ImagenService,
         private readonly fileStorage: FileStorageService,
+        private readonly apiKeysService: ApiKeysService,
     ) {}
 
     /**
@@ -473,7 +475,7 @@ export class SyllabusService {
      * 4. Bulk update blocks with parsed content.
      * 5. Return updated syllabus.
      */
-    async importFromDocx(subjectId: string, userId: string, file: Express.Multer.File, modelName: string, userApiKey?: string) {
+    async importFromDocx(subjectId: string, userId: string, file: Express.Multer.File, modelName: string, callUserId?: string) {
         this.logger.log(`Importing DOCX syllabus for subject ${subjectId}: ${file.originalname}`);
 
         // Step 0: Validate subject existence and ownership
@@ -497,61 +499,85 @@ export class SyllabusService {
             throw new BadRequestException('Không thể tạo đề cương');
         }
 
-        // Step 2: Convert DOCX to markdown
-        const markdown = await this.markItDown.convertToMarkdown(file.buffer, file.originalname);
-        this.logger.log(`MarkItDown output: ${markdown.length} chars`);
+        // Update status to 'importing' synchronously
+        await this.prisma.syllabus.update({
+            where: { id: syllabus.id },
+            data: { status: 'importing' },
+        });
 
-        // Step 3: AI parse into blocks
-        const userPrompt = `Parse the following syllabus document into the 10 standard blocks:\n\n${markdown}`;
+        // Run the heavy lifting in background
+        this.runImportBackground(syllabus.id, subjectId, file, modelName, callUserId)
+            .catch((err) => {
+                this.logger.error(`Failed during async import setup: ${err.message}`);
+            });
 
-        let aiResult;
+        // Return current syllabus with status 'importing' immediately
+        return this.getSyllabus(subjectId);
+    }
+
+    private async runImportBackground(
+        syllabusId: string,
+        subjectId: string,
+        file: Express.Multer.File,
+        modelName: string,
+        callUserId?: string
+    ) {
         try {
-            aiResult = await this.aiProvider.generateTextWithSystem(
+            // Step 2: Convert DOCX to markdown
+            const markdown = await this.markItDown.convertToMarkdown(file.buffer, file.originalname);
+            this.logger.log(`MarkItDown output: ${markdown.length} chars`);
+
+            // Step 3: AI parse into blocks
+            const userPrompt = `Parse the following syllabus document into the 10 standard blocks:\n\n${markdown}`;
+
+            const aiResult = await this.aiProvider.generateTextWithSystem(
                 SYLLABUS_PARSE_SYSTEM_PROMPT,
                 userPrompt,
                 modelName,
-                userApiKey,
+                callUserId,
             );
-        } catch (error: any) {
-            this.logger.error(`AI generate failed: ${error.message}`);
-            throw new BadRequestException(`Lỗi AI: ${error.message || 'Không có mô hình AI khả dụng. Vui lòng kiểm tra lại cấu hình Model hoặc API Key.'}`);
-        }
 
-        // Step 4: Parse AI response as JSON
-        let blockMapping: Record<string, string>;
-        try {
+            // Step 4: Parse AI response as JSON
+            let blockMapping: Record<string, string>;
             // Strip markdown code fences if present
             let jsonStr = aiResult.content.trim();
             if (jsonStr.startsWith('```')) {
                 jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
             }
             blockMapping = JSON.parse(jsonStr);
-        } catch (err) {
-            this.logger.error(`Failed to parse AI response as JSON: ${err}`);
-            throw new BadRequestException(
-                'AI không thể phân tích nội dung file. Vui lòng kiểm tra lại file đề cương.',
-            );
+
+            // Fetch current syllabus blocks to map
+            const syllabus = await this.prisma.syllabus.findUnique({
+                where: { id: syllabusId },
+                include: { blocks: true },
+            });
+
+            if (syllabus) {
+                // Step 5: Map parsed content to existing blocks
+                const blockUpdates = syllabus.blocks
+                    .filter((block) => {
+                        const content = blockMapping[block.blockType];
+                        return content !== undefined && content.trim().length > 0;
+                    })
+                    .map((block) => ({
+                        id: block.id,
+                        content: blockMapping[block.blockType],
+                    }));
+
+                if (blockUpdates.length > 0) {
+                    await this.updateBlocks(syllabus.id, blockUpdates);
+                }
+                this.logger.log(`Async Imported ${blockUpdates.length}/${syllabus.blocks.length} blocks from DOCX`);
+            }
+        } catch (error: any) {
+            this.logger.error(`Async DOCX import failed: ${error.message}`);
+        } finally {
+            // Always restore status to 'draft' so client knows it's finished (either successfully or with error)
+            await this.prisma.syllabus.update({
+                where: { id: syllabusId },
+                data: { status: 'draft' },
+            });
         }
-
-        // Step 5: Map parsed content to existing blocks
-        const blockUpdates = syllabus.blocks
-            .filter((block) => {
-                const content = blockMapping[block.blockType];
-                return content !== undefined && content.trim().length > 0;
-            })
-            .map((block) => ({
-                id: block.id,
-                content: blockMapping[block.blockType],
-            }));
-
-        if (blockUpdates.length > 0) {
-            await this.updateBlocks(syllabus.id, blockUpdates);
-        }
-
-        this.logger.log(`Imported ${blockUpdates.length}/${syllabus.blocks.length} blocks from DOCX`);
-
-        // Return refreshed syllabus
-        return this.getSyllabus(subjectId);
     }
 
     // ==================== AI Lesson Splitting ====================
@@ -560,7 +586,14 @@ export class SyllabusService {
      * AI-split content_detail into N lessons with title + outline.
      * Clears existing lessons before generating new ones.
      */
-    async generateLessons(syllabusId: string, numberOfLessons: number | undefined, modelName: string, userApiKey?: string) {
+    async generateLessons(
+        syllabusId: string,
+        numberOfLessons: number | undefined,
+        modelName: string,
+        userId?: string,
+        theoryLessons?: number,
+        practiceLessons?: number,
+    ) {
         this.logger.log(`Generating lessons for syllabus ${syllabusId}`);
 
         const syllabus = await this.prisma.syllabus.findUnique({
@@ -606,8 +639,18 @@ export class SyllabusService {
         let countInstruction = '';
         if (numberOfLessons && numberOfLessons > 0) {
             countInstruction = `\n\nYÊU CẦU QUAN TRỌNG: Bạn PHẢI tạo chính xác ${numberOfLessons} bài giảng.`;
+        } else if (theoryLessons !== undefined || practiceLessons !== undefined) {
+            const total = (theoryLessons || 0) + (practiceLessons || 0);
+            countInstruction = `\n\nYÊU CẦU QUAN TRỌNG: Bạn PHẢI tạo chính xác ${total} bài giảng.`;
         } else {
             countInstruction = `\n\nYÊU CẦU QUAN TRỌNG: Số lượng bài giảng mặc định là số tín chỉ * 4 (ví dụ 3 tín chỉ = 12 bài). Hãy tìm thông tin số tín chỉ trong phần THÔNG TIN CHUNG và tạo số lượng bài tương ứng.`;
+        }
+
+        if (theoryLessons !== undefined && theoryLessons > 0) {
+            countInstruction += ` Trong đó phải có chính xác ${theoryLessons} bài Lý thuyết (ghi rõ 'Lý thuyết' trong tiêu đề bài nếu thích hợp, hoặc phân bổ hợp lý theo đề cương).`;
+        }
+        if (practiceLessons !== undefined && practiceLessons > 0) {
+            countInstruction += ` Trong đó phải có chính xác ${practiceLessons} bài Thực hành/Thảo luận (ghi rõ 'Thực hành' hoặc 'Thảo luận' trong tiêu đề bài).`;
         }
 
         // AI call
@@ -617,7 +660,7 @@ export class SyllabusService {
                 LESSON_SPLIT_SYSTEM_PROMPT,
                 `Phân chia nội dung học phần sau thành các bài giảng:${countInstruction}\n\n${context}`,
                 modelName,
-                userApiKey,
+                userId,
             );
         } catch (error: any) {
             this.logger.error(`AI generate failed: ${error.message}`);
@@ -678,6 +721,45 @@ export class SyllabusService {
         });
     }
 
+    /**
+     * Reorder lessons within a syllabus.
+     */
+    async reorderLessons(syllabusId: string, userId: string, lessonIds: string[]) {
+        this.logger.log(`Reordering lessons for syllabus ${syllabusId}`);
+
+        // Validate ownership
+        const syllabus = await this.prisma.syllabus.findUnique({
+            where: { id: syllabusId },
+            include: { subject: { select: { userId: true } } },
+        });
+        if (!syllabus) {
+            throw new BadRequestException('Đề cương không tồn tại.');
+        }
+        if (syllabus.subject.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền chỉnh sửa đề cương này.');
+        }
+
+        const updates = lessonIds.map((id, idx) =>
+            this.prisma.syllabusLesson.update({
+                where: { id },
+                data: { sortOrder: idx },
+            }),
+        );
+        await this.prisma.$transaction(updates);
+        return this.getSyllabusLessons(syllabusId);
+    }
+
+    /**
+     * Helper to get lessons of a syllabus.
+     */
+    async getSyllabusLessons(syllabusId: string) {
+        return this.prisma.syllabusLesson.findMany({
+            where: { syllabusId },
+            orderBy: { sortOrder: 'asc' },
+            include: { lesson: { select: { id: true, title: true, status: true } } },
+        });
+    }
+
     // ==================== Lesson Bridge ====================
 
     /**
@@ -727,7 +809,7 @@ export class SyllabusService {
     /**
      * AI-generate textbook chapter content for a SyllabusLesson.
      */
-    async generateTextbook(syllabusLessonId: string, modelName: string, userApiKey?: string) {
+    async generateTextbook(syllabusLessonId: string, modelName: string, userId?: string) {
         this.logger.log(`Generating textbook for SyllabusLesson ${syllabusLessonId}`);
 
         const sl = await this.prisma.syllabusLesson.findUnique({
@@ -785,7 +867,7 @@ export class SyllabusService {
                     TEXTBOOK_SYSTEM_PROMPT,
                     `Viết nội dung textbook cho bài giảng sau:\n\n${context}`,
                     modelName,
-                    userApiKey,
+                    userId,
                 );
             } catch (error: any) {
                 this.logger.error(`AI generate failed: ${error.message}`);
@@ -862,7 +944,7 @@ export class SyllabusService {
      * AI-generate textbook using 5-step pipeline:
      * EXTRACT → PLAN → WRITE → ILLUSTRATE → REVIEW+FIX
      */
-    async generateTextbookPro(syllabusLessonId: string, modelName: string, imageModelName?: string, userApiKey?: string) {
+    async generateTextbookPro(syllabusLessonId: string, modelName: string, imageModelName?: string, userId?: string) {
         this.logger.log(`[TextbookPro] Starting 5-step pipeline for ${syllabusLessonId}`);
 
         const sl = await this.prisma.syllabusLesson.findUnique({
@@ -908,7 +990,7 @@ export class SyllabusService {
                         const extractResult = await this.aiProvider.generateTextWithSystem(
                             EXTRACT_PROMPT,
                             `BÀI GIẢNG: "${sl.title}"\nĐỀ CƯƠNG: ${sl.outline}\n\nTÀI LIỆU (${ref.fileName}):\n${ref.markdownContent.slice(0, REF_CHAR_LIMIT)}`,
-                            modelName, userApiKey,
+                            modelName, userId,
                         );
                         if (!extractResult.content.includes('KHÔNG CÓ NỘI DUNG LIÊN QUAN')) {
                             relevantRefs += `\n## TÀI LIỆU THAM KHẢO: ${ref.fileName}\n${extractResult.content}\n`;
@@ -927,7 +1009,7 @@ export class SyllabusService {
             const planResult = await this.aiProvider.generateTextWithSystem(
                 PLAN_PROMPT,
                 `${baseContext}\n${relevantRefs ? `## TÀI LIỆU THAM KHẢO ĐÃ TRÍCH\n${relevantRefs}\n` : ''}`,
-                modelName, userApiKey,
+                modelName, userId,
             );
 
             // Save plan
@@ -947,7 +1029,7 @@ export class SyllabusService {
             const writeResult = await this.aiProvider.generateTextWithSystem(
                 WRITE_PROMPT,
                 `## KẾ HOẠCH BÀI VIẾT (PLAN)\n${planJson}\n\n${baseContext}\n${relevantRefs ? `## TÀI LIỆU THAM KHẢO\n${relevantRefs}\n` : ''}`,
-                modelName, userApiKey,
+                modelName, userId,
             );
             let draft = writeResult.content.trim();
 
@@ -956,7 +1038,7 @@ export class SyllabusService {
             this.logger.log(`[TextbookPro] Step 3: ILLUSTRATE`);
 
             try {
-                draft = await this.illustrateTextbook(draft, syllabusId, syllabusLessonId, modelName, imageModelName, userApiKey);
+                draft = await this.illustrateTextbook(draft, syllabusId, syllabusLessonId, modelName, imageModelName, userId);
             } catch (err: any) {
                 this.logger.warn(`[TextbookPro] ILLUSTRATE failed (non-fatal): ${err.message}`);
             }
@@ -968,7 +1050,7 @@ export class SyllabusService {
             const reviewResult = await this.aiProvider.generateTextWithSystem(
                 REVIEW_FIX_PROMPT,
                 `BÀI VIẾT CẦN KIỂM TRA:\n\n${draft}`,
-                modelName, userApiKey,
+                modelName, userId,
             );
             const finalContent = reviewResult.content.trim();
 
@@ -1004,11 +1086,11 @@ export class SyllabusService {
      */
     private async illustrateTextbook(
         draft: string, syllabusId: string, lessonId: string,
-        modelName: string, imageModelName?: string, userApiKey?: string,
+        modelName: string, imageModelName?: string, userId?: string,
     ): Promise<string> {
         // Ask AI to create illustration specs
         const illustrateResult = await this.aiProvider.generateTextWithSystem(
-            ILLUSTRATE_PROMPT, `BÀI VIẾT:\n\n${draft}`, modelName, userApiKey,
+            ILLUSTRATE_PROMPT, `BÀI VIẾT:\n\n${draft}`, modelName, userId,
         );
 
         let illustrations: Array<{ position: string; type: string; caption: string; content: string }>;
@@ -1043,7 +1125,8 @@ export class SyllabusService {
                     markdownInserts.push(`\n![${ill.caption}](${publicUrl})\n`);
                     imageRecords.push({ url: publicUrl, caption: ill.caption, type: 'mermaid' });
                 } else if (ill.type === 'ai_image') {
-                    const generated = await this.imagen.generateImage(ill.content, '16:9', imageModelName, userApiKey);
+                    const geminiApiKey = userId ? await this.apiKeysService.getActiveKey(userId, 'GEMINI') : undefined;
+                    const generated = await this.imagen.generateImage(ill.content, '16:9', imageModelName, geminiApiKey || undefined, userId);
                     if (generated.mimeType !== 'image/svg+xml') {
                         const ext = generated.mimeType.includes('jpeg') ? 'jpg' : 'png';
                         const filename = `img_${idx}.${ext}`;

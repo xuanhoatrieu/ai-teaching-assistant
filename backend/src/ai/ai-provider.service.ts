@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { CLIProxyProvider } from './cliproxy.provider';
 import { CustomOpenAIProvider } from './custom-openai.provider';
+import { ApiKeysService } from '../api-keys/api-keys.service';
 
 export type AIProviderType = 'cliproxy' | 'gemini' | string;
 
@@ -19,6 +20,7 @@ export class AiProviderService {
     constructor(
         private readonly cliproxy: CLIProxyProvider,
         private readonly customOpenAI: CustomOpenAIProvider,
+        private readonly apiKeysService: ApiKeysService,
     ) { }
 
     /**
@@ -50,7 +52,7 @@ export class AiProviderService {
     async generateText(
         prompt: string,
         modelName: string,
-        userApiKey?: string,
+        userId?: string,
         options?: { maxTokens?: number },
     ): Promise<AIProviderResult> {
         // Check if this is a dynamic custom OpenAI model
@@ -59,7 +61,7 @@ export class AiProviderService {
             const providerId = parts[1];
             const realModel = parts.slice(2).join(':');
             this.logger.log(`Routing to Custom OpenAI provider: ${providerId}, model: ${realModel}`);
-            const content = await this.customOpenAI.generateText(providerId, prompt, realModel, { maxTokens: options?.maxTokens });
+            const content = await this.customOpenAI.generateText(providerId, prompt, realModel, { maxTokens: options?.maxTokens, userId });
             return {
                 content,
                 provider: `custom_openai:${providerId}`,
@@ -107,10 +109,11 @@ export class AiProviderService {
         }
 
         // Priority 2: Gemini SDK with user's API key
-        if (userApiKey) {
+        const geminiApiKey = userId ? await this.apiKeysService.getActiveKey(userId, 'GEMINI') : undefined;
+        if (geminiApiKey) {
             try {
                 this.logger.log(`Using Gemini SDK with model: ${normalizedModel}`);
-                const genAI = new GoogleGenerativeAI(userApiKey);
+                const genAI = new GoogleGenerativeAI(geminiApiKey);
                 const model = genAI.getGenerativeModel({ model: normalizedModel });
                 const result = await model.generateContent(prompt);
                 const response = result.response;
@@ -137,7 +140,7 @@ export class AiProviderService {
         systemPrompt: string,
         userPrompt: string,
         modelName: string,
-        userApiKey?: string,
+        userId?: string,
     ): Promise<AIProviderResult> {
         // Check if this is a dynamic custom OpenAI model
         if (modelName.startsWith('custom_openai:')) {
@@ -149,7 +152,8 @@ export class AiProviderService {
                 providerId,
                 systemPrompt,
                 userPrompt,
-                realModel
+                realModel,
+                { userId }
             );
             return {
                 content,
@@ -181,9 +185,10 @@ export class AiProviderService {
         }
 
         // Priority 2: Gemini SDK (combine prompts)
-        if (userApiKey) {
+        const geminiApiKey = userId ? await this.apiKeysService.getActiveKey(userId, 'GEMINI') : undefined;
+        if (geminiApiKey) {
             const combinedPrompt = `${systemPrompt}\n\n${userPrompt}`;
-            const genAI = new GoogleGenerativeAI(userApiKey);
+            const genAI = new GoogleGenerativeAI(geminiApiKey);
             const model = genAI.getGenerativeModel({ model: normalizedModel });
             const result = await model.generateContent(combinedPrompt);
 

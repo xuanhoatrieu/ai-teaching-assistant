@@ -81,7 +81,6 @@ export class SyllabusController {
             throw new BadRequestException('Định dạng file không hợp lệ. Chỉ chấp nhận file .docx');
         }
 
-        const apiKey = await this.apiKeysService.getActiveKey(user.id, 'GEMINI');
         const modelConfig = await this.modelConfigService.getModelForTask(user.id, 'OUTLINE');
 
         return this.syllabusService.importFromDocx(
@@ -89,7 +88,7 @@ export class SyllabusController {
             user.id,
             file,
             modelConfig.modelName,
-            apiKey || undefined,
+            user.id,
         );
     }
 
@@ -208,18 +207,32 @@ export class SyllabusController {
     @Post('syllabus/:syllabusId/lessons/generate')
     async generateLessons(
         @Param('syllabusId') syllabusId: string,
-        @Body() body: { numberOfLessons?: number },
+        @Body() body: { numberOfLessons?: number; theoryLessons?: number; practiceLessons?: number },
         @CurrentUser() user: { id: string },
     ) {
-        const apiKey = await this.apiKeysService.getActiveKey(user.id, 'GEMINI');
         const modelConfig = await this.modelConfigService.getModelForTask(user.id, 'OUTLINE');
 
         return this.syllabusService.generateLessons(
             syllabusId,
             body.numberOfLessons,
             modelConfig.modelName,
-            apiKey || undefined,
+            user.id,
+            body.theoryLessons,
+            body.practiceLessons,
         );
+    }
+
+    /**
+     * PUT /syllabus/:syllabusId/lessons/reorder
+     * Reorder lessons list.
+     */
+    @Put('syllabus/:syllabusId/lessons/reorder')
+    async reorderLessons(
+        @Param('syllabusId') syllabusId: string,
+        @Body() body: { lessonIds: string[] },
+        @CurrentUser() user: { id: string },
+    ) {
+        return this.syllabusService.reorderLessons(syllabusId, user.id, body.lessonIds);
     }
 
     /**
@@ -261,13 +274,12 @@ export class SyllabusController {
         @Param('lessonId') lessonId: string,
         @CurrentUser() user: { id: string },
     ) {
-        const apiKey = await this.apiKeysService.getActiveKey(user.id, 'GEMINI');
         const modelConfig = await this.modelConfigService.getModelForTask(user.id, 'OUTLINE');
 
         return this.syllabusService.generateTextbook(
             lessonId,
             modelConfig.modelName,
-            apiKey || undefined,
+            user.id,
         );
     }
 
@@ -292,7 +304,6 @@ export class SyllabusController {
         @Param('lessonId') lessonId: string,
         @CurrentUser() user: { id: string },
     ) {
-        const apiKey = await this.apiKeysService.getActiveKey(user.id, 'GEMINI');
         const modelConfig = await this.modelConfigService.getModelForTask(user.id, 'OUTLINE');
 
         // Try to get image model (optional)
@@ -306,7 +317,7 @@ export class SyllabusController {
             lessonId,
             modelConfig.modelName,
             imageModelName,
-            apiKey || undefined,
+            user.id,
         );
     }
 

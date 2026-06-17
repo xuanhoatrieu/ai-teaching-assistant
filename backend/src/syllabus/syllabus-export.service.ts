@@ -593,8 +593,40 @@ export class SyllabusExportService {
 
     // ==================== Textbook DOCX Export ====================
 
-    /** Path to Pandoc binary (installed locally) */
-    private readonly PANDOC_PATH = '/home/trieuhoa/ai-teaching-assistant/.local/bin/pandoc';
+    private async getPandocCommand(): Promise<string> {
+        const defaultCmd = 'pandoc';
+        
+        // 1. Try default system-wide command
+        const works = await new Promise<boolean>((resolve) => {
+            const { execFile } = require('child_process');
+            execFile(defaultCmd, ['--version'], (err) => {
+                resolve(!err);
+            });
+        });
+        if (works) return defaultCmd;
+
+        // 2. Try common paths
+        const { homedir } = require('os');
+        const { join } = require('path');
+        const { existsSync } = require('fs');
+        
+        const home = homedir();
+        const commonPaths = [
+            join(process.cwd(), '.local/bin/pandoc'),
+            join(home, '.local/bin/pandoc'),
+            '/usr/local/bin/pandoc',
+            '/usr/bin/pandoc',
+        ];
+
+        for (const p of commonPaths) {
+            if (existsSync(p)) {
+                this.logger.log(`Found pandoc at fallback path: ${p}`);
+                return p;
+            }
+        }
+
+        return defaultCmd;
+    }
 
     /**
      * Generate a DOCX file combining all lessons' textbook content.
@@ -673,9 +705,10 @@ export class SyllabusExportService {
 
             // Run Pandoc to convert Markdown → DOCX
             // Uses reference.docx template: TNR 13pt, justified, A4 2cm/3cm margins
-            const refDoc = '/home/trieuhoa/ai-teaching-assistant/backend/assets/reference.docx';
+            const refDoc = path.resolve(__dirname, '..', '..', 'assets', 'reference.docx');
+            const pandoc = await this.getPandocCommand();
             const pandocCmd = [
-                this.PANDOC_PATH,
+                pandoc,
                 JSON.stringify(tmpMd),
                 '-o', JSON.stringify(tmpDocx),
                 '-f', 'markdown',
@@ -690,7 +723,7 @@ export class SyllabusExportService {
             execSync(pandocCmd, { timeout: 60_000 });
 
             // Post-process DOCX: add gray background + border to code blocks
-            const postprocessScript = path.join(process.cwd(), 'assets', 'docx_postprocess.py');
+            const postprocessScript = path.resolve(__dirname, '..', '..', 'assets', 'docx_postprocess.py');
             const tmpDocxStyled = tmpDocx.replace('.docx', '_styled.docx');
             try {
                 // Auto-install python-docx if not available

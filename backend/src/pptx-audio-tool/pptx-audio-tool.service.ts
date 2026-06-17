@@ -632,11 +632,10 @@ Trả lời dưới dạng JSON:
 \`\`\``;
 
         // Use AiProviderService (CLIProxy → Gemini SDK fallback)
-        const apiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
         const modelName = modelConfig.modelName || 'gemini-2.0-flash';
 
         this.logger.log(`[PptxAudioTool] Generating questions with model: ${modelName}`);
-        const aiResult = await this.aiProvider.generateText(prompt, modelName, apiKey || undefined, { maxTokens: 32768 });
+        const aiResult = await this.aiProvider.generateText(prompt, modelName, userId, { maxTokens: 32768 });
         const responseText = aiResult.content;
         this.logger.log(`[PptxAudioTool] Questions generated via ${aiResult.provider} (${aiResult.model})`);
 

@@ -25,6 +25,8 @@ export function SyllabusPanel({ subjectId }: Props) {
     const [expandedLesson, setExpandedLesson] = useState<string | null>(null);
     const [editingTextbook, setEditingTextbook] = useState<{ id: string; content: string } | null>(null);
     const [numberOfLessons, setNumberOfLessons] = useState<string>('');
+    const [theoryLessons, setTheoryLessons] = useState<string>('');
+    const [practiceLessons, setPracticeLessons] = useState<string>('');
     const [generatingTextbookId, setGeneratingTextbookId] = useState<string | null>(null);
     const [proStatus, setProStatus] = useState<TextbookStatus | null>(null);
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
@@ -98,14 +100,22 @@ export function SyllabusPanel({ subjectId }: Props) {
 
         setIsImporting(true);
         setError('');
-        setMessage({ type: 'success', text: '⏳ Đang import đề cương... (MarkItDown → AI phân tích)' });
+        setMessage({ type: 'success', text: '⏳ Đang tải file lên... (MarkItDown → AI phân tích)' });
         try {
+            // Update local status to importing
+            setSyllabus(prev => prev ? { ...prev, status: 'importing' } : null);
+
             const res = await syllabusApi.importDocx(subjectId, file);
             setSyllabus(res.data);
-            setMessage({ type: 'success', text: `✅ Import thành công! Đã điền ${res.data?.blocks?.filter((b: any) => b.content?.trim()).length || 0}/10 mục.` });
+            if (res.data?.status === 'importing') {
+                setMessage({ type: 'success', text: '⏳ File đã tải lên thành công, AI đang phân tích đề cương...' });
+            } else {
+                setMessage({ type: 'success', text: `✅ Import thành công! Đã điền ${res.data?.blocks?.filter((b: any) => b.content?.trim()).length || 0}/10 mục.` });
+            }
         } catch (err: any) {
             const msg = err.response?.data?.message || 'Import thất bại';
             setMessage({ type: 'error', text: `❌ ${msg}` });
+            loadSyllabus();
         } finally {
             setIsImporting(false);
         }
@@ -133,7 +143,9 @@ export function SyllabusPanel({ subjectId }: Props) {
         setMessage({ type: 'success', text: '⏳ AI đang phân chia bài giảng từ đề cương...' });
         try {
             const num = numberOfLessons ? parseInt(numberOfLessons) : undefined;
-            const res = await syllabusApi.generateLessons(syllabus.id, num);
+            const theory = theoryLessons ? parseInt(theoryLessons) : undefined;
+            const practice = practiceLessons ? parseInt(practiceLessons) : undefined;
+            const res = await syllabusApi.generateLessons(syllabus.id, num, theory, practice);
             setMessage({ type: 'success', text: `✅ Đã tạo ${res.data.length} bài giảng!` });
             loadSyllabus();
         } catch (err: any) {
@@ -142,6 +154,60 @@ export function SyllabusPanel({ subjectId }: Props) {
             setIsGenerating(false);
         }
     };
+
+    const handleMoveLesson = async (index: number, direction: 'up' | 'down', e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!syllabus) return;
+
+        const newLessons = [...syllabus.lessons];
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+        if (targetIndex < 0 || targetIndex >= newLessons.length) return;
+
+        // Swap
+        const temp = newLessons[index];
+        newLessons[index] = newLessons[targetIndex];
+        newLessons[targetIndex] = temp;
+
+        // Recalculate sortOrder for client view temporarily
+        const updatedLessons = newLessons.map((l, idx) => ({ ...l, sortOrder: idx }));
+
+        setSyllabus({
+            ...syllabus,
+            lessons: updatedLessons,
+        });
+
+        try {
+            await syllabusApi.reorderLessons(syllabus.id, updatedLessons.map(l => l.id));
+            setMessage({ type: 'success', text: '✅ Đã thay đổi thứ tự bài giảng' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch {
+            setMessage({ type: 'error', text: 'Không thể đổi thứ tự bài giảng' });
+            loadSyllabus(); // Revert to server state
+        }
+    };
+
+    // Polling for DOCX import status
+    useEffect(() => {
+        if (!syllabus || syllabus.status !== 'importing') return;
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await syllabusApi.get(subjectId);
+                if (res.data) {
+                    setSyllabus(res.data);
+                    if (res.data.status !== 'importing') {
+                        setMessage({ type: 'success', text: '✅ Import đề cương thành công!' });
+                        setTimeout(() => setMessage(null), 5000);
+                    }
+                }
+            } catch (err) {
+                // Ignore polling errors
+            }
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [syllabus, subjectId]);
 
     const handleClearLessons = async () => {
         if (!syllabus) return;
@@ -172,21 +238,7 @@ export function SyllabusPanel({ subjectId }: Props) {
         }
     };
 
-    const handleGenerateTextbook = async (sl: { id: string; title: string }) => {
-        if (!syllabus) return;
-        setGeneratingTextbookId(sl.id);
-        setMessage({ type: 'success', text: `⏳ Đang tạo textbook cho "${sl.title}"... (có thể mất 1-3 phút)` });
-        try {
-            await syllabusApi.generateTextbook(syllabus.id, sl.id);
-            setMessage({ type: 'success', text: `✅ Textbook "${sl.title}" đã sẵn sàng!` });
-            loadSyllabus();
-        } catch (err: any) {
-            setMessage({ type: 'error', text: `❌ ${err.response?.data?.message || 'Lỗi tạo textbook'}` });
-            loadSyllabus();
-        } finally {
-            setGeneratingTextbookId(null);
-        }
-    };
+
 
     const handleGenerateTextbookPro = async (sl: { id: string; title: string }) => {
         if (!syllabus) return;
@@ -447,15 +499,38 @@ export function SyllabusPanel({ subjectId }: Props) {
             <div className="syllabus-lessons-section">
                 <div className="ref-header">
                     <h4>📖 Bài giảng từ đề cương ({syllabus.lessons.length})</h4>
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
                         <div className="lesson-count-input">
-                            <label>Số lượng bài</label>
+                            <label>Số bài LT</label>
                             <input 
                                 type="number" 
-                                style={{ width: '65px', padding: '0.35rem 0.5rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', color: '#f1f5f9', textAlign: 'center' }}
+                                style={{ width: '60px', padding: '0.35rem 0.5rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', color: '#f1f5f9', textAlign: 'center' }}
+                                value={theoryLessons}
+                                onChange={(e) => setTheoryLessons(e.target.value)}
+                                min={0}
+                                placeholder="Tự động"
+                            />
+                        </div>
+                        <div className="lesson-count-input">
+                            <label>Số bài TH/TL</label>
+                            <input 
+                                type="number" 
+                                style={{ width: '60px', padding: '0.35rem 0.5rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', color: '#f1f5f9', textAlign: 'center' }}
+                                value={practiceLessons}
+                                onChange={(e) => setPracticeLessons(e.target.value)}
+                                min={0}
+                                placeholder="Tự động"
+                            />
+                        </div>
+                        <div className="lesson-count-input">
+                            <label>Tổng số bài</label>
+                            <input 
+                                type="number" 
+                                style={{ width: '60px', padding: '0.35rem 0.5rem', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', background: 'rgba(255,255,255,0.06)', color: '#f1f5f9', textAlign: 'center', opacity: theoryLessons || practiceLessons ? 0.5 : 1 }}
                                 value={numberOfLessons}
                                 onChange={(e) => setNumberOfLessons(e.target.value)}
                                 min={1}
+                                disabled={!!(theoryLessons || practiceLessons)}
                             />
                         </div>
                         <button
@@ -484,13 +559,29 @@ export function SyllabusPanel({ subjectId }: Props) {
                     </p>
                 ) : (
                     <div className="syllabus-lessons-list">
-                        {syllabus.lessons.map((sl) => (
+                        {syllabus.lessons.map((sl, idx) => (
                             <div
                                 key={sl.id}
                                 className={`syllabus-lesson-card ${expandedLesson === sl.id ? 'expanded' : ''}`}
                                 onClick={() => setExpandedLesson(expandedLesson === sl.id ? null : sl.id)}
                             >
                                 <div className="lesson-card-header">
+                                    <div className="lesson-reorder-controls" onClick={(e) => e.stopPropagation()}>
+                                        <button
+                                            disabled={idx === 0}
+                                            onClick={(e) => handleMoveLesson(idx, 'up', e)}
+                                            title="Di chuyển lên"
+                                        >
+                                            ▲
+                                        </button>
+                                        <button
+                                            disabled={idx === syllabus.lessons.length - 1}
+                                            onClick={(e) => handleMoveLesson(idx, 'down', e)}
+                                            title="Di chuyển xuống"
+                                        >
+                                            ▼
+                                        </button>
+                                    </div>
                                     <span className="lesson-order">{formatLessonOrder(sl.sortOrder)}</span>
                                     {editingTitleId === sl.id ? (
                                         <>
@@ -524,6 +615,18 @@ export function SyllabusPanel({ subjectId }: Props) {
                                     )}
                                     {sl.lessonId && (
                                         <span className="lesson-linked">🔗 Đã tạo</span>
+                                    )}
+                                    {sl.textbookContent && (
+                                        <button
+                                            className="btn-quick-download"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleExportSingleLessonDocx(sl);
+                                            }}
+                                            title="Tải nhanh giáo trình DOCX"
+                                        >
+                                            📥
+                                        </button>
                                     )}
                                     <span className="lesson-expand">{expandedLesson === sl.id ? '▲' : '▼'}</span>
                                     {sl.textbookStatus === 'done' && <span className="lesson-tb-badge done">📗</span>}
@@ -579,21 +682,7 @@ export function SyllabusPanel({ subjectId }: Props) {
                                                 </button>
                                             )}
                                             <button
-                                                className={`btn-bridge ${sl.textbookStatus === 'done' ? 'btn-open' : 'btn-create'} ${generatingTextbookId === sl.id ? 'btn-generating' : ''}`}
-                                                disabled={generatingTextbookId === sl.id || sl.textbookStatus === 'generating'}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleGenerateTextbook(sl);
-                                                }}
-                                            >
-                                                {generatingTextbookId === sl.id
-                                                    ? '⏳ AI đang viết...'
-                                                    : sl.textbookStatus === 'done'
-                                                        ? '🔄 Tạo lại textbook'
-                                                        : '📕 Tạo textbook'}
-                                            </button>
-                                            <button
-                                                className={`btn-bridge btn-pro ${generatingTextbookId === sl.id ? 'btn-generating' : ''}`}
+                                                className={`btn-bridge btn-pro ${sl.textbookStatus === 'done' ? 'btn-open' : 'btn-create'} ${generatingTextbookId === sl.id ? 'btn-generating' : ''}`}
                                                 disabled={generatingTextbookId === sl.id || sl.textbookStatus === 'generating'}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
@@ -603,7 +692,9 @@ export function SyllabusPanel({ subjectId }: Props) {
                                             >
                                                 {generatingTextbookId === sl.id
                                                     ? '⏳ Đang xử lý...'
-                                                    : '🚀 Textbook PRO'}
+                                                    : sl.textbookStatus === 'done'
+                                                        ? '🔄 Tạo lại textbook PRO'
+                                                        : '🚀 Tạo textbook PRO'}
                                             </button>
                                             {/* Progress bar for Pro mode */}
                                             {generatingTextbookId === sl.id && proStatus && (

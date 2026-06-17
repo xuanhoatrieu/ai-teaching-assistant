@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CryptoUtil } from '../common/crypto.util';
 
 export interface CustomProviderConfig {
     id: string;
@@ -18,8 +19,20 @@ export interface ChatMessage {
 @Injectable()
 export class CustomOpenAIProvider {
     private readonly logger = new Logger(CustomOpenAIProvider.name);
+    private readonly crypto = new CryptoUtil();
 
     constructor(private readonly prisma: PrismaService) {}
+
+    private getCleanUrl(baseUrl: string): string {
+        let url = baseUrl.trim();
+        if (url.endsWith('/')) {
+            url = url.slice(0, -1);
+        }
+        if (url.endsWith('/v1')) {
+            url = url.slice(0, -3);
+        }
+        return url;
+    }
 
     /**
      * Get all custom providers from system config
@@ -73,19 +86,56 @@ export class CustomOpenAIProvider {
         providerId: string,
         messages: ChatMessage[],
         model: string,
-        options?: { stream?: boolean; maxTokens?: number }
+        options?: { stream?: boolean; maxTokens?: number; userId?: string }
     ): Promise<string> {
         const provider = await this.getProvider(providerId);
-        if (!provider || !provider.enabled) {
-            throw new NotFoundException(`Custom OpenAI Provider "${providerId}" is disabled or not found`);
+        
+        let apiKey = provider?.apiKey || '';
+        let url = provider?.url || '';
+        let enabled = provider?.enabled ?? false;
+        let providerName = provider?.name || 'Personal OpenAI';
+
+        if (providerId === 'personal') {
+            enabled = true;
         }
 
-        this.logger.log(`Custom OpenAI chat (${provider.name}): model=${model}, messages=${messages.length}`);
+        if (options?.userId) {
+            const userKeyJson = await this.prisma.apiKey.findFirst({
+                where: {
+                    userId: options.userId,
+                    service: 'OPENAI' as any,
+                    isSystem: false,
+                }
+            });
 
-        const response = await fetch(`${provider.url}/v1/chat/completions`, {
+            if (userKeyJson?.keyEncrypted) {
+                try {
+                    const decrypted = await this.crypto.decrypt(userKeyJson.keyEncrypted);
+                    const userCreds = JSON.parse(decrypted);
+                    if (userCreds.apiKey) {
+                        apiKey = userCreds.apiKey;
+                        url = userCreds.baseUrl || url || 'https://api.openai.com/v1';
+                        enabled = true;
+                        providerName = 'Personal OpenAI';
+                        this.logger.log(`[CustomOpenAI] Using user personal OpenAI key for userId=${options.userId}, baseUrl=${url}`);
+                    }
+                } catch (err) {
+                    this.logger.error(`Failed to parse user personal OpenAI key: ${err.message}`);
+                }
+            }
+        }
+
+        if (!enabled || !apiKey) {
+            throw new NotFoundException(`Custom OpenAI Provider "${providerId}" is disabled, not configured, or missing API Key`);
+        }
+
+        this.logger.log(`Custom OpenAI chat (${providerName}): model=${model}, messages=${messages.length}`);
+
+        const cleanUrl = this.getCleanUrl(url);
+        const response = await fetch(`${cleanUrl}/v1/chat/completions`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${provider.apiKey}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
@@ -98,8 +148,8 @@ export class CustomOpenAIProvider {
 
         if (!response.ok) {
             const errorText = await response.text();
-            this.logger.error(`Custom OpenAI Provider "${provider.name}" error: ${response.status} - ${errorText}`);
-            throw new Error(`Provider "${provider.name}" request failed: ${response.status} - ${errorText}`);
+            this.logger.error(`Custom OpenAI Provider "${providerName}" error: ${response.status} - ${errorText}`);
+            throw new Error(`Provider "${providerName}" request failed: ${response.status} - ${errorText}`);
         }
 
         let fullContent = '';
@@ -157,9 +207,12 @@ export class CustomOpenAIProvider {
         providerId: string,
         prompt: string,
         model: string,
-        options?: { maxTokens?: number }
+        options?: { maxTokens?: number; userId?: string }
     ): Promise<string> {
-        return this.chat(providerId, [{ role: 'user', content: prompt }], model, { maxTokens: options?.maxTokens });
+        return this.chat(providerId, [{ role: 'user', content: prompt }], model, {
+            maxTokens: options?.maxTokens,
+            userId: options?.userId
+        });
     }
 
     /**
@@ -169,7 +222,8 @@ export class CustomOpenAIProvider {
         providerId: string,
         systemPrompt: string,
         userPrompt: string,
-        model: string
+        model: string,
+        options?: { userId?: string }
     ): Promise<string> {
         return this.chat(
             providerId,
@@ -177,7 +231,8 @@ export class CustomOpenAIProvider {
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
             ],
-            model
+            model,
+            { userId: options?.userId }
         );
     }
 
@@ -188,11 +243,52 @@ export class CustomOpenAIProvider {
         providerId: string,
         text: string,
         model: string,
-        voiceId?: string
+        voiceId?: string,
+        userId?: string
     ): Promise<{ audio: Buffer; format: 'wav' | 'mp3' }> {
         const provider = await this.getProvider(providerId);
-        if (!provider || !provider.enabled) {
-            throw new NotFoundException(`Custom OpenAI Provider "${providerId}" is disabled or not found`);
+        
+        let apiKey = provider?.apiKey || '';
+        let url = provider?.url || '';
+        let enabled = provider?.enabled ?? false;
+        let ttsType = provider?.ttsType || 'none';
+        if (providerId === 'personal') {
+            ttsType = url.toLowerCase().includes('shopaikey') ? 'shopaikey' : 'openai';
+        }
+        let providerName = provider?.name || 'Personal OpenAI';
+
+        if (providerId === 'personal') {
+            enabled = true;
+        }
+
+        if (userId) {
+            const userKeyJson = await this.prisma.apiKey.findFirst({
+                where: {
+                    userId,
+                    service: 'OPENAI' as any,
+                    isSystem: false,
+                }
+            });
+
+            if (userKeyJson?.keyEncrypted) {
+                try {
+                    const decrypted = await this.crypto.decrypt(userKeyJson.keyEncrypted);
+                    const userCreds = JSON.parse(decrypted);
+                    if (userCreds.apiKey) {
+                        apiKey = userCreds.apiKey;
+                        url = userCreds.baseUrl || url || 'https://api.openai.com/v1';
+                        enabled = true;
+                        providerName = 'Personal OpenAI';
+                        this.logger.log(`[CustomOpenAI TTS] Using user personal OpenAI key for userId=${userId}, baseUrl=${url}`);
+                    }
+                } catch (err) {
+                    this.logger.error(`Failed to parse user personal OpenAI key for TTS: ${err.message}`);
+                }
+            }
+        }
+
+        if (!enabled || !apiKey) {
+            throw new NotFoundException(`Custom OpenAI Provider "${providerId}" is disabled, not configured, or missing API Key`);
         }
 
         let voice = voiceId || 'Puck';
@@ -200,10 +296,10 @@ export class CustomOpenAIProvider {
             const parts = voice.split(':');
             voice = parts[parts.length - 1] || 'Puck';
         }
-        this.logger.log(`Custom OpenAI TTS (${provider.name}): model=${model}, voice=${voice} (raw=${voiceId}), text=${text.substring(0, 50)}...`);
+        this.logger.log(`Custom OpenAI TTS (${providerName}): model=${model}, voice=${voice} (raw=${voiceId}), text=${text.substring(0, 50)}...`);
 
         // Handle ShopAIKey Custom endpoints
-        if (provider.ttsType === 'shopaikey') {
+        if (ttsType === 'shopaikey') {
             let actualModel = model;
             if (actualModel === 'gemini-tts') {
                 actualModel = 'gemini-2.5-flash-preview-tts';
@@ -212,20 +308,19 @@ export class CustomOpenAIProvider {
             let endpoint = '';
             let requestBody = {};
 
+            const cleanUrl = this.getCleanUrl(url);
             if (isGoogleTTS) {
-                // ShopAIKey custom Google TTS endpoint
-                endpoint = `${provider.url}/tts/google/generations`;
+                endpoint = `${cleanUrl}/tts/google/generations`;
                 requestBody = { text, model: actualModel, voice };
             } else {
-                // ShopAIKey custom OpenAI TTS endpoint
-                endpoint = `${provider.url}/tts/openai/speech`;
+                endpoint = `${cleanUrl}/tts/openai/speech`;
                 requestBody = { input: text, model: actualModel, voice, response_format: 'mp3' };
             }
 
             const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${provider.apiKey}`,
+                    'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(requestBody),
@@ -255,11 +350,12 @@ export class CustomOpenAIProvider {
         }
 
         // Handle standard OpenAI TTS endpoint
-        if (provider.ttsType === 'openai') {
-            const response = await fetch(`${provider.url}/v1/audio/speech`, {
+        if (ttsType === 'openai' || providerId === 'personal') {
+            const cleanUrl = this.getCleanUrl(url);
+            const response = await fetch(`${cleanUrl}/v1/audio/speech`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${provider.apiKey}`,
+                    'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
@@ -280,7 +376,7 @@ export class CustomOpenAIProvider {
             return { audio: audioBuffer, format: 'mp3' };
         }
 
-        throw new Error(`Provider "${provider.name}" does not support TTS or TTS is not configured`);
+        throw new Error(`Provider "${providerName}" does not support TTS or TTS is not configured`);
     }
 
     /**
@@ -292,7 +388,8 @@ export class CustomOpenAIProvider {
             throw new NotFoundException(`Custom OpenAI Provider "${providerId}" not found`);
         }
 
-        const response = await fetch(`${provider.url}/v1/models`, {
+        const cleanUrl = this.getCleanUrl(provider.url);
+        const response = await fetch(`${cleanUrl}/v1/models`, {
             headers: {
                 'Authorization': `Bearer ${provider.apiKey}`,
             },
