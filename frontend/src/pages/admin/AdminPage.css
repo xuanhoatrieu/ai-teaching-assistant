@@ -1,5 +1,6 @@
 .admin-page {
-    max-width: 1200px;
+    max-width: 100%;
+    width: 100%;
 }
 
 .admin-page.loading {
@@ -64,7 +65,7 @@
     background: rgba(30, 41, 59, 0.6);
     border: 1px solid rgba(59, 130, 246, 0.1);
     border-radius: 12px;
-    overflow: hidden;
+    overflow-x: auto;
 }
 
 .data-table table {
