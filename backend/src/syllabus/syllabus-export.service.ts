@@ -59,27 +59,27 @@ export class SyllabusExportService {
     async generateDocx(blocks: BlockData[], subjectName: string): Promise<Buffer> {
         this.logger.log(`Generating syllabus DOCX: ${subjectName}, ${blocks.length} blocks`);
 
-        // Split blocks into sections: portrait (before content_detail),
-        // landscape (content_detail), portrait (after content_detail)
+        // Split blocks into sections:
+        // - Portrait (Section 1): header, general_info, lecturers, description, clo, materials, student_tasks
+        // - Landscape (Section 2): assessment, content_detail (contains wide tables)
+        // - Portrait (Section 3): update_log + signatures
         const beforeLandscape: BlockData[] = [];
-        let landscapeBlock: BlockData | null = null;
+        const landscapeBlocks: BlockData[] = [];
         const afterLandscape: BlockData[] = [];
 
-        let foundLandscape = false;
         for (const block of blocks) {
-            if (block.blockType === 'content_detail') {
-                landscapeBlock = block;
-                foundLandscape = true;
-            } else if (!foundLandscape) {
-                beforeLandscape.push(block);
-            } else {
+            if (block.blockType === 'assessment' || block.blockType === 'content_detail') {
+                landscapeBlocks.push(block);
+            } else if (block.blockType === 'update_log') {
                 afterLandscape.push(block);
+            } else {
+                beforeLandscape.push(block);
             }
         }
 
         const sections: any[] = [];
 
-        // Section 1: Portrait — header through assessment
+        // Section 1: Portrait — header through student_tasks
         sections.push({
             properties: {
                 page: {
@@ -88,20 +88,19 @@ export class SyllabusExportService {
                 },
             },
             children: [
-                ...this.buildTitlePage(subjectName),
                 ...this.buildBlocks(beforeLandscape),
             ],
         });
 
-        // Section 2: Landscape — content_detail (wide table)
-        if (landscapeBlock && landscapeBlock.content.trim()) {
+        // Section 2: Landscape — assessment and content_detail (wide tables)
+        if (landscapeBlocks.length > 0) {
             sections.push({
                 properties: {
                     type: SectionType.NEXT_PAGE,
                     page: {
                         size: {
-                            width: 16838,
-                            height: 11906,
+                            width: 11906,
+                            height: 16838,
                             orientation: PageOrientation.LANDSCAPE,
                         },
                         margin: {
@@ -112,7 +111,7 @@ export class SyllabusExportService {
                         },
                     },
                 },
-                children: this.buildBlock(landscapeBlock),
+                children: this.buildBlocks(landscapeBlocks),
             });
         }
 
@@ -158,62 +157,6 @@ export class SyllabusExportService {
 
     // ==================== Document parts ====================
 
-    private buildTitlePage(subjectName: string): Paragraph[] {
-        return [
-            // University header
-            new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 0 },
-                children: [
-                    new TextRun({
-                        text: 'TRƯỜNG ĐẠI HỌC NÔNG LÂM',
-                        font: FONT_NAME,
-                        size: HEADING_SIZE,
-                        bold: true,
-                    }),
-                ],
-            }),
-            new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 200 },
-                children: [
-                    new TextRun({
-                        text: 'KHOA ……',
-                        font: FONT_NAME,
-                        size: HEADING_SIZE,
-                        bold: true,
-                    }),
-                ],
-            }),
-            // Title
-            new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 400, after: 200 },
-                children: [
-                    new TextRun({
-                        text: 'ĐỀ CƯƠNG HỌC PHẦN',
-                        font: FONT_NAME,
-                        size: TITLE_SIZE,
-                        bold: true,
-                    }),
-                ],
-            }),
-            // Subject name
-            new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { after: 400 },
-                children: [
-                    new TextRun({
-                        text: subjectName,
-                        font: FONT_NAME,
-                        size: HEADING_SIZE,
-                        bold: true,
-                    }),
-                ],
-            }),
-        ];
-    }
-
     private buildBlocks(blocks: BlockData[]): (Paragraph | Table)[] {
         const children: (Paragraph | Table)[] = [];
         for (const block of blocks) {
@@ -225,46 +168,111 @@ export class SyllabusExportService {
     private buildBlock(block: BlockData): (Paragraph | Table)[] {
         const children: (Paragraph | Table)[] = [];
 
-        // Skip header block (handled in title page) and empty blocks
-        if (block.blockType === 'header') return children;
         if (!block.content.trim()) return children;
 
-        // Block heading
-        children.push(
-            new Paragraph({
-                spacing: { before: 300, after: 120 },
-                children: [
-                    new TextRun({
-                        text: block.title,
-                        font: FONT_NAME,
-                        size: HEADING_SIZE,
-                        bold: true,
-                    }),
-                ],
-            }),
-        );
+        // Block heading (skip for header block)
+        if (block.blockType !== 'header') {
+            children.push(
+                new Paragraph({
+                    spacing: { before: 300, after: 120 },
+                    children: [
+                        new TextRun({
+                            text: block.title,
+                            font: FONT_NAME,
+                            size: HEADING_SIZE,
+                            bold: true,
+                        }),
+                    ],
+                }),
+            );
+        }
 
-        // Check if there is a table in this block
-        const parsedTable = this.parseMarkdownTable(block.content);
-        if (parsedTable) {
-            // Render text before the table
-            if (parsedTable.beforeText) {
-                children.push(...this.buildLines(parsedTable.beforeText));
+        // Render content as an ordered sequence of text runs and tables.
+        // A block (e.g. "assessment") may contain MULTIPLE tables interleaved
+        // with text (plan table + several rubric tables), so we must walk the
+        // whole content instead of extracting only the first table.
+        const segments = this.splitIntoSegments(block.content);
+        for (const seg of segments) {
+            if (seg.type === 'table') {
+                children.push(this.buildDocxTable(seg.table, block.blockType === 'header'));
+            } else if (seg.text.trim()) {
+                children.push(...this.buildLines(seg.text));
             }
-
-            // Build the Word Table
-            children.push(this.buildDocxTable(parsedTable));
-
-            // Render text after the table
-            if (parsedTable.afterText) {
-                children.push(...this.buildLines(parsedTable.afterText));
-            }
-        } else {
-            // Fallback: standard line-by-line rendering
-            children.push(...this.buildLines(block.content));
         }
 
         return children;
+    }
+
+    /**
+     * Split markdown content into an ordered list of text / table segments.
+     * Consecutive table rows (header + separator + data rows) form one table
+     * segment; everything else is text. This lets a single block render any
+     * number of tables interleaved with paragraphs, in document order.
+     */
+    private splitIntoSegments(
+        markdown: string,
+    ): Array<{ type: 'text'; text: string } | { type: 'table'; table: { headers: string[]; rows: string[][] } }> {
+        const segments: Array<{ type: 'text'; text: string } | { type: 'table'; table: { headers: string[]; rows: string[][] } }> = [];
+        if (!markdown) return segments;
+
+        const lines = markdown.split('\n');
+
+        const isSeparatorRow = (line: string): boolean => {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return false;
+            const parts = trimmed.slice(1, -1).split('|');
+            if (parts.length === 0) return false;
+            return parts.every((part) => /^\s*:?-+:?\s*$/.test(part));
+        };
+        const isTableRow = (line: string): boolean => {
+            const trimmed = line.trim();
+            return trimmed.startsWith('|') && trimmed.endsWith('|');
+        };
+        const parseRow = (line: string, colCount: number): string[] => {
+            const cells = line.trim().slice(1, -1).split('|').map((cell) => cell.trim().replace(/<br\s*\/?>/gi, '\n'));
+            while (cells.length < colCount) cells.push('');
+            if (cells.length > colCount) cells.splice(colCount);
+            return cells;
+        };
+
+        let textBuffer: string[] = [];
+        const flushText = () => {
+            if (textBuffer.length) {
+                segments.push({ type: 'text', text: textBuffer.join('\n') });
+                textBuffer = [];
+            }
+        };
+
+        let i = 0;
+        while (i < lines.length) {
+            // Detect start of a table: a row followed by a separator row
+            if (isTableRow(lines[i]) && i + 1 < lines.length && isSeparatorRow(lines[i + 1])) {
+                flushText();
+                let headers = lines[i].trim().slice(1, -1).split('|').map((c) => c.trim());
+                const colCount = headers.length;
+                const rows: string[][] = [];
+                let j = i + 2;
+                while (j < lines.length && isTableRow(lines[j]) && !isSeparatorRow(lines[j])) {
+                    rows.push(parseRow(lines[j], colCount));
+                    j++;
+                }
+                // Many TUAF-2026 templates use an EMPTY markdown header row (e.g. "|  |  |")
+                // followed by the real (bold) heading as the first data row. Rendering the
+                // empty header produces a blank first row above the title. Drop it and
+                // promote the first data row to be the header instead.
+                if (headers.every((h) => h === '') && rows.length > 0) {
+                    headers = rows.shift() as string[];
+                }
+                segments.push({ type: 'table', table: { headers, rows } });
+                i = j;
+            } else {
+                textBuffer.push(lines[i]);
+                i++;
+            }
+        }
+        flushText();
+
+        return segments;
     }
 
     private buildLines(text: string): Paragraph[] {
@@ -308,77 +316,7 @@ export class SyllabusExportService {
         return paragraphs;
     }
 
-    private parseMarkdownTable(markdown: string): { beforeText: string; headers: string[]; rows: string[][]; afterText: string } | null {
-        if (!markdown) return null;
-        
-        const lines = markdown.split('\n');
-        let tableStartIndex = -1;
-        let tableEndIndex = -1;
-
-        const isSeparatorRow = (line: string): boolean => {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('|') || !trimmed.endsWith('|')) return false;
-            const inner = trimmed.slice(1, -1);
-            const parts = inner.split('|');
-            if (parts.length === 0) return false;
-            return parts.every(part => /^\s*:?-+:?\s*$/.test(part));
-        };
-
-        const isTableRow = (line: string): boolean => {
-            const trimmed = line.trim();
-            return trimmed.startsWith('|') && trimmed.endsWith('|');
-        };
-
-        for (let i = 0; i < lines.length - 1; i++) {
-            if (isTableRow(lines[i]) && isSeparatorRow(lines[i + 1])) {
-                tableStartIndex = i;
-                break;
-            }
-        }
-
-        if (tableStartIndex === -1) {
-            return null;
-        }
-
-        tableEndIndex = tableStartIndex + 1;
-        while (tableEndIndex + 1 < lines.length && isTableRow(lines[tableEndIndex + 1])) {
-            tableEndIndex++;
-        }
-
-        const beforeText = lines.slice(0, tableStartIndex).join('\n').trim();
-        const afterText = lines.slice(tableEndIndex + 1).join('\n').trim();
-
-        const headerLine = lines[tableStartIndex].trim().slice(1, -1);
-        const headers = headerLine.split('|').map(cell => cell.trim());
-
-        const rows: string[][] = [];
-        for (let i = tableStartIndex + 2; i <= tableEndIndex; i++) {
-            const rowLine = lines[i].trim().slice(1, -1);
-            const cells = rowLine.split('|').map(cell => {
-                let val = cell.trim();
-                // Replace <br>, <br/>, <br /> (case-insensitive) with actual newlines
-                val = val.replace(/<br\s*\/?>/gi, '\n');
-                return val;
-            });
-
-            while (cells.length < headers.length) {
-                cells.push('');
-            }
-            if (cells.length > headers.length) {
-                cells.splice(headers.length);
-            }
-            rows.push(cells);
-        }
-
-        return {
-            beforeText,
-            headers,
-            rows,
-            afterText,
-        };
-    }
-
-    private buildDocxTable(parsed: { headers: string[]; rows: string[][] }): Table {
+    private buildDocxTable(parsed: { headers: string[]; rows: string[][] }, isHeaderBlock = false): Table {
         const { headers, rows } = parsed;
         const tableRows: TableRow[] = [];
         const numCols = headers.length;
@@ -394,7 +332,7 @@ export class SyllabusExportService {
             while (c + colSpan < numCols && headers[c + colSpan] === '>') {
                 colSpan++;
             }
-            headerCells.push(this.createTableCell(value, true, colSpan));
+            headerCells.push(this.createTableCell(value, true, colSpan, undefined, isHeaderBlock));
         }
         tableRows.push(
             new TableRow({
@@ -419,7 +357,7 @@ export class SyllabusExportService {
                     while (c + colSpan < numCols && rows[r][c + colSpan] === '>') {
                         colSpan++;
                     }
-                    rowCells.push(this.createTableCell('', false, colSpan, VerticalMergeType.CONTINUE));
+                    rowCells.push(this.createTableCell('', false, colSpan, VerticalMergeType.CONTINUE, isHeaderBlock));
                 } else {
                     // normal cell or vertical merge restart
                     let colSpan = 1;
@@ -432,7 +370,7 @@ export class SyllabusExportService {
                     }
                     
                     const vMerge = rowSpan > 1 ? VerticalMergeType.RESTART : undefined;
-                    rowCells.push(this.createTableCell(value, false, colSpan, vMerge));
+                    rowCells.push(this.createTableCell(value, false, colSpan, vMerge, isHeaderBlock));
                 }
             }
             tableRows.push(
@@ -444,7 +382,14 @@ export class SyllabusExportService {
 
         return new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
-            borders: {
+            borders: isHeaderBlock ? {
+                top: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+                bottom: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+                left: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+                right: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+                insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+                insideVertical: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+            } : {
                 top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
                 bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
                 left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
@@ -460,7 +405,8 @@ export class SyllabusExportService {
         cellContent: string, 
         isHeader: boolean, 
         colSpan: number, 
-        vMerge?: (typeof VerticalMergeType)[keyof typeof VerticalMergeType]
+        vMerge?: (typeof VerticalMergeType)[keyof typeof VerticalMergeType],
+        isHeaderBlock = false
     ): TableCell {
         if (vMerge === VerticalMergeType.CONTINUE) {
             return new TableCell({
@@ -502,7 +448,7 @@ export class SyllabusExportService {
         return new TableCell({
             columnSpan: colSpan,
             verticalMerge: vMerge === VerticalMergeType.RESTART ? VerticalMergeType.RESTART : undefined,
-            shading: isHeader ? { fill: 'F2F2F2' } : undefined,
+            shading: (isHeader && !isHeaderBlock) ? { fill: 'F2F2F2' } : undefined,
             margins: {
                 top: 100,
                 bottom: 100,
@@ -629,6 +575,28 @@ export class SyllabusExportService {
     }
 
     /**
+     * Resolve a bundled asset (reference.docx, docx_postprocess.py).
+     * The compiled code runs from dist/, but the `assets` folder may live either
+     * next to dist (dist/assets, when nest-cli copies it) or at the project root
+     * (backend/assets, the source location). Try the known locations in order.
+     */
+    private resolveAssetPath(fileName: string): string {
+        const { existsSync } = require('fs');
+        const { resolve } = require('path');
+        const candidates = [
+            resolve(__dirname, '..', '..', 'assets', fileName), // dist/assets (copied)
+            resolve(process.cwd(), 'assets', fileName),         // backend/assets (source)
+            resolve(process.cwd(), 'dist', 'assets', fileName),
+        ];
+        for (const p of candidates) {
+            if (existsSync(p)) return p;
+        }
+        // Fall back to the first candidate so the error message is meaningful
+        this.logger.warn(`Asset "${fileName}" not found in: ${candidates.join(', ')}`);
+        return candidates[0];
+    }
+
+    /**
      * Generate a DOCX file combining all lessons' textbook content.
      * Uses Pandoc for conversion — the same approach as the /export skill.
      * Pandoc handles tables, math, code blocks, blockquotes, and all
@@ -705,7 +673,7 @@ export class SyllabusExportService {
 
             // Run Pandoc to convert Markdown → DOCX
             // Uses reference.docx template: TNR 13pt, justified, A4 2cm/3cm margins
-            const refDoc = path.resolve(__dirname, '..', '..', 'assets', 'reference.docx');
+            const refDoc = this.resolveAssetPath('reference.docx');
             const pandoc = await this.getPandocCommand();
             const pandocCmd = [
                 pandoc,
@@ -723,7 +691,7 @@ export class SyllabusExportService {
             execSync(pandocCmd, { timeout: 60_000 });
 
             // Post-process DOCX: add gray background + border to code blocks
-            const postprocessScript = path.resolve(__dirname, '..', '..', 'assets', 'docx_postprocess.py');
+            const postprocessScript = this.resolveAssetPath('docx_postprocess.py');
             const tmpDocxStyled = tmpDocx.replace('.docx', '_styled.docx');
             try {
                 // Auto-install python-docx if not available

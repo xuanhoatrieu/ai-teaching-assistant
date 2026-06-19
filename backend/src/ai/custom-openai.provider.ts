@@ -132,6 +132,39 @@ export class CustomOpenAIProvider {
         this.logger.log(`Custom OpenAI chat (${providerName}): model=${model}, messages=${messages.length}`);
 
         const cleanUrl = this.getCleanUrl(url);
+        const isShopaikey = cleanUrl.toLowerCase().includes('shopaikey');
+        const maxRetries = isShopaikey ? 3 : 1;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const result = await this.doStreamingChat(cleanUrl, apiKey, model, messages, options?.maxTokens, providerName);
+                return result;
+            } catch (error: any) {
+                const is524 = error.message?.includes('524') || error.message?.includes('timeout occurred');
+                if (isShopaikey && is524 && attempt < maxRetries) {
+                    const delay = attempt * 10_000; // 10s, 20s, 30s
+                    this.logger.warn(`[ShopAIKey Retry] 524 timeout on attempt ${attempt}/${maxRetries}, retrying in ${delay / 1000}s...`);
+                    await new Promise(r => setTimeout(r, delay));
+                    continue;
+                }
+                throw error;
+            }
+        }
+
+        return ''; // Should never reach here
+    }
+
+    /**
+     * Internal: perform a single streaming chat request
+     */
+    private async doStreamingChat(
+        cleanUrl: string,
+        apiKey: string,
+        model: string,
+        messages: ChatMessage[],
+        maxTokens?: number,
+        providerName?: string,
+    ): Promise<string> {
         const response = await fetch(`${cleanUrl}/v1/chat/completions`, {
             method: 'POST',
             headers: {
@@ -142,7 +175,7 @@ export class CustomOpenAIProvider {
                 model,
                 messages,
                 stream: true, // Force streaming to bypass Cloudflare timeout
-                max_tokens: options?.maxTokens,
+                max_tokens: maxTokens,
             }),
         });
 
@@ -287,6 +320,11 @@ export class CustomOpenAIProvider {
             }
         }
 
+        // Re-evaluate ttsType after user key URL is loaded (may differ from admin provider config)
+        if (providerId === 'personal') {
+            ttsType = url.toLowerCase().includes('shopaikey') ? 'shopaikey' : 'openai';
+        }
+
         if (!enabled || !apiKey) {
             throw new NotFoundException(`Custom OpenAI Provider "${providerId}" is disabled, not configured, or missing API Key`);
         }
@@ -298,7 +336,7 @@ export class CustomOpenAIProvider {
         }
         this.logger.log(`Custom OpenAI TTS (${providerName}): model=${model}, voice=${voice} (raw=${voiceId}), text=${text.substring(0, 50)}...`);
 
-        // Handle ShopAIKey Custom endpoints
+        // Handle ShopAIKey Custom endpoints (with retry for 524 timeouts)
         if (ttsType === 'shopaikey') {
             let actualModel = model;
             if (actualModel === 'gemini-tts') {
@@ -317,36 +355,50 @@ export class CustomOpenAIProvider {
                 requestBody = { input: text, model: actualModel, voice, response_format: 'mp3' };
             }
 
-            const response = await fetch(endpoint, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(requestBody),
-                signal: AbortSignal.timeout(60000),
-            });
+            const maxRetries = 3;
+            for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                try {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(requestBody),
+                        signal: AbortSignal.timeout(120_000),
+                    });
 
-            if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`ShopAIKey custom TTS API failed: ${response.status} - ${errText}`);
+                    if (!response.ok) {
+                        const errText = await response.text();
+                        throw new Error(`ShopAIKey custom TTS API failed: ${response.status} - ${errText}`);
+                    }
+
+                    const data = await response.json();
+                    const fileUrl = data.url;
+                    if (!fileUrl) {
+                        throw new Error('ShopAIKey custom TTS API: No audio URL returned in response');
+                    }
+
+                    this.logger.log(`Downloading audio file from URL: ${fileUrl}`);
+                    const audioResponse = await fetch(fileUrl);
+                    if (!audioResponse.ok) {
+                        throw new Error(`Failed to download audio file: HTTP ${audioResponse.status}`);
+                    }
+
+                    const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+                    const format = isGoogleTTS ? 'wav' : 'mp3';
+                    return { audio: audioBuffer, format };
+                } catch (error: any) {
+                    const is524 = error.message?.includes('524') || error.message?.includes('timeout occurred');
+                    if (is524 && attempt < maxRetries) {
+                        const delay = attempt * 5_000;
+                        this.logger.warn(`[ShopAIKey TTS Retry] 524 timeout on attempt ${attempt}/${maxRetries}, retrying in ${delay / 1000}s...`);
+                        await new Promise(r => setTimeout(r, delay));
+                        continue;
+                    }
+                    throw error;
+                }
             }
-
-            const data = await response.json();
-            const fileUrl = data.url;
-            if (!fileUrl) {
-                throw new Error('ShopAIKey custom TTS API: No audio URL returned in response');
-            }
-
-            this.logger.log(`Downloading audio file from URL: ${fileUrl}`);
-            const audioResponse = await fetch(fileUrl);
-            if (!audioResponse.ok) {
-                throw new Error(`Failed to download audio file: HTTP ${audioResponse.status}`);
-            }
-
-            const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
-            const format = isGoogleTTS ? 'wav' : 'mp3';
-            return { audio: audioBuffer, format };
         }
 
         // Handle standard OpenAI TTS endpoint

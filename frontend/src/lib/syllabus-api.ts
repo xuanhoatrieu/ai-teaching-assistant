@@ -57,6 +57,9 @@ export const syllabusApi = {
     create: (subjectId: string) =>
         api.post<Syllabus>(`/subjects/${subjectId}/syllabus`),
 
+    deleteSyllabus: (subjectId: string) =>
+        api.delete(`/subjects/${subjectId}/syllabus`),
+
     updateBlock: (syllabusId: string, blockId: string, data: { title?: string; content?: string; metadata?: any }) =>
         api.put<SyllabusBlock>(`/syllabus/${syllabusId}/blocks/${blockId}`, data),
 

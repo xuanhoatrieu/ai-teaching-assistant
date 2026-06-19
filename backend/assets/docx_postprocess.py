@@ -91,6 +91,31 @@ def is_code_paragraph(paragraph):
     return any(cn in style_name for cn in ["Source Code", "Verbatim"])
 
 
+def add_table_borders(table):
+    """Force single black borders (all sides + inside) on a table via tblPr.
+
+    Pandoc's reference Table style ships without tblBorders, so generated tables
+    render borderless in Word. Inject an explicit tblBorders block so every cell
+    edge is visible.
+    """
+    tblPr = table._tbl.tblPr
+    # Remove existing tblBorders to avoid duplicates
+    existing = tblPr.find(qn('w:tblBorders'))
+    if existing is not None:
+        tblPr.remove(existing)
+    borders = parse_xml(
+        f'<w:tblBorders {nsdecls("w")}>'
+        '  <w:top w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '  <w:left w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '  <w:bottom w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '  <w:right w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '  <w:insideH w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '  <w:insideV w:val="single" w:sz="4" w:space="0" w:color="000000"/>'
+        '</w:tblBorders>'
+    )
+    tblPr.append(borders)
+
+
 def postprocess_docx(input_path, output_path):
     """Post-process Pandoc DOCX: fix fonts + code block styling."""
     doc = Document(input_path)
@@ -111,8 +136,18 @@ def postprocess_docx(input_path, output_path):
             force_font_on_runs(paragraph, "Times New Roman")
             body_count += 1
 
+    # Tables: add visible borders + force Times New Roman in cells
+    table_count = 0
+    for table in doc.tables:
+        add_table_borders(table)
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    force_font_on_runs(paragraph, "Times New Roman")
+        table_count += 1
+
     doc.save(output_path)
-    print(f"Post-processed: {code_count} code (LEFT) + {body_count} body paragraphs")
+    print(f"Post-processed: {code_count} code (LEFT) + {body_count} body paragraphs + {table_count} tables (borders)")
 
 
 if __name__ == "__main__":

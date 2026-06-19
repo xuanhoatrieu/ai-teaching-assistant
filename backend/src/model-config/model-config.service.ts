@@ -952,7 +952,7 @@ export class ModelConfigService {
                                 }
                                 
                                 if (customModelsList.length > 0) {
-                                    models['OPENAI_PERSONAL'] = customModelsList;
+                                    models['PERSONAL'] = customModelsList;
                                     this.logger.log(`Added personal OpenAI provider with ${customModelsList.length} models for user ${userId}`);
                                 }
                             } else {

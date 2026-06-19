@@ -34,10 +34,18 @@ export function SyllabusPanel({ subjectId }: Props) {
     const [editingOutlineId, setEditingOutlineId] = useState<string | null>(null);
     const [editingOutlineValue, setEditingOutlineValue] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const proPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     useEffect(() => {
         loadSyllabus();
     }, [subjectId]);
+
+    // Stop textbook-pro polling on unmount to avoid leaks
+    useEffect(() => {
+        return () => {
+            if (proPollRef.current) clearInterval(proPollRef.current);
+        };
+    }, []);
 
     // Auto-calculate default number of lessons from general_info block
     useEffect(() => {
@@ -56,15 +64,15 @@ export function SyllabusPanel({ subjectId }: Props) {
         }
     }, [syllabus]);
 
-    const loadSyllabus = async () => {
-        setIsLoading(true);
+    const loadSyllabus = async (silent = false) => {
+        if (!silent) setIsLoading(true);
         try {
             const res = await syllabusApi.get(subjectId);
             setSyllabus(res.data);
         } catch (err: any) {
             setError('Không thể tải đề cương');
         } finally {
-            setIsLoading(false);
+            if (!silent) setIsLoading(false);
         }
     };
 
@@ -115,7 +123,7 @@ export function SyllabusPanel({ subjectId }: Props) {
         } catch (err: any) {
             const msg = err.response?.data?.message || 'Import thất bại';
             setMessage({ type: 'error', text: `❌ ${msg}` });
-            loadSyllabus();
+            loadSyllabus(true);
         } finally {
             setIsImporting(false);
         }
@@ -147,7 +155,7 @@ export function SyllabusPanel({ subjectId }: Props) {
             const practice = practiceLessons ? parseInt(practiceLessons) : undefined;
             const res = await syllabusApi.generateLessons(syllabus.id, num, theory, practice);
             setMessage({ type: 'success', text: `✅ Đã tạo ${res.data.length} bài giảng!` });
-            loadSyllabus();
+            loadSyllabus(true);
         } catch (err: any) {
             setMessage({ type: 'error', text: `❌ ${err.response?.data?.message || 'Không thể phân chia bài'}` });
         } finally {
@@ -183,38 +191,73 @@ export function SyllabusPanel({ subjectId }: Props) {
             setTimeout(() => setMessage(null), 3000);
         } catch {
             setMessage({ type: 'error', text: 'Không thể đổi thứ tự bài giảng' });
-            loadSyllabus(); // Revert to server state
+            loadSyllabus(true); // Revert to server state
         }
+    };
+
+    // Helper: map import status to user-friendly progress message
+    const getImportProgressMessage = (status: string): string => {
+        if (status === 'importing:converting') return '📄 Đang chuyển đổi file DOCX → văn bản...';
+        if (status === 'importing:parsing') return '🤖 AI đang phân tích đề cương...';
+        if (status === 'importing:filling') return '📝 Đang điền nội dung vào các mục...';
+        if (status.startsWith('importing:block_')) {
+            const parts = status.split('_');
+            const current = parts[1] || '?';
+            const total = parts[2] || '10';
+            return `📝 Đang điền mục ${current}/${total}...`;
+        }
+        if (status === 'importing:error') return '❌ Import gặp lỗi!';
+        if (status.startsWith('importing')) return '⏳ Đang import đề cương...';
+        return '';
     };
 
     // Polling for DOCX import status
     useEffect(() => {
-        if (!syllabus || syllabus.status !== 'importing') return;
+        if (!syllabus || !syllabus.status.startsWith('importing')) return;
 
         const interval = setInterval(async () => {
             try {
                 const res = await syllabusApi.get(subjectId);
                 if (res.data) {
                     setSyllabus(res.data);
-                    if (res.data.status !== 'importing') {
-                        setMessage({ type: 'success', text: '✅ Import đề cương thành công!' });
+                    const st = res.data.status;
+                    if (st.startsWith('importing')) {
+                        const progressMsg = getImportProgressMessage(st);
+                        if (progressMsg) setMessage({ type: 'success', text: progressMsg });
+                    } else {
+                        // Import finished
+                        const filledBlocks = res.data.blocks?.filter((b: any) => b.content?.trim()).length || 0;
+                        setMessage({ type: 'success', text: `✅ Import hoàn tất! Đã điền ${filledBlocks}/10 mục.` });
                         setTimeout(() => setMessage(null), 5000);
                     }
                 }
             } catch (err) {
                 // Ignore polling errors
             }
-        }, 3000);
+        }, 2000);
 
         return () => clearInterval(interval);
-    }, [syllabus, subjectId]);
+    }, [syllabus?.status, subjectId]);
+
+    const handleDeleteSyllabus = async () => {
+        if (!syllabus) return;
+        if (!confirm('⚠️ Xóa toàn bộ đề cương?\n\nThao tác này sẽ xóa tất cả nội dung đề cương, bài giảng, giáo trình và tài liệu tham khảo. Không thể hoàn tác.')) return;
+        try {
+            await syllabusApi.deleteSyllabus(subjectId);
+            setSyllabus(null);
+            setMessage({ type: 'success', text: '🗑️ Đã xóa đề cương.' });
+            setTimeout(() => setMessage(null), 3000);
+        } catch (err: any) {
+            setMessage({ type: 'error', text: `❌ ${err.response?.data?.message || 'Không thể xóa đề cương'}` });
+        }
+    };
 
     const handleClearLessons = async () => {
         if (!syllabus) return;
         if (!confirm('Xóa tất cả bài giảng đã tạo?')) return;
         try {
             await syllabusApi.clearLessons(syllabus.id);
-            loadSyllabus();
+            loadSyllabus(true);
             setMessage({ type: 'success', text: '🗑️ Đã xóa tất cả bài giảng.' });
         } catch {
             setMessage({ type: 'error', text: 'Không thể xóa' });
@@ -227,7 +270,7 @@ export function SyllabusPanel({ subjectId }: Props) {
         try {
             const res = await syllabusApi.createLessonBridge(syllabus.id, sl.id);
             setMessage({ type: 'success', text: `✅ Đã tạo bài giảng "${sl.title}"` });
-            loadSyllabus();
+            loadSyllabus(true);
             // Navigate to the new lesson editor
             const lessonData = res.data as any;
             if (lessonData?.lesson?.id) {
@@ -246,29 +289,40 @@ export function SyllabusPanel({ subjectId }: Props) {
         setProStatus({ phase: 'extracting', status: 'generating', progress: 10, message: 'Trích xuất tài liệu tham khảo...' });
         setMessage({ type: 'success', text: `🚀 Đang tạo textbook PRO (5 bước) cho "${sl.title}"...` });
 
-        // Start polling
+        try {
+            // Kick off background pipeline (returns immediately)
+            await syllabusApi.generateTextbookPro(syllabus.id, sl.id);
+        } catch (err: any) {
+            setMessage({ type: 'error', text: `❌ ${err.response?.data?.message || 'Không thể bắt đầu tạo textbook Pro'}` });
+            setGeneratingTextbookId(null);
+            setProStatus(null);
+            return;
+        }
+
+        // Poll status until done/error (pipeline runs in background on the server)
+        if (proPollRef.current) clearInterval(proPollRef.current);
         const pollInterval = setInterval(async () => {
             try {
                 const res = await syllabusApi.getTextbookStatus(syllabus.id, sl.id);
                 setProStatus(res.data);
-                if (res.data.phase === 'done' || res.data.phase === 'error') {
+                if (res.data.phase === 'done') {
                     clearInterval(pollInterval);
+                    proPollRef.current = null;
+                    setMessage({ type: 'success', text: `✅ Textbook PRO "${sl.title}" đã sẵn sàng!` });
+                    setGeneratingTextbookId(null);
+                    setProStatus(null);
+                    loadSyllabus(true);
+                } else if (res.data.phase === 'error') {
+                    clearInterval(pollInterval);
+                    proPollRef.current = null;
+                    setMessage({ type: 'error', text: `❌ Lỗi tạo textbook Pro cho "${sl.title}"` });
+                    setGeneratingTextbookId(null);
+                    setProStatus(null);
+                    loadSyllabus(true);
                 }
-            } catch { /* ignore poll errors */ }
+            } catch { /* ignore transient poll errors */ }
         }, 3000);
-
-        try {
-            await syllabusApi.generateTextbookPro(syllabus.id, sl.id);
-            setMessage({ type: 'success', text: `✅ Textbook PRO "${sl.title}" đã sẵn sàng!` });
-            loadSyllabus();
-        } catch (err: any) {
-            setMessage({ type: 'error', text: `❌ ${err.response?.data?.message || 'Lỗi tạo textbook Pro'}` });
-            loadSyllabus();
-        } finally {
-            clearInterval(pollInterval);
-            setGeneratingTextbookId(null);
-            setProStatus(null);
-        }
+        proPollRef.current = pollInterval;
     };
 
     const handleSaveTextbook = async () => {
@@ -427,8 +481,10 @@ export function SyllabusPanel({ subjectId }: Props) {
             <div className="syllabus-header">
                 <div className="syllabus-header-left">
                     <h3>📋 Đề cương chi tiết</h3>
-                    <span className={`status-badge status-${syllabus.status}`}>
-                        {syllabus.status === 'draft' ? '📝 Bản nháp' : '✅ Hoàn thành'}
+                    <span className={`status-badge ${syllabus.status.startsWith('importing') ? 'status-importing' : `status-${syllabus.status}`}`}>
+                        {syllabus.status.startsWith('importing') ? '⏳ Đang import...'
+                            : syllabus.status === 'draft' ? '📝 Bản nháp'
+                            : '✅ Hoàn thành'}
                     </span>
                 </div>
                 <div className="syllabus-header-actions">
@@ -459,8 +515,42 @@ export function SyllabusPanel({ subjectId }: Props) {
                         onChange={handleImportDocx}
                         style={{ display: 'none' }}
                     />
+                    <button
+                        className="btn-delete-syllabus"
+                        onClick={handleDeleteSyllabus}
+                        title="Xóa toàn bộ đề cương"
+                    >
+                        🗑️ Xóa đề cương
+                    </button>
                 </div>
             </div>
+
+            {/* Import Progress Bar */}
+            {syllabus.status.startsWith('importing') && (
+                <div className="import-progress-bar">
+                    <div className="import-progress-track">
+                        <div
+                            className="import-progress-fill"
+                            style={{
+                                width: syllabus.status === 'importing:converting' ? '15%'
+                                    : syllabus.status === 'importing:parsing' ? '40%'
+                                    : syllabus.status === 'importing:filling' ? '60%'
+                                    : syllabus.status.startsWith('importing:block_') ? (() => {
+                                        const parts = syllabus.status.split('_');
+                                        const cur = parseInt(parts[1]) || 0;
+                                        const tot = parseInt(parts[2]) || 10;
+                                        return `${60 + (cur / tot) * 35}%`;
+                                    })()
+                                    : syllabus.status === 'importing:error' ? '100%'
+                                    : '20%'
+                            }}
+                        />
+                    </div>
+                    <span className="import-progress-label">
+                        {getImportProgressMessage(syllabus.status)}
+                    </span>
+                </div>
+            )}
 
             {/* Model Selection */}
             <div className="syllabus-model-config" style={{ display: 'flex', gap: '1rem', padding: '1rem', backgroundColor: 'var(--bg-card)', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
@@ -492,14 +582,14 @@ export function SyllabusPanel({ subjectId }: Props) {
             <ReferencePanel
                 syllabusId={syllabus.id}
                 references={syllabus.references}
-                onUpdated={loadSyllabus}
+                onUpdated={() => loadSyllabus(true)}
             />
 
             {/* Lessons section */}
             <div className="syllabus-lessons-section">
                 <div className="ref-header">
                     <h4>📖 Bài giảng từ đề cương ({syllabus.lessons.length})</h4>
-                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                         <div className="lesson-count-input">
                             <label>Số bài LT</label>
                             <input 
@@ -534,7 +624,7 @@ export function SyllabusPanel({ subjectId }: Props) {
                             />
                         </div>
                         <button
-                            className="btn-import"
+                            className="btn-import btn-split-lessons"
                             onClick={handleGenerateLessons}
                             disabled={isGenerating}
                         >

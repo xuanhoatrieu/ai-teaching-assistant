@@ -56,6 +56,18 @@ export class SyllabusController {
     }
 
     /**
+     * DELETE /subjects/:subjectId/syllabus
+     * Delete an entire syllabus (cascade deletes blocks, lessons, references).
+     */
+    @Delete('subjects/:subjectId/syllabus')
+    async deleteSyllabus(
+        @Param('subjectId') subjectId: string,
+        @CurrentUser() user: { id: string },
+    ) {
+        return this.syllabusService.deleteSyllabus(subjectId, user.id);
+    }
+
+    /**
      * POST /subjects/:subjectId/syllabus/import
      * Upload DOCX syllabus → MarkItDown → AI parse → fill blocks.
      */
@@ -313,7 +325,7 @@ export class SyllabusController {
             imageModelName = imgConfig?.modelName;
         } catch { /* image model is optional */ }
 
-        return this.syllabusService.generateTextbookPro(
+        return this.syllabusService.startTextbookPro(
             lessonId,
             modelConfig.modelName,
             imageModelName,

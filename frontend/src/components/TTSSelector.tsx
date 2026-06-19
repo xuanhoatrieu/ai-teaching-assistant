@@ -134,6 +134,20 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 m.name.startsWith('vitts:') ||
                 m.name.startsWith('custom_openai:')
             );
+
+            // Also collect TTS_VOICE items from custom provider keys (e.g., PERSONAL)
+            Object.keys(modelsRes.data.models || {}).forEach(key => {
+                if (['GEMINI', 'CLIPROXY', 'IMAGE_GEN', 'VITTS', 'VBEE'].includes(key)) return;
+                const list = modelsRes.data.models[key] || [];
+                const customVoices = list
+                    .filter((m: AvailableModel) => m.supportedTasks.includes('TTS_VOICE'))
+                    .filter((m: AvailableModel) => !allVoices.some((v: AvailableModel) => v.name === m.name))
+                    .map((m: AvailableModel) => ({ ...m, source: key }));
+                if (customVoices.length > 0) {
+                    allVoices.push(...customVoices);
+                }
+            });
+
             setVoices(allVoices);
 
             // Try to load saved TTS config
@@ -332,7 +346,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
             newModel = customModels[0]?.name || selectedModel;
             
             let availableVoices = customVoices;
-            if (newProvider === 'SHOPAIKEY') {
+            if (newProvider === 'SHOPAIKEY' || newProvider === 'PERSONAL') {
                 const isGeminiModel = newModel.endsWith(':gemini-tts') || newModel.includes('gemini');
                 const geminiNames = ['zephyr', 'puck', 'charon', 'kore', 'aoede'];
                 availableVoices = customVoices.filter(v => {
@@ -352,7 +366,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         setSelectedModel(modelName);
         
         let newVoice = selectedVoice;
-        if (provider === 'SHOPAIKEY') {
+        if (provider === 'SHOPAIKEY' || provider === 'PERSONAL') {
             const isGeminiModel = modelName.endsWith(':gemini-tts') || modelName.includes('gemini');
             const geminiNames = ['zephyr', 'puck', 'charon', 'kore', 'aoede'];
             
@@ -413,7 +427,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
         }
         
         const allCustomVoices = voices.filter(v => v.name.startsWith(`custom_openai:${provider.toLowerCase()}:`));
-        if (provider === 'SHOPAIKEY') {
+        if (provider === 'SHOPAIKEY' || provider === 'PERSONAL') {
             const isGeminiModel = selectedModel.endsWith(':gemini-tts') || selectedModel.includes('gemini');
             const geminiNames = ['zephyr', 'puck', 'charon', 'kore', 'aoede'];
             

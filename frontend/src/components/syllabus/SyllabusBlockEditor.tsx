@@ -3,7 +3,13 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { SyllabusBlock } from '../../lib/syllabus-api';
 import { syllabusApi } from '../../lib/syllabus-api';
-import { parseMarkdownTable, formatMarkdownTable, getCellSpan } from '../../lib/markdown-table';
+import {
+    parseSegments,
+    serializeSegments,
+    getCellSpan,
+    type Segment,
+    type TableSegment,
+} from '../../lib/markdown-table';
 
 interface Props {
     block: SyllabusBlock;
@@ -32,14 +38,11 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState('');
 
-    // Table Editor States
-    const [editorMode, setEditorMode] = useState<'markdown' | 'table'>('markdown');
-    const [beforeText, setBeforeText] = useState('');
-    const [afterText, setAfterText] = useState('');
-    const [tableHeaders, setTableHeaders] = useState<string[]>([]);
-    const [tableRows, setTableRows] = useState<string[][]>([]);
+    // Structured editing: ordered list of text/table segments.
+    const [segments, setSegments] = useState<Segment[]>([]);
+    const [viewMode, setViewMode] = useState<'structured' | 'raw'>('structured');
 
-    // Sync content when block changes
+    // Sync when block changes
     useEffect(() => {
         setContent(block.content);
         setTitle(block.title);
@@ -49,157 +52,26 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
     const hasContent = block.content.trim().length > 0;
 
     const handleStartEdit = () => {
-        const parsed = parseMarkdownTable(content);
-        if (parsed) {
-            setBeforeText(parsed.beforeText);
-            setTableHeaders(parsed.headers);
-            setTableRows(parsed.rows);
-            setAfterText(parsed.afterText);
-            setEditorMode('table');
-        } else {
-            setEditorMode('markdown');
-        }
+        setSegments(parseSegments(content));
+        setViewMode('structured');
         setIsEditing(true);
     };
 
-    const handleSwitchToMarkdown = () => {
-        const serialized = formatMarkdownTable({
-            beforeText,
-            headers: tableHeaders,
-            rows: tableRows,
-            afterText,
-        });
-        setContent(serialized);
-        setEditorMode('markdown');
+    const handleSwitchToRaw = () => {
+        setContent(serializeSegments(segments));
+        setViewMode('raw');
     };
 
-    const handleSwitchToTable = () => {
-        const parsed = parseMarkdownTable(content);
-        if (parsed) {
-            setBeforeText(parsed.beforeText);
-            setTableHeaders(parsed.headers);
-            setTableRows(parsed.rows);
-            setAfterText(parsed.afterText);
-            setEditorMode('table');
-        } else {
-            alert('Nội dung hiện tại không chứa bảng Markdown hợp lệ hoặc bảng bị lỗi định dạng.');
-        }
-    };
-
-    const handleCellChange = (rowIndex: number, colIndex: number, value: string) => {
-        const updatedRows = [...tableRows];
-        updatedRows[rowIndex] = [...updatedRows[rowIndex]];
-        updatedRows[rowIndex][colIndex] = value;
-        setTableRows(updatedRows);
-    };
-
-    const handleHeaderChange = (colIndex: number, value: string) => {
-        const updatedHeaders = [...tableHeaders];
-        updatedHeaders[colIndex] = value;
-        setTableHeaders(updatedHeaders);
-    };
-
-    const addRow = () => {
-        const newRow = Array(tableHeaders.length).fill('');
-        setTableRows([...tableRows, newRow]);
-    };
-
-    const deleteRow = (rowIndex: number) => {
-        setTableRows(tableRows.filter((_, i) => i !== rowIndex));
-    };
-
-    const addColumn = () => {
-        const colName = window.prompt('Nhập tên cột mới:');
-        if (colName && colName.trim()) {
-            setTableHeaders([...tableHeaders, colName.trim()]);
-            setTableRows(tableRows.map(row => [...row, '']));
-        }
-    };
-
-    const deleteColumn = (colIndex: number) => {
-        if (tableHeaders.length <= 1) {
-            alert('Bảng phải có ít nhất 1 cột.');
-            return;
-        }
-        if (window.confirm(`Bạn có chắc chắn muốn xóa cột "${tableHeaders[colIndex]}"?`)) {
-            setTableHeaders(tableHeaders.filter((_, i) => i !== colIndex));
-            setTableRows(tableRows.map(row => row.filter((_, i) => i !== colIndex)));
-        }
-    };
-
-    // Table Merging Operations
-    const mergeRight = (r: number, c: number) => {
-        const span = getCellSpan(tableRows, r, c);
-        const targetColIndex = c + span.colSpan;
-        if (targetColIndex >= (tableRows[0]?.length || 0)) {
-            alert('Không thể gộp sang phải ngoài phạm vi bảng.');
-            return;
-        }
-
-        const updatedRows = tableRows.map((row, ri) => {
-            if (ri >= r && ri < r + span.rowSpan) {
-                const newRow = [...row];
-                newRow[targetColIndex] = '>';
-                return newRow;
-            }
-            return row;
-        });
-        setTableRows(updatedRows);
-    };
-
-    const mergeDown = (r: number, c: number) => {
-        const span = getCellSpan(tableRows, r, c);
-        const targetRowIndex = r + span.rowSpan;
-        if (targetRowIndex >= tableRows.length) {
-            alert('Không thể gộp xuống dưới ngoài phạm vi bảng.');
-            return;
-        }
-
-        const updatedRows = tableRows.map((row, ri) => {
-            if (ri === targetRowIndex) {
-                const newRow = [...row];
-                newRow[c] = '^';
-                for (let i = 1; i < span.colSpan; i++) {
-                    newRow[c + i] = '>';
-                }
-                return newRow;
-            }
-            return row;
-        });
-        setTableRows(updatedRows);
-    };
-
-    const splitCell = (r: number, c: number) => {
-        const span = getCellSpan(tableRows, r, c);
-        if (span.colSpan === 1 && span.rowSpan === 1) return;
-
-        const updatedRows = tableRows.map((row, ri) => {
-            if (ri >= r && ri < r + span.rowSpan) {
-                const newRow = [...row];
-                for (let ci = c; ci < c + span.colSpan; ci++) {
-                    if (ri === r && ci === c) continue;
-                    newRow[ci] = '';
-                }
-                return newRow;
-            }
-            return row;
-        });
-        setTableRows(updatedRows);
+    const handleSwitchToStructured = () => {
+        setSegments(parseSegments(content));
+        setViewMode('structured');
     };
 
     const handleSave = async () => {
         setIsSaving(true);
         setError('');
         try {
-            let finalContent = content;
-            if (editorMode === 'table') {
-                finalContent = formatMarkdownTable({
-                    beforeText,
-                    headers: tableHeaders,
-                    rows: tableRows,
-                    afterText,
-                });
-            }
+            const finalContent = viewMode === 'structured' ? serializeSegments(segments) : content;
             const res = await syllabusApi.updateBlock(syllabusId, block.id, { title, content: finalContent });
             onSaved(res.data);
             setIsEditing(false);
@@ -217,41 +89,210 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
         setError('');
     };
 
-    // Render Table View Mode with Merged Cells support
-    const renderTableView = (parsed: ReturnType<typeof parseMarkdownTable>) => {
-        if (!parsed) return null;
+    // ---- Segment-level operations ----
+    const updateTable = (segIndex: number, updater: (t: TableSegment) => TableSegment) =>
+        setSegments((prev) => prev.map((s, i) => (i === segIndex && s.type === 'table' ? updater(s) : s)));
+
+    const updateText = (segIndex: number, text: string) =>
+        setSegments((prev) => prev.map((s, i) => (i === segIndex && s.type === 'text' ? { ...s, text } : s)));
+
+    const deleteSegment = (segIndex: number) => {
+        if (!window.confirm('Xóa mục này khỏi nội dung?')) return;
+        setSegments((prev) => prev.filter((_, i) => i !== segIndex));
+    };
+
+    const addTextSegment = () =>
+        setSegments((prev) => [...prev, { type: 'text', text: '' }]);
+
+    const addTableSegment = () =>
+        setSegments((prev) => [...prev, { type: 'table', headers: ['Cột 1', 'Cột 2'], rows: [['', '']] }]);
+
+    // ---- Table cell / structure operations (operate on segments[segIndex]) ----
+    const handleCellChange = (segIndex: number, r: number, c: number, value: string) =>
+        updateTable(segIndex, (t) => ({
+            ...t,
+            rows: t.rows.map((row, ri) => (ri === r ? row.map((cell, ci) => (ci === c ? value : cell)) : row)),
+        }));
+
+    const handleHeaderChange = (segIndex: number, c: number, value: string) =>
+        updateTable(segIndex, (t) => ({
+            ...t,
+            headers: t.headers.map((h, ci) => (ci === c ? value : h)),
+        }));
+
+    const addRow = (segIndex: number) =>
+        updateTable(segIndex, (t) => ({ ...t, rows: [...t.rows, Array(t.headers.length).fill('')] }));
+
+    const deleteRow = (segIndex: number, r: number) =>
+        updateTable(segIndex, (t) => ({ ...t, rows: t.rows.filter((_, i) => i !== r) }));
+
+    const addColumn = (segIndex: number) => {
+        const colName = window.prompt('Nhập tên cột mới:');
+        if (colName === null) return;
+        updateTable(segIndex, (t) => ({
+            ...t,
+            headers: [...t.headers, colName.trim()],
+            rows: t.rows.map((row) => [...row, '']),
+        }));
+    };
+
+    const deleteColumn = (segIndex: number, c: number) => {
+        const seg = segments[segIndex];
+        if (seg?.type !== 'table') return;
+        if (seg.headers.length <= 1) {
+            alert('Bảng phải có ít nhất 1 cột.');
+            return;
+        }
+        if (!window.confirm(`Xóa cột "${seg.headers[c] || c + 1}"?`)) return;
+        updateTable(segIndex, (t) => ({
+            ...t,
+            headers: t.headers.filter((_, i) => i !== c),
+            rows: t.rows.map((row) => row.filter((_, i) => i !== c)),
+        }));
+    };
+
+    const mergeRight = (segIndex: number, r: number, c: number) => {
+        const seg = segments[segIndex];
+        if (seg?.type !== 'table') return;
+        const span = getCellSpan(seg.rows, r, c);
+        const target = c + span.colSpan;
+        if (target >= (seg.rows[0]?.length || 0)) {
+            alert('Không thể gộp sang phải ngoài phạm vi bảng.');
+            return;
+        }
+        updateTable(segIndex, (t) => ({
+            ...t,
+            rows: t.rows.map((row, ri) =>
+                ri >= r && ri < r + span.rowSpan ? row.map((cell, ci) => (ci === target ? '>' : cell)) : row,
+            ),
+        }));
+    };
+
+    const mergeDown = (segIndex: number, r: number, c: number) => {
+        const seg = segments[segIndex];
+        if (seg?.type !== 'table') return;
+        const span = getCellSpan(seg.rows, r, c);
+        const target = r + span.rowSpan;
+        if (target >= seg.rows.length) {
+            alert('Không thể gộp xuống dưới ngoài phạm vi bảng.');
+            return;
+        }
+        updateTable(segIndex, (t) => ({
+            ...t,
+            rows: t.rows.map((row, ri) => {
+                if (ri !== target) return row;
+                return row.map((cell, ci) => {
+                    if (ci === c) return '^';
+                    if (ci > c && ci < c + span.colSpan) return '>';
+                    return cell;
+                });
+            }),
+        }));
+    };
+
+    const splitCell = (segIndex: number, r: number, c: number) => {
+        const seg = segments[segIndex];
+        if (seg?.type !== 'table') return;
+        const span = getCellSpan(seg.rows, r, c);
+        if (span.colSpan === 1 && span.rowSpan === 1) return;
+        updateTable(segIndex, (t) => ({
+            ...t,
+            rows: t.rows.map((row, ri) => {
+                if (ri < r || ri >= r + span.rowSpan) return row;
+                return row.map((cell, ci) => {
+                    if (ri === r && ci === c) return cell;
+                    if (ci >= c && ci < c + span.colSpan) return '';
+                    return cell;
+                });
+            }),
+        }));
+    };
+
+    // ---- Render: one table editor grid ----
+    const renderTableEditor = (seg: TableSegment, segIndex: number) => {
+        const allHeadersEmpty = seg.headers.every((h) => h.trim() === '');
         return (
-            <div className="custom-table-view-container">
-                {parsed.beforeText && (
-                    <div className="table-before-text">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.beforeText}</ReactMarkdown>
-                    </div>
-                )}
-                
-                <div className="table-responsive">
-                    <table className="custom-syllabus-table">
+            <div className="visual-table-editor-wrapper">
+                <div className="table-editor-actions">
+                    <button type="button" className="btn-table-action" onClick={() => addRow(segIndex)}>
+                        ➕ Thêm hàng
+                    </button>
+                    <button type="button" className="btn-table-action" onClick={() => addColumn(segIndex)}>
+                        ➕ Thêm cột
+                    </button>
+                    {allHeadersEmpty && (
+                        <span className="empty-header-hint">Bảng này không có tiêu đề cột</span>
+                    )}
+                </div>
+                <div className="table-editor-scrollable">
+                    <table className="visual-table-editor-grid">
                         <thead>
                             <tr>
-                                {parsed.headers.map((header, i) => (
-                                    <th key={i}>
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{header}</ReactMarkdown>
+                                <th className="action-col-header">Xóa</th>
+                                {seg.headers.map((header, colIndex) => (
+                                    <th key={colIndex}>
+                                        <div className="table-editor-header-cell">
+                                            <input
+                                                type="text"
+                                                className="table-editor-header-input"
+                                                value={header}
+                                                placeholder="(không có tiêu đề cột)"
+                                                onChange={(e) => handleHeaderChange(segIndex, colIndex, e.target.value)}
+                                            />
+                                            <button
+                                                type="button"
+                                                className="btn-delete-col"
+                                                onClick={() => deleteColumn(segIndex, colIndex)}
+                                                title="Xóa cột"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
                                     </th>
                                 ))}
                             </tr>
                         </thead>
                         <tbody>
-                            {parsed.rows.map((row, rowIndex) => (
+                            {seg.rows.map((row, rowIndex) => (
                                 <tr key={rowIndex}>
+                                    <td className="action-col-cell">
+                                        <button
+                                            type="button"
+                                            className="btn-delete-row"
+                                            onClick={() => deleteRow(segIndex, rowIndex)}
+                                            title="Xóa hàng"
+                                        >
+                                            🗑️
+                                        </button>
+                                    </td>
                                     {row.map((cell, colIndex) => {
-                                        const span = getCellSpan(parsed.rows, rowIndex, colIndex);
+                                        const span = getCellSpan(seg.rows, rowIndex, colIndex);
                                         if (span.isMerged) return null;
+                                        const showMergeRight = colIndex + span.colSpan < (seg.rows[0]?.length || 0);
+                                        const showMergeDown = rowIndex + span.rowSpan < seg.rows.length;
+                                        const isMergedCell = span.colSpan > 1 || span.rowSpan > 1;
                                         return (
-                                            <td 
-                                                key={colIndex} 
-                                                colSpan={span.colSpan} 
-                                                rowSpan={span.rowSpan}
-                                            >
-                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{cell || ' '}</ReactMarkdown>
+                                            <td key={colIndex} colSpan={span.colSpan} rowSpan={span.rowSpan}>
+                                                <div className="table-editor-cell-wrapper">
+                                                    <textarea
+                                                        className="table-editor-cell-textarea"
+                                                        value={cell}
+                                                        onChange={(e) => handleCellChange(segIndex, rowIndex, colIndex, e.target.value)}
+                                                        rows={Math.max(2, span.rowSpan * 2)}
+                                                        placeholder="Nhập nội dung ô..."
+                                                    />
+                                                    <div className="cell-merge-toolbar">
+                                                        {showMergeRight && (
+                                                            <button type="button" className="btn-merge-action" onClick={() => mergeRight(segIndex, rowIndex, colIndex)} title="Gộp ô sang phải">➡️</button>
+                                                        )}
+                                                        {showMergeDown && (
+                                                            <button type="button" className="btn-merge-action" onClick={() => mergeDown(segIndex, rowIndex, colIndex)} title="Gộp ô xuống dưới">⬇️</button>
+                                                        )}
+                                                        {isMergedCell && (
+                                                            <button type="button" className="btn-merge-action btn-split" onClick={() => splitCell(segIndex, rowIndex, colIndex)} title="Hủy gộp ô">🔓</button>
+                                                        )}
+                                                    </div>
+                                                </div>
                                             </td>
                                         );
                                     })}
@@ -260,15 +301,41 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                         </tbody>
                     </table>
                 </div>
-
-                {parsed.afterText && (
-                    <div className="table-after-text" style={{ marginTop: '12px' }}>
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{parsed.afterText}</ReactMarkdown>
-                    </div>
-                )}
             </div>
         );
     };
+
+    // ---- Render: one table in view (read-only) mode ----
+    const renderTableView = (seg: TableSegment, key: number) => (
+        <div className="table-responsive" key={key}>
+            <table className="custom-syllabus-table">
+                <thead>
+                    <tr>
+                        {seg.headers.map((header, i) => (
+                            <th key={i}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{header}</ReactMarkdown>
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {seg.rows.map((row, rowIndex) => (
+                        <tr key={rowIndex}>
+                            {row.map((cell, colIndex) => {
+                                const span = getCellSpan(seg.rows, rowIndex, colIndex);
+                                if (span.isMerged) return null;
+                                return (
+                                    <td key={colIndex} colSpan={span.colSpan} rowSpan={span.rowSpan}>
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{cell || ' '}</ReactMarkdown>
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
 
     return (
         <div className={`syllabus-block ${isEditing ? 'editing' : ''}`}>
@@ -290,21 +357,13 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                 <div className="block-actions">
                     {isEditing ? (
                         <>
-                            <button
-                                className="btn-save"
-                                onClick={handleSave}
-                                disabled={isSaving}
-                            >
+                            <button className="btn-save" onClick={handleSave} disabled={isSaving}>
                                 {isSaving ? '⏳' : '💾'} Lưu
                             </button>
-                            <button className="btn-cancel" onClick={handleCancel}>
-                                ↩️ Hủy
-                            </button>
+                            <button className="btn-cancel" onClick={handleCancel}>↩️ Hủy</button>
                         </>
                     ) : (
-                        <button className="btn-edit" onClick={handleStartEdit}>
-                            ✏️ Sửa
-                        </button>
+                        <button className="btn-edit" onClick={handleStartEdit}>✏️ Sửa</button>
                     )}
                 </div>
             </div>
@@ -314,160 +373,64 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
             <div className="block-body">
                 {isEditing ? (
                     <div className="block-editor-container">
-                        {/* Editor Mode Selector */}
+                        {/* PLACEHOLDER_EDIT_BODY */}
                         <div className="editor-mode-selector">
-                            <button 
+                            <button
                                 type="button"
-                                className={`btn-mode-toggle ${editorMode === 'table' ? 'active' : ''}`}
-                                onClick={handleSwitchToTable}
+                                className={`btn-mode-toggle ${viewMode === 'structured' ? 'active' : ''}`}
+                                onClick={handleSwitchToStructured}
                             >
-                                🛠️ Chỉnh sửa dạng bảng trực quan
+                                📊 Soạn thảo trực quan
                             </button>
-                            <button 
+                            <button
                                 type="button"
-                                className={`btn-mode-toggle ${editorMode === 'markdown' ? 'active' : ''}`}
-                                onClick={handleSwitchToMarkdown}
+                                className={`btn-mode-toggle ${viewMode === 'raw' ? 'active' : ''}`}
+                                onClick={handleSwitchToRaw}
                             >
-                                📝 Chỉnh sửa dạng mã Markdown
+                                📝 Mã Markdown
                             </button>
                         </div>
 
-                        {/* Editor Area */}
-                        {editorMode === 'table' ? (
-                            <div className="visual-table-editor-wrapper">
-                                <div className="table-text-field">
-                                    <label className="field-label">Văn bản phía trên bảng (Tiêu đề mục):</label>
-                                    <input
-                                        type="text"
-                                        className="table-text-input"
-                                        value={beforeText}
-                                        onChange={(e) => setBeforeText(e.target.value)}
-                                        placeholder="Nhập tiêu đề hoặc văn bản trước bảng..."
-                                    />
-                                </div>
-
-                                <div className="table-editor-actions">
-                                    <button type="button" className="btn-table-action" onClick={addRow}>
-                                        ➕ Thêm hàng
+                        {viewMode === 'structured' ? (
+                            <div className="segment-list">
+                                {segments.map((seg, segIndex) => (
+                                    <div className="segment-item" key={segIndex}>
+                                        <div className="segment-toolbar">
+                                            <span className="segment-label">
+                                                {seg.type === 'table' ? '📊 Bảng' : '📝 Đoạn văn'}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="btn-delete-segment"
+                                                onClick={() => deleteSegment(segIndex)}
+                                                title="Xóa mục này"
+                                            >
+                                                🗑️ Xóa mục
+                                            </button>
+                                        </div>
+                                        {seg.type === 'table' ? (
+                                            renderTableEditor(seg, segIndex)
+                                        ) : (
+                                            <textarea
+                                                className="table-text-textarea"
+                                                value={seg.text}
+                                                onChange={(e) => updateText(segIndex, e.target.value)}
+                                                placeholder="Nhập nội dung văn bản..."
+                                                rows={Math.max(3, seg.text.split('\n').length)}
+                                            />
+                                        )}
+                                    </div>
+                                ))}
+                                {segments.length === 0 && (
+                                    <p className="block-empty">Mục này chưa có nội dung. Thêm đoạn văn hoặc bảng bên dưới.</p>
+                                )}
+                                <div className="segment-add-actions">
+                                    <button type="button" className="btn-table-action" onClick={addTextSegment}>
+                                        ➕ Thêm đoạn văn
                                     </button>
-                                    <button type="button" className="btn-table-action" onClick={addColumn}>
-                                        ➕ Thêm cột
+                                    <button type="button" className="btn-table-action" onClick={addTableSegment}>
+                                        ➕ Thêm bảng
                                     </button>
-                                </div>
-
-                                <div className="table-editor-scrollable">
-                                    <table className="visual-table-editor-grid">
-                                        <thead>
-                                            <tr>
-                                                <th className="action-col-header">Xóa</th>
-                                                {tableHeaders.map((header, colIndex) => (
-                                                    <th key={colIndex}>
-                                                        <div className="table-editor-header-cell">
-                                                            <input
-                                                                type="text"
-                                                                className="table-editor-header-input"
-                                                                value={header}
-                                                                onChange={(e) => handleHeaderChange(colIndex, e.target.value)}
-                                                            />
-                                                            <button 
-                                                                type="button"
-                                                                className="btn-delete-col"
-                                                                onClick={() => deleteColumn(colIndex)}
-                                                                title="Xóa cột"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </div>
-                                                    </th>
-                                                ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {tableRows.map((row, rowIndex) => (
-                                                <tr key={rowIndex}>
-                                                    <td className="action-col-cell">
-                                                        <button 
-                                                            type="button"
-                                                            className="btn-delete-row"
-                                                            onClick={() => deleteRow(rowIndex)}
-                                                            title="Xóa hàng"
-                                                        >
-                                                            🗑️
-                                                        </button>
-                                                    </td>
-                                                    {row.map((cell, colIndex) => {
-                                                        const span = getCellSpan(tableRows, rowIndex, colIndex);
-                                                        if (span.isMerged) return null;
-                                                        
-                                                        const showMergeRight = colIndex + span.colSpan < (tableRows[0]?.length || 0);
-                                                        const showMergeDown = rowIndex + span.rowSpan < tableRows.length;
-                                                        const isMergedCell = span.colSpan > 1 || span.rowSpan > 1;
-
-                                                        return (
-                                                            <td 
-                                                                key={colIndex}
-                                                                colSpan={span.colSpan}
-                                                                rowSpan={span.rowSpan}
-                                                            >
-                                                                <div className="table-editor-cell-wrapper">
-                                                                    <textarea
-                                                                        className="table-editor-cell-textarea"
-                                                                        value={cell}
-                                                                        onChange={(e) => handleCellChange(rowIndex, colIndex, e.target.value)}
-                                                                        rows={Math.max(2, span.rowSpan * 2)}
-                                                                        placeholder="Nhập nội dung ô..."
-                                                                    />
-                                                                    <div className="cell-merge-toolbar">
-                                                                        {showMergeRight && (
-                                                                            <button 
-                                                                                type="button"
-                                                                                className="btn-merge-action" 
-                                                                                onClick={() => mergeRight(rowIndex, colIndex)}
-                                                                                title="Gộp ô sang phải"
-                                                                            >
-                                                                                ➡️
-                                                                            </button>
-                                                                        )}
-                                                                        {showMergeDown && (
-                                                                            <button 
-                                                                                type="button"
-                                                                                className="btn-merge-action" 
-                                                                                onClick={() => mergeDown(rowIndex, colIndex)}
-                                                                                title="Gộp ô xuống dưới"
-                                                                            >
-                                                                                ⬇️
-                                                                            </button>
-                                                                        )}
-                                                                        {isMergedCell && (
-                                                                            <button 
-                                                                                type="button"
-                                                                                className="btn-merge-action btn-split" 
-                                                                                onClick={() => splitCell(rowIndex, colIndex)}
-                                                                                title="Hủy gộp ô"
-                                                                            >
-                                                                                🔓
-                                                                            </button>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-
-                                <div className="table-text-field" style={{ marginTop: '12px' }}>
-                                    <label className="field-label">Văn bản phía dưới bảng (Lưu ý/Ghi chú):</label>
-                                    <textarea
-                                        className="table-text-textarea"
-                                        value={afterText}
-                                        onChange={(e) => setAfterText(e.target.value)}
-                                        placeholder="Nhập văn bản sau bảng..."
-                                        rows={2}
-                                    />
                                 </div>
                             </div>
                         ) : (
@@ -483,17 +446,17 @@ export function SyllabusBlockEditor({ block, syllabusId, onSaved }: Props) {
                 ) : (
                     <div className="block-content-view">
                         {hasContent ? (
-                            (() => {
-                                const parsed = parseMarkdownTable(block.content);
-                                if (parsed) {
-                                    return renderTableView(parsed);
-                                }
-                                return (
-                                    <div className="markdown-content block-markdown">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.content}</ReactMarkdown>
-                                    </div>
-                                );
-                            })()
+                            <div className="segment-list">
+                                {parseSegments(block.content).map((seg, i) =>
+                                    seg.type === 'table' ? (
+                                        renderTableView(seg, i)
+                                    ) : (
+                                        <div className="markdown-content block-markdown" key={i}>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.text}</ReactMarkdown>
+                                        </div>
+                                    ),
+                                )}
+                            </div>
                         ) : (
                             <p className="block-empty">Chưa có nội dung. Nhấn ✏️ Sửa để thêm.</p>
                         )}

@@ -110,12 +110,12 @@ Ma trận đóng góp của mục tiêu, chuẩn đầu ra của học phần v�
         sortOrder: 6,
         defaultContent: `**6. Nhiệm vụ của sinh viên**
 
-Mô tả các yêu cầu đối với sinh viên theo quy định chung và đặc thù của học phần.
+Mô tả các yêu cầu đối với sinh viên theo quy định chung và đặc thù của học phần, bao gồm cả đạo đức học thuật.
 
 **6.1. Phần lý thuyết, bài tập, thảo luận**
-- Dự lớp ≥80% tổng số thời lượng của học phần.
+- Dự lớp ≥80% tổng số thời lượng của học phần, bao gồm cả thời gian học trực tuyến (nếu có).
 - Chuẩn bị thảo luận.
-- Hoàn thành các bài tập được giao.
+- Hoàn thành các bài tập được giao trong sách bài tập, hệ thống LMS.
 
 **6.2. Phần thí nghiệm, thực hành (nếu có)**
 - Các bài thí nghiệm, thực hành của học phần.
@@ -123,7 +123,10 @@ Mô tả các yêu cầu đối với sinh viên theo quy định chung và đ�
 
 **6.3. Phần bài tập lớn, tiểu luận (nếu có)**
 - Tên bài tập lớn hoặc tiểu luận.
-- Yêu cầu cần đạt.`
+- Yêu cầu cần đạt, trong đó quy định rõ yêu cầu về liêm chính học thuật.
+
+**6.4. Phần khác (nếu có)**
+Ví dụ như tham quan thực tế.`
     },
     {
         blockType: 'assessment',
@@ -139,23 +142,63 @@ Mô tả các yêu cầu đối với sinh viên theo quy định chung và đ�
 | **I. Chuyên cần** | | | | | | **20%** |
 | 1 | Đi học đầy đủ, tích cực tham gia các hoạt động trong giờ | | CLO.. | Quan sát | Rubric 1 | 30% |
 | 2 | Trung bình các bài ôn tập LMS | | CLO.. | Trắc nghiệm | | 70% |
+| .. | … | | | | | |
 | **II. Kiểm tra quá trình** | | | | | | **30%** |
-| 1 | Kiểm tra giữa kỳ | 12 | CLO.. | Viết tự luận | Đề thi | 100% |
+| 1 | | 12 | CLO.. | | | |
+| 2 | | 30 | CLO.. | | | |
+| … | …. | | | | | |
 | **III. Thi cuối kỳ** | | | | | | **50%** |
-| 1 | Thi cuối kỳ | | CLO.. | Tự luận/Trắc nghiệm | Đề thi | 100% |
+| 1 | | | CLO.. | | | |
+| 2 | | | CLO.. | | | |
+| … | …. | | | | | |
 
 *Lưu ý:* *Trọng số đánh giá hiện đang áp dụng*
 * *Đối với bậc đại học: 20% chuyên cần; 30% quá trình và 50% cuối kỳ;*
+* *Đối với bậc thạc sĩ: 20% chuyên cần; 20% quá trình và 60% cuối kỳ;*
 
 **7.2. Các Rubric đánh giá chuẩn đầu ra của học phần**
+
+**Rubric đánh giá học phần**
+
+*Hướng dẫn: Rubric là một hình thức đánh giá chỉ rõ các tiêu chí đạt được trên tất cả các nhiệm vụ của người học. Với mỗi thành phần điểm (chuyên cần, quá trình, cuối kỳ), giảng viên chủ động chọn các Rubric phù hợp. Với mỗi Rubric, Thầy/Cô xác định trọng số của các tiêu chí đánh giá và tổng trọng số của các tiêu chí bằng 100%.. Ví dụ các Rubric: sự tham gia và tính chủ động trong các buổi học; tự luận; trắc nghiệm; vấn đáp; thuyết trình; tiểu luận; bài tập lớn... Trường hợp có nhiều Rubric, giảng viên xác định trọng số sao cho tổng trọng số của các Rubric bằng 100%.*
+
+***Ví dụ: Các hình thức đánh giá khác nhau***
 
 **Rubric 1: Sự tham gia và tính chủ động trong các buổi học**
 
 |  |  |  |  |  |  |  |
 | --- | --- | --- | --- | --- | --- | --- |
-| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi** **(8,5-10)** | **Khá** **(7,0-8,4)** | **Trung bình** **(5,5-6,9)** | **Trung bình yếu** **(4,0-5,4)** | **Kém** **<4,0** |
-| Tham dự đầy đủ | 80% | Dự lớp ≥95% | Dự lớp 90%-94% | Dự lớp 85%-89% | Dự lớp 80%-84% | Dự lớp <80% |
-| Thái độ tham gia | 20% | Tích cực phát biểu | Tương đối tích cực | Chỉ lắng nghe | Thụ động | Làm việc riêng |`
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| Tham dự các buổi học lý thuyết và thảo luận | 80% | Tham dự đầy đủ các buổi học lý thuyết và thực hành | Tham dự chỉ đạt khoảng 95% -99% các buổi học lý thuyết và thực hành | Tham dự chỉ đạt khoảng 90% -94% các buổi học lý thuyết và thực hành | Tham dự đạt khoảng 80% - 89% các buổi học lý thuyết và thực hành | Tham dự < 80% các buổi học lý thuyết và thực hành |
+| Thái độ học giờ lý thuyết, thảo luận | 20% | Tích cực phát biểu xây dựng bài. Xung phong làm bài tập | Tương đối tích cực phát biểu xây dựng và có tinh thần xung phong làm bài tập tuy nhiên chất lượng câu trả lời chưa cao. | Chưa tích cực phát biểu xây dựng và xung phong làm bài tập. Giáo viên chỉ định mới trả lời. | Chỉ tham dự lớp học nhưng không tham gia phát biểu, xung phong làm bài. | Không hiểu bài và không trả lời được câu hỏi liên quan đến bài cũ. Làm việc riêng trong giờ học. |
+
+**Rubric 2: Thuyết trình**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |
+
+**Rubric 3: Vấn đáp**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |
+
+**Rubric 4: Tiểu luận**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |
+
+**Rubric n: ..............**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |`
     },
     {
         blockType: 'content_detail',
@@ -166,8 +209,8 @@ Mô tả các yêu cầu đối với sinh viên theo quy định chung và đ�
 |  |  |  |  |  |  |
 | --- | --- | --- | --- | --- | --- |
 | **Tiết** | **Nội dung** | **Chuẩn đầu ra HP** | **Phương pháp dạy học** | **Phương pháp đánh giá** | **Tài liệu tham khảo** |
-| | **Chương 1: …** | | | | |
-| 1,2,3 | A. Nội dung trên lớp:<br>1. Lý thuyết: ...<br>2. Thảo luận: ... | CLO1 | Thuyết trình, Thảo luận | Kiểm tra quá trình | [1] |
+| | **Chương 1:…** | | | | |
+| 1,2,3 | A. Nội dung trên lớp<br>1. Lý thuyết: ...<br>2. Thảo luận: ... | CLO1 | Thuyết trình, Thảo luận | Kiểm tra quá trình | [1] |
 | | B. Nội dung tự học:<br>1. Chuẩn bị tài liệu...<br>2. Làm bài tập... | CLO1 | Tự học có hướng dẫn | Đánh giá chuyên cần | [2] |`
     },
     {
@@ -180,11 +223,13 @@ Mô tả các yêu cầu đối với sinh viên theo quy định chung và đ�
 
 |  |  |
 | --- | --- |
-| **Lần 1:** Ngày cập nhật:...<br>Nội dung cập nhật:... | **Người cập nhật ký:**<br>Trưởng Bộ môn: |
+| **Lần 1:** Tóm tắt nội dung cập nhật ĐCCT lần 1: *ngày .. tháng .. năm..*<br>- Lý do cập nhật, bổ sung | <Người cập nhật ký và ghi rõ họ tên)<br>Trưởng Bộ môn: |
+| **Lần 2:** Tóm tắt nội dung cập nhật ĐCCT lần 2: *ngày .. tháng .. năm..*<br>- Lý do cập nhật, bổ sung | <Người cập nhật ký và ghi rõ họ tên)<br>Trưởng Bộ môn: |
+| **Lần …:** | <Người cập nhật ký và ghi rõ họ tên)<br>Trưởng Bộ môn: |
 
-| TRƯỜNG KHOA | TRƯỞNG BỘ MÔN | GIẢNG VIÊN BIÊN SOẠN |
+|  |  |  |
 | --- | --- | --- |
-| | | |`
+| **TRƯỜNG KHOA** | **TRƯỞNG BỘ MÔN** | **GIẢNG VIÊN BIÊN SOẠN** |`
     }
 ];
 
@@ -197,49 +242,266 @@ const REF_CHAR_LIMIT = 50_000;
 /** System prompt for parsing syllabus DOCX markdown into 10 blocks */
 const SYLLABUS_PARSE_SYSTEM_PROMPT = `You are an expert at parsing Vietnamese university syllabus documents.
 You will receive a markdown conversion of a DOCX syllabus file. Your job is to identify the content
-that belongs to each of these 10 standard blocks and return a JSON mapping.
+that belongs to each of these 10 standard blocks, extract the values, and reconstruct each block content using the EXACT structure, markdown tables, headings, and formatting of the 2026 standard templates.
 
-The 10 block types are:
-1. "header" - Document header info: university name, department, approval stamps, semester/year
-2. "general_info" - Course code, credits, prerequisites, course type, semester offered
-3. "lecturers" - Lecturer names, titles, contact info, office hours
-4. "description" - Course description, overview, objectives
-5. "clo" - Course Learning Outcomes (CLO) mapped to PLO/competencies
-6. "materials" - Textbooks, references, online resources
-7. "student_tasks" - Student responsibilities, attendance, assignments
-8. "assessment" - Grading scheme, exam structure, rubrics, assessment matrix
-9. "content_detail" - Detailed weekly/session plan with topics, CLO mapping, teaching methods
-10. "update_log" - Revision history, changelog
+CRITICAL RULES:
+1. Legacy documents use DIFFERENT numbering systems (Roman numerals I/II/III, Arabic 1/2/3, or no numbers at all), DIFFERENT section ordering, and DIFFERENT terminology. You MUST match by CONTENT SEMANTICS, NOT by section numbers or headings.
+2. For each block, your output MUST STRICTLY follow the provided "Standard Template" format (including all markdown tables, subheadings, and specific list structures). Do not copy the legacy document's formatting.
+3. Extract relevant details from the imported document and fill them into the template's placeholder values (e.g. replacing '……', '.....', 'CLO..', 'PLO..', empty table cells, or blank areas).
+4. If a piece of information or field in the template is not present in the imported document, keep the template's default placeholder value (e.g. keep '……' or '.....' or leave empty).
+5. For tables with dynamic rows (e.g. lecturers, CLO mapping, weekly plan schedule, assessment plan items), you may add or remove rows as needed to represent all actual imported items, but you MUST preserve the exact columns, headers, and separator styles.
+6. Silently ignore and discard any content in the imported document that does not map to any template field or block.
 
-LEGACY TEMPLATE TOLERANCE & SEMANTIC MAPPING RULES:
-- Legacy syllabus files might use different headings, section order, or terminology. You must use semantic matching to identify which parts of the legacy document belong to the 10 standard blocks.
-- Map sections named "Mục tiêu môn học", "Chuẩn đầu ra", "Mục tiêu học phần", "CĐR", "Yêu cầu năng lực", etc. to "clo" or "description" depending on the content (CLO/Competencies go to "clo", general objectives/overview go to "description").
-- Map sections named "Tài liệu học tập", "Sách tham khảo", "Giáo trình", "Tài liệu giảng dạy", etc. to "materials".
-- Map sections named "Cách đánh giá", "Thang điểm", "Hình thức kiểm tra", "Đánh giá kết quả", "Kiểm tra và đánh giá học phần", etc. to "assessment".
-- Map sections named "Phân phối chương trình", "Lịch trình giảng dạy", "Các chương bài", "Nội dung chi tiết", "Đề cương bài giảng", etc. to "content_detail".
-- Map sections named "Thông tin chung", "Tên môn học", "Số tín chỉ", "Bộ môn phụ trách" to "general_info". If the lecturer information is mixed in here, separate it and put the lecturer names/contacts in "lecturers".
-- If a section is missing, do not guess content; use an empty string "".
+Here are the 10 blocks with their standard template structures and semantic matching descriptions:
 
-RULES:
-- Return ONLY a valid JSON object with block types as keys and content as values.
-- If a section is not found in the document, use empty string "".
-- Preserve the original text as-is. Do not translate or rephrase.
-- Include table data as formatted text.
-- Do NOT wrap the JSON in markdown code fences.
+1. "header" — Cover page / university header.
+Matches: The document header/cover page area ONLY. Contains university name, department, title "ĐỀ CƯƠNG HỌC PHẦN", course name, course code, date.
+Standard Template Structure (You MUST use this exact table and heading structure):
+\`\`\`markdown
+|  |  |
+| --- | --- |
+| TRƯỜNG ĐẠI HỌC NÔNG LÂM  **KHOA [Extracted Faculty, e.g. CÔNG NGHỆ THÔNG TIN or ……]** | CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM  **Độc lập – Tự do – Hạnh phúc**  *Thái nguyên, ngày…tháng…năm 2026* |
 
-Example output format:
-{
-  "header": "TRƯỜNG ĐẠI HỌC ...",
-  "general_info": "Tên học phần: ...",
-  "lecturers": "1. TS. Nguyễn Văn A ...",
-  "description": "Học phần này cung cấp ...",
-  "clo": "CLO1: ...",
-  "materials": "1. Sách giáo khoa ...",
-  "student_tasks": "Sinh viên phải ...",
-  "assessment": "Thành phần đánh giá: ...",
-  "content_detail": "Tuần 1: ...",
-  "update_log": ""
-}`;
+**ĐỀ CƯƠNG HỌC PHẦN**
+
+**Tên học phần:** [Extracted Course Name, e.g. Tin học đại cương]
+
+**Mã học phần:** [Extracted Course Code, e.g. CNTT101]
+\`\`\`
+
+2. "general_info" — Course metadata/administrative info.
+Matches: Credits, prerequisites, course type, department, credit hour breakdown.
+Standard Template Structure (You MUST use this exact list and table structure):
+\`\`\`markdown
+**1. Thông tin chung về học phần**
+
+- Số tín chỉ: [Extracted credits or ……] Loại học phần: [Extracted type: bắt buộc, tự chọn or ……]
+- Các học phần tiên quyết: [Extracted prerequisites or ……]
+- Học phần học trước: [Extracted previous courses or ……]
+- Các học phần song hành: [Extracted parallel courses or ……]
+- Các yêu cầu đối với học phần (nếu có): [Extracted requirements or ……]
+- Bộ môn (Khoa) phụ trách học phần: [Extracted department or ……]
+- Số tiết quy đổi với các hoạt động:
+
+|  |  |  |  |
+| --- | --- | --- | --- |
+| Nghe giảng lý thuyết: | [Extracted number or …..]tiết | Thảo luận: | [Extracted number or …..]tiết |
+| Làm bài tập: | [Extracted number or …..]tiết | Thực hành, thí nghiệm: | [Extracted number or …..]tiết |
+| Hoạt động theo nhóm: | [Extracted number or …..]tiết | Tự học: | [Extracted number or …..]tiết |
+| Bài tập lớn (tiểu luận): | [Extracted number or …..]tiết | Tự học có hướng dẫn: | [Extracted number or …..]tiết |
+\`\`\`
+
+3. "lecturers" — Information about teaching staff.
+Matches: Lecturer names, contact info (phone, email), academic credentials, office hours.
+Standard Template Structure (Use this exact table format):
+\`\`\`markdown
+**2. Thông tin chung về các giảng viên**
+
+|  |  |  |  |  |
+| --- | --- | --- | --- | --- |
+| **STT** | **Học hàm, học vị, họ tên** | **Số điện thoại** | **Email** | **Ghi chú** |
+[Generate a table row for each lecturer found in the format: | [STT] | [Academic title + Full name] | [Phone] | [Email] | [Notes] |. If none found, output:
+| 1 | PGS.TS. Nguyễn Văn A | 0912 | mail@tuaf.edu.vn |  |
+| 2 |  |  |  |  |
+| …. |  |  |  |  |
+]
+\`\`\`
+
+4. "description" — Course description and objectives.
+Matches: Course overview narrative, role in curriculum, general learning goals (kiến thức, kỹ năng, năng lực tự chủ) as narrative/bullet text (not mapping tables).
+Standard Template Structure (You MUST use this format):
+\`\`\`markdown
+**3. Mô tả tóm tắt nội dung học phần, mục tiêu của học phần**
+
+[Extracted course description narrative]
+
+[Extracted course objectives / learning goals, formatted as a clear list or paragraphs]
+\`\`\`
+
+5. "clo" — Course Learning Outcomes (CLOs) and PLO mapping.
+Matches: CLO table mapping (CLO1->PLO, CLO2->PLO), competency matrix tables, Bloom's level.
+Standard Template Structure (Use this exact table and list format):
+\`\`\`markdown
+**4. Chuẩn đầu ra học phần**
+
+Ma trận đóng góp của mục tiêu, chuẩn đầu ra của học phần và chuẩn đầu ra của chương trình đào tạo.
+
+|  |  |  |  |  |
+| --- | --- | --- | --- | --- |
+| **Mục tiêu của HP** | **Thứ tự chuẩn đầu ra** | **Nội dung đầu ra HP** | **Chuẩn đầu ra chương trình đào tạo** | **Mức độ đóng góp** |
+[Generate a table row for each CLO/CĐR found. If none found, output:
+| CO1 | CLO1 |  | PLO1 |  |
+| CO2 | CLO2 |  | PLO.. |  |
+| CO3 | CLO3 |  | PLOn |  |
+|  | …. | …….. | ….. | …. |
+]
+
+*Lưu ý:*
+*- Chuẩn đầu ra học phần cần quy định cụ thể kiến thức, kỹ năng, năng lực tự chủ sinh viên đạt được.*
+*- Mức năng lực được đánh giá theo thang Bloom (1= Nhớ; 2= Hiểu; 3= Ứng dụng; 4= Phân tích; 5= Đánh giá; 6= Sáng tạo).*
+\`\`\`
+
+6. "materials" — Textbooks, reference materials.
+Matches: Textbooks, reference books, journals, library codes, online resources.
+Standard Template Structure:
+\`\`\`markdown
+**5. Học liệu**
+
+- Tài liệu học tập chính: [Extracted main books, list items]
+- Tài liệu tham khảo: [Extracted reference books, list items]
+- Học liệu điện từ (nếu có): [Extracted electronic links/materials or ……]
+
+*Chú ý:*
+- Tài liệu học tập phải đáp ứng yêu cầu của Thông tư số 35/2021/TT-BGDĐT ngày 06 tháng 12 năm 2021 của Bộ Giáo dục và Đào tạo.
+- Tài liệu học tập chính phải có sự phê duyệt của Thủ trưởng cơ sở đào tạo.
+- *Tài liệu tham khảo cần có mã số thư viện, trung tâm số ĐHTN hoặc đường link truy cập.*
+\`\`\`
+
+7. "student_tasks" — Student responsibilities.
+Matches: Attendance rules (>=80%), lab/practice rules, essay/project rules, academic integrity.
+Standard Template Structure:
+\`\`\`markdown
+**6. Nhiệm vụ của sinh viên**
+
+Mô tả các yêu cầu đối với sinh viên theo quy định chung và đặc thù của học phần, bao gồm cả đạo đức học thuật.
+
+**6.1. Phần lý thuyết, bài tập, thảo luận**
+- Dự lớp ≥80% tổng số thời lượng của học phần, bao gồm cả thời gian học trực tuyến (nếu có).
+- Chuẩn bị thảo luận.
+- Hoàn thành các bài tập được giao trong sách bài tập, hệ thống LMS.
+
+**6.2. Phần thí nghiệm, thực hành (nếu có)**
+[Extracted or default:
+- Các bài thí nghiệm, thực hành của học phần.
+- Yêu cầu cần đạt đối với phần thí nghiệm, thực hành.
+]
+
+**6.3. Phần bài tập lớn, tiểu luận (nếu có)**
+[Extracted or default:
+- Tên bài tập lớn hoặc tiểu luận.
+- Yêu cầu cần đạt, trong đó quy định rõ yêu cầu về liêm chính học thuật.
+]
+
+**6.4. Phần khác (nếu có)**
+[Extracted or default:
+Ví dụ như tham quan thực tế.
+]
+\`\`\`
+
+8. "assessment" — Grading and evaluation plans.
+Matches: Grade weights breakdown (attendance %, midterm %, final exam %), planning table, rubrics.
+Standard Template Structure:
+\`\`\`markdown
+**7. Phương pháp kiểm tra, đánh giá người học và thang điểm**
+
+**7.1. Kế hoạch kiểm tra**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **STT** | **Nội dung** | **Thời điểm (tiết thứ)** | **Chuẩn đầu ra được đánh giá** | **Phương pháp đánh giá** | **Công cụ đánh giá** | **Tỷ lệ %** |
+[Generate rows for assessment items found. If none found, output:
+| **I. Chuyên cần** | | | | | | **20%** |
+| 1 | Đi học đầy đủ, tích cực tham gia các hoạt động trong giờ | | CLO.. | Quan sát | Rubric 1 | 30% |
+| 2 | Trung bình các bài ôn tập LMS | | CLO.. | Trắc nghiệm | | 70% |
+| .. | … | | | | | |
+| **II. Kiểm tra quá trình** | | | | | | **30%** |
+| 1 | | 12 | CLO.. | | | |
+| 2 | | 30 | CLO.. | | | |
+| … | …. | | | | | |
+| **III. Thi cuối kỳ** | | | | | | **50%** |
+| 1 | | | CLO.. | | | |
+| 2 | | | CLO.. | | | |
+| … | …. | | | | | |
+]
+
+*Lưu ý:* *Trọng số đánh giá hiện đang áp dụng*
+* *Đối với bậc đại học: 20% chuyên cần; 30% quá trình và 50% cuối kỳ;*
+* *Đối với bậc thạc sĩ: 20% chuyên cần; 20% quá trình và 60% cuối kỳ;*
+
+**7.2. Các Rubric đánh giá chuẩn đầu ra của học phần**
+
+**Rubric đánh giá học phần**
+
+*Hướng dẫn: Rubric là một hình thức đánh giá chỉ rõ các tiêu chí đạt được trên tất cả các nhiệm vụ của người học. Với mỗi thành phần điểm (chuyên cần, quá trình, cuối kỳ), giảng viên chủ động chọn các Rubric phù hợp. Với mỗi Rubric, Thầy/Cô xác định trọng số của các tiêu chí đánh giá và tổng trọng số của các tiêu chí bằng 100%.. Ví dụ các Rubric: sự tham gia và tính chủ động trong các buổi học; tự luận; trắc nghiệm; vấn đáp; thuyết trình; tiểu luận; bài tập lớn... Trường hợp có nhiều Rubric, giảng viên xác định trọng số sao cho tổng trọng số của các Rubric bằng 100%.*
+
+***Ví dụ: Các hình thức đánh giá khác nhau***
+
+**Rubric 1: Sự tham gia và tính chủ động trong các buổi học**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| Tham dự các buổi học lý thuyết và thảo luận | 80% | Tham dự đầy đủ các buổi học lý thuyết và thực hành | Tham dự chỉ đạt khoảng 95% -99% các buổi học lý thuyết và thực hành | Tham dự chỉ đạt khoảng 90% -94% các buổi học lý thuyết và thực hành | Tham dự đạt khoảng 80% - 89% các buổi học lý thuyết và thực hành | Tham dự < 80% các buổi học lý thuyết và thực hành |
+| Thái độ học giờ lý thuyết, thảo luận | 20% | Tích cực phát biểu xây dựng bài. Xung phong làm bài tập | Tương đối tích cực phát biểu xây dựng và có tinh thần xung phong làm bài tập tuy nhiên chất lượng câu trả lời chưa cao. | Chưa tích cực phát biểu xây dựng và xung phong làm bài tập. Giáo viên chỉ định mới trả lời. | Chỉ tham dự lớp học nhưng không tham gia phát biểu, xung phong làm bài. | Không hiểu bài và không trả lời được câu hỏi liên quan đến bài cũ. Làm việc riêng trong giờ học. |
+
+**Rubric 2: Thuyết trình**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |
+
+**Rubric 3: Vấn đáp**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |
+
+**Rubric 4: Tiểu luận**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |
+
+**Rubric n: ..............**
+
+|  |  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Tiêu chí đánh giá** | **Trọng số (%)** | **Giỏi (8,5-10)** | **Khá (7,0-8,4)** | **Trung bình (5,5-6,9)** | **Trung bình yếu (4,0-5,4)** | **Kém <4,0** |
+| | | | | | | |
+\`\`\`
+
+9. "content_detail" — Weekly teaching schedule / Chapter breakdown.
+Matches: Chapter/Lesson detailed schedule (hours, topics, CLOs, teaching/assessment methods, references).
+Standard Template Structure (Use this exact 6-column markdown table. Do NOT alter columns):
+\`\`\`markdown
+**8. Nội dung chi tiết học phần**
+
+|  |  |  |  |  |  |
+| --- | --- | --- | --- | --- | --- |
+| **Tiết** | **Nội dung** | **Chuẩn đầu ra HP** | **Phương pháp dạy học** | **Phương pháp đánh giá** | **Tài liệu tham khảo** |
+[Generate rows for chapters and sessions. Format MUST follow:
+- Chapter row: |  | **Chương X: [Chapter Name]** |  |  |  |  |
+- In-class teaching row: | [Periods, e.g. 1,2,3] | A. Nội dung trên lớp<br>1. [Topic 1]<br>2. [Topic 2] | [CLO, e.g. CLO1] | [Teaching methods, e.g. Thuyết trình] | [Assessment, e.g. Kiểm tra viết giữa kỳ] | [References, e.g. 1, trang 1-15] |
+- Self-study row: |  | B. Nội dung tự học<br>1. [Task 1]<br>2. [Task 2] | [CLO, e.g. CLO1] | Tự học có hướng dẫn | Đánh giá chuyên cần | [References, e.g. 3, trang 3-10] |
+]
+\`\`\`
+
+10. "update_log" — Revision log and signature block.
+Matches: Revision dates, approver blocks, TRƯỜNG KHOA / TRƯỞNG BỘ MÔN / GIẢNG VIÊN signatures.
+Standard Template Structure:
+\`\`\`markdown
+**9. Thời điểm ban hành đề cương chi tiết học phần**
+
+**10. Tiến trình cập nhật đề cương chi tiết (hàng năm)**
+
+|  |  |
+| --- | --- |
+| **Lần 1:** Tóm tắt nội dung cập nhật ĐCCT lần 1: *ngày .. tháng .. năm..*<br>- Lý do cập nhật, bổ sung | <Người cập nhật ký và ghi rõ họ tên)<br>Trưởng Bộ môn: |
+| **Lần 2:** Tóm tắt nội dung cập nhật ĐCCT lần 2: *ngày .. tháng .. năm..*<br>- Lý do cập nhật, bổ sung | <Người cập nhật ký và ghi rõ họ tên)<br>Trưởng Bộ môn: |
+| **Lần …:** | <Người cập nhật ký và ghi rõ họ tên)<br>Trưởng Bộ môn: |
+
+|  |  |  |
+| --- | --- | --- |
+| **TRƯỜNG KHOA** | **TRƯỞNG BỘ MÔN** | **GIẢNG VIÊN BIÊN SOẠN** |
+\`\`\`
+
+Output ONLY a JSON mapping from blockType to its reconstructed markdown content. Do not enclose in code fences.`;
+
+/** Valid block types for mapping */
+
 
 @Injectable()
 export class SyllabusService {
@@ -309,6 +571,29 @@ export class SyllabusService {
                 },
             },
         });
+    }
+
+    /**
+     * Delete an entire syllabus (cascade deletes blocks, lessons, references).
+     */
+    async deleteSyllabus(subjectId: string, userId: string) {
+        const subject = await this.prisma.subject.findUnique({
+            where: { id: subjectId },
+            select: { userId: true },
+        });
+        if (!subject) {
+            throw new BadRequestException('Môn học không tồn tại.');
+        }
+        if (subject.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền xóa đề cương này.');
+        }
+        const syllabus = await this.prisma.syllabus.findUnique({ where: { subjectId } });
+        if (!syllabus) {
+            throw new BadRequestException('Chưa có đề cương để xóa.');
+        }
+        await this.prisma.syllabus.delete({ where: { id: syllabus.id } });
+        this.logger.log(`Deleted syllabus for subject ${subjectId}`);
+        return { success: true, message: 'Đã xóa đề cương thành công.' };
     }
 
     /**
@@ -522,12 +807,21 @@ export class SyllabusService {
         modelName: string,
         callUserId?: string
     ) {
+        const updateStatus = async (status: string) => {
+            await this.prisma.syllabus.update({
+                where: { id: syllabusId },
+                data: { status },
+            });
+        };
+
         try {
-            // Step 2: Convert DOCX to markdown
+            // Step 1: Convert DOCX to markdown
+            await updateStatus('importing:converting');
             const markdown = await this.markItDown.convertToMarkdown(file.buffer, file.originalname);
             this.logger.log(`MarkItDown output: ${markdown.length} chars`);
 
-            // Step 3: AI parse into blocks
+            // Step 2: AI parse into blocks
+            await updateStatus('importing:parsing');
             const userPrompt = `Parse the following syllabus document into the 10 standard blocks:\n\n${markdown}`;
 
             const aiResult = await this.aiProvider.generateTextWithSystem(
@@ -537,7 +831,8 @@ export class SyllabusService {
                 callUserId,
             );
 
-            // Step 4: Parse AI response as JSON
+            // Step 3: Parse AI response as JSON
+            await updateStatus('importing:filling');
             let blockMapping: Record<string, string>;
             // Strip markdown code fences if present
             let jsonStr = aiResult.content.trim();
@@ -553,26 +848,29 @@ export class SyllabusService {
             });
 
             if (syllabus) {
-                // Step 5: Map parsed content to existing blocks
-                const blockUpdates = syllabus.blocks
-                    .filter((block) => {
-                        const content = blockMapping[block.blockType];
-                        return content !== undefined && content.trim().length > 0;
-                    })
-                    .map((block) => ({
-                        id: block.id,
-                        content: blockMapping[block.blockType],
-                    }));
-
-                if (blockUpdates.length > 0) {
-                    await this.updateBlocks(syllabus.id, blockUpdates);
+                // Step 4: Map parsed content to existing blocks one by one with progress
+                const blockTypes = syllabus.blocks.map(b => b.blockType);
+                let filledCount = 0;
+                for (const block of syllabus.blocks) {
+                    const content = blockMapping[block.blockType];
+                    if (content !== undefined && content.trim().length > 0) {
+                        await this.prisma.syllabusBlock.update({
+                            where: { id: block.id },
+                            data: { content },
+                        });
+                        filledCount++;
+                        await updateStatus(`importing:block_${filledCount}_${blockTypes.length}`);
+                    }
                 }
-                this.logger.log(`Async Imported ${blockUpdates.length}/${syllabus.blocks.length} blocks from DOCX`);
+                this.logger.log(`Async Imported ${filledCount}/${syllabus.blocks.length} blocks from DOCX`);
             }
         } catch (error: any) {
             this.logger.error(`Async DOCX import failed: ${error.message}`);
+            await updateStatus('importing:error');
+            // Wait 3s so frontend can see the error status before resetting
+            await new Promise(r => setTimeout(r, 3000));
         } finally {
-            // Always restore status to 'draft' so client knows it's finished (either successfully or with error)
+            // Always restore status to 'draft' so client knows it's finished
             await this.prisma.syllabus.update({
                 where: { id: syllabusId },
                 data: { status: 'draft' },
@@ -939,6 +1237,30 @@ export class SyllabusService {
     }
 
     // ==================== Multi-Phase Textbook Pipeline ====================
+
+    /**
+     * Kick off the Textbook Pro pipeline in the background and return immediately.
+     * The pipeline can take several minutes; running it synchronously causes the
+     * HTTP connection to be closed by proxies (net::ERR_EMPTY_RESPONSE). The client
+     * tracks progress via getTextbookStatus polling (phase 'done' / 'error').
+     */
+    async startTextbookPro(lessonId: string, modelName: string, imageModelName: string | undefined, userId?: string) {
+        const sl = await this.prisma.syllabusLesson.findUnique({
+            where: { id: lessonId },
+            select: { id: true },
+        });
+        if (!sl) throw new BadRequestException('SyllabusLesson not found');
+
+        // Set initial phase synchronously so the first poll reflects progress
+        await this.updatePhase(lessonId, 'generating', 'extracting');
+
+        // Fire-and-forget; errors are recorded into textbookPhase='error' by the pipeline
+        this.generateTextbookPro(lessonId, modelName, imageModelName, userId).catch((err: any) => {
+            this.logger.error(`[TextbookPro] background pipeline failed: ${err.message}`);
+        });
+
+        return { started: true, phase: 'extracting', status: 'generating' };
+    }
 
     /**
      * AI-generate textbook using 5-step pipeline:
