@@ -9,11 +9,12 @@ import { SyllabusService } from './syllabus.service';
 import { MarkItDownService } from './markitdown.service';
 import { MermaidService } from './mermaid.service';
 import { SyllabusExportService } from './syllabus-export.service';
+import { ReferenceRagService } from './reference-rag.service';
 
 @Module({
     imports: [PrismaModule, AIModule, ApiKeysModule, ModelConfigModule, FileStorageModule],
     controllers: [SyllabusController],
-    providers: [SyllabusService, MarkItDownService, MermaidService, SyllabusExportService],
+    providers: [SyllabusService, MarkItDownService, MermaidService, SyllabusExportService, ReferenceRagService],
     exports: [SyllabusService],
 })
 export class SyllabusModule {}

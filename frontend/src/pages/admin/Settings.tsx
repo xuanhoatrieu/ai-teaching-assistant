@@ -46,11 +46,13 @@ export function SettingsPage() {
     const [defaultTextModel, setDefaultTextModel] = useState('');
     const [defaultImageModel, setDefaultImageModel] = useState('');
     const [defaultTTSModel, setDefaultTTSModel] = useState('');
+    const [defaultEmbeddingModel, setDefaultEmbeddingModel] = useState('');
     const [categorizedModels, setCategorizedModels] = useState<{
         text: { id: string; source: string }[];
         image: { id: string; source: string }[];
         tts: { id: string; source: string }[];
-    }>({ text: [], image: [], tts: [] });
+        embedding: { id: string; source: string }[];
+    }>({ text: [], image: [], tts: [], embedding: [] });
 
     // ImageGen state
     const [imageGenConfig, setImageGenConfig] = useState<ImageGenConfig | null>(null);
@@ -246,6 +248,7 @@ export function SettingsPage() {
             setDefaultTextModel(config.defaultTextModel || '');
             setDefaultImageModel(config.defaultImageModel || '');
             setDefaultTTSModel(config.defaultTTSModel || '');
+            setDefaultEmbeddingModel(config.defaultEmbeddingModel || '');
 
             // Fetch available models if enabled
             if (config.enabled) {
@@ -319,6 +322,7 @@ export function SettingsPage() {
                 defaultTextModel: defaultTextModel || undefined,
                 defaultImageModel: defaultImageModel || undefined,
                 defaultTTSModel: defaultTTSModel || undefined,
+                defaultEmbeddingModel: defaultEmbeddingModel || undefined,
             };
             await api.put('/admin/config/cliproxy', payload);
             setCliproxyApiKey(''); // clear API key after saving
@@ -638,6 +642,24 @@ export function SettingsPage() {
                                 )}
                             </select>
                             <p className="help-text">Model cho tạo giọng đọc TTS</p>
+                        </div>
+
+                        <div className="setting-group">
+                            <label htmlFor="default-embedding-model">🔎 Default Embedding Model</label>
+                            <select
+                                id="default-embedding-model"
+                                value={defaultEmbeddingModel}
+                                onChange={(e) => setDefaultEmbeddingModel(e.target.value)}
+                            >
+                                {categorizedModels.embedding.length === 0 ? (
+                                    <option value={defaultEmbeddingModel}>{defaultEmbeddingModel || '-- Test Connection để load models --'}</option>
+                                ) : (
+                                    categorizedModels.embedding.map(m => (
+                                        <option key={`${m.source}:${m.id}`} value={m.id}>[{m.source}] {m.id}</option>
+                                    ))
+                                )}
+                            </select>
+                            <p className="help-text">Model embedding cho RAG tài liệu (tạo Textbook Pro)</p>
                         </div>
 
                         <div className="button-group">

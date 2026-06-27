@@ -8,10 +8,16 @@ import {
     Body,
     Query,
     UseGuards,
+    UseInterceptors,
+    UploadedFile,
+    ParseFilePipe,
+    MaxFileSizeValidator,
+    BadRequestException,
     Res,
     Req,
     Logger,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InteractiveQuestionService } from './interactive-question.service';
@@ -447,8 +453,198 @@ export class QuestionsController {
         };
     }
 
-    // ==================== HELPERS ====================
+    /**
+     * GET /lessons/:lessonId/review-questions/import-template
+     * Download a blank Excel template (with example rows) for importing review questions.
+     */
+    @Get('review-questions/import-template')
+    async downloadReviewImportTemplate(@Res() res: Response) {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Câu hỏi ôn tập');
 
+        worksheet.columns = [
+            { header: 'Level', key: 'level', width: 8 },
+            { header: 'Question', key: 'question', width: 50 },
+            { header: 'Correct Answer (A)', key: 'correctAnswer', width: 30 },
+            { header: 'Option B', key: 'optionB', width: 30 },
+            { header: 'Option C', key: 'optionC', width: 30 },
+            { header: 'Option D', key: 'optionD', width: 30 },
+            { header: 'Explanation', key: 'explanation', width: 40 },
+        ];
+
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF4472C4' },
+        };
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+        // Example rows (users can overwrite/delete these)
+        worksheet.addRow({
+            level: 1,
+            question: 'Thủ đô của Việt Nam là thành phố nào?',
+            correctAnswer: 'Hà Nội',
+            optionB: 'TP. Hồ Chí Minh',
+            optionC: 'Đà Nẵng',
+            optionD: 'Hải Phòng',
+            explanation: 'Hà Nội là thủ đô của Việt Nam.',
+        });
+        worksheet.addRow({
+            level: 2,
+            question: 'Vì sao nước biển có vị mặn?',
+            correctAnswer: 'Do hòa tan muối khoáng từ đất đá',
+            optionB: 'Do cá thải ra muối',
+            optionC: 'Do ánh nắng mặt trời',
+            optionD: 'Do gió biển',
+            explanation: 'Nước mưa bào mòn đất đá, cuốn muối khoáng ra biển.',
+        });
+
+        // Instructions sheet
+        const guide = workbook.addWorksheet('Hướng dẫn');
+        guide.columns = [{ width: 90 }];
+        const lines = [
+            'HƯỚNG DẪN ĐIỀN FILE CÂU HỎI ÔN TẬP',
+            '',
+            '1. Mỗi dòng là một câu hỏi (điền ở sheet "Câu hỏi ôn tập").',
+            '2. Cột Level: mức độ Bloom — 1 = Biết, 2 = Hiểu, 3 = Vận dụng. Để trống sẽ mặc định là 1.',
+            '3. Cột "Correct Answer (A)" LUÔN là đáp án ĐÚNG (sẽ là phương án A).',
+            '4. Các cột Option B, C, D là phương án sai (gây nhiễu). Cần điền đủ cả 3.',
+            '5. Cột Explanation (giải thích) không bắt buộc.',
+            '6. KHÔNG cần điền mã câu hỏi — hệ thống tự sinh khi import.',
+            '7. Khi import, câu hỏi mới được THÊM vào cuối, không xóa câu hỏi cũ.',
+            '8. Có thể xóa 2 dòng ví dụ mẫu trước khi điền dữ liệu của bạn.',
+        ];
+        lines.forEach((t) => guide.addRow([t]));
+        guide.getRow(1).font = { bold: true, size: 14 };
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent('mau_cau_hoi_on_tap.xlsx')}"`);
+        await workbook.xlsx.write(res);
+        res.end();
+    }
+
+    /**
+     * POST /lessons/:lessonId/review-questions/import
+     * Import review questions from an uploaded .xlsx file (append mode).
+     */
+    @Post('review-questions/import')
+    @UseInterceptors(FileInterceptor('file'))
+    async importReviewQuestions(
+        @Param('lessonId') lessonId: string,
+        @UploadedFile(
+            new ParseFilePipe({
+                validators: [new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 })],
+            }),
+        )
+        file: Express.Multer.File,
+    ) {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn file Excel (.xlsx).');
+        }
+        const ext = file.originalname.split('.').pop()?.toLowerCase();
+        if (ext !== 'xlsx') {
+            throw new BadRequestException('Định dạng không hợp lệ. Chỉ chấp nhận file .xlsx.');
+        }
+
+        const workbook = new ExcelJS.Workbook();
+        try {
+            await workbook.xlsx.load(file.buffer as any);
+        } catch {
+            throw new BadRequestException('Không đọc được file Excel. File có thể bị hỏng.');
+        }
+
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) {
+            throw new BadRequestException('File Excel không có dữ liệu.');
+        }
+
+        const lessonNumber = await this.getLessonNumber(lessonId);
+
+        const cell = (row: ExcelJS.Row, col: number): string => {
+            const v = row.getCell(col).value;
+            if (v === null || v === undefined) return '';
+            if (typeof v === 'object' && 'text' in (v as any)) return String((v as any).text).trim();
+            if (typeof v === 'object' && 'result' in (v as any)) return String((v as any).result).trim();
+            return String(v).trim();
+        };
+
+        // Normalize a question for duplicate detection: lowercase, collapse
+        // whitespace, strip surrounding punctuation/quotes.
+        const normalize = (s: string): string =>
+            s
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .replace(/[.,;:!?"'`()[\]{}…]/g, '')
+                .trim();
+
+        // Seed the seen-set with questions already in this lesson.
+        const existing = await this.reviewQuestionService.getQuestions(lessonId);
+        const seen = new Set<string>(existing.map((q) => normalize(q.question)));
+
+        let imported = 0;
+        let skipped = 0;
+        let duplicates = 0;
+        const errors: string[] = [];
+
+        // Row 1 is the header — start from row 2.
+        for (let r = 2; r <= worksheet.rowCount; r++) {
+            const row = worksheet.getRow(r);
+            const question = cell(row, 2);
+            const correctAnswer = cell(row, 3);
+            const optionB = cell(row, 4);
+            const optionC = cell(row, 5);
+            const optionD = cell(row, 6);
+
+            // Skip fully empty rows silently.
+            if (!question && !correctAnswer && !optionB && !optionC && !optionD) {
+                continue;
+            }
+
+            if (!question || !correctAnswer || !optionB || !optionC || !optionD) {
+                skipped++;
+                errors.push(`Dòng ${r}: thiếu câu hỏi hoặc thiếu phương án.`);
+                continue;
+            }
+
+            // Skip questions that duplicate an existing one or an earlier row.
+            const key = normalize(question);
+            if (seen.has(key)) {
+                duplicates++;
+                errors.push(`Dòng ${r}: trùng câu hỏi đã có, đã bỏ qua.`);
+                continue;
+            }
+            seen.add(key);
+
+            let level = parseInt(cell(row, 1), 10);
+            if (!Number.isInteger(level) || level < 1 || level > 3) {
+                level = 1;
+            }
+
+            try {
+                await this.reviewQuestionService.createQuestion(lessonId, lessonNumber, {
+                    level,
+                    question,
+                    correctAnswer,
+                    optionB,
+                    optionC,
+                    optionD,
+                    explanation: cell(row, 7) || undefined,
+                });
+                imported++;
+            } catch (e: any) {
+                skipped++;
+                errors.push(`Dòng ${r}: ${e?.message || 'lỗi không xác định'}`);
+            }
+        }
+
+        if (imported === 0 && skipped === 0 && duplicates === 0) {
+            throw new BadRequestException('File không có câu hỏi nào để import.');
+        }
+
+        return { imported, skipped, duplicates, errors };
+    }
+
+    // ==================== HELPERS ====================
     /**
      * Get slides content for AI generation
      */

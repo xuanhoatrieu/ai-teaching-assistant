@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 interface JobStatus {
     id: string;
     type: string;
-    status: 'pending' | 'processing' | 'done' | 'error';
+    status: 'pending' | 'processing' | 'done' | 'error' | 'cancelled';
     progress: number;
     total: number;
     message: string | null;
@@ -41,6 +41,8 @@ export function useJobPolling(options?: {
     onComplete?: (jobStatus: JobStatus) => void;
     /** Called when job fails */
     onError?: (errorMessage: string) => void;
+    /** Called when job was cancelled by the user */
+    onCancelled?: () => void;
     /** Polling interval in ms (default: 3000) */
     intervalMs?: number;
 }): UseJobPollingReturn {
@@ -70,6 +72,9 @@ export function useJobPolling(options?: {
             if (status.status === 'done') {
                 stopPolling();
                 optionsRef.current?.onComplete?.(status);
+            } else if (status.status === 'cancelled') {
+                stopPolling();
+                optionsRef.current?.onCancelled?.();
             } else if (status.status === 'error') {
                 stopPolling();
                 const msg = status.error || 'Đã xảy ra lỗi không xác định';

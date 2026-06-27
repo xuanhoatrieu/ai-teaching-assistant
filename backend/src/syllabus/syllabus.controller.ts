@@ -325,11 +325,19 @@ export class SyllabusController {
             imageModelName = imgConfig?.modelName;
         } catch { /* image model is optional */ }
 
+        // Try to get embedding model for RAG (optional — pipeline falls back if absent)
+        let embeddingModelName: string | undefined;
+        try {
+            const embConfig = await this.modelConfigService.getModelForTask(user.id, 'EMBEDDING');
+            embeddingModelName = embConfig?.modelName;
+        } catch { /* embedding model is optional */ }
+
         return this.syllabusService.startTextbookPro(
             lessonId,
             modelConfig.modelName,
             imageModelName,
             user.id,
+            embeddingModelName,
         );
     }
 

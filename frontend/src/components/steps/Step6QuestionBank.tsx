@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api } from '../../lib/api';
 import { useJobPolling } from '../../hooks/useJobPolling';
@@ -49,6 +49,10 @@ export function Step6QuestionBank() {
     const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
     const [editingInteractiveId, setEditingInteractiveId] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'review' | 'interactive'>('review');
+
+    // Excel import (review questions)
+    const reviewImportInputRef = useRef<HTMLInputElement>(null);
+    const [isImportingReview, setIsImportingReview] = useState(false);
 
     const hasOutline = !!lessonData?.detailedOutline;
 
@@ -252,6 +256,52 @@ export function Step6QuestionBank() {
         }
     };
 
+    const handleDownloadReviewTemplate = async () => {
+        try {
+            const response = await api.get(`/lessons/${lessonId}/review-questions/import-template`, {
+                responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'mau_cau_hoi_on_tap.xlsx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Không thể tải file mẫu' });
+        }
+    };
+
+    const handleImportReviewExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = ''; // reset so the same file can be re-selected
+        if (!file) return;
+
+        setIsImportingReview(true);
+        setMessage(null);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const response = await api.post(
+                `/lessons/${lessonId}/review-questions/import`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0 },
+            );
+            const { imported = 0, skipped = 0, duplicates = 0 } = response.data || {};
+            await loadQuestions();
+            const notes: string[] = [];
+            if (duplicates > 0) notes.push(`bỏ qua ${duplicates} câu trùng`);
+            if (skipped > 0) notes.push(`${skipped} dòng không hợp lệ`);
+            const note = notes.length > 0 ? ` (${notes.join(', ')})` : '';
+            setMessage({ type: 'success', text: `✓ Đã thêm ${imported} câu hỏi ôn tập${note}` });
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Import thất bại' });
+        } finally {
+            setIsImportingReview(false);
+        }
+    };
+
 
     // Parse answers from array with * prefix for correct
     const parseAnswers = (answers: string[]) => {
@@ -266,6 +316,23 @@ export function Step6QuestionBank() {
             <div className="step-header">
                 <h2>❓ Bước 6: Ngân Hàng Câu Hỏi</h2>
                 <div className="header-actions">
+                    <input
+                        type="file"
+                        ref={reviewImportInputRef}
+                        accept=".xlsx"
+                        style={{ display: 'none' }}
+                        onChange={handleImportReviewExcel}
+                    />
+                    <button className="btn-secondary" onClick={handleDownloadReviewTemplate}>
+                        📥 Tải file mẫu Ôn tập
+                    </button>
+                    <button
+                        className="btn-secondary"
+                        onClick={() => reviewImportInputRef.current?.click()}
+                        disabled={isImportingReview}
+                    >
+                        {isImportingReview ? '⏳ Đang import...' : '📤 Import Excel Ôn tập'}
+                    </button>
                     {interactiveQuestions.length > 0 && (
                         <button className="btn-secondary" onClick={handleExportInteractiveExcel}>
                             📊 Xuất Excel Tương tác

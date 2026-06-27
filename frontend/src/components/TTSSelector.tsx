@@ -34,6 +34,7 @@ interface ViTTSOptions {
     voice_library?: VoiceLibEntry[];
     design_attributes?: DesignAttributes;
     defaults?: { speed: number; num_step: number; normalize: boolean };
+    isPersonal?: boolean;
     error?: string;
 }
 
@@ -48,6 +49,16 @@ interface TTSSelectorProps {
         vittsNormalize?: boolean;
     }) => void;
 }
+
+// Fallback attributes for the "System Voice" (design) form when the ViTTS
+// options endpoint is unavailable (e.g. only system creds, or transient error).
+const DEFAULT_DESIGN_ATTRIBUTES: DesignAttributes = {
+    gender: ['male', 'female'],
+    age: ['child', 'young', 'middle-aged', 'elderly'],
+    pitch: ['very low', 'low', 'normal', 'high', 'very high'],
+    style: ['normal', 'whisper'],
+    accent: [],
+};
 
 export function TTSSelector({ onChange }: TTSSelectorProps) {
     const [provider, setProvider] = useState<Provider>('GEMINI');
@@ -393,6 +404,11 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
 
     const handleVittsModeChange = (mode: ViTTSMode) => {
         setVittsMode(mode);
+        // Clone requires a personal ViTTS key. Without it, switch the UI to clone
+        // (to show the "chưa khai báo API" notice) but do NOT save a clone config.
+        if (mode === 'clone' && !vittsOptions?.isPersonal) {
+            return;
+        }
         let voice = selectedVoice;
         if (mode === 'auto') voice = 'vitts:auto';
         else if (mode === 'design') voice = 'vitts:design';
@@ -551,11 +567,9 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                 <div className="vitts-omnivoice">
                     {vittsLoading ? (
                         <div className="tts-loading">⏳ Đang tải ViTTS options...</div>
-                    ) : vittsOptions?.error ? (
-                        <div className="tts-error">⚠️ {vittsOptions.error}</div>
                     ) : (
                         <>
-                            {/* Mode Selector */}
+                            {/* Mode Selector: Auto / System Voice / Voice Clone */}
                             <div className="tts-row">
                                 <label className="tts-label">🎛️ Chế độ:</label>
                                 <div className="provider-buttons vitts-mode-buttons">
@@ -565,36 +579,38 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                                         disabled={isSaving}
                                         title="Model tự chọn giọng phù hợp"
                                     >
-                                        🤖 Auto Voice
+                                        🤖 Tự động
                                     </button>
                                     <button
                                         className={`provider-btn ${vittsMode === 'design' ? 'active' : ''}`}
                                         onClick={() => handleVittsModeChange('design')}
                                         disabled={isSaving}
-                                        title="Thiết kế giọng theo thuộc tính"
+                                        title="Chọn giọng hệ thống theo giới tính và thuộc tính"
                                     >
-                                        🎨 Voice Design
+                                        🗣️ Giọng hệ thống
                                     </button>
                                     <button
                                         className={`provider-btn ${vittsMode === 'clone' ? 'active' : ''}`}
                                         onClick={() => handleVittsModeChange('clone')}
                                         disabled={isSaving}
-                                        title="Clone giọng từ Voice Library"
+                                        title="Clone giọng từ giọng mẫu cá nhân"
                                     >
-                                        🎤 Voice Cloning
+                                        🎤 Giọng clone
                                     </button>
                                 </div>
                             </div>
 
-                            {/* Mode: Voice Design — attribute dropdowns */}
-                            {vittsMode === 'design' && vittsOptions?.design_attributes && (
+                            {/* Mode: System Voice — attribute dropdowns (gender/age/pitch/...) */}
+                            {vittsMode === 'design' && (() => {
+                                const attrs = vittsOptions?.design_attributes || DEFAULT_DESIGN_ATTRIBUTES;
+                                return (
                                 <div className="vitts-design-form">
                                     <div className="tts-row">
                                         <label className="tts-label">👤 Giới tính:</label>
                                         <select className="tts-select" value={designGender}
                                             onChange={(e) => { setDesignGender(e.target.value); }}
                                         >
-                                            {vittsOptions.design_attributes.gender.map(g => (
+                                            {attrs.gender.map(g => (
                                                 <option key={g} value={g}>{g === 'male' ? '👨 Nam' : '👩 Nữ'}</option>
                                             ))}
                                         </select>
@@ -604,7 +620,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                                         <select className="tts-select" value={designAge}
                                             onChange={(e) => { setDesignAge(e.target.value); }}
                                         >
-                                            {vittsOptions.design_attributes.age.map(a => (
+                                            {attrs.age.map(a => (
                                                 <option key={a} value={a}>
                                                     {a === 'child' ? '👶 Trẻ em' : a === 'young' ? '🧑 Trẻ' : a === 'middle-aged' ? '🧔 Trung niên' : '👴 Lớn tuổi'}
                                                 </option>
@@ -616,7 +632,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                                         <select className="tts-select" value={designPitch}
                                             onChange={(e) => { setDesignPitch(e.target.value); }}
                                         >
-                                            {vittsOptions.design_attributes.pitch.map(p => (
+                                            {attrs.pitch.map(p => (
                                                 <option key={p} value={p}>{p}</option>
                                             ))}
                                         </select>
@@ -626,19 +642,19 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                                         <select className="tts-select" value={designStyle}
                                             onChange={(e) => { setDesignStyle(e.target.value); }}
                                         >
-                                            {vittsOptions.design_attributes.style.map(s => (
+                                            {attrs.style.map(s => (
                                                 <option key={s} value={s}>{s === 'whisper' ? '🤫 Thì thầm' : '🗣️ Bình thường'}</option>
                                             ))}
                                         </select>
                                     </div>
-                                    {vittsOptions.design_attributes.accent.filter(a => a).length > 0 && (
+                                    {attrs.accent.filter(a => a).length > 0 && (
                                         <div className="tts-row">
                                             <label className="tts-label">🌍 Giọng vùng:</label>
                                             <select className="tts-select" value={designAccent}
                                                 onChange={(e) => { setDesignAccent(e.target.value); }}
                                             >
                                                 <option value="">Không có</option>
-                                                {vittsOptions.design_attributes.accent.filter(a => a).map(a => (
+                                                {attrs.accent.filter(a => a).map(a => (
                                                     <option key={a} value={a}>{a}</option>
                                                 ))}
                                             </select>
@@ -651,29 +667,37 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                                         ✅ Áp dụng
                                     </button>
                                 </div>
-                            )}
+                                );
+                            })()}
 
-                            {/* Mode: Voice Cloning — ref selector */}
+                            {/* Mode: Voice Clone — requires personal ViTTS API key */}
                             {vittsMode === 'clone' && (
-                                <div className="tts-row">
-                                    <label className="tts-label">📎 Giọng mẫu:</label>
-                                    <select
-                                        className="tts-select voice-select"
-                                        value={selectedVoice.replace('vitts:ref:', '')}
-                                        onChange={(e) => handleRefChange(e.target.value)}
-                                        disabled={isSaving}
-                                    >
-                                        {!vittsOptions?.voice_library?.length ? (
-                                            <option value="">-- Chưa có giọng mẫu --</option>
-                                        ) : (
-                                            vittsOptions.voice_library.map((ref) => (
-                                                <option key={ref.ref_id} value={ref.ref_id}>
-                                                    {ref.name} ({ref.language}) {ref.duration_sec ? `• ${ref.duration_sec.toFixed(1)}s` : ''}
-                                                </option>
-                                            ))
-                                        )}
-                                    </select>
-                                </div>
+                                !vittsOptions?.isPersonal ? (
+                                    <div className="tts-note" style={{ padding: '0.6rem 0.85rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '6px', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                                        ⚠️ Giọng clone yêu cầu <strong>API key ViTTS cá nhân</strong> (giọng mẫu nằm trên tài khoản ViTTS của bạn).
+                                        Bạn chưa khai báo API key cá nhân — vui lòng thêm trong <strong>Cài đặt → API Keys → ViTTS</strong>, hoặc chọn chế độ khác.
+                                    </div>
+                                ) : (
+                                    <div className="tts-row">
+                                        <label className="tts-label">📎 Giọng mẫu:</label>
+                                        <select
+                                            className="tts-select voice-select"
+                                            value={selectedVoice.replace('vitts:ref:', '')}
+                                            onChange={(e) => handleRefChange(e.target.value)}
+                                            disabled={isSaving}
+                                        >
+                                            {!vittsOptions?.voice_library?.length ? (
+                                                <option value="">-- Chưa có giọng mẫu --</option>
+                                            ) : (
+                                                vittsOptions.voice_library.map((ref) => (
+                                                    <option key={ref.ref_id} value={ref.ref_id}>
+                                                        {ref.name} ({ref.language}) {ref.duration_sec ? `• ${ref.duration_sec.toFixed(1)}s` : ''}
+                                                    </option>
+                                                ))
+                                            )}
+                                        </select>
+                                    </div>
+                                )
                             )}
 
                             {/* Mode: Auto — no extra controls needed */}

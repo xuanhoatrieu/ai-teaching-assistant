@@ -166,6 +166,13 @@ export class SlidesController {
                 await this.jobService.updateProgress(job.id, 0, `Bắt đầu tối ưu nội dung cho ${total} slide...`);
 
                 for (let i = 0; i < total; i++) {
+                    // Stop early if the user requested cancellation.
+                    const current = await this.jobService.getJobStatus(job.id);
+                    if (current.status === 'cancelled') {
+                        this.logger.log(`[generateAllContent] Job ${job.id} cancelled at slide ${i}/${total}. Stopping.`);
+                        return;
+                    }
+
                     const slide = slidesToProcess[i];
                     await this.jobService.updateProgress(
                         job.id,

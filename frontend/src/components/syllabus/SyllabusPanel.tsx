@@ -556,6 +556,7 @@ export function SyllabusPanel({ subjectId }: Props) {
             <div className="syllabus-model-config" style={{ display: 'flex', gap: '1rem', padding: '1rem', backgroundColor: 'var(--bg-card)', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
                 <ModelSelector taskType="OUTLINE" label="🧠 Model sinh Nội dung (Đề cương & Textbook)" compact />
                 <ModelSelector taskType="IMAGE" label="🖼️ Model tạo Ảnh minh họa" compact />
+                <ModelSelector taskType="EMBEDDING" label="🔎 Model embedding (RAG tài liệu)" compact />
             </div>
 
             {/* Messages */}

@@ -114,13 +114,32 @@ export class GenerationJobService {
     }
 
     /**
+     * Cancel a job — only if it's still pending/processing.
+     * The background worker checks status between steps and stops on 'cancelled'.
+     */
+    async cancelJob(jobId: string) {
+        const result = await this.prisma.generationJob.updateMany({
+            where: {
+                id: jobId,
+                status: { in: ['pending', 'processing'] },
+            },
+            data: {
+                status: 'cancelled',
+                message: 'Đã dừng theo yêu cầu',
+            },
+        });
+        this.logger.log(`[cancelJob] Job ${jobId} cancel requested (updated ${result.count})`);
+        return { cancelled: result.count > 0 };
+    }
+
+    /**
      * Clean up old completed/failed jobs (optional, for housekeeping).
      */
     async cleanOldJobs(olderThanHours = 24) {
         const cutoff = new Date(Date.now() - olderThanHours * 60 * 60 * 1000);
         const result = await this.prisma.generationJob.deleteMany({
             where: {
-                status: { in: ['done', 'error'] },
+                status: { in: ['done', 'error', 'cancelled'] },
                 createdAt: { lt: cutoff },
             },
         });

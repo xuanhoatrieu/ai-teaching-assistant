@@ -275,6 +275,12 @@ export class TTSService {
                 }
             }
         } else if (dto.provider === 'VITTS') {
+            // Admin-configured baseUrl is the shared deployment default — read it once
+            // and use it as the fallback for both personal and system credentials so
+            // the ViTTS address can change via settings without touching code.
+            const adminVittsBaseUrl = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.baseUrl' } });
+            const configuredBaseUrl = adminVittsBaseUrl?.value || undefined;
+
             // Priority 1: User's own ViTTS credentials
             const vittsCredentialsJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
 
@@ -287,25 +293,34 @@ export class TTSService {
                         throw new Error('Invalid ViTTS credentials format. Expected: {"apiKey": "xxx", "baseUrl": "yyy"}');
                     }
 
-                    this.logger.log(`Using ViTTS provider with user credentials, baseUrl: ${vittsCredentials.baseUrl || 'default'}`);
+                    // User baseUrl wins; else fall back to admin-configured baseUrl.
+                    const baseUrl = vittsCredentials.baseUrl || configuredBaseUrl;
+                    this.logger.log(`Using ViTTS provider with user credentials, baseUrl: ${baseUrl || 'provider default'}`);
                     provider = this.ttsFactory.getProvider('VITTS' as any, {
                         apiKey: vittsCredentials.apiKey,
-                        baseUrl: vittsCredentials.baseUrl,
+                        baseUrl,
                     });
                 } catch (parseError) {
                     throw new Error(`Invalid ViTTS credentials JSON: ${parseError.message}`);
                 }
             } else {
-                // Priority 2: Admin/system ViTTS credentials from system_configs
+                // No personal key. A clone/reference voice needs the user's OWN ViTTS key
+                // (the reference audio lives on their personal ViTTS account).
+                const voiceId = dto.voiceId || '';
+                const isCloneOrRef = dto.vittsMode === 'clone' || voiceId.startsWith('vitts:ref:');
+                if (isCloneOrRef) {
+                    throw new Error('Giọng clone/tham chiếu yêu cầu API key ViTTS cá nhân. Vui lòng cấu hình trong Cài đặt, hoặc chọn giọng hệ thống.');
+                }
+
+                // Priority 2: Admin/system ViTTS credentials from system_configs (system voices)
                 const adminVittsEnabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
                 const adminVittsApiKey = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.apiKey' } });
-                const adminVittsBaseUrl = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.baseUrl' } });
 
                 if (adminVittsEnabled?.value === 'true' && adminVittsApiKey?.value) {
-                    this.logger.log(`Using ViTTS admin credentials (system-level), baseUrl: ${adminVittsBaseUrl?.value || 'default'}`);
+                    this.logger.log(`Using ViTTS admin credentials (system-level), baseUrl: ${configuredBaseUrl || 'provider default'}`);
                     provider = this.ttsFactory.getProvider('VITTS' as any, {
                         apiKey: adminVittsApiKey.value,
-                        baseUrl: adminVittsBaseUrl?.value || 'http://117.0.36.6:8888',
+                        baseUrl: configuredBaseUrl,
                     });
                 } else {
                     // Priority 3: Fallback to Gemini TTS

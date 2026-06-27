@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GenerationJobService } from './generation-job.service';
 
@@ -24,5 +24,14 @@ export class GenerationJobController {
     @Get(':id/status')
     async getJobStatus(@Param('id') id: string) {
         return this.jobService.getJobStatus(id);
+    }
+
+    /**
+     * Request cancellation of a running job. The background worker checks
+     * status between steps and stops when it sees 'cancelled'.
+     */
+    @Post(':id/cancel')
+    async cancelJob(@Param('id') id: string) {
+        return this.jobService.cancelJob(id);
     }
 }

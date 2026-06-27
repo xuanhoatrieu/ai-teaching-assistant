@@ -53,3 +53,9 @@ backend/datauser/
 
 # Local binaries
 .local/
+
+# Graphify analysis artifacts (tool output, not project code)
+graphify-out/
+
+# Harness local DB
+harness.db

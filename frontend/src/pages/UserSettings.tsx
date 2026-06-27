@@ -40,6 +40,7 @@ const TASK_TYPE_INFO: Record<string, { icon: string; label: string; desc: string
     QUESTIONS: { icon: '❓', label: 'Ngân Hàng Câu Hỏi', desc: 'Tạo câu hỏi trắc nghiệm' },
     IMAGE: { icon: '🖼️', label: 'Tạo Hình Ảnh', desc: 'Hình minh họa cho slide' },
     TTS: { icon: '🔊', label: 'Text-to-Speech', desc: 'Giọng đọc cho presentation' },
+    EMBEDDING: { icon: '🔎', label: 'Embedding (RAG)', desc: 'Tìm nội dung liên quan từ tài liệu tham khảo khi tạo giáo trình' },
 };
 
 // My Templates Section Component

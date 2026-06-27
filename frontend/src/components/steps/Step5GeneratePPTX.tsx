@@ -163,6 +163,10 @@ export function Step5GeneratePPTX() {
             setError(`Lỗi khi tối ưu nội dung: ${msg}`);
             loadSavedContent(false);
         },
+        onCancelled: async () => {
+            setStatus('idle');
+            await loadSavedContent(false);
+        },
     });
 
     const checkActiveJob = useCallback(async () => {
@@ -279,10 +283,22 @@ export function Step5GeneratePPTX() {
         }
     }, [lessonId]);
 
-    const stopGenerating = () => {
+    const stopGenerating = useCallback(async () => {
+        if (!window.confirm('Dừng việc tạo nội dung? Các slide đã tạo xong sẽ được giữ lại.')) {
+            return;
+        }
+        const jobId = contentJob.jobStatus?.id;
+        try {
+            if (jobId) {
+                await api.post(`/generation-jobs/${jobId}/cancel`);
+            }
+        } catch (err) {
+            console.error('[Step5] Failed to cancel job:', err);
+        }
         contentJob.stopPolling();
         setStatus('idle');
-    };
+        await loadSavedContent(false);
+    }, [contentJob, loadSavedContent]);
 
     // Regenerate ALL slides from scratch (clear existing data first)
     const handleRegenerateAll = useCallback(async () => {
@@ -515,7 +531,7 @@ export function Step5GeneratePPTX() {
                         {status === 'generating_images' && (isJobRunning && contentJob.jobStatus ? contentJob.jobStatus.message : `🖼️ Đang tạo slide...`)}
                         {status === 'generating_pptx' && '📦 Đang đóng gói PowerPoint...'}
                     </p>
-                    {status === 'generating_images' && !isJobRunning && (
+                    {status === 'generating_images' && isJobRunning && (
                         <button className="btn-stop" onClick={stopGenerating}>
                             ⏹️ Dừng tạo
                         </button>
@@ -531,7 +547,7 @@ export function Step5GeneratePPTX() {
                         {slideProgress.map((slide) => (
                             <div key={slide.slideIndex} className={`slide-card ${slide.phase} ${slide.isRegenerating ? 'regenerating' : ''}`}>
                                 <div className="slide-card-header">
-                                    <span className="slide-number">Slide {slide.slideIndex}</span>
+                                    <span className="slide-number">Slide {slide.slideIndex + 1}</span>
                                     <span className="slide-title">{slide.title}</span>
                                     <span className="slide-status">
                                         {slide.phase === 'pending' && '⏳'}

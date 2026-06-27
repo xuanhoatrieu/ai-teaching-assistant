@@ -155,6 +155,70 @@ export class CustomOpenAIProvider {
     }
 
     /**
+     * Call OpenAI-compatible /v1/embeddings endpoint. Returns one vector per input text.
+     */
+    async embed(
+        providerId: string,
+        texts: string[],
+        model: string,
+        options?: { userId?: string },
+    ): Promise<number[][]> {
+        const provider = await this.getProvider(providerId);
+
+        let apiKey = provider?.apiKey || '';
+        let url = provider?.url || '';
+        let enabled = provider?.enabled ?? false;
+
+        if (providerId === 'personal') {
+            enabled = true;
+        }
+
+        if (options?.userId) {
+            const userKeyJson = await this.prisma.apiKey.findFirst({
+                where: { userId: options.userId, service: 'OPENAI' as any, isSystem: false },
+            });
+            if (userKeyJson?.keyEncrypted) {
+                try {
+                    const decrypted = await this.crypto.decrypt(userKeyJson.keyEncrypted);
+                    const userCreds = JSON.parse(decrypted);
+                    if (userCreds.apiKey) {
+                        apiKey = userCreds.apiKey;
+                        url = userCreds.baseUrl || url || 'https://api.openai.com/v1';
+                        enabled = true;
+                    }
+                } catch (err) {
+                    this.logger.error(`Failed to parse user personal OpenAI key: ${err.message}`);
+                }
+            }
+        }
+
+        if (!enabled || !apiKey) {
+            throw new NotFoundException(`Custom OpenAI Provider "${providerId}" is disabled, not configured, or missing API Key`);
+        }
+
+        const cleanUrl = this.getCleanUrl(url);
+        const response = await fetch(`${cleanUrl}/v1/embeddings`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ model, input: texts }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            this.logger.error(`Custom OpenAI embeddings error: ${response.status} - ${errorText}`);
+            throw new Error(`Embeddings request failed: ${response.status} - ${errorText}`);
+        }
+
+        const json = await response.json();
+        // OpenAI returns data sorted by index; sort defensively then map to vectors.
+        const data = (json.data || []).slice().sort((a: any, b: any) => (a.index ?? 0) - (b.index ?? 0));
+        return data.map((d: any) => d.embedding as number[]);
+    }
+
+    /**
      * Internal: perform a single streaming chat request
      */
     private async doStreamingChat(

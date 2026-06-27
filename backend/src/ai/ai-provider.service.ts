@@ -203,6 +203,44 @@ export class AiProviderService {
     }
 
     /**
+     * Embed an array of texts into vectors. Returns one vector per input, same order.
+     * Routes custom_openai:* models to the OpenAI-compatible provider; otherwise Gemini.
+     */
+    async embed(
+        texts: string[],
+        modelName: string,
+        userId?: string,
+    ): Promise<number[][]> {
+        if (texts.length === 0) return [];
+
+        // Route to custom OpenAI-compatible provider (e.g. ShopAIKey / personal OpenAI)
+        if (modelName.startsWith('custom_openai:')) {
+            const parts = modelName.split(':');
+            const providerId = parts[1];
+            const realModel = parts.slice(2).join(':');
+            this.logger.log(`Embedding via Custom OpenAI provider: ${providerId}, model: ${realModel}`);
+            return this.customOpenAI.embed(providerId, texts, realModel, { userId });
+        }
+
+        // Default: Gemini embeddings via @google/generative-ai
+        const normalizedModel = this.normalizeModelName(modelName);
+        const geminiApiKey = userId ? await this.apiKeysService.getActiveKey(userId, 'GEMINI') : undefined;
+        if (!geminiApiKey) {
+            throw new Error('No GEMINI API key available for embeddings');
+        }
+        const genAI = new GoogleGenerativeAI(geminiApiKey);
+        const model = genAI.getGenerativeModel({ model: normalizedModel });
+
+        // Embed sequentially (SDK embedContent handles one text at a time reliably)
+        const vectors: number[][] = [];
+        for (const text of texts) {
+            const result = await model.embedContent(text);
+            vectors.push(result.embedding.values);
+        }
+        return vectors;
+    }
+
+    /**
      * Check which provider is currently active
      */
     async getActiveProvider(): Promise<{ provider: AIProviderType; status: string }> {

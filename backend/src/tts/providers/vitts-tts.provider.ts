@@ -128,6 +128,12 @@ export class ViTTSTTSProvider implements ITTSProvider {
                 }
             } else {
                 this.logger.error(`ViTTS error: ${JSON.stringify(errInfo)}`);
+                // No HTTP response — network-level failure (server down / wrong address).
+                if (['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH'].includes(error.code)) {
+                    throw new BadRequestException(
+                        `Không kết nối được máy chủ ViTTS (${this.baseUrl}). Máy chủ có thể đang tắt hoặc địa chỉ cấu hình sai. Vui lòng kiểm tra máy chủ ViTTS và baseUrl trong Cài đặt.`
+                    );
+                }
             }
             throw error;
         }

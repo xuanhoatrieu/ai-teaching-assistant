@@ -6,6 +6,7 @@ import { MarkItDownService } from './markitdown.service';
 import { MermaidService } from './mermaid.service';
 import { FileStorageService } from '../file-storage/file-storage.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { ReferenceRagService } from './reference-rag.service';
 
 /** Default 10 blocks matching TUAF 2026 syllabus template */
 const DEFAULT_BLOCKS = [
@@ -515,6 +516,7 @@ export class SyllabusService {
         private readonly imagen: ImagenService,
         private readonly fileStorage: FileStorageService,
         private readonly apiKeysService: ApiKeysService,
+        private readonly referenceRag: ReferenceRagService,
     ) {}
 
     /**
@@ -1244,7 +1246,7 @@ export class SyllabusService {
      * HTTP connection to be closed by proxies (net::ERR_EMPTY_RESPONSE). The client
      * tracks progress via getTextbookStatus polling (phase 'done' / 'error').
      */
-    async startTextbookPro(lessonId: string, modelName: string, imageModelName: string | undefined, userId?: string) {
+    async startTextbookPro(lessonId: string, modelName: string, imageModelName: string | undefined, userId?: string, embeddingModelName?: string) {
         const sl = await this.prisma.syllabusLesson.findUnique({
             where: { id: lessonId },
             select: { id: true },
@@ -1255,7 +1257,7 @@ export class SyllabusService {
         await this.updatePhase(lessonId, 'generating', 'extracting');
 
         // Fire-and-forget; errors are recorded into textbookPhase='error' by the pipeline
-        this.generateTextbookPro(lessonId, modelName, imageModelName, userId).catch((err: any) => {
+        this.generateTextbookPro(lessonId, modelName, imageModelName, userId, embeddingModelName).catch((err: any) => {
             this.logger.error(`[TextbookPro] background pipeline failed: ${err.message}`);
         });
 
@@ -1266,7 +1268,7 @@ export class SyllabusService {
      * AI-generate textbook using 5-step pipeline:
      * EXTRACT → PLAN → WRITE → ILLUSTRATE → REVIEW+FIX
      */
-    async generateTextbookPro(syllabusLessonId: string, modelName: string, imageModelName?: string, userId?: string) {
+    async generateTextbookPro(syllabusLessonId: string, modelName: string, imageModelName?: string, userId?: string, embeddingModelName?: string) {
         this.logger.log(`[TextbookPro] Starting 5-step pipeline for ${syllabusLessonId}`);
 
         const sl = await this.prisma.syllabusLesson.findUnique({
@@ -1275,7 +1277,7 @@ export class SyllabusService {
                 syllabus: {
                     include: {
                         blocks: true,
-                        references: { where: { status: 'done' }, select: { markdownContent: true, fileName: true } },
+                        references: { where: { status: 'done' }, select: { id: true, markdownContent: true, fileName: true } },
                     },
                 },
             },
@@ -1301,11 +1303,41 @@ export class SyllabusService {
                 baseContext += `## MÔ TẢ HỌC PHẦN\n${descBlock.content}\n\n`;
             }
 
-            // ── Step 0: EXTRACT ──
-            this.logger.log(`[TextbookPro] Step 0: EXTRACT references`);
+            // ── Step 0: EXTRACT (RAG retrieval, fallback to AI-extract) ──
+            this.logger.log(`[TextbookPro] Step 0: EXTRACT references (embeddingModel=${embeddingModelName || 'none'})`);
             let relevantRefs = '';
             const refs = sl.syllabus.references.slice(0, 3);
-            if (refs.length > 0) {
+
+            // Path 1: RAG — chunk + embed + retrieve top-k relevant passages.
+            let ragSucceeded = false;
+            if (embeddingModelName && refs.length > 0) {
+                try {
+                    for (const ref of refs) {
+                        if (!ref.markdownContent) continue;
+                        await this.referenceRag.indexReference(ref.id, embeddingModelName, userId);
+                    }
+                    const query = `${sl.title}\n${sl.outline}`;
+                    const hits = await this.referenceRag.retrieve(syllabusId, query, embeddingModelName, userId, 12);
+                    if (hits.length > 0) {
+                        // Group retrieved chunks by source file.
+                        const byFile = new Map<string, string[]>();
+                        for (const h of hits) {
+                            if (!byFile.has(h.fileName)) byFile.set(h.fileName, []);
+                            byFile.get(h.fileName)!.push(h.content);
+                        }
+                        for (const [fileName, contents] of byFile) {
+                            relevantRefs += `\n## TÀI LIỆU THAM KHẢO: ${fileName}\n${contents.join('\n\n---\n\n')}\n`;
+                        }
+                        ragSucceeded = true;
+                        this.logger.log(`[TextbookPro] RAG retrieved ${hits.length} chunks → ${relevantRefs.length} chars`);
+                    }
+                } catch (err: any) {
+                    this.logger.warn(`[TextbookPro] RAG failed, falling back to AI-extract: ${err.message}`);
+                }
+            }
+
+            // Path 2: Fallback — AI extracts relevant passages from truncated text.
+            if (!ragSucceeded && refs.length > 0) {
                 for (const ref of refs) {
                     if (!ref.markdownContent) continue;
                     try {
@@ -1371,7 +1403,7 @@ export class SyllabusService {
 
             const reviewResult = await this.aiProvider.generateTextWithSystem(
                 REVIEW_FIX_PROMPT,
-                `BÀI VIẾT CẦN KIỂM TRA:\n\n${draft}`,
+                `${relevantRefs ? `## TÀI LIỆU THAM KHẢO (đối chiếu tính chính xác)\n${relevantRefs}\n\n` : ''}BÀI VIẾT CẦN KIỂM TRA:\n\n${draft}`,
                 modelName, userId,
             );
             const finalContent = reviewResult.content.trim();

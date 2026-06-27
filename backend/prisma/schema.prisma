@@ -429,8 +429,23 @@ model SyllabusReference {
   status          String   @default("pending")
   createdAt       DateTime @default(now()) @map("created_at")
   syllabus        Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
+  chunks          SyllabusReferenceChunk[]
 
   @@map("syllabus_references")
+}
+
+model SyllabusReferenceChunk {
+  id             String            @id @default(uuid())
+  referenceId    String            @map("reference_id")
+  chunkIndex     Int               @map("chunk_index")
+  content        String
+  embedding      Float[]
+  embeddingModel String            @map("embedding_model")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  reference      SyllabusReference @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  @@index([referenceId])
+  @@map("syllabus_reference_chunks")
 }
 
 model SyllabusLesson {
@@ -544,4 +559,5 @@ enum TaskType {
   QUESTIONS
   IMAGE
   TTS
+  EMBEDDING
 }

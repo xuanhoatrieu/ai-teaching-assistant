@@ -6,8 +6,14 @@ import { SystemConfigService } from '../settings/system-config.service';
 import { CustomOpenAIProvider } from '../ai/custom-openai.provider';
 
 // Task types for model configuration - must match Prisma TaskType enum
-export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'IMAGE', 'TTS'] as const;
+export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'IMAGE', 'TTS', 'EMBEDDING'] as const;
 export type TaskTypeValue = typeof TASK_TYPES[number];
+
+// Last-resort ViTTS base URL (production public IP). Only used when neither the
+// user's personal key nor the admin system config provides a baseUrl. Configured
+// values from admin/user settings always take precedence so the IP can change
+// without touching code.
+const DEFAULT_VITTS_BASE_URL = 'http://117.0.36.6:8888';
 
 export interface AvailableModel {
     name: string;
@@ -33,6 +39,7 @@ const DEFAULT_MODELS: Record<TaskTypeValue, { provider: string; modelName: strin
     QUESTIONS: { provider: 'CLIPROXY', modelName: 'gpt-5.5' },
     IMAGE: { provider: 'CLIPROXY', modelName: 'gpt-image-2' },
     TTS: { provider: 'VITTS', modelName: 'vitts:design' },
+    EMBEDDING: { provider: 'GEMINI', modelName: 'text-embedding-004' },
 };
 
 @Injectable()
@@ -144,6 +151,9 @@ export class ModelConfigService {
                     if (taskType === 'TTS' && cliproxyConfig.defaultTTSModel) {
                         return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTTSModel };
                     }
+                    if (taskType === 'EMBEDDING' && (cliproxyConfig as any).defaultEmbeddingModel) {
+                        return { provider: 'CLIPROXY', modelName: (cliproxyConfig as any).defaultEmbeddingModel };
+                    }
                 }
             } catch (error: any) {
                 this.logger.warn(`Failed to get CLIProxy config: ${error.message}`);
@@ -213,6 +223,7 @@ export class ModelConfigService {
         'imagen-3.0-generate-002': { displayName: 'Imagen 3.0', description: 'High quality image generation', supportedTasks: ['IMAGE'] },
         'gemini-2.5-flash-preview-tts': { displayName: 'Gemini 2.5 Flash TTS ⭐', description: 'Fast TTS', supportedTasks: ['TTS'] },
         'gemini-2.5-pro-preview-tts': { displayName: 'Gemini 2.5 Pro TTS', description: 'High quality TTS', supportedTasks: ['TTS'] },
+        'text-embedding-004': { displayName: 'Text Embedding 004 ⭐', description: 'Embedding cho RAG tài liệu', supportedTasks: ['EMBEDDING'] },
     };
 
     /**
@@ -222,7 +233,8 @@ export class ModelConfigService {
         const id = modelId.toLowerCase();
         if (id.includes('tts')) return ['TTS'];
         if (id.includes('image') || id.includes('imagen')) return ['IMAGE'];
-        if (id.includes('embedding') || id.includes('aqa') || id.includes('retrieval')) return []; // skip non-generative
+        if (id.includes('embedding')) return ['EMBEDDING'];
+        if (id.includes('aqa') || id.includes('retrieval')) return []; // skip non-generative
         // Default: text generation tasks
         return ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS'];
     }
@@ -435,8 +447,12 @@ export class ModelConfigService {
     private classifyCLIProxyModel(modelId: string): string[] {
         const id = modelId.toLowerCase();
 
-        // Skip non-generative models
-        if (id.includes('embedding') || id.includes('retrieval') || id.includes('moderation')) {
+        // Embedding models support the EMBEDDING task only
+        if (id.includes('embedding')) {
+            return ['EMBEDDING'];
+        }
+        // Skip other non-generative models
+        if (id.includes('retrieval') || id.includes('moderation')) {
             return [];
         }
 
@@ -575,6 +591,50 @@ export class ModelConfigService {
     }
 
     /**
+     * Resolve ViTTS credentials: user personal key first, then admin system_config.
+     * Returns null if neither is available.
+     */
+    private async resolveViTTSCredentials(
+        userId: string,
+    ): Promise<{ apiKey: string; baseUrl: string; isSystem: boolean } | null> {
+        // Admin-configured baseUrl is the shared default for this deployment.
+        // It is the fallback when a user's personal key omits its own baseUrl,
+        // so we never hardcode an IP that may change between dev and production.
+        const baseUrlCfg = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.baseUrl' } });
+        const adminBaseUrl = baseUrlCfg?.value || DEFAULT_VITTS_BASE_URL;
+
+        const userJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
+        if (userJson) {
+            let apiKey = '';
+            let baseUrl = adminBaseUrl;
+            try {
+                const parsed = JSON.parse(userJson);
+                if (typeof parsed === 'object' && parsed !== null) {
+                    apiKey = parsed.apiKey || '';
+                    baseUrl = parsed.baseUrl || adminBaseUrl;
+                } else {
+                    apiKey = String(parsed);
+                }
+            } catch {
+                apiKey = userJson;
+            }
+            if (apiKey) return { apiKey, baseUrl, isSystem: false };
+        }
+
+        // Fallback: admin system VITTS config
+        const enabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
+        const apiKeyCfg = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.apiKey' } });
+        if (enabled?.value === 'true' && apiKeyCfg?.value) {
+            return {
+                apiKey: apiKeyCfg.value,
+                baseUrl: adminBaseUrl,
+                isSystem: true,
+            };
+        }
+        return null;
+    }
+
+    /**
      * Discover ViTTS voices - fetches saved refs and trained voices from API
      * Priority order: 1) Saved references (default), 2) Trained voices, 3) System voices
      */
@@ -596,37 +656,17 @@ export class ModelConfigService {
         ];
 
         // Try to get user's ViTTS credentials
-        const vittsCredentialsJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
+        const creds = await this.resolveViTTSCredentials(userId);
 
-        if (!vittsCredentialsJson) {
-            this.logger.log('No ViTTS credentials configured, returning system voices only');
+        if (!creds) {
+            this.logger.log('No ViTTS credentials (user or admin) configured, returning system voices only');
             return systemVoices;
         }
 
         try {
-            this.logger.log(`[ViTTS debug] raw credential type: ${typeof vittsCredentialsJson}, length: ${vittsCredentialsJson?.length}, preview: ${vittsCredentialsJson?.substring(0, 80)}`);
-            
-            let apiKey: string;
-            let baseUrl: string;
-            
-            // Handle both formats: JSON object or plain API key string
-            try {
-                const parsed = JSON.parse(vittsCredentialsJson);
-                if (typeof parsed === 'object' && parsed !== null) {
-                    apiKey = parsed.apiKey || '';
-                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8888';
-                } else {
-                    // JSON.parse returned a primitive (string/number)
-                    apiKey = String(parsed);
-                    baseUrl = 'http://117.0.36.6:8888';
-                }
-            } catch {
-                // Not valid JSON — treat as plain API key
-                apiKey = vittsCredentialsJson;
-                baseUrl = 'http://117.0.36.6:8888';
-            }
-
-            this.logger.log(`[ViTTS debug] resolved: baseUrl=${baseUrl}, apiKey=${apiKey?.substring(0, 8)}..., apiKey length=${apiKey?.length}`);
+            const apiKey = creds.apiKey;
+            const baseUrl = creds.baseUrl;
+            this.logger.log(`[ViTTS debug] resolved: baseUrl=${baseUrl}, isSystem=${creds.isSystem}, apiKey length=${apiKey?.length}`);
 
             const savedRefs: AvailableModel[] = [];
             const trainedVoices: AvailableModel[] = [];
@@ -822,21 +862,42 @@ export class ModelConfigService {
                             }
                         }
 
-                        // Add default chat models for LLM tasks
-                        customModelsList.push(
-                            {
-                                name: `custom_openai:${cp.id}:gpt-4o-mini`,
-                                displayName: 'GPT-4o Mini',
-                                description: `Chat model via ${cp.name}`,
-                                supportedTasks: ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS'],
-                            },
-                            {
-                                name: `custom_openai:${cp.id}:gpt-4o`,
-                                displayName: 'GPT-4o',
-                                description: `Chat model via ${cp.name}`,
-                                supportedTasks: ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS'],
+                        // Enumerate the provider's real catalog via /v1/models. Every
+                        // configured provider is OpenAI-compatible, so this lists ALL its
+                        // models (chat, embedding, image, tts) — not just a hardcoded set.
+                        let listedRealModels = false;
+                        try {
+                            const realModels = await this.customOpenAI.listModels(cp.id);
+                            for (const rm of realModels) {
+                                const id = rm.id;
+                                const tasks = this.classifyCLIProxyModel(id);
+                                if (tasks.length === 0) continue;
+                                const name = `custom_openai:${cp.id}:${id}`;
+                                if (customModelsList.some((m) => m.name === name)) continue; // dedup
+
+                                let emoji = '🧠';
+                                if (tasks.includes('IMAGE')) emoji = '🎨';
+                                else if (tasks.includes('TTS')) emoji = '🔊';
+                                else if (tasks.includes('EMBEDDING')) emoji = '🔎';
+
+                                customModelsList.push({
+                                    name,
+                                    displayName: `${emoji} ${this.formatModelDisplayName(id)} (${cp.name})`,
+                                    description: `via ${cp.name}`,
+                                    supportedTasks: tasks,
+                                });
+                                listedRealModels = true;
                             }
-                        );
+                        } catch (err: any) {
+                            this.logger.warn(`Could not list models for provider ${cp.id}: ${err.message}`);
+                        }
+
+                        // No hardcoded fallback: if /v1/models returned nothing (e.g. the
+                        // key is expired and the gateway answered 401), show no chat models
+                        // rather than "ghost" models the provider may not actually serve.
+                        if (!listedRealModels) {
+                            this.logger.warn(`Provider ${cp.id} listed no real models (key may be invalid/expired); skipping fallback chat models`);
+                        }
 
                         if (customModelsList.length > 0) {
                             models[providerKey] = customModelsList;
@@ -933,8 +994,8 @@ export class ModelConfigService {
 
                                 for (const m of rawModels) {
                                     const modelId = m.id;
-                                    const isEmbeddingOrModeration = modelId.includes('embed') || modelId.includes('mod');
-                                    if (isEmbeddingOrModeration) continue;
+                                    // Skip moderation models; embedding models are kept (RAG).
+                                    if (modelId.includes('mod') && !modelId.includes('embed')) continue;
 
                                     const tasks = this.classifyCLIProxyModel(modelId);
                                     if (tasks.length === 0) continue;
@@ -942,6 +1003,7 @@ export class ModelConfigService {
                                     let emoji = '🧠';
                                     if (tasks.includes('IMAGE')) emoji = '🎨';
                                     else if (tasks.includes('TTS')) emoji = '🔊';
+                                    else if (tasks.includes('EMBEDDING')) emoji = '🔎';
 
                                     customModelsList.push({
                                         name: `custom_openai:personal:${modelId}`,
@@ -1092,30 +1154,15 @@ export class ModelConfigService {
      * Returns modes, voice library, design attributes, and defaults.
      */
     async discoverViTTSOptions(userId: string): Promise<any> {
-        const vittsCredentialsJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
+        const creds = await this.resolveViTTSCredentials(userId);
 
-        if (!vittsCredentialsJson) {
+        if (!creds) {
             return { error: 'No ViTTS credentials configured' };
         }
 
         try {
-            let apiKey: string;
-            let baseUrl: string;
-            
-            // Handle both formats: JSON object or plain API key string
-            try {
-                const parsed = JSON.parse(vittsCredentialsJson);
-                if (typeof parsed === 'object' && parsed !== null) {
-                    apiKey = parsed.apiKey || '';
-                    baseUrl = parsed.baseUrl || 'http://117.0.36.6:8888';
-                } else {
-                    apiKey = String(parsed);
-                    baseUrl = 'http://117.0.36.6:8888';
-                }
-            } catch {
-                apiKey = vittsCredentialsJson;
-                baseUrl = 'http://117.0.36.6:8888';
-            }
+            const apiKey = creds.apiKey;
+            const baseUrl = creds.baseUrl;
 
             const response = await fetch(`${baseUrl}/api/v1/tts/options`, {
                 headers: { 'X-API-Key': apiKey },
@@ -1127,8 +1174,10 @@ export class ModelConfigService {
             }
 
             const data = await response.json();
-            this.logger.log(`ViTTS options: ${data.modes?.length || 0} modes, ${data.voice_library?.length || 0} voices`);
-            return data;
+            this.logger.log(`ViTTS options: ${data.modes?.length || 0} modes, ${data.voice_library?.length || 0} voices (isSystem=${creds.isSystem})`);
+            // Voice clone references belong to a personal ViTTS account. Tell the
+            // frontend whether these creds are personal so it can gate clone mode.
+            return { ...data, isPersonal: !creds.isSystem };
         } catch (error: any) {
             this.logger.error(`Failed to discover ViTTS options: ${error.message}`);
             return { error: error.message };

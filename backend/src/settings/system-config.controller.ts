@@ -33,6 +33,10 @@ export class UpdateCLIProxyConfigDto {
     @IsOptional()
     @IsString()
     defaultTTSModel?: string;
+
+    @IsOptional()
+    @IsString()
+    defaultEmbeddingModel?: string;
 }
 
 export class UpdateImageGenConfigDto {
@@ -173,6 +177,9 @@ export class SystemConfigController {
         if (dto.defaultTTSModel) {
             await this.configService.set('cliproxy.defaultTTSModel', dto.defaultTTSModel);
         }
+        if (dto.defaultEmbeddingModel) {
+            await this.configService.set('cliproxy.defaultEmbeddingModel', dto.defaultEmbeddingModel);
+        }
 
         return { success: true, message: 'CLIProxy configuration updated' };
     }
@@ -190,6 +197,7 @@ export class SystemConfigController {
         const text: { id: string; source: string }[] = [];
         const image: { id: string; source: string }[] = [];
         const tts: { id: string; source: string }[] = [];
+        const embedding: { id: string; source: string }[] = [];
         const allModels: string[] = [];
         let cliproxySuccess = false;
         let cliproxyMessage = '';
@@ -212,11 +220,13 @@ export class SystemConfigController {
 
                         for (const id of models) {
                             const lower = id.toLowerCase();
-                            if (lower.includes('embedding') || lower.includes('retrieval') || lower.includes('moderation')) continue;
+                            if (lower.includes('retrieval') || lower.includes('moderation')) continue;
 
                             allModels.push(id);
                             const entry = { id, source: 'CLIProxy' };
-                            if (lower.includes('tts') || lower.includes('speech')) {
+                            if (lower.includes('embedding')) {
+                                embedding.push(entry);
+                            } else if (lower.includes('tts') || lower.includes('speech')) {
                                 tts.push(entry);
                             } else if (lower.includes('image') || lower.includes('imagen') || lower.includes('dall-e')) {
                                 image.push(entry);
@@ -285,13 +295,15 @@ export class SystemConfigController {
                         if (!modelId) continue;
                         const lower = modelId.toLowerCase();
 
-                        // Skip non-generative
-                        if (lower.includes('embedding') || lower.includes('aqa') || lower.includes('retrieval')) continue;
+                        // Skip non-generative (keep embedding for RAG)
+                        if (lower.includes('aqa') || lower.includes('retrieval')) continue;
                         // Skip if already in CLIProxy (avoid duplicates)
                         if (seenCliproxy.has(lower)) continue;
 
                         const entry = { id: modelId, source: 'Gemini SDK' };
-                        if (lower.includes('tts') || lower.includes('speech')) {
+                        if (lower.includes('embedding')) {
+                            embedding.push(entry);
+                        } else if (lower.includes('tts') || lower.includes('speech')) {
                             tts.push(entry);
                         } else if (lower.includes('image') || lower.includes('imagen')) {
                             image.push(entry);
@@ -320,14 +332,14 @@ export class SystemConfigController {
         // 3. Return combined result
         // ═══════════════════════════════════════════
         const messages = [cliproxyMessage, geminiMessage].filter(Boolean).join(' | ');
-        const success = cliproxySuccess || text.length > 0 || image.length > 0 || tts.length > 0;
+        const success = cliproxySuccess || text.length > 0 || image.length > 0 || tts.length > 0 || embedding.length > 0;
 
         return {
             success,
             message: success ? `✅ ${messages}` : `❌ ${messages}`,
             modelsCount: allModels.length,
             models: allModels,
-            categorized: { text, image, tts },
+            categorized: { text, image, tts, embedding },
         };
     }
 

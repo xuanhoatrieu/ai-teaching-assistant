@@ -131,6 +131,17 @@ export function Step4GenerateAudio() {
         if (audioRes.data?.length > 0) setSlideAudios(normalizeSlideAudios(audioRes.data));
     };
 
+    // Refresh only the audio status while the generate-all job is running so each
+    // slide card flips GENERATING (yellow) → COMPLETED (green) in real time.
+    const reloadAudiosOnly = async () => {
+        try {
+            const audioRes = await api.get(`/lessons/${lessonId}/slide-audios`);
+            if (audioRes.data?.length > 0) setSlideAudios(normalizeSlideAudios(audioRes.data));
+        } catch (err) {
+            console.error('Error refreshing slide audios:', err);
+        }
+    };
+
     const notesJob = useJobPolling({
         onComplete: async () => {
             setIsGeneratingNotes(false);
@@ -163,6 +174,15 @@ export function Step4GenerateAudio() {
             alert(`Lỗi khi tạo audio tất cả slide: ${msg}`);
         },
     });
+
+    // While the generate-all job is running, refresh audio statuses on each
+    // progress tick so cards update color and become playable one by one.
+    useEffect(() => {
+        if (generateAllJob.isRunning) {
+            reloadAudiosOnly();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [generateAllJob.jobStatus?.progress, generateAllJob.isRunning]);
 
     const checkActiveJobs = async () => {
         try {

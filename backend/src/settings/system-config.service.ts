@@ -86,6 +86,7 @@ export class SystemConfigService implements OnModuleInit {
         defaultTextModel: string;
         defaultImageModel: string;
         defaultTTSModel: string;
+        defaultEmbeddingModel: string;
     }> {
         const configs = await this.getByPrefix('cliproxy.');
         const configMap = new Map(configs.map(c => [c.key, c.value]));
@@ -97,6 +98,7 @@ export class SystemConfigService implements OnModuleInit {
             defaultTextModel: configMap.get('cliproxy.defaultTextModel') || '',
             defaultImageModel: configMap.get('cliproxy.defaultImageModel') || '',
             defaultTTSModel: configMap.get('cliproxy.defaultTTSModel') || '',
+            defaultEmbeddingModel: configMap.get('cliproxy.defaultEmbeddingModel') || '',
         };
     }
 
