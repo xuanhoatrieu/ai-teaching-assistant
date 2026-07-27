@@ -345,7 +345,12 @@ export function Step4GenerateAudio() {
     const generateAllAudios = async () => {
         try {
             setIsGeneratingAll(true);
-            const response = await api.post(`/lessons/${lessonId}/slide-audios/generate-all`);
+            const response = await api.post(`/lessons/${lessonId}/slide-audios/generate-all`, {
+                multilingualMode: multilingualMode || undefined,
+                vittsMode: vittsMode || undefined,
+                vittsDesignInstruct: vittsDesignInstruct || undefined,
+                vittsNormalize,
+            });
             if (response.data?.jobId) {
                 generateAllJob.startPolling(response.data.jobId);
             }

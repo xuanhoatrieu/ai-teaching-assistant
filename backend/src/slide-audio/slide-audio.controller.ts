@@ -139,6 +139,10 @@ export class SlideAudioController {
     @Post('generate-all')
     async generateAllAudios(
         @Param('lessonId') lessonId: string,
+        @Body('multilingualMode') multilingualMode: string,
+        @Body('vittsMode') vittsMode: string,
+        @Body('vittsDesignInstruct') vittsDesignInstruct: string,
+        @Body('vittsNormalize') vittsNormalize: boolean,
         @Request() req,
     ) {
         const userId = req.user.id;
@@ -155,6 +159,9 @@ export class SlideAudioController {
             lessonId,
             userId,
         });
+
+        // Capture TTS params for the background job closure
+        const ttsParams = { multilingualMode, vittsMode, vittsDesignInstruct, vittsNormalize };
 
         setImmediate(async () => {
             try {
@@ -188,6 +195,10 @@ export class SlideAudioController {
                             lessonId,
                             slideAudio.slideIndex,
                             userId,
+                            ttsParams.multilingualMode,
+                            ttsParams.vittsMode,
+                            ttsParams.vittsDesignInstruct,
+                            ttsParams.vittsNormalize,
                         );
                     } catch (error) {
                         this.logger.error(`Failed to generate audio for slide index ${slideAudio.slideIndex}:`, error);
