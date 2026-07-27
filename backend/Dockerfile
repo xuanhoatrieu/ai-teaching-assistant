@@ -77,4 +77,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3001/health || exit 1
 
 # Start the application (auto-sync DB + seed admin configs on startup)
-CMD ["sh", "-c", "npx prisma db push && node prisma/seed-configs.js && node dist/src/main"]
+CMD ["sh", "-c", "npx prisma db push --accept-data-loss && node prisma/seed-configs.js && node dist/src/main"]
