@@ -417,13 +417,13 @@ export class SlideAudioService {
                 } else {
                     this.logger.log(`ViTTS mode from request: ${vittsMode}, modelName: ${modelConfig.modelName}`);
                 }
-                // Set default design instruct (male voice) if mode is 'design' and no instruct provided
+                // Set default design instruct if mode is 'design' and no instruct provided
                 if (vittsMode === 'design' && !vittsDesignInstruct) {
                     try {
                         const adminInstruct = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.designInstruct' } });
-                        vittsDesignInstruct = adminInstruct?.value || 'male, middle-aged';
+                        vittsDesignInstruct = adminInstruct?.value || 'female, young adult';
                     } catch {
-                        vittsDesignInstruct = 'male, middle-aged';
+                        vittsDesignInstruct = 'female, young adult';
                     }
                     this.logger.log(`ViTTS design instruct (default): ${vittsDesignInstruct}`);
                 }

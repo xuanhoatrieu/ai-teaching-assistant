@@ -217,6 +217,22 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                         }
                         setSelectedModel(matchedModel?.name || allTTSModels[0].name);
                     }
+
+                    // Notify parent with loaded TTS config on mount
+                    // Without this, Step4 state stays empty after page reload
+                    if (onChange && (currentProvider === 'VITTS' || savedVoice.startsWith('vitts:'))) {
+                        const detectedMode = savedVoice.startsWith('vitts:ref:') ? 'clone'
+                            : savedVoice === 'vitts:design' ? 'design'
+                            : 'auto';
+                        onChange({
+                            provider: currentProvider || 'VITTS',
+                            model: 'vitts',
+                            voice: savedVoice,
+                            vittsMode: detectedMode,
+                            vittsDesignInstruct: detectedMode === 'design' ? buildDesignInstruct() : undefined,
+                            vittsNormalize,
+                        });
+                    }
                     return;
                 }
             } catch (configErr) {

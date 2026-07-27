@@ -359,13 +359,13 @@ export class PptxAudioToolService {
                     else if (modelConfig.modelName === 'vitts:design') options = { ...options, vittsMode: 'design' };
                     else options = { ...options, vittsMode: 'auto' };
                 }
-                // Set default design instruct (male voice) if mode is 'design' and no instruct provided
+                // Set default design instruct if mode is 'design' and no instruct provided
                 if (options?.vittsMode === 'design' && !options?.vittsDesignInstruct) {
                     try {
                         const adminInstruct = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.designInstruct' } });
-                        options = { ...options, vittsDesignInstruct: adminInstruct?.value || 'male, middle-aged' };
+                        options = { ...options, vittsDesignInstruct: adminInstruct?.value || 'female, young adult' };
                     } catch {
-                        options = { ...options, vittsDesignInstruct: 'male, middle-aged' };
+                        options = { ...options, vittsDesignInstruct: 'female, young adult' };
                     }
                 }
             } else if (modelConfig.modelName) {
