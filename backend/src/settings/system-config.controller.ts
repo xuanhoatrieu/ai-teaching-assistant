@@ -525,57 +525,233 @@ export class SystemConfigController {
     }
 
     /**
-     * Test ViTTS connection
+     * Get all ViTTS servers (multi-server management)
      */
-    @Get('vitts/test')
-    async testViTTSConnection() {
-        const apiKey = await this.configService.get('vitts.apiKey');
-        const baseUrl = await this.configService.get('vitts.baseUrl') || 'http://117.0.36.6:8888';
+    @Get('vitts/servers')
+    async getViTTSServers() {
+        const servers = await this.configService.getViTTSServers();
+        return servers.map(s => ({
+            ...s,
+            apiKey: s.apiKey ? '***' + s.apiKey.slice(-4) : '',
+        }));
+    }
 
-        if (!apiKey) {
-            return { success: false, message: '❌ ViTTS API key not configured' };
+    /**
+     * Add new ViTTS server
+     */
+    @Post('vitts/servers')
+    async createViTTSServer(@Body() dto: {
+        name: string;
+        baseUrl: string;
+        apiKey: string;
+        enabled?: boolean;
+        defaultVoice?: string;
+        designInstruct?: string;
+    }) {
+        if (!dto.name || !dto.baseUrl) {
+            throw new BadRequestException('Tên máy chủ và Base URL là bắt buộc.');
+        }
+        const servers = await this.configService.getViTTSServers();
+        const id = 'vitts-' + dto.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+
+        if (servers.some(s => s.id === id)) {
+            throw new BadRequestException(`Máy chủ với tên "${dto.name}" đã tồn tại.`);
+        }
+
+        const newServer = {
+            id,
+            name: dto.name,
+            baseUrl: dto.baseUrl.replace(/\/+$/, ''),
+            apiKey: dto.apiKey || '',
+            enabled: dto.enabled !== undefined ? dto.enabled : true,
+            defaultVoice: dto.defaultVoice || 'vitts:design',
+            designInstruct: dto.designInstruct || 'male, middle-aged',
+        };
+
+        servers.push(newServer);
+        await this.configService.saveViTTSServers(servers);
+        return { success: true, server: newServer };
+    }
+
+    /**
+     * Update ViTTS server
+     */
+    @Put('vitts/servers/:id')
+    async updateViTTSServer(
+        @Param('id') id: string,
+        @Body() dto: {
+            name?: string;
+            baseUrl?: string;
+            apiKey?: string;
+            enabled?: boolean;
+            defaultVoice?: string;
+            designInstruct?: string;
+        },
+    ) {
+        const servers = await this.configService.getViTTSServers();
+        const index = servers.findIndex(s => s.id === id);
+
+        if (index === -1) {
+            throw new BadRequestException(`Không tìm thấy máy chủ ViTTS với ID "${id}".`);
+        }
+
+        const current = servers[index];
+        const updatedApiKey = dto.apiKey && !dto.apiKey.startsWith('***') ? dto.apiKey : current.apiKey;
+
+        servers[index] = {
+            ...current,
+            name: dto.name ?? current.name,
+            baseUrl: dto.baseUrl ? dto.baseUrl.replace(/\/+$/, '') : current.baseUrl,
+            apiKey: updatedApiKey,
+            enabled: dto.enabled !== undefined ? dto.enabled : current.enabled,
+            defaultVoice: dto.defaultVoice ?? current.defaultVoice,
+            designInstruct: dto.designInstruct ?? current.designInstruct,
+        };
+
+        await this.configService.saveViTTSServers(servers);
+        return { success: true, server: servers[index] };
+    }
+
+    /**
+     * Delete ViTTS server
+     */
+    @Delete('vitts/servers/:id')
+    async deleteViTTSServer(@Param('id') id: string) {
+        const servers = await this.configService.getViTTSServers();
+        const filtered = servers.filter(s => s.id !== id);
+
+        if (filtered.length === servers.length) {
+            throw new BadRequestException(`Không tìm thấy máy chủ ViTTS với ID "${id}".`);
+        }
+
+        await this.configService.saveViTTSServers(filtered);
+        return { success: true, message: 'Đã xóa máy chủ ViTTS thành công.' };
+    }
+
+    /**
+     * Test specific ViTTS server
+     */
+    @Get('vitts/servers/:id/test')
+    async testSpecificViTTSServer(@Param('id') id: string) {
+        const servers = await this.configService.getViTTSServers();
+        const server = servers.find(s => s.id === id);
+
+        if (!server) {
+            return { success: false, message: `❌ Không tìm thấy cấu hình máy chủ ID: ${id}` };
+        }
+
+        const authHeaders: Record<string, string> = {};
+        if (server.apiKey) {
+            authHeaders['X-API-Key'] = server.apiKey;
+            authHeaders['Authorization'] = `Bearer ${server.apiKey}`;
         }
 
         try {
-            const response = await fetch(`${baseUrl}/api/v1/tts/voices`, {
-                headers: { 'X-API-Key': apiKey },
+            let refsList: any[] = [];
+            try {
+                const refsResponse = await fetch(`${server.baseUrl}/api/v1/refs`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(5000),
+                });
+                if (refsResponse.ok) {
+                    const rData = await refsResponse.json();
+                    refsList = Array.isArray(rData) ? rData : (rData.refs || []);
+                }
+            } catch {}
+
+            const response = await fetch(`${server.baseUrl}/api/v1/tts/voices`, {
+                headers: authHeaders,
                 signal: AbortSignal.timeout(10000),
             });
 
             if (response.ok) {
                 const data = await response.json().catch(() => null);
                 const voiceCount = Array.isArray(data) ? data.length : (data?.voices?.length || '?');
+                const refsCountInfo = refsList.length > 0 ? `, ${refsList.length} giọng ref` : '';
                 return {
                     success: true,
-                    message: `✅ ViTTS connected! URL: ${baseUrl} (${voiceCount} voices)`,
+                    message: `✅ Kết nối thành công tới ${server.name}! (${voiceCount} giọng hệ thống${refsCountInfo})`,
+                    voices: Array.isArray(data) ? data : (data?.voices || []),
+                    refs: refsList.map((r: any) => ({
+                        id: r.id || r.ref_id || r.name,
+                        name: r.name || r.id,
+                        duration: r.duration_sec || null,
+                    })),
                 };
             } else {
                 return {
                     success: false,
-                    message: `❌ ViTTS returned HTTP ${response.status}`,
+                    message: `❌ Máy chủ ${server.name} trả về HTTP ${response.status}`,
                 };
             }
         } catch (error: any) {
-            const msg = error.message || '';
-            const isTimeout = error.name === 'TimeoutError' || msg.includes('timeout') || msg.includes('aborted');
-            const isNetworkError = msg.includes('fetch failed') || msg.includes('ECONNREFUSED') || msg.includes('EHOSTUNREACH') || msg.includes('ENOTFOUND');
-
-            if (isNetworkError) {
-                return {
-                    success: false,
-                    message: `⚠️ Không kết nối được tới ${baseUrl}. Server ViTTS có thể chỉ accessible từ VPS. Trên VPS sẽ hoạt động bình thường.`,
-                };
-            }
-            if (isTimeout) {
-                return {
-                    success: false,
-                    message: `❌ ViTTS timeout (10s) — server có thể chậm hoặc không accessible từ máy này.`,
-                };
-            }
             return {
                 success: false,
-                message: `❌ ViTTS error: ${msg}`,
+                message: `❌ Không thể kết nối tới ${server.name} (${server.baseUrl}): ${error.message}`,
             };
+        }
+    }
+
+    /**
+     * Get available ViTTS reference voices for clone mode
+     */
+    @Get('vitts/refs')
+    async getViTTSRefs() {
+        const apiKey = await this.configService.get('vitts.apiKey');
+        const baseUrl = await this.configService.get('vitts.baseUrl') || 'http://117.0.36.6:8888';
+
+        const authHeaders: Record<string, string> = {};
+        if (apiKey) {
+            authHeaders['X-API-Key'] = apiKey;
+            authHeaders['Authorization'] = `Bearer ${apiKey}`;
+        }
+
+        try {
+            // 1. Try /api/v1/refs
+            const refsRes = await fetch(`${baseUrl}/api/v1/refs`, {
+                headers: authHeaders,
+                signal: AbortSignal.timeout(10000),
+            });
+            if (refsRes.ok) {
+                const data = await refsRes.json();
+                const list = Array.isArray(data) ? data : (data.refs || []);
+                return {
+                    success: true,
+                    refs: list.map((r: any) => ({
+                        id: r.id || r.ref_id || r.name,
+                        name: r.name || r.id,
+                        duration: r.duration_sec || null,
+                    })),
+                };
+            }
+
+            // 2. Try /api/v1/tts/trained-voices
+            const trainedRes = await fetch(`${baseUrl}/api/v1/tts/trained-voices`, {
+                headers: authHeaders,
+                signal: AbortSignal.timeout(10000),
+            });
+            if (trainedRes.ok) {
+                const data = await trainedRes.json();
+                const lib = Array.isArray(data) ? data : (data.voices || []);
+                return {
+                    success: true,
+                    refs: lib.map((r: any) => ({
+                        id: r.id || r.voice_id || r.name,
+                        name: r.name || r.id,
+                        duration: null,
+                    })),
+                };
+            }
+
+            const errorMsg = refsRes.status === 401
+                ? `Máy chủ ${baseUrl} phản hồi HTTP 401 (API Key không hợp lệ hoặc chưa được cấp trên máy chủ này).`
+                : `Không tìm thấy file mẫu trên máy chủ (HTTP ${refsRes.status}).`;
+
+            return { success: false, refs: [], error: errorMsg };
+
+            return { success: false, refs: [] };
+        } catch (err: any) {
+            return { success: false, refs: [], error: err.message };
         }
     }
 

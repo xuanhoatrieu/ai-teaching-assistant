@@ -122,8 +122,8 @@ export class VbeeTTSProvider implements ITTSProvider {
     }
 
     async getVoices(): Promise<Voice[]> {
-        // Get personal voices from API if credentials available
-        const personalVoices = await this.fetchPersonalVoices();
+        // Get personal and Vietnamese voices from API if credentials available
+        const apiVoices = await this.fetchPersonalVoices();
 
         // Default/known voices
         const defaultVoices: Voice[] = [
@@ -135,37 +135,57 @@ export class VbeeTTSProvider implements ITTSProvider {
                 description: 'Giọng cá nhân Triệu Hòa - Giảng bài giáo dục',
             },
             {
-                id: 'hn_female_ngochuyen_news_48k-fhg',
-                name: 'Ngọc Huyền (Nữ)',
+                id: 'hn_female_ngochuyen_full_24k-st',
+                name: 'Ngọc Huyền 2.0 (Nữ HN)',
                 gender: 'female',
                 languageCode: 'vi-VN',
-                description: 'Giọng nữ Hà Nội, phù hợp đọc tin tức',
+                description: 'Giọng nữ Hà Nội truyền cảm',
             },
             {
-                id: 'hn_male_manhdung_news_48k-fhg',
-                name: 'Mạnh Dũng (Nam)',
+                id: 'hn_male_manhdung_full_24k-st',
+                name: 'Mạnh Dũng 2.0 (Nam HN)',
                 gender: 'male',
                 languageCode: 'vi-VN',
-                description: 'Giọng nam Hà Nội, phù hợp đọc tin tức',
+                description: 'Giọng nam Hà Nội mạnh mẽ',
             },
             {
-                id: 'sg_female_thaongan_call_48k-fhg',
-                name: 'Thảo Ngân (Nữ)',
+                id: 'hn_male_minhquan_yt_24k-pre',
+                name: 'Minh Quân Pro (Nam HN)',
+                gender: 'male',
+                languageCode: 'vi-VN',
+                description: 'Giọng nam tự nhiên trẻ trung',
+            },
+            {
+                id: 'sg_female_tuongvy_call_44k-fhg',
+                name: 'Tường Vy (Nữ SG)',
                 gender: 'female',
                 languageCode: 'vi-VN',
-                description: 'Giọng nữ Sài Gòn, phù hợp hội thoại',
+                description: 'Giọng nữ Sài Gòn nhẹ nhàng',
             },
             {
-                id: 'sg_male_minhhoang_call_48k-fhg',
-                name: 'Minh Hoàng (Nam)',
-                gender: 'male',
+                id: 'sg_female_thaotrinh_full_44k-phg',
+                name: 'Thảo Trinh (Nữ SG)',
+                gender: 'female',
                 languageCode: 'vi-VN',
-                description: 'Giọng nam Sài Gòn, phù hợp hội thoại',
+                description: 'Giọng nữ Sài Gòn truyền cảm',
+            },
+            {
+                id: 'hue_female_huonggiang_full_48k-fhg',
+                name: 'Hương Giang (Nữ Huế)',
+                gender: 'female',
+                languageCode: 'vi-VN',
+                description: 'Giọng nữ Huế ngọt ngào',
             },
         ];
 
-        // Merge personal voices with defaults
-        return [...personalVoices, ...defaultVoices];
+        // Merge API voices with defaults (deduplicate by id)
+        const combined = [...apiVoices];
+        for (const def of defaultVoices) {
+            if (!combined.some(v => v.id === def.id)) {
+                combined.push(def);
+            }
+        }
+        return combined;
     }
 
     private async fetchPersonalVoices(): Promise<Voice[]> {
@@ -185,26 +205,34 @@ export class VbeeTTSProvider implements ITTSProvider {
                 return [];
             }
 
-            const allVoices = response.data.result;
-            const personalVoices: Voice[] = [];
+            const rawVoices: any[] = response.data.result.voices || (Array.isArray(response.data.result) ? response.data.result : []);
+            const voices: Voice[] = [];
 
-            for (const [voiceCode, voiceDetails] of Object.entries(allVoices)) {
-                const details = voiceDetails as Record<string, unknown>;
-                if (details.voice_ownership === 'PERSONAL') {
-                    personalVoices.push({
-                        id: voiceCode,
-                        name: (details.name as string) || voiceCode,
-                        gender: (details.gender as string) === 'male' ? 'male' : 'female',
-                        languageCode: 'vi-VN',
-                        description: 'Giọng cá nhân',
-                    });
-                }
+            for (const item of rawVoices) {
+                const voiceCode = item.code || item.voice_code || item.id;
+                if (!voiceCode) continue;
+
+                const isVi = item.language_code === 'vi-VN' || item.language?.code === 'vi-VN' || item.language === 'vi-VN';
+                const isPersonal = item.voice_ownership === 'PERSONAL' || 
+                                   item.features?.includes('personal-voice') || 
+                                   item.features?.includes('cloned-voice') ||
+                                   voiceCode.includes('trieuhoa');
+
+                if (!isVi && !isPersonal) continue;
+
+                voices.push({
+                    id: voiceCode,
+                    name: item.name || voiceCode,
+                    gender: item.gender === 'male' ? 'male' : 'female',
+                    languageCode: 'vi-VN',
+                    description: item.description || (isPersonal ? 'Giọng cá nhân' : `Giọng ${item.gender === 'female' ? 'nữ' : 'nam'} Vbee (${item.locale || 'VN'})`),
+                });
             }
 
-            this.logger.log(`Found ${personalVoices.length} personal voices`);
-            return personalVoices;
+            this.logger.log(`Found ${voices.length} Vbee voices from API`);
+            return voices;
         } catch (error) {
-            this.logger.warn(`Error fetching Vbee personal voices: ${error.message}`);
+            this.logger.warn(`Error fetching Vbee voices: ${error.message}`);
             return [];
         }
     }

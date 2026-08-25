@@ -38,7 +38,10 @@ export class ViTTSTTSProvider implements ITTSProvider {
     }
 
     private get headers() {
-        return { 'X-API-Key': this.apiKey };
+        return {
+            'X-API-Key': this.apiKey,
+            'Authorization': `Bearer ${this.apiKey}`,
+        };
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -46,21 +49,13 @@ export class ViTTSTTSProvider implements ITTSProvider {
     // ═══════════════════════════════════════════════════════════════
 
     async generateAudio(text: string, options?: TTSOptions): Promise<TTSResult> {
-        this.logger.log(`ViTTS generateAudio: baseUrl=${this.baseUrl}, mode=${options?.vittsMode || 'auto'}`);
+        this.logger.log(`ViTTS generateAudio: baseUrl=${this.baseUrl}, engine=${options?.vittsEngine || 'auto'}, mode=${options?.vittsMode || 'auto'}`);
         this.logger.log(`Text preview: ${text.substring(0, 80)}...`);
 
         if (!this.apiKey) {
             throw new Error('ViTTS API key is required');
         }
 
-        let mode = options?.vittsMode;
-        if (!mode) {
-            if (options?.voiceId && options.voiceId !== 'auto' && options.voiceId !== 'vitts:auto') {
-                mode = 'clone';
-            } else {
-                mode = 'auto';
-            }
-        }
         const speed = options?.vittsSpeed ?? options?.speed ?? 1.0;
         const numStep = options?.vittsNumStep ?? 32;
         const normalize = options?.vittsNormalize ?? true;
@@ -68,30 +63,67 @@ export class ViTTSTTSProvider implements ITTSProvider {
         try {
             let audioBytes: Buffer;
 
-            switch (mode) {
-                case 'clone': {
-                    // Voice cloning from saved reference
-                    let refId = options?.voiceId || '';
-                    this.logger.log(`Mode=clone, raw voiceId=${refId}`);
-                    if (refId.startsWith('vitts:')) refId = refId.substring(6);
-                    if (refId.startsWith('ref:')) refId = refId.substring(4);
-                    this.logger.log(`Mode=clone, extracted ref_id=${refId}`);
-                    if (!refId) throw new Error('Voice Cloning requires a ref_id. Please select a reference voice.');
-                    audioBytes = await this.omniCloneRef(text, refId, speed, numStep, normalize);
-                    break;
+            const isVieNeu = options?.vittsEngine === 'vieneu' ||
+                (options?.voiceId && (options.voiceId.startsWith('vieneu:') || options.voiceId.includes(':vieneu:')));
+
+            if (isVieNeu) {
+                let rawVoice = options?.voiceId || '';
+                if (rawVoice.includes(':vieneu:')) {
+                    rawVoice = rawVoice.split(':vieneu:')[1];
+                } else if (rawVoice.startsWith('vieneu:')) {
+                    rawVoice = rawVoice.substring(7);
                 }
-                case 'design': {
-                    // Voice design via instruct text
-                    const instruct = options?.vittsDesignInstruct || 'female, young adult';
-                    this.logger.log(`Mode=design, instruct=${instruct}`);
-                    audioBytes = await this.omniDesign(text, instruct, speed, numStep, normalize);
-                    break;
+
+                // Check if this is a clone voice (has ref: prefix or valid UUID)
+                const isClone = rawVoice.startsWith('ref:') ||
+                    (options?.vittsMode === 'clone' && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(rawVoice));
+
+                if (isClone) {
+                    const refId = rawVoice.replace(/^ref:/, '');
+                    this.logger.log(`Routing to VieNeu Clone (48kHz): refId=${refId}`);
+                    audioBytes = await this.vieneuCloneRef(text, refId, speed);
+                } else {
+                    const preset = rawVoice.replace(/^preset:/, '') || 'Adam';
+                    this.logger.log(`Routing to VieNeu Preset (48kHz): preset=${preset}`);
+                    audioBytes = await this.vieneuPreset(text, preset, speed);
                 }
-                case 'auto':
-                default: {
-                    this.logger.log(`Mode=auto`);
-                    audioBytes = await this.omniAuto(text, speed, numStep, normalize);
-                    break;
+            } else {
+                // OmniVoice engine
+                let mode = options?.vittsMode;
+                if (!mode) {
+                    if (options?.voiceId && options.voiceId !== 'auto' && options.voiceId !== 'vitts:auto' && !options.voiceId.endsWith(':auto')) {
+                        mode = 'clone';
+                    } else {
+                        mode = 'auto';
+                    }
+                }
+
+                switch (mode) {
+                    case 'clone': {
+                        let refId = options?.voiceId || '';
+                        if (refId.includes(':omni:ref:')) refId = refId.split(':omni:ref:')[1];
+                        else if (refId.includes(':ref:')) refId = refId.split(':ref:')[1];
+                        else if (refId.startsWith('vitts:ref:')) refId = refId.substring(10);
+                        else if (refId.startsWith('ref:')) refId = refId.substring(4);
+                        else if (refId.startsWith('vitts:')) refId = refId.substring(6);
+
+                        this.logger.log(`Routing to OmniVoice Clone (24kHz): refId=${refId}`);
+                        if (!refId) throw new Error('Voice Cloning requires a ref_id. Please select a reference voice.');
+                        audioBytes = await this.omniCloneRef(text, refId, speed, numStep, normalize);
+                        break;
+                    }
+                    case 'design': {
+                        const instruct = options?.vittsDesignInstruct || 'female, young adult';
+                        this.logger.log(`Routing to OmniVoice Design (24kHz): instruct=${instruct}`);
+                        audioBytes = await this.omniDesign(text, instruct, speed, numStep, normalize);
+                        break;
+                    }
+                    case 'auto':
+                    default: {
+                        this.logger.log(`Routing to OmniVoice Auto (24kHz)`);
+                        audioBytes = await this.omniAuto(text, speed, numStep, normalize);
+                        break;
+                    }
                 }
             }
 
@@ -123,20 +155,56 @@ export class ViTTSTTSProvider implements ITTSProvider {
 
                 if (error.response.status === 404 && (bodyObj?.detail === 'Reference audio file not found' || bodyObj?.detail?.includes('not found'))) {
                     throw new BadRequestException(
-                        'Không tìm thấy file âm thanh mẫu (ref 9/cthinh) trên máy chủ ViTTS Local. Vui lòng mở trang OmniVoice Studio (ViTTS Local) và tải lên lại file mẫu.'
+                        'Không tìm thấy file âm thanh mẫu trên máy chủ ViTTS. Vui lòng kiểm tra lại giọng mẫu trong Voice Library.'
                     );
                 }
             } else {
                 this.logger.error(`ViTTS error: ${JSON.stringify(errInfo)}`);
-                // No HTTP response — network-level failure (server down / wrong address).
                 if (['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH'].includes(error.code)) {
                     throw new BadRequestException(
-                        `Không kết nối được máy chủ ViTTS (${this.baseUrl}). Máy chủ có thể đang tắt hoặc địa chỉ cấu hình sai. Vui lòng kiểm tra máy chủ ViTTS và baseUrl trong Cài đặt.`
+                        `Không kết nối được máy chủ ViTTS (${this.baseUrl}). Máy chủ có thể đang tắt hoặc địa chỉ cấu hình sai. Vui lòng kiểm tra máy chủ ViTTS trong Cài đặt.`
                     );
                 }
             }
             throw error;
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // VIENEU-TTS ENDPOINTS (48kHz)
+    // ═══════════════════════════════════════════════════════════════
+
+    private async vieneuPreset(text: string, voicePreset: string, speed: number): Promise<Buffer> {
+        this.logger.log(`ViTTS VieNeu preset synthesize: preset=${voicePreset}, speed=${speed}`);
+        const resp = await axios.post(
+            `${this.baseUrl}/api/v1/tts/synthesize`,
+            {
+                text,
+                voice: voicePreset,
+                voice_preset: voicePreset,
+                preset: voicePreset,
+                engine: 'vieneu',
+                speed,
+            },
+            { headers: this.headers, timeout: 45000 },
+        );
+        if (resp.data?.audio_url) {
+            return this.downloadAudio(resp.data.audio_url);
+        }
+        throw new Error('VieNeu synthesize failed: no audio_url returned');
+    }
+
+    private async vieneuCloneRef(text: string, refId: string, speed: number): Promise<Buffer> {
+        this.logger.log(`ViTTS VieNeu clone with ref: refId=${refId}, speed=${speed}`);
+        const resp = await axios.post(
+            `${this.baseUrl}/api/v1/tts/synthesize-with-ref`,
+            { text, ref_id: refId, speed },
+            { headers: this.headers, timeout: 45000 },
+        );
+        if (resp.data?.audio_url) {
+            return this.downloadAudio(resp.data.audio_url);
+        }
+        throw new Error('VieNeu clone failed: no audio_url returned');
     }
 
     // ═══════════════════════════════════════════════════════════════

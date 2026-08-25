@@ -346,7 +346,7 @@ export class SlideAudioService {
     }
 
     // Generate audio for a single slide
-    async generateSingleAudio(lessonId: string, slideIndex: number, userId: string, multilingualMode?: string, vittsMode?: string, vittsDesignInstruct?: string, vittsNormalize?: boolean) {
+    async generateSingleAudio(lessonId: string, slideIndex: number, userId: string, multilingualMode?: string, vittsMode?: string, vittsDesignInstruct?: string, vittsNormalize?: boolean, vittsEngine?: string) {
         const slideAudio = await this.prisma.slideAudio.findUnique({
             where: {
                 lessonId_slideIndex: { lessonId, slideIndex },
@@ -375,6 +375,7 @@ export class SlideAudioService {
             // Format: "gemini-voice:VoiceName" or "vbee:voiceId" or "vitts:ref:3"
             let provider = modelConfig.provider || 'GEMINI';
             let voiceName = 'Puck';
+            let activeEngine = vittsEngine;
             // Get default TTS model from system config (not hardcoded)
             const defaultTTSConfig = await this.modelConfigService.getDefaultForTask('TTS');
             let modelName = defaultTTSConfig.modelName;
@@ -408,15 +409,24 @@ export class SlideAudioService {
                 provider = 'VITTS';
                 voiceName = modelConfig.modelName; // Keep full format, provider will strip prefix
                 modelName = 'vitts';
-                // Auto-detect mode from modelName if not explicitly set
-                if (!vittsMode) {
-                    if (modelConfig.modelName.startsWith('vitts:ref:')) vittsMode = 'clone';
-                    else if (modelConfig.modelName === 'vitts:design') vittsMode = 'design';
-                    else vittsMode = 'auto'; // default to auto (safe, no ref_id needed)
-                    this.logger.log(`ViTTS auto-detected mode: ${vittsMode} from modelName: ${modelConfig.modelName}`);
-                } else {
-                    this.logger.log(`ViTTS mode from request: ${vittsMode}, modelName: ${modelConfig.modelName}`);
+                const isVieNeu = modelConfig.modelName.includes(':vieneu:') || modelConfig.modelName.startsWith('vieneu:');
+                if (!activeEngine) {
+                    activeEngine = isVieNeu ? 'vieneu' : 'omnivoice';
                 }
+
+                // Determine mode strictly from modelName to avoid stale vittsMode overriding preset voices
+                if (modelConfig.modelName.includes(':ref:')) {
+                    vittsMode = 'clone';
+                } else if (isVieNeu) {
+                    vittsMode = 'preset';
+                } else if (modelConfig.modelName.endsWith(':design')) {
+                    vittsMode = 'design';
+                } else if (modelConfig.modelName.endsWith(':auto')) {
+                    vittsMode = 'auto';
+                } else if (!vittsMode) {
+                    vittsMode = 'auto';
+                }
+                this.logger.log(`ViTTS resolved engine: ${activeEngine}, mode: ${vittsMode}, modelName: ${modelConfig.modelName}`);
                 // Set default design instruct if mode is 'design' and no instruct provided
                 if (vittsMode === 'design' && !vittsDesignInstruct) {
                     try {
@@ -443,6 +453,7 @@ export class SlideAudioService {
                 model: modelName,
                 provider: provider,
                 multilingualMode: multilingualMode,
+                vittsEngine: activeEngine,
                 vittsMode: vittsMode as any,
                 vittsDesignInstruct: vittsDesignInstruct,
                 vittsNormalize: vittsNormalize,

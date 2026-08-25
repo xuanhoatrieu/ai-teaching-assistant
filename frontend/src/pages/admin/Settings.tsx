@@ -65,16 +65,132 @@ export function SettingsPage() {
     const [isTestingImageGen, setIsTestingImageGen] = useState(false);
     const [isSavingImageGen, setIsSavingImageGen] = useState(false);
 
-    // ViTTS state
-    const [vittsEnabled, setVittsEnabled] = useState(false);
-    const [vittsBaseUrl, setVittsBaseUrl] = useState('');
-    const [vittsApiKey, setVittsApiKey] = useState('');
-    const [vittsDefaultVoice, setVittsDefaultVoice] = useState('vitts:design');
-    const [vittsDesignInstruct, setVittsDesignInstruct] = useState('male, middle-aged');
-    const [vittsCurrentApiKey, setVittsCurrentApiKey] = useState('');
-    const [vittsTestResult, setVittsTestResult] = useState<{ success: boolean; message: string } | null>(null);
-    const [isTestingVitts, setIsTestingVitts] = useState(false);
-    const [isSavingVitts, setIsSavingVitts] = useState(false);
+
+
+    // ViTTS Multi-Server state
+    const [vittsServers, setVittsServers] = useState<any[]>([]);
+    const [isLoadingVittsServers, setIsLoadingVittsServers] = useState(false);
+    const [isVittsModalOpen, setIsVittsModalOpen] = useState(false);
+    const [editingVittsServerId, setEditingVittsServerId] = useState<string | null>(null);
+    const [vittsFormName, setVittsFormName] = useState('');
+    const [vittsFormBaseUrl, setVittsFormBaseUrl] = useState('');
+    const [vittsFormApiKey, setVittsFormApiKey] = useState('');
+    const [vittsFormEnabled, setVittsFormEnabled] = useState(true);
+    const [vittsFormDefaultVoice, setVittsFormDefaultVoice] = useState('vitts:design');
+    const [vittsFormDesignInstruct, setVittsFormDesignInstruct] = useState('male, middle-aged');
+    const [vittsServerTestResults, setVittsServerTestResults] = useState<Record<string, { success: boolean; message: string; voices?: any[]; refs?: any[]; loading?: boolean }>>({});
+
+    const fetchViTTSServers = async () => {
+        setIsLoadingVittsServers(true);
+        try {
+            const response = await api.get('/admin/config/vitts/servers');
+            setVittsServers(response.data || []);
+        } catch (err) {
+            console.error('Failed to fetch ViTTS servers:', err);
+        } finally {
+            setIsLoadingVittsServers(false);
+        }
+    };
+
+    const handleOpenVittsModal = (server?: any) => {
+        if (server) {
+            setEditingVittsServerId(server.id);
+            setVittsFormName(server.name);
+            setVittsFormBaseUrl(server.baseUrl);
+            setVittsFormApiKey('');
+            setVittsFormEnabled(server.enabled);
+            setVittsFormDefaultVoice(server.defaultVoice || 'vitts:design');
+            setVittsFormDesignInstruct(server.designInstruct || 'male, middle-aged');
+        } else {
+            setEditingVittsServerId(null);
+            setVittsFormName('');
+            setVittsFormBaseUrl('http://10.64.11.16:8888');
+            setVittsFormApiKey('');
+            setVittsFormEnabled(true);
+            setVittsFormDefaultVoice('vitts:design');
+            setVittsFormDesignInstruct('male, middle-aged');
+        }
+        setIsVittsModalOpen(true);
+    };
+
+    const handleSaveViTTSServer = async () => {
+        if (!vittsFormName || !vittsFormBaseUrl) {
+            alert('Vui lòng nhập đầy đủ Tên máy chủ và Base URL');
+            return;
+        }
+
+        try {
+            const payload: any = {
+                name: vittsFormName,
+                baseUrl: vittsFormBaseUrl,
+                enabled: vittsFormEnabled,
+                defaultVoice: vittsFormDefaultVoice,
+                designInstruct: vittsFormDesignInstruct,
+            };
+            if (vittsFormApiKey) {
+                payload.apiKey = vittsFormApiKey;
+            }
+
+            if (editingVittsServerId) {
+                await api.put(`/admin/config/vitts/servers/${editingVittsServerId}`, payload);
+            } else {
+                await api.post('/admin/config/vitts/servers', payload);
+            }
+
+            setIsVittsModalOpen(false);
+            fetchViTTSServers();
+        } catch (err: any) {
+            alert(`Lỗi lưu máy chủ: ${err.response?.data?.message || err.message}`);
+        }
+    };
+
+    const handleDeleteViTTSServer = async (id: string, name: string) => {
+        if (!window.confirm(`Bạn có chắc muốn xóa máy chủ ViTTS "${name}"?`)) return;
+        try {
+            await api.delete(`/admin/config/vitts/servers/${id}`);
+            fetchViTTSServers();
+        } catch (err: any) {
+            alert(`Lỗi khi xóa: ${err.response?.data?.message || err.message}`);
+        }
+    };
+
+    const handleToggleViTTSServer = async (server: any) => {
+        try {
+            await api.put(`/admin/config/vitts/servers/${server.id}`, {
+                enabled: !server.enabled,
+                apiKey: '***',
+            });
+            fetchViTTSServers();
+        } catch (err: any) {
+            alert(`Lỗi: ${err.response?.data?.message || err.message}`);
+        }
+    };
+
+    const handleTestViTTSServer = async (id: string) => {
+        setVittsServerTestResults(prev => ({ ...prev, [id]: { loading: true, success: false, message: 'Đang kiểm tra kết nối...' } }));
+        try {
+            const response = await api.get(`/admin/config/vitts/servers/${id}/test`);
+            setVittsServerTestResults(prev => ({
+                ...prev,
+                [id]: {
+                    loading: false,
+                    success: response.data.success,
+                    message: response.data.message,
+                    voices: response.data.voices,
+                    refs: response.data.refs,
+                },
+            }));
+        } catch (err: any) {
+            setVittsServerTestResults(prev => ({
+                ...prev,
+                [id]: {
+                    loading: false,
+                    success: false,
+                    message: err.response?.data?.message || err.message,
+                },
+            }));
+        }
+    };
 
     // SMTP state
     const [smtpEnabled, setSmtpEnabled] = useState(false);
@@ -208,7 +324,7 @@ export function SettingsPage() {
         fetchSettings();
         fetchCLIProxyConfig();
         fetchImageGenConfig();
-        fetchViTTSConfig();
+        fetchViTTSServers();
         fetchSMTPConfig();
         fetchCustomProviders();
     }, []);
@@ -416,66 +532,7 @@ export function SettingsPage() {
     // ViTTS handlers
     // ========================
 
-    const fetchViTTSConfig = async () => {
-        try {
-            const response = await api.get('/admin/config/vitts');
-            const config = response.data;
-            setVittsEnabled(config.enabled);
-            setVittsBaseUrl(config.baseUrl || '');
-            setVittsCurrentApiKey(config.apiKey || '');
-            setVittsDefaultVoice(config.defaultVoice || 'vitts:design');
-            setVittsDesignInstruct(config.designInstruct || 'male, middle-aged');
-        } catch (err) {
-            console.error('Failed to fetch ViTTS config:', err);
-        }
-    };
 
-    const handleSaveVitts = async () => {
-        setIsSavingVitts(true);
-        try {
-            await api.put('/admin/config/vitts', {
-                enabled: vittsEnabled,
-                baseUrl: vittsBaseUrl || undefined,
-                apiKey: vittsApiKey || undefined,
-                defaultVoice: vittsDefaultVoice || undefined,
-                designInstruct: vittsDesignInstruct || undefined,
-            });
-            setMessage('ViTTS configuration saved');
-            setVittsApiKey('');
-            await fetchViTTSConfig();
-        } catch (err: any) {
-            setMessage(err.response?.data?.message || 'Failed to save ViTTS config');
-        } finally {
-            setIsSavingVitts(false);
-        }
-    };
-
-    const handleTestVitts = async () => {
-        setIsTestingVitts(true);
-        setVittsTestResult(null);
-        try {
-            // Auto-save first
-            await api.put('/admin/config/vitts', {
-                enabled: vittsEnabled,
-                baseUrl: vittsBaseUrl || undefined,
-                apiKey: vittsApiKey || undefined,
-                defaultVoice: vittsDefaultVoice || undefined,
-                designInstruct: vittsDesignInstruct || undefined,
-            });
-            setVittsApiKey('');
-
-            const response = await api.get('/admin/config/vitts/test');
-            setVittsTestResult(response.data);
-            await fetchViTTSConfig();
-        } catch (err: any) {
-            setVittsTestResult({
-                success: false,
-                message: err.response?.data?.message || 'Connection test failed',
-            });
-        } finally {
-            setIsTestingVitts(false);
-        }
-    };
 
     const handleSaveSMTP = async () => {
         setIsSavingSmtp(true);
@@ -942,106 +999,209 @@ export function SettingsPage() {
                 )}
             </div>
 
-            {/* ViTTS System Config Section */}
+            {/* ViTTS System Config Section (Multi-Server) */}
             <div className="settings-section cliproxy-section">
-                <h2>🎙️ ViTTS Voice (OmniVoice)</h2>
-                <p className="section-desc">
-                    Cấu hình giọng đọc ViTTS mặc định cho toàn hệ thống. User không cần tự cấu hình API key.
-                </p>
-
-                <div className="setting-group">
-                    <label className="toggle-label">
-                        <input
-                            type="checkbox"
-                            checked={vittsEnabled}
-                            onChange={(e) => setVittsEnabled(e.target.checked)}
-                        />
-                        <span>Enable ViTTS (System-level)</span>
-                        {vittsEnabled && <span className="status-badge enabled">Active</span>}
-                        {!vittsEnabled && <span className="status-badge disabled">Disabled</span>}
-                    </label>
-                    <p className="help-text">
-                        Khi bật, tất cả user sẽ dùng giọng ViTTS mặc định mà không cần cấu hình riêng.
-                    </p>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                    <div>
+                        <h2>🎙️ Quản lý Đa Máy Chủ ViTTS (Multi-Server ViTTS)</h2>
+                        <p className="section-desc" style={{ marginBottom: 0 }}>
+                            Quản lý danh sách các máy chủ GPU / LAN ViTTS (VieNeu-TTS / OmniVoice). Hệ thống tự động quét và phân chia giọng đọc theo từng máy chủ ở Bước 4.
+                        </p>
+                    </div>
+                    <button
+                        className="primary-btn"
+                        onClick={() => handleOpenVittsModal()}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+                    >
+                        <span>+</span> Thêm Máy Chủ ViTTS
+                    </button>
                 </div>
 
-                {vittsEnabled && (
-                    <>
-                        <div className="setting-group">
-                            <label htmlFor="vitts-baseurl">ViTTS Base URL</label>
-                            <input
-                                id="vitts-baseurl"
-                                type="text"
-                                value={vittsBaseUrl}
-                                onChange={(e) => setVittsBaseUrl(e.target.value)}
-                                placeholder="http://117.0.36.6:8888"
-                            />
-                        </div>
+                {isLoadingVittsServers ? (
+                    <p style={{ color: '#888' }}>⏳ Đang tải danh sách máy chủ ViTTS...</p>
+                ) : vittsServers.length === 0 ? (
+                    <div style={{ padding: '24px', backgroundColor: '#1a1a1a', borderRadius: '8px', border: '1px dashed #333', textAlign: 'center', color: '#888' }}>
+                        Chưa có máy chủ ViTTS nào được cấu hình. Bấm nút <strong>+ Thêm Máy Chủ ViTTS</strong> để bắt đầu.
+                    </div>
+                ) : (
+                    <div className="table-responsive" style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '12px', textAlign: 'left' }}>
+                            <thead>
+                                <tr style={{ borderBottom: '1px solid #333', color: '#888', fontSize: '13px' }}>
+                                    <th style={{ padding: '12px 8px' }}>Tên Máy Chủ</th>
+                                    <th style={{ padding: '12px 8px' }}>Base URL</th>
+                                    <th style={{ padding: '12px 8px' }}>API Key</th>
+                                    <th style={{ padding: '12px 8px' }}>Trạng Thái</th>
+                                    <th style={{ padding: '12px 8px' }}>Kiểm Tra Kết Nối</th>
+                                    <th style={{ padding: '12px 8px', textAlign: 'right' }}>Thao Tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {vittsServers.map((server) => (
+                                    <tr key={server.id} style={{ borderBottom: '1px solid #222' }}>
+                                        <td style={{ padding: '12px 8px', fontWeight: 600, color: '#eee' }}>
+                                            🎙️ {server.name}
+                                        </td>
+                                        <td style={{ padding: '12px 8px', color: '#aaa', fontFamily: 'monospace', fontSize: '12px' }}>
+                                            {server.baseUrl}
+                                        </td>
+                                        <td style={{ padding: '12px 8px', color: '#666', fontFamily: 'monospace', fontSize: '12px' }}>
+                                            {server.apiKey || '(Trống)'}
+                                        </td>
+                                        <td style={{ padding: '12px 8px' }}>
+                                            <button
+                                                onClick={() => handleToggleViTTSServer(server)}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    cursor: 'pointer',
+                                                    padding: '4px 8px',
+                                                    borderRadius: '12px',
+                                                    fontSize: '12px',
+                                                    fontWeight: 500,
+                                                    backgroundColor: server.enabled ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                                    color: server.enabled ? '#22c55e' : '#ef4444',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }}
+                                            >
+                                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: server.enabled ? '#22c55e' : '#ef4444' }}></span>
+                                                {server.enabled ? 'Kích hoạt' : 'Tắt'}
+                                            </button>
+                                        </td>
+                                        <td style={{ padding: '12px 8px' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <button
+                                                    className="secondary-btn"
+                                                    style={{ padding: '4px 10px', fontSize: '12px', margin: 0, width: 'fit-content' }}
+                                                    onClick={() => handleTestViTTSServer(server.id)}
+                                                    disabled={vittsServerTestResults[server.id]?.loading}
+                                                >
+                                                    {vittsServerTestResults[server.id]?.loading ? '⏳ Đang test...' : '🔍 Test'}
+                                                </button>
+                                                {vittsServerTestResults[server.id] && !vittsServerTestResults[server.id]?.loading && (
+                                                    <span style={{
+                                                        fontSize: '11px',
+                                                        color: vittsServerTestResults[server.id].success ? '#22c55e' : '#ef4444',
+                                                        marginTop: '2px'
+                                                    }}>
+                                                        {vittsServerTestResults[server.id].message}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                        <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                                            <div style={{ display: 'inline-flex', gap: '8px' }}>
+                                                <button
+                                                    className="secondary-btn"
+                                                    style={{ padding: '4px 8px', fontSize: '12px', margin: 0 }}
+                                                    onClick={() => handleOpenVittsModal(server)}
+                                                    title="Chỉnh sửa"
+                                                >
+                                                    ✏️ Sửa
+                                                </button>
+                                                <button
+                                                    className="secondary-btn"
+                                                    style={{ padding: '4px 8px', fontSize: '12px', margin: 0, color: '#ef4444', borderColor: '#ef4444' }}
+                                                    onClick={() => handleDeleteViTTSServer(server.id, server.name)}
+                                                    title="Xóa"
+                                                >
+                                                    🗑️ Xóa
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
 
-                        <div className="setting-group">
-                            <label htmlFor="vitts-apikey">API Key</label>
-                            <input
-                                id="vitts-apikey"
-                                type="password"
-                                value={vittsApiKey}
-                                onChange={(e) => setVittsApiKey(e.target.value)}
-                                placeholder="Enter new API key to update"
-                            />
-                            <p className="help-text">
-                                Current: {vittsCurrentApiKey || 'Not set'}
-                            </p>
-                        </div>
+                {/* Modal Thêm / Sửa Máy Chủ ViTTS */}
+                {isVittsModalOpen && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 1000,
+                        backdropFilter: 'blur(4px)'
+                    }}>
+                        <div style={{
+                            backgroundColor: '#1e1e1e',
+                            borderRadius: '12px',
+                            padding: '24px',
+                            width: '100%',
+                            maxWidth: '520px',
+                            border: '1px solid #333',
+                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+                        }}>
+                            <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#fff', fontSize: '18px' }}>
+                                {editingVittsServerId ? '✏️ Chỉnh Sửa Máy Chủ ViTTS' : '➕ Thêm Máy Chủ ViTTS Mới'}
+                            </h3>
 
-                        <div className="setting-group">
-                            <label htmlFor="vitts-voice">🔊 Default Voice Mode</label>
-                            <select
-                                id="vitts-voice"
-                                value={vittsDefaultVoice}
-                                onChange={(e) => setVittsDefaultVoice(e.target.value)}
-                            >
-                                <option value="vitts:design">Voice Design (mô tả giọng)</option>
-                                <option value="vitts:auto">Auto (AI tự chọn)</option>
-                            </select>
-                            <p className="help-text">Design: mô tả giọng nam/nữ, tuổi. Auto: AI tự chọn giọng phù hợp.</p>
-                        </div>
-
-                        {vittsDefaultVoice === 'vitts:design' && (
-                            <div className="setting-group">
-                                <label htmlFor="vitts-instruct">🎭 Voice Design Instruct</label>
+                            <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>Tên Máy Chủ (Gợi nhớ)</label>
                                 <input
-                                    id="vitts-instruct"
                                     type="text"
-                                    value={vittsDesignInstruct}
-                                    onChange={(e) => setVittsDesignInstruct(e.target.value)}
-                                    placeholder="male, middle-aged"
+                                    value={vittsFormName}
+                                    onChange={(e) => setVittsFormName(e.target.value)}
+                                    placeholder="VD: ViTTS Lab GPU 1, ViTTS Cloud VPS..."
+                                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #3d3d3d', borderRadius: '4px' }}
                                 />
-                                <p className="help-text">Mô tả giọng mặc định. VD: "male, middle-aged" hoặc "female, young adult"</p>
                             </div>
-                        )}
 
-                        <div className="button-group">
-                            <button
-                                className="secondary-btn"
-                                onClick={handleTestVitts}
-                                disabled={isTestingVitts}
-                            >
-                                {isTestingVitts ? '⏳ Testing...' : '🔍 Test Connection'}
-                            </button>
-                            <button
-                                className="primary-btn"
-                                onClick={handleSaveVitts}
-                                disabled={isSavingVitts}
-                            >
-                                {isSavingVitts ? 'Saving...' : 'Save ViTTS Settings'}
-                            </button>
+                            <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>Base URL Máy Chủ</label>
+                                <input
+                                    type="text"
+                                    value={vittsFormBaseUrl}
+                                    onChange={(e) => setVittsFormBaseUrl(e.target.value)}
+                                    placeholder="VD: http://10.64.11.16:8888 hoặc http://117.0.36.6:8888"
+                                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #3d3d3d', borderRadius: '4px' }}
+                                />
+                            </div>
+
+                            <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>
+                                    API Key {editingVittsServerId && '(để trống nếu không đổi)'}
+                                </label>
+                                <input
+                                    type="password"
+                                    value={vittsFormApiKey}
+                                    onChange={(e) => setVittsFormApiKey(e.target.value)}
+                                    placeholder="vneu_..."
+                                    style={{ width: '100%', padding: '10px', boxSizing: 'border-box', backgroundColor: '#2a2a2a', color: 'white', border: '1px solid #3d3d3d', borderRadius: '4px' }}
+                                />
+                            </div>
+
+                            <div className="setting-group" style={{ marginBottom: '20px' }}>
+                                <label className="toggle-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={vittsFormEnabled}
+                                        onChange={(e) => setVittsFormEnabled(e.target.checked)}
+                                    />
+                                    <span>Kích hoạt máy chủ này</span>
+                                </label>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                                <button className="secondary-btn" onClick={() => setIsVittsModalOpen(false)} style={{ margin: 0 }}>
+                                    Hủy
+                                </button>
+                                <button className="primary-btn" onClick={handleSaveViTTSServer} style={{ margin: 0 }}>
+                                    Lưu Lại
+                                </button>
+                            </div>
                         </div>
-
-                        {vittsTestResult && (
-                            <div className={`test-result ${vittsTestResult.success ? 'success' : 'error'}`}>
-                                {vittsTestResult.success ? '✅' : '❌'} {vittsTestResult.message}
-                            </div>
-                        )}
-                    </>
+                    </div>
                 )}
             </div>
 

@@ -4,6 +4,7 @@ import { ApiKeysService } from '../api-keys/api-keys.service';
 import { CLIProxyProvider } from '../ai/cliproxy.provider';
 import { SystemConfigService } from '../settings/system-config.service';
 import { CustomOpenAIProvider } from '../ai/custom-openai.provider';
+import { CryptoUtil } from '../common/crypto.util';
 
 // Task types for model configuration - must match Prisma TaskType enum
 export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'IMAGE', 'TTS', 'EMBEDDING'] as const;
@@ -20,6 +21,7 @@ export interface AvailableModel {
     displayName: string;
     description?: string;
     supportedTasks: string[];
+    source?: string;
 }
 
 export interface ModelConfigDto {
@@ -45,6 +47,7 @@ const DEFAULT_MODELS: Record<TaskTypeValue, { provider: string; modelName: strin
 @Injectable()
 export class ModelConfigService {
     private readonly logger = new Logger(ModelConfigService.name);
+    private readonly crypto = new CryptoUtil();
 
     constructor(
         private prisma: PrismaService,
@@ -521,24 +524,92 @@ export class ModelConfigService {
     }
 
     /**
-     * Discover Vbee personal voices using user's API token
+     * Discover Vbee personal and Vietnamese voices using user's API token
      */
     async discoverVbeeVoices(userId: string): Promise<AvailableModel[]> {
-        // Always include hardcoded known voices
+        // Default known fallback voices
         const knownVoices: AvailableModel[] = [
             {
                 name: 'vbee:n_thainguyen_male_giangbaitrieuhoa_education_vc',
                 displayName: 'Vbee - Giọng Triệu Hòa 👨 (Giảng bài)',
-                description: 'Giọng cá nhân - Giảng bài giáo dục',
+                description: 'Giọng cá nhân Triệu Hòa - Giảng bài giáo dục',
+                supportedTasks: ['TTS', 'TTS_VOICE'],
+            },
+            {
+                name: 'vbee:hn_female_ngochuyen_full_24k-st',
+                displayName: 'Vbee - Ngọc Huyền 2.0 👩 (HN)',
+                description: 'Giọng nữ Hà Nội truyền cảm',
+                supportedTasks: ['TTS', 'TTS_VOICE'],
+            },
+            {
+                name: 'vbee:hn_male_manhdung_full_24k-st',
+                displayName: 'Vbee - Mạnh Dũng 2.0 👨 (HN)',
+                description: 'Giọng nam Hà Nội mạnh mẽ',
+                supportedTasks: ['TTS', 'TTS_VOICE'],
+            },
+            {
+                name: 'vbee:hn_male_minhquan_yt_24k-pre',
+                displayName: 'Vbee - Minh Quân Pro 👨 (HN)',
+                description: 'Giọng nam tự nhiên trẻ trung',
+                supportedTasks: ['TTS', 'TTS_VOICE'],
+            },
+            {
+                name: 'vbee:sg_female_tuongvy_call_44k-fhg',
+                displayName: 'Vbee - SG - Tường Vy 👩 (SG)',
+                description: 'Giọng nữ Sài Gòn nhẹ nhàng',
+                supportedTasks: ['TTS', 'TTS_VOICE'],
+            },
+            {
+                name: 'vbee:sg_female_thaotrinh_full_44k-phg',
+                displayName: 'Vbee - SG - Thảo Trinh 👩 (SG)',
+                description: 'Giọng nữ Sài Gòn truyền cảm',
+                supportedTasks: ['TTS', 'TTS_VOICE'],
+            },
+            {
+                name: 'vbee:hue_female_huonggiang_full_48k-fhg',
+                displayName: 'Vbee - Huế - Hương Giang 👩 (Huế)',
+                description: 'Giọng nữ Huế ngọt ngào',
                 supportedTasks: ['TTS', 'TTS_VOICE'],
             },
         ];
 
-        const vbeeToken = await this.apiKeysService.getActiveKey(userId, 'VBEE');
+        const rawKey = await this.apiKeysService.getActiveKey(userId, 'VBEE');
 
-        if (!vbeeToken) {
+        if (!rawKey) {
             this.logger.log('No Vbee token configured, returning known voices only');
             return knownVoices;
+        }
+
+        // Vbee credentials may be stored as JSON { "token": "xxx", "appId": "yyy", "voiceCodes": "..." } or plain token
+        let vbeeToken = rawKey;
+        let parsedKey: any = null;
+        try {
+            parsedKey = JSON.parse(rawKey);
+            if (parsedKey && typeof parsedKey === 'object') {
+                vbeeToken = parsedKey.token || parsedKey.apiKey || rawKey;
+            }
+        } catch {
+            // raw string token
+        }
+
+        // Parse user custom cloned voices from credentials (voiceCodes)
+        const customVoiceEntries: { code: string; displayName?: string }[] = [];
+        if (parsedKey && parsedKey.voiceCodes) {
+            const lines = typeof parsedKey.voiceCodes === 'string'
+                ? parsedKey.voiceCodes.split(/[\r\n,;]+/)
+                : Array.isArray(parsedKey.voiceCodes) ? parsedKey.voiceCodes : [];
+            for (const line of lines) {
+                const trimmed = (typeof line === 'string' ? line : '').trim();
+                if (!trimmed) continue;
+                if (trimmed.includes(':')) {
+                    const [c, ...nameParts] = trimmed.split(':');
+                    const code = c.trim();
+                    const displayName = nameParts.join(':').trim();
+                    if (code) customVoiceEntries.push({ code, displayName });
+                } else {
+                    customVoiceEntries.push({ code: trimmed });
+                }
+            }
         }
 
         try {
@@ -556,183 +627,327 @@ export class ModelConfigService {
             const voices: AvailableModel[] = [];
 
             if (data.status === 1 && data.result) {
-                // data.result is a dictionary: { voice_code: voice_details }
-                for (const [voiceCode, voiceDetails] of Object.entries(data.result)) {
-                    const details = voiceDetails as any;
-                    // Filter for personal voices like the Python code
-                    if (details.voice_ownership === 'PERSONAL' || details.voice_ownership === 'SYSTEM') {
-                        const displayName = details.name || voiceCode;
-                        const gender = details.gender === 'female' ? '👩' : '👨';
-                        const region = details.locale === 'vi-VN-x-south' ? 'SG' : 'HN';
+                // Vbee API returns { status: 1, result: { total: N, voices: [...] } }
+                const rawVoices: any[] = data.result.voices || (Array.isArray(data.result) ? data.result : []);
 
-                        voices.push({
-                            name: `vbee:${voiceCode}`,
-                            displayName: `Vbee - ${displayName} ${gender} (${region})`,
-                            description: `${details.voice_ownership} - ${details.locale || 'vi-VN'}`,
-                            supportedTasks: ['TTS'],
-                        });
+                // Fallback if data.result is an object map { code: details }
+                if (rawVoices.length === 0 && typeof data.result === 'object' && !Array.isArray(data.result)) {
+                    for (const [code, details] of Object.entries(data.result)) {
+                        if (code !== 'voices' && code !== 'total' && typeof details === 'object' && details !== null) {
+                            rawVoices.push({ ...(details as object), code: (details as any).code || code });
+                        }
                     }
+                }
+
+                for (const item of rawVoices) {
+                    const voiceCode = item.code || item.voice_code || item.id;
+                    if (!voiceCode) continue;
+
+                    const isVi = item.language_code === 'vi-VN' || item.language?.code === 'vi-VN' || item.language === 'vi-VN';
+                    const isPersonal = item.voice_ownership === 'PERSONAL' || 
+                                       item.features?.includes('personal-voice') || 
+                                       item.features?.includes('cloned-voice') ||
+                                       voiceCode.includes('trieuhoa');
+
+                    // Include all Vietnamese voices and any personal/cloned voices
+                    if (!isVi && !isPersonal) continue;
+
+                    const displayName = item.name || voiceCode;
+                    const gender = item.gender === 'female' ? '👩' : '👨';
+                    let region = 'VN';
+                    if (item.locale === 'northern') region = 'HN';
+                    else if (item.locale === 'southern') region = 'SG';
+                    else if (item.locale === 'central') region = 'Huế';
+                    else if (item.locale) region = item.locale;
+
+                    voices.push({
+                        name: `vbee:${voiceCode}`,
+                        displayName: `Vbee - ${displayName} ${gender} (${region})`,
+                        description: item.description || (isPersonal ? 'Giọng cá nhân' : `${item.level || 'Vbee'} - ${item.locale || 'vi-VN'}`),
+                        supportedTasks: ['TTS', 'TTS_VOICE'],
+                    });
                 }
             }
 
             this.logger.log(`Discovered ${voices.length} Vbee voices for user ${userId}`);
+            
             // Merge with known voices (remove duplicates by name)
             const allVoices = [...knownVoices];
             for (const voice of voices) {
-                if (!allVoices.find(v => v.name === voice.name)) {
+                const existingIndex = allVoices.findIndex(v => v.name === voice.name);
+                if (existingIndex >= 0) {
+                    allVoices[existingIndex] = voice; // update with live data
+                } else {
                     allVoices.push(voice);
                 }
             }
+
+            // Insert user custom cloned voices at the top
+            for (const custom of customVoiceEntries) {
+                const name = `vbee:${custom.code}`;
+                const existingIdx = allVoices.findIndex(v => v.name === name);
+                const modelItem: AvailableModel = {
+                    name,
+                    displayName: `Vbee - ${custom.displayName || custom.code} ⭐ (Cá nhân)`,
+                    description: 'Giọng nhân bản cá nhân Vbee Studio',
+                    supportedTasks: ['TTS', 'TTS_VOICE'],
+                };
+                if (existingIdx >= 0) {
+                    allVoices.splice(existingIdx, 1);
+                }
+                allVoices.unshift(modelItem);
+            }
+
             return allVoices;
         } catch (error: any) {
             this.logger.error(`Failed to discover Vbee voices: ${error.message}`);
-            return knownVoices; // Return known voices even on error
-        }
-    }
-
-    /**
-     * Resolve ViTTS credentials: user personal key first, then admin system_config.
-     * Returns null if neither is available.
-     */
-    private async resolveViTTSCredentials(
-        userId: string,
-    ): Promise<{ apiKey: string; baseUrl: string; isSystem: boolean } | null> {
-        // Admin-configured baseUrl is the shared default for this deployment.
-        // It is the fallback when a user's personal key omits its own baseUrl,
-        // so we never hardcode an IP that may change between dev and production.
-        const baseUrlCfg = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.baseUrl' } });
-        const adminBaseUrl = baseUrlCfg?.value || DEFAULT_VITTS_BASE_URL;
-
-        const userJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
-        if (userJson) {
-            let apiKey = '';
-            let baseUrl = adminBaseUrl;
-            try {
-                const parsed = JSON.parse(userJson);
-                if (typeof parsed === 'object' && parsed !== null) {
-                    apiKey = parsed.apiKey || '';
-                    baseUrl = parsed.baseUrl || adminBaseUrl;
-                } else {
-                    apiKey = String(parsed);
+            
+            // Still include custom cloned voices even if network error
+            const fallbackVoices = [...knownVoices];
+            for (const custom of customVoiceEntries) {
+                const name = `vbee:${custom.code}`;
+                const existingIdx = fallbackVoices.findIndex(v => v.name === name);
+                const modelItem: AvailableModel = {
+                    name,
+                    displayName: `Vbee - ${custom.displayName || custom.code} ⭐ (Cá nhân)`,
+                    description: 'Giọng nhân bản cá nhân Vbee Studio',
+                    supportedTasks: ['TTS', 'TTS_VOICE'],
+                };
+                if (existingIdx >= 0) {
+                    fallbackVoices.splice(existingIdx, 1);
                 }
-            } catch {
-                apiKey = userJson;
+                fallbackVoices.unshift(modelItem);
             }
-            if (apiKey) return { apiKey, baseUrl, isSystem: false };
+            return fallbackVoices; // Return voices even on error
         }
-
-        // Fallback: admin system VITTS config
-        const enabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
-        const apiKeyCfg = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.apiKey' } });
-        if (enabled?.value === 'true' && apiKeyCfg?.value) {
-            return {
-                apiKey: apiKeyCfg.value,
-                baseUrl: adminBaseUrl,
-                isSystem: true,
-            };
-        }
-        return null;
     }
 
     /**
-     * Discover ViTTS voices - fetches saved refs and trained voices from API
-     * Priority order: 1) Saved references (default), 2) Trained voices, 3) System voices
+     * Resolve all active ViTTS servers (admin + personal)
+     */
+    async resolveAllViTTSServers(userId: string): Promise<Array<{
+        id: string;
+        name: string;
+        baseUrl: string;
+        apiKey: string;
+        isPersonal: boolean;
+        defaultVoice?: string;
+        designInstruct?: string;
+    }>> {
+        const result: Array<{
+            id: string;
+            name: string;
+            baseUrl: string;
+            apiKey: string;
+            isPersonal: boolean;
+            defaultVoice?: string;
+            designInstruct?: string;
+        }> = [];
+
+        // 1. Check user personal ViTTS keys from ApiKeys table
+        try {
+            const userKeys = await this.prisma.apiKey.findMany({
+                where: { userId, service: 'VITTS' as any },
+                orderBy: { createdAt: 'asc' },
+            });
+
+            for (const uk of userKeys) {
+                let baseUrl = DEFAULT_VITTS_BASE_URL;
+                let apiKey = '';
+                try {
+                    const decrypted = uk.keyEncrypted ? await this.crypto.decrypt(uk.keyEncrypted) : '{}';
+                    const parsed = JSON.parse(decrypted);
+                    if (typeof parsed === 'object' && parsed !== null) {
+                        apiKey = parsed.apiKey || '';
+                        baseUrl = parsed.baseUrl || DEFAULT_VITTS_BASE_URL;
+                    } else {
+                        apiKey = String(parsed);
+                    }
+                } catch {
+                    apiKey = uk.keyEncrypted ? await this.crypto.decrypt(uk.keyEncrypted) : '';
+                }
+
+                if (apiKey) {
+                    result.push({
+                        id: `personal-${uk.id}`,
+                        name: uk.name || 'ViTTS Cá nhân',
+                        baseUrl: baseUrl.replace(/\/+$/, ''),
+                        apiKey,
+                        isPersonal: true,
+                    });
+                }
+            }
+        } catch (err: any) {
+            this.logger.warn(`Failed to load personal ViTTS keys: ${err.message}`);
+        }
+
+        // 2. Check Admin System ViTTS servers
+        if (this.systemConfigService) {
+            try {
+                const adminServers = await this.systemConfigService.getViTTSServers();
+                for (const s of adminServers) {
+                    if (s.enabled && s.baseUrl) {
+                        result.push({
+                            id: s.id,
+                            name: s.name,
+                            baseUrl: s.baseUrl.replace(/\/+$/, ''),
+                            apiKey: s.apiKey,
+                            isPersonal: false,
+                            defaultVoice: s.defaultVoice,
+                            designInstruct: s.designInstruct,
+                        });
+                    }
+                }
+            } catch (err: any) {
+                this.logger.warn(`Failed to load admin ViTTS servers: ${err.message}`);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Discover ViTTS voices across all active servers
      */
     async discoverViTTSVoices(userId: string): Promise<AvailableModel[]> {
-        // System voices are always available as fallback
-        const systemVoices: AvailableModel[] = [
-            {
-                name: 'vitts:male',
-                displayName: 'ViTTS - Nam (Hệ thống)',
-                description: 'Giọng nam hệ thống - ViTTS Local',
-                supportedTasks: ['TTS', 'TTS_VOICE'],
-            },
-            {
-                name: 'vitts:female',
-                displayName: 'ViTTS - Nữ (Hệ thống)',
-                description: 'Giọng nữ hệ thống - ViTTS Local',
-                supportedTasks: ['TTS', 'TTS_VOICE'],
-            },
-        ];
+        const servers = await this.resolveAllViTTSServers(userId);
 
-        // Try to get user's ViTTS credentials
-        const creds = await this.resolveViTTSCredentials(userId);
-
-        if (!creds) {
-            this.logger.log('No ViTTS credentials (user or admin) configured, returning system voices only');
-            return systemVoices;
+        if (servers.length === 0) {
+            return [
+                {
+                    name: 'vitts:male',
+                    displayName: 'ViTTS - Nam (Hệ thống)',
+                    description: 'Giọng nam hệ thống - ViTTS Local',
+                    supportedTasks: ['TTS', 'TTS_VOICE'],
+                },
+                {
+                    name: 'vitts:female',
+                    displayName: 'ViTTS - Nữ (Hệ thống)',
+                    description: 'Giọng nữ hệ thống - ViTTS Local',
+                    supportedTasks: ['TTS', 'TTS_VOICE'],
+                },
+            ];
         }
 
-        try {
-            const apiKey = creds.apiKey;
-            const baseUrl = creds.baseUrl;
-            this.logger.log(`[ViTTS debug] resolved: baseUrl=${baseUrl}, isSystem=${creds.isSystem}, apiKey length=${apiKey?.length}`);
+        const allVoices: AvailableModel[] = [];
 
-            const savedRefs: AvailableModel[] = [];
-            const trainedVoices: AvailableModel[] = [];
+        for (const server of servers) {
+            const authHeaders: Record<string, string> = {};
+            if (server.apiKey) {
+                authHeaders['X-API-Key'] = server.apiKey;
+                authHeaders['Authorization'] = `Bearer ${server.apiKey}`;
+            }
+
+            const serverSource = `ViTTS - ${server.name}`;
 
             // 1. Fetch saved references (top priority)
             try {
-                this.logger.log(`[ViTTS debug] fetching refs from ${baseUrl}/api/v1/refs`);
-                const refsResponse = await fetch(`${baseUrl}/api/v1/refs`, {
-                    headers: { 'X-API-Key': apiKey },
-                    signal: AbortSignal.timeout(15000),
+                const refsResponse = await fetch(`${server.baseUrl}/api/v1/refs`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(10000),
                 });
-                this.logger.log(`[ViTTS debug] refs response: ${refsResponse.status} ${refsResponse.statusText}`);
                 if (refsResponse.ok) {
                     const refsData = await refsResponse.json();
-                    // API returns array directly, not {refs: [...]}
                     const refsArray = Array.isArray(refsData) ? refsData : (refsData.refs || []);
                     for (const ref of refsArray) {
-                        savedRefs.push({
-                            name: `vitts:ref:${ref.id}`,
-                            displayName: `ViTTS - ${ref.name || ref.id} 🎤`,
-                            description: 'Giọng tham chiếu đã lưu - ViTTS',
+                        allVoices.push({
+                            name: `vitts:${server.id}:ref:${ref.id}`,
+                            displayName: `ViTTS - ${ref.name || ref.id} 🎤 (${server.name})`,
+                            description: `Giọng tham chiếu đã lưu - ${server.name}`,
                             supportedTasks: ['TTS', 'TTS_VOICE'],
+                            source: serverSource,
                         });
                     }
-                    this.logger.log(`ViTTS refs response: ${refsArray.length} items`);
-                } else {
-                    const errBody = await refsResponse.text().catch(() => '');
-                    this.logger.warn(`ViTTS refs API returned ${refsResponse.status}: ${errBody.substring(0, 200)}`);
                 }
             } catch (refError: any) {
-                this.logger.warn(`Failed to fetch ViTTS saved refs: ${refError.message}`);
+                this.logger.warn(`Failed to fetch ViTTS saved refs for ${server.name}: ${refError.message}`);
             }
 
-            // 2. Fetch trained voices (second priority)
+            // 2. Fetch trained voices
             try {
-                const voicesResponse = await fetch(`${baseUrl}/api/v1/tts/trained-voices`, {
-                    headers: { 'x-api-key': apiKey },
+                const voicesResponse = await fetch(`${server.baseUrl}/api/v1/tts/trained-voices`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(10000),
                 });
                 if (voicesResponse.ok) {
                     const voicesData = await voicesResponse.json();
-                    // API returns array directly, not {voices: [...]}
                     const voicesArray = Array.isArray(voicesData) ? voicesData : (voicesData.voices || []);
                     for (const voice of voicesArray) {
-                        trainedVoices.push({
-                            name: `vitts:trained_${voice.id}`,
-                            displayName: `ViTTS - ${voice.name || voice.id} 🎓`,
-                            description: 'Giọng đã train - ViTTS',
+                        allVoices.push({
+                            name: `vitts:${server.id}:trained_${voice.id}`,
+                            displayName: `ViTTS - ${voice.name || voice.id} 🎓 (${server.name})`,
+                            description: `Giọng đã train - ${server.name}`,
                             supportedTasks: ['TTS', 'TTS_VOICE'],
+                            source: serverSource,
                         });
                     }
-                    this.logger.log(`ViTTS trained voices response: ${voicesArray.length} items`);
-                } else {
-                    this.logger.warn(`ViTTS trained voices API returned ${voicesResponse.status}`);
                 }
             } catch (voiceError: any) {
-                this.logger.warn(`Failed to fetch ViTTS trained voices: ${voiceError.message}`);
+                this.logger.warn(`Failed to fetch ViTTS trained voices for ${server.name}: ${voiceError.message}`);
             }
 
-            // Return in priority order: refs -> trained -> system
-            const allVoices = [...savedRefs, ...trainedVoices, ...systemVoices];
-            this.logger.log(`Discovered ${savedRefs.length} refs, ${trainedVoices.length} trained, ${systemVoices.length} system ViTTS voices`);
-            return allVoices;
-        } catch (error: any) {
-            this.logger.error(`Failed to parse ViTTS credentials: ${error.message}`);
-            return systemVoices;
+            // 3. Fetch VieNeu Presets (/api/v1/tts/presets)
+            try {
+                const presetsRes = await fetch(`${server.baseUrl}/api/v1/tts/presets`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(10000),
+                });
+                if (presetsRes.ok) {
+                    const presetsList = await presetsRes.json();
+                    if (Array.isArray(presetsList)) {
+                        const regionOrder: Record<string, number> = { 'Bắc': 1, 'bac': 1, 'Trung': 2, 'trung': 2, 'Nam': 3, 'nam': 3 };
+                        const genderOrder: Record<string, number> = { 'Nam': 1, 'nam': 1, 'male': 1, 'Nữ': 2, 'nu': 2, 'female': 2 };
+                        const sortedPresets = [...presetsList].sort((a: any, b: any) => {
+                            const rA = regionOrder[a.region || ''] || 99;
+                            const rB = regionOrder[b.region || ''] || 99;
+                            if (rA !== rB) return rA - rB;
+                            const gA = genderOrder[a.gender || ''] || 99;
+                            const gB = genderOrder[b.gender || ''] || 99;
+                            if (gA !== gB) return gA - gB;
+                            return (a.name || '').localeCompare(b.name || '', 'vi');
+                        });
+                        for (const p of sortedPresets) {
+                            allVoices.push({
+                                name: `vitts:${server.id}:vieneu:${p.id || p.name}`,
+                                displayName: `ViTTS - [Miền ${p.region || 'Bắc'}] ${p.gender || 'Nam'} - ${p.name}`,
+                                description: p.description || `Giọng ${p.gender || 'Nam'} miền ${p.region || 'Bắc'} - VieNeu-TTS 48kHz (${server.name})`,
+                                supportedTasks: ['TTS', 'TTS_VOICE'],
+                                source: serverSource,
+                            });
+                        }
+                    }
+                }
+            } catch (pErr: any) {
+                this.logger.debug(`No VieNeu presets for ${server.name}: ${pErr.message}`);
+            }
+
+            // 4. Fetch standard voices from ViTTS server (/api/v1/tts/voices)
+            try {
+                const serverVoicesRes = await fetch(`${server.baseUrl}/api/v1/tts/voices`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(10000),
+                });
+                if (serverVoicesRes.ok) {
+                    const voicesList = await serverVoicesRes.json();
+                    const rawList = Array.isArray(voicesList) ? voicesList : (voicesList.voices || []);
+                    for (const item of rawList) {
+                        const voiceId = item.id || item.voice_id || item.name;
+                        const displayName = item.name || item.id;
+                        allVoices.push({
+                            name: `vitts:${server.id}:${voiceId}`,
+                            displayName: `ViTTS - ${displayName} (${server.name})`,
+                            description: item.description || `Giọng ${item.language || 'Tiếng Việt'} - ${server.name}`,
+                            supportedTasks: ['TTS', 'TTS_VOICE'],
+                            source: serverSource,
+                        });
+                    }
+                }
+            } catch (srvErr: any) {
+                this.logger.warn(`Failed to fetch ViTTS dynamic server voices for ${server.name}: ${srvErr.message}`);
+            }
         }
+
+        return allVoices;
     }
 
     /**
@@ -803,12 +1018,23 @@ export class ModelConfigService {
             this.logger.warn(`Vbee voice discovery failed: ${error.message}`);
         }
 
-        // Add ViTTS voices (refs -> trained -> system, in priority order)
+        // Add ViTTS multi-server models and voices
         try {
+            const servers = await this.resolveAllViTTSServers(userId);
+            if (servers.length > 0) {
+                models.VITTS = servers.map((server) => ({
+                    name: `vitts:${server.id}:auto`,
+                    displayName: server.name,
+                    description: `Máy chủ ViTTS - ${server.name}`,
+                    supportedTasks: ['TTS'],
+                    source: server.name,
+                }));
+            }
+
             const vittsVoices = await this.discoverViTTSVoices(userId);
             if (vittsVoices.length > 0) {
                 models.GEMINI = [...models.GEMINI, ...vittsVoices];
-                this.logger.log(`Added ${vittsVoices.length} ViTTS voices to available models`);
+                this.logger.log(`Added ${vittsVoices.length} ViTTS voices across ${servers.length} servers`);
             }
         } catch (error: any) {
             this.logger.warn(`ViTTS voice discovery failed: ${error.message}`);
@@ -1151,35 +1377,143 @@ export class ModelConfigService {
 
     /**
      * Discover ViTTS options from the server's /api/v1/tts/options endpoint.
-     * Returns modes, voice library, design attributes, and defaults.
+     * Returns modes, voice library, design attributes, and defaults for a specific server or default.
      */
-    async discoverViTTSOptions(userId: string): Promise<any> {
-        const creds = await this.resolveViTTSCredentials(userId);
+    async discoverViTTSOptions(userId: string, serverId?: string): Promise<any> {
+        const servers = await this.resolveAllViTTSServers(userId);
 
-        if (!creds) {
+        if (servers.length === 0) {
             return { error: 'No ViTTS credentials configured' };
         }
 
+        const server = serverId
+            ? (servers.find(s => s.id === serverId || s.name === serverId) || servers[0])
+            : servers[0];
+
         try {
-            const apiKey = creds.apiKey;
-            const baseUrl = creds.baseUrl;
+            const apiKey = server.apiKey;
+            const baseUrl = server.baseUrl;
 
-            const response = await fetch(`${baseUrl}/api/v1/tts/options`, {
-                headers: { 'X-API-Key': apiKey },
-            });
-
-            if (!response.ok) {
-                this.logger.warn(`ViTTS options API returned ${response.status}`);
-                return { error: `ViTTS options API returned ${response.status}` };
+            const authHeaders: Record<string, string> = {};
+            if (apiKey) {
+                authHeaders['X-API-Key'] = apiKey;
+                authHeaders['Authorization'] = `Bearer ${apiKey}`;
             }
 
-            const data = await response.json();
-            this.logger.log(`ViTTS options: ${data.modes?.length || 0} modes, ${data.voice_library?.length || 0} voices (isSystem=${creds.isSystem})`);
-            // Voice clone references belong to a personal ViTTS account. Tell the
-            // frontend whether these creds are personal so it can gate clone mode.
-            return { ...data, isPersonal: !creds.isSystem };
+            let optionsData: any = {};
+            let availableEngines: string[] = ['omnivoice'];
+
+            // 1. Check /api/v1/tts/models for available engines
+            try {
+                const modelsRes = await fetch(`${baseUrl}/api/v1/tts/models`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(6000),
+                });
+                if (modelsRes.ok) {
+                    const mData = await modelsRes.json();
+                    if (mData.current_engines && Array.isArray(mData.current_engines)) {
+                        availableEngines = mData.current_engines;
+                    } else if (mData.available_models && Array.isArray(mData.available_models)) {
+                        availableEngines = Array.from(new Set(mData.available_models.map((m: any) => m.engine || m.id)));
+                    } else if (mData.engine) {
+                        availableEngines = [mData.engine];
+                    }
+                }
+            } catch {}
+
+            // 2. Fetch /api/v1/tts/options
+            try {
+                const response = await fetch(`${baseUrl}/api/v1/tts/options`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(8000),
+                });
+                if (response.ok) {
+                    optionsData = await response.json();
+                    if (optionsData.engines && typeof optionsData.engines === 'object') {
+                        availableEngines = Object.keys(optionsData.engines);
+                    }
+                }
+            } catch {}
+
+            // 3. Fetch voice library (refs)
+            let voiceLibrary: any[] = [];
+            try {
+                const refsRes = await fetch(`${baseUrl}/api/v1/refs`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(6000),
+                });
+                if (refsRes.ok) {
+                    const rawRefs = await refsRes.json();
+                    const refsList = Array.isArray(rawRefs) ? rawRefs : (rawRefs.refs || []);
+                    voiceLibrary = refsList.map((v: any) => ({
+                        ref_id: v.id || v.ref_id || v.name,
+                        name: v.name || v.id,
+                        gender: (v.name || '').toLowerCase().includes('female') || (v.name || '').toLowerCase().includes('nữ') ? 'female' : 'male',
+                        language: v.language || 'vi',
+                        duration_sec: v.duration_sec || null,
+                    }));
+                }
+            } catch {}
+
+            // 4. Fetch VieNeu Presets if engine contains vieneu
+            let vieneuPresets: any[] = [];
+            if (availableEngines.includes('vieneu')) {
+                if (optionsData.engines?.vieneu?.presets) {
+                    vieneuPresets = optionsData.engines.vieneu.presets;
+                } else {
+                    try {
+                        const presetsRes = await fetch(`${baseUrl}/api/v1/tts/presets`, {
+                            headers: authHeaders,
+                            signal: AbortSignal.timeout(6000),
+                        });
+                        if (presetsRes.ok) {
+                            vieneuPresets = await presetsRes.json();
+                        }
+                    } catch {}
+                }
+
+                // Sort presets by [Miền Bắc]-nam, nữ, [Miền Trung], [Miền Nam]
+                const regionOrder: Record<string, number> = { 'Bắc': 1, 'bac': 1, 'Trung': 2, 'trung': 2, 'Nam': 3, 'nam': 3 };
+                const genderOrder: Record<string, number> = { 'Nam': 1, 'nam': 1, 'male': 1, 'Nữ': 2, 'nu': 2, 'female': 2 };
+                vieneuPresets.sort((a: any, b: any) => {
+                    const rA = regionOrder[a.region || ''] || 99;
+                    const rB = regionOrder[b.region || ''] || 99;
+                    if (rA !== rB) return rA - rB;
+                    const gA = genderOrder[a.gender || ''] || 99;
+                    const gB = genderOrder[b.gender || ''] || 99;
+                    if (gA !== gB) return gA - gB;
+                    return (a.name || '').localeCompare(b.name || '', 'vi');
+                });
+            }
+
+            // Extract OmniVoice design attributes and modes
+            const omniEngine = optionsData.engines?.omnivoice || optionsData;
+            const designAttributes = omniEngine.design_attributes || optionsData.design_attributes || {
+                gender: ['male', 'female'],
+                age: ['child', 'young', 'middle-aged', 'elderly'],
+                pitch: ['very low', 'low', 'normal', 'high', 'very high'],
+                style: ['normal', 'whisper'],
+                accent: ['', 'american accent', 'british accent', 'australian accent', 'indian accent'],
+            };
+            const modes = omniEngine.modes || optionsData.modes || [
+                { id: 'auto', name: 'Auto Voice', description: 'Model tự chọn giọng phù hợp' },
+                { id: 'clone', name: 'Voice Cloning', description: 'Clone giọng từ Voice Library' },
+                { id: 'design', name: 'Voice Design', description: 'Thiết kế giọng theo thuộc tính' },
+            ];
+
+            return {
+                ...optionsData,
+                available_engines: availableEngines,
+                vieneu_presets: vieneuPresets,
+                voice_library: voiceLibrary,
+                design_attributes: designAttributes,
+                modes,
+                isPersonal: server.isPersonal,
+                serverId: server.id,
+                serverName: server.name,
+            };
         } catch (error: any) {
-            this.logger.error(`Failed to discover ViTTS options: ${error.message}`);
+            this.logger.error(`Failed to discover ViTTS options for ${server.name}: ${error.message}`);
             return { error: error.message };
         }
     }

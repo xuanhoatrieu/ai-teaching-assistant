@@ -47,6 +47,12 @@ __pycache__/
 backend/uploads/
 backend/datauser/
 
+# Python venv
+venv/
+.venv/
+*/venv/
+*/.venv/
+
 # Startup script runtime data
 .pids/
 .logs/

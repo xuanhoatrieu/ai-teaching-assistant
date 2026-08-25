@@ -8,7 +8,7 @@ import { VideoPreview } from '../components/VideoPreview';
 import { VideoHistory } from '../components/VideoHistory';
 import './VideoGeneratorPage.css';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+const WS_URL = import.meta.env.VITE_WS_URL || `${window.location.protocol}//${window.location.hostname}:3003`;
 
 export const VideoGeneratorPage: React.FC = () => {
   const { lessonId } = useParams<{ lessonId: string }>();

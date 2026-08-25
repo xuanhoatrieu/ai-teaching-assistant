@@ -665,6 +665,7 @@ export function UserSettingsPage() {
         key: string;
         vbeeToken: string;
         vbeeAppId: string;
+        vbeeVoiceCodes: string;
         vittsApiKey: string;
         vittsBaseUrl: string;
         openaiApiKey: string;
@@ -675,8 +676,9 @@ export function UserSettingsPage() {
         key: '',
         vbeeToken: '',
         vbeeAppId: '',
+        vbeeVoiceCodes: '',
         vittsApiKey: '',
-        vittsBaseUrl: 'http://117.0.36.6:8000',
+        vittsBaseUrl: 'http://10.64.11.16:8888',
         openaiApiKey: '',
         openaiBaseUrl: 'https://api.openai.com/v1',
     });
@@ -716,8 +718,9 @@ export function UserSettingsPage() {
                 key: '',
                 vbeeToken: '',
                 vbeeAppId: '',
+                vbeeVoiceCodes: '',
                 vittsApiKey: '',
-                vittsBaseUrl: 'http://117.0.36.6:8000',
+                vittsBaseUrl: 'http://10.64.11.16:8888',
                 openaiApiKey: '',
                 openaiBaseUrl: 'https://api.openai.com/v1',
             });
@@ -729,8 +732,9 @@ export function UserSettingsPage() {
                 key: '',
                 vbeeToken: '',
                 vbeeAppId: '',
+                vbeeVoiceCodes: '',
                 vittsApiKey: '',
-                vittsBaseUrl: 'http://117.0.36.6:8000',
+                vittsBaseUrl: 'http://10.64.11.16:8888',
                 openaiApiKey: '',
                 openaiBaseUrl: 'https://api.openai.com/v1',
             });
@@ -769,6 +773,17 @@ export function UserSettingsPage() {
                 setIsTesting(false);
                 return;
             }
+        } else if (formData.service === 'VBEE') {
+            if (!formData.vbeeToken || !formData.vbeeAppId) {
+                setTestResult({ success: false, message: 'Vui lòng nhập Vbee Token và App ID trước khi test.' });
+                setIsTesting(false);
+                return;
+            }
+            keyToSubmit = JSON.stringify({
+                token: formData.vbeeToken,
+                appId: formData.vbeeAppId,
+                voiceCodes: formData.vbeeVoiceCodes || ''
+            });
         }
         
         try {
@@ -795,7 +810,7 @@ export function UserSettingsPage() {
         setError('');
         setSuccessMsg('');
 
-        // For Vbee, combine token and appId into JSON
+        // For Vbee, combine token, appId, and voiceCodes into JSON
         let keyToSubmit = formData.key;
         if (formData.service === 'VBEE') {
             if (!formData.vbeeToken || !formData.vbeeAppId) {
@@ -804,7 +819,8 @@ export function UserSettingsPage() {
             }
             keyToSubmit = JSON.stringify({
                 token: formData.vbeeToken,
-                appId: formData.vbeeAppId
+                appId: formData.vbeeAppId,
+                voiceCodes: formData.vbeeVoiceCodes || ''
             });
         } else if (formData.service === 'VITTS') {
             if (!formData.vittsApiKey) {
@@ -813,7 +829,7 @@ export function UserSettingsPage() {
             }
             keyToSubmit = JSON.stringify({
                 apiKey: formData.vittsApiKey,
-                baseUrl: formData.vittsBaseUrl || 'http://117.0.36.6:8000'
+                baseUrl: formData.vittsBaseUrl || 'http://10.64.11.16:8888'
             });
         } else if (formData.service === 'OPENAI') {
             if (!formData.openaiApiKey) {
@@ -1010,6 +1026,31 @@ export function UserSettingsPage() {
                                             placeholder="Nhập App ID từ Vbee"
                                             required={!editingKey}
                                         />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>
+                                            Mã giọng nhân bản Vbee (Tùy chọn)
+                                        </label>
+                                        <textarea
+                                            value={formData.vbeeVoiceCodes}
+                                            onChange={e => setFormData({ ...formData, vbeeVoiceCodes: e.target.value })}
+                                            placeholder={`Nhập mã giọng nhân bản nhanh hoặc chuyên nghiệp từ Vbee Studio (mỗi mã 1 dòng hoặc cách nhau bằng dấu phẩy).&#10;Ví dụ:&#10;n_thainguyen_male_giangbaitrieuhoa_education_vc: Giọng Triệu Hòa&#10;ma_giong_chuyen_nghiep_1: Giọng Thuyết Minh 1`}
+                                            rows={3}
+                                            style={{
+                                                width: '100%',
+                                                padding: '0.625rem',
+                                                borderRadius: '8px',
+                                                border: '1px solid var(--border-color, #e2e8f0)',
+                                                background: 'var(--bg-secondary, #f8fafc)',
+                                                color: 'var(--text-primary, #1e293b)',
+                                                fontFamily: 'inherit',
+                                                fontSize: '0.875rem',
+                                                resize: 'vertical'
+                                            }}
+                                        />
+                                        <small style={{ color: 'var(--text-secondary, #64748b)', display: 'block', marginTop: '0.375rem', lineHeight: '1.4' }}>
+                                            💡 Hỗ trợ định dạng <code>mã_giọng</code> hoặc <code>mã_giọng: Tên hiển thị</code>. Các giọng này sẽ được ưu tiên hiển thị đầu danh sách với biểu tượng ⭐.
+                                        </small>
                                     </div>
                                 </>
                             ) : formData.service === 'VITTS' ? (

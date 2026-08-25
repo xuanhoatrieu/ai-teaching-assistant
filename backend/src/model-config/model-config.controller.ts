@@ -3,6 +3,7 @@ import {
     Get,
     Post,
     Body,
+    Query,
     UseGuards,
     Request,
     HttpException,
@@ -74,18 +75,6 @@ export class ModelConfigController {
     async discoverModels(@Request() req: any) {
         try {
             const models = await this.modelConfigService.getAllAvailableModels(req.user.id);
-            
-            console.log(`[DEBUG DISCOVER] User: ${req.user.email} (ID: ${req.user.id})`);
-            console.log(`[DEBUG DISCOVER] Keys returned:`, Object.keys(models));
-            if (models.SHOPAIKEY) {
-                console.log(`[DEBUG DISCOVER] SHOPAIKEY Models:`, JSON.stringify(models.SHOPAIKEY, null, 2));
-            } else {
-                console.log(`[DEBUG DISCOVER] SHOPAIKEY Models key is missing!`);
-            }
-            const shopaikeyVoices = (models.GEMINI || []).filter(m => m.name.includes('shopaikey'));
-            console.log(`[DEBUG DISCOVER] ShopAIKey voices in GEMINI list count: ${shopaikeyVoices.length}`);
-            console.log(`[DEBUG DISCOVER] ShopAIKey voices details:`, JSON.stringify(shopaikeyVoices, null, 2));
-
             return {
                 models,
                 message: 'Models discovered successfully',
@@ -102,9 +91,9 @@ export class ModelConfigController {
      * Discover ViTTS OmniVoice options (modes, voice library, design attributes)
      */
     @Get('vitts-options')
-    async getViTTSOptions(@Request() req: any) {
+    async getViTTSOptions(@Request() req: any, @Query('serverId') serverId?: string) {
         try {
-            const options = await this.modelConfigService.discoverViTTSOptions(req.user.id);
+            const options = await this.modelConfigService.discoverViTTSOptions(req.user.id, serverId);
             return options;
         } catch (error: any) {
             throw new HttpException(

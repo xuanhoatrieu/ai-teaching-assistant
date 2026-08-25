@@ -41,8 +41,11 @@ export class GenerateAudioDto {
 
     @IsOptional()
     @IsString()
-    @IsIn(['auto', 'clone', 'design', null])
-    vittsMode?: string; // OmniVoice mode: 'auto', 'clone', 'design'
+    vittsEngine?: string; // 'vieneu' or 'omnivoice'
+
+    @IsOptional()
+    @IsString()
+    vittsMode?: string; // 'preset', 'auto', 'clone', 'design'
 
     @IsOptional()
     @IsString()

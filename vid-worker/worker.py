@@ -135,8 +135,11 @@ def main():
                 r.publish(f"{REDIS_DONE_PREFIX}{job_id}", error_payload)
                 r.set(f"{REDIS_DONE_PREFIX}{job_id}", error_payload, ex=86400)
 
-        except json.JSONDecodeError as e:
+        except (json.JSONDecodeError) as e:
             logger.error(f"Invalid job JSON: {e}")
+        except (redis.exceptions.TimeoutError, TimeoutError):
+            # Normal timeout when no jobs are in queue, continue waiting
+            continue
         except Exception as e:
             logger.error(f"Worker loop error: {e}", exc_info=True)
             time.sleep(5)  # Backoff on unexpected errors

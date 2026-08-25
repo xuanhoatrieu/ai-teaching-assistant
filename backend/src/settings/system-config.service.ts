@@ -242,6 +242,63 @@ export class SystemConfigService implements OnModuleInit {
     }
 
     /**
+     * Get all ViTTS servers (multi-server support)
+     */
+    async getViTTSServers(): Promise<Array<{
+        id: string;
+        name: string;
+        baseUrl: string;
+        apiKey: string;
+        enabled: boolean;
+        defaultVoice?: string;
+        designInstruct?: string;
+    }>> {
+        const raw = await this.get('vitts.servers');
+        if (raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed;
+                }
+            } catch {}
+        }
+        // Fallback/Migration: wrap existing single ViTTS config as default server
+        const legacyEnabled = await this.get('vitts.enabled');
+        const legacyBaseUrl = await this.get('vitts.baseUrl');
+        const legacyApiKey = await this.get('vitts.apiKey');
+        const legacyDefaultVoice = await this.get('vitts.defaultVoice');
+        const legacyDesignInstruct = await this.get('vitts.designInstruct');
+
+        if (legacyBaseUrl || legacyApiKey) {
+            return [{
+                id: 'vitts-server-1',
+                name: 'ViTTS Server 1',
+                baseUrl: legacyBaseUrl || 'http://10.64.11.16:8888',
+                apiKey: legacyApiKey || '',
+                enabled: legacyEnabled === 'true',
+                defaultVoice: legacyDefaultVoice || 'vitts:design',
+                designInstruct: legacyDesignInstruct || 'male, middle-aged',
+            }];
+        }
+        return [];
+    }
+
+    /**
+     * Save all ViTTS servers
+     */
+    async saveViTTSServers(servers: Array<{
+        id: string;
+        name: string;
+        baseUrl: string;
+        apiKey: string;
+        enabled: boolean;
+        defaultVoice?: string;
+        designInstruct?: string;
+    }>): Promise<void> {
+        await this.set('vitts.servers', JSON.stringify(servers));
+    }
+
+    /**
      * Auto initialize all defaults on module initialization
      */
     async onModuleInit() {

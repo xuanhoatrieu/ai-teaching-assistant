@@ -7,13 +7,14 @@ import { ModelSelector } from '../ModelSelector';
 import '../ModelSelector.css';
 import './Step4GenerateAudio.css';
 
-// Helper to get full audio URL from backend
-const getFullAudioUrl = (audioUrl: string | null): string => {
+// Helper to get full audio URL from backend with optional cache busting
+const getFullAudioUrl = (audioUrl: string | null, cacheBust = false): string => {
     if (!audioUrl) return '';
-    if (audioUrl.startsWith('http://') || audioUrl.startsWith('https://')) {
-        return audioUrl;
+    let url = audioUrl;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `${API_BASE_URL}${audioUrl}`;
     }
-    return `${API_BASE_URL}${audioUrl}`;
+    return cacheBust ? `${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}` : url;
 };
 
 interface SlideAudio {
@@ -393,7 +394,7 @@ export function Step4GenerateAudio() {
             audioRefs.current[slideIndex] = new Audio();
         }
         const audio = audioRefs.current[slideIndex];
-        audio.src = getFullAudioUrl(audioUrl);
+        audio.src = getFullAudioUrl(audioUrl, true);
         audio.ontimeupdate = () => {
             if (audio.duration > 0) {
                 setPlaybackProgress(prev => ({ ...prev, [slideIndex]: (audio.currentTime / audio.duration) * 100 }));

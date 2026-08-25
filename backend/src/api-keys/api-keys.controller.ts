@@ -149,6 +149,31 @@ export class UserApiKeysController {
             }
         }
 
+        if (dto.service === ('VBEE' as any)) {
+            try {
+                let token = dto.key;
+                try {
+                    const parsed = JSON.parse(dto.key);
+                    token = parsed.token || parsed.apiKey || dto.key;
+                } catch {}
+
+                const response = await fetch('https://vbee.vn/api/v1/voices', {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    signal: AbortSignal.timeout(10000),
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const total = data.result?.voices?.length || 0;
+                    return { success: true, message: `Kết nối thành công! Đã xác thực tài khoản Vbee và kết nối kho giọng (${total} giọng).` };
+                } else {
+                    return { success: false, message: `Lỗi xác thực Vbee: HTTP ${response.status} (Vui lòng kiểm tra lại Token)` };
+                }
+            } catch (err: any) {
+                return { success: false, message: `Lỗi kết nối Vbee: ${err.message}` };
+            }
+        }
+
         return { success: true, message: 'Dịch vụ này hiện chưa hỗ trợ kiểm tra kết nối trực tiếp.' };
     }
 

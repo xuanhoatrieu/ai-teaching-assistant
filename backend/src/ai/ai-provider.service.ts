@@ -61,12 +61,16 @@ export class AiProviderService {
             const providerId = parts[1];
             const realModel = parts.slice(2).join(':');
             this.logger.log(`Routing to Custom OpenAI provider: ${providerId}, model: ${realModel}`);
-            const content = await this.customOpenAI.generateText(providerId, prompt, realModel, { maxTokens: options?.maxTokens, userId });
-            return {
-                content,
-                provider: `custom_openai:${providerId}`,
-                model: realModel,
-            };
+            try {
+                const content = await this.customOpenAI.generateText(providerId, prompt, realModel, { maxTokens: options?.maxTokens, userId });
+                return {
+                    content,
+                    provider: `custom_openai:${providerId}`,
+                    model: realModel,
+                };
+            } catch (err: any) {
+                this.logger.warn(`Custom OpenAI provider ${providerId} (${realModel}) failed: ${err.message}. Falling back to default admin/system provider...`);
+            }
         }
 
         // Normalize model name (strip provider prefix)
@@ -108,7 +112,7 @@ export class AiProviderService {
             }
         }
 
-        // Priority 2: Gemini SDK with user's API key
+        // Priority 2: Gemini SDK with user's API key (or system key)
         const geminiApiKey = userId ? await this.apiKeysService.getActiveKey(userId, 'GEMINI') : undefined;
         if (geminiApiKey) {
             try {
@@ -116,7 +120,7 @@ export class AiProviderService {
                 const genAI = new GoogleGenerativeAI(geminiApiKey);
                 const model = genAI.getGenerativeModel({ model: normalizedModel });
                 const result = await model.generateContent(prompt);
-                const response = result.response;
+                const response = await result.response;
 
                 return {
                     content: response.text(),
@@ -148,18 +152,22 @@ export class AiProviderService {
             const providerId = parts[1];
             const realModel = parts.slice(2).join(':');
             this.logger.log(`Routing with system prompt to Custom OpenAI provider: ${providerId}, model: ${realModel}`);
-            const content = await this.customOpenAI.generateTextWithSystem(
-                providerId,
-                systemPrompt,
-                userPrompt,
-                realModel,
-                { userId }
-            );
-            return {
-                content,
-                provider: `custom_openai:${providerId}`,
-                model: realModel,
-            };
+            try {
+                const content = await this.customOpenAI.generateTextWithSystem(
+                    providerId,
+                    systemPrompt,
+                    userPrompt,
+                    realModel,
+                    { userId }
+                );
+                return {
+                    content,
+                    provider: `custom_openai:${providerId}`,
+                    model: realModel,
+                };
+            } catch (err: any) {
+                this.logger.warn(`Custom OpenAI provider ${providerId} (${realModel}) failed: ${err.message}. Falling back to default admin/system provider...`);
+            }
         }
 
         // Normalize model name (strip provider prefix)
@@ -219,7 +227,11 @@ export class AiProviderService {
             const providerId = parts[1];
             const realModel = parts.slice(2).join(':');
             this.logger.log(`Embedding via Custom OpenAI provider: ${providerId}, model: ${realModel}`);
-            return this.customOpenAI.embed(providerId, texts, realModel, { userId });
+            try {
+                return await this.customOpenAI.embed(providerId, texts, realModel, { userId });
+            } catch (err: any) {
+                this.logger.warn(`Custom OpenAI embedding via ${providerId} (${realModel}) failed: ${err.message}. Falling back to default Gemini embedding...`);
+            }
         }
 
         // Default: Gemini embeddings via @google/generative-ai

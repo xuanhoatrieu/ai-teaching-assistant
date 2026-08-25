@@ -274,66 +274,118 @@ export class TTSService {
                     throw new Error(`Invalid Vbee credentials JSON: ${parseError.message}`);
                 }
             }
-        } else if (dto.provider === 'VITTS') {
-            // Admin-configured baseUrl is the shared deployment default — read it once
-            // and use it as the fallback for both personal and system credentials so
-            // the ViTTS address can change via settings without touching code.
-            const adminVittsBaseUrl = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.baseUrl' } });
-            const configuredBaseUrl = adminVittsBaseUrl?.value || undefined;
+        } else if (dto.provider === 'VITTS' || dto.provider?.startsWith('VITTS_') || dto.provider?.toLowerCase().startsWith('vitts') || dto.voiceId?.startsWith('vitts:')) {
+            // Multi-Server ViTTS resolution
+            let targetServer: { baseUrl: string; apiKey: string; name?: string } | null = null;
 
-            // Priority 1: User's own ViTTS credentials
-            const vittsCredentialsJson = await this.apiKeysService.getActiveKey(userId, 'VITTS' as any);
+            // 1. Load admin servers
+            let adminServers: Array<{ id: string; name: string; baseUrl: string; apiKey: string; enabled: boolean }> = [];
+            try {
+                const rawServers = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.servers' } });
+                if (rawServers?.value) {
+                    adminServers = JSON.parse(rawServers.value);
+                }
+            } catch {}
 
-            if (vittsCredentialsJson) {
-                // Parse user's ViTTS credentials
+            // Legacy fallback if vitts.servers not set
+            if (adminServers.length === 0) {
+                const legacyEnabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
+                const legacyBaseUrl = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.baseUrl' } });
+                const legacyApiKey = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.apiKey' } });
+                if (legacyBaseUrl?.value || legacyApiKey?.value) {
+                    adminServers = [{
+                        id: 'vitts-server-1',
+                        name: 'ViTTS Server 1',
+                        baseUrl: legacyBaseUrl?.value || 'http://10.64.11.16:8888',
+                        apiKey: legacyApiKey?.value || '',
+                        enabled: legacyEnabled?.value === 'true',
+                    }];
+                }
+            }
+
+            // 2. Load user personal keys
+            const userKeys = await this.prisma.apiKey.findMany({
+                where: { userId, service: 'VITTS' as any },
+                orderBy: { createdAt: 'asc' },
+            });
+
+            const personalServers: Array<{ id: string; name: string; baseUrl: string; apiKey: string }> = [];
+            for (const uk of userKeys) {
                 try {
-                    const vittsCredentials = JSON.parse(vittsCredentialsJson);
-                    this.logger.log(`[DEBUG] ViTTS user credentials: apiKey=${vittsCredentials.apiKey?.substring(0, 10)}..., baseUrl=${vittsCredentials.baseUrl || 'NOT SET'}`);
-                    if (!vittsCredentials.apiKey) {
-                        throw new Error('Invalid ViTTS credentials format. Expected: {"apiKey": "xxx", "baseUrl": "yyy"}');
+                    const decrypted = uk.keyEncrypted ? await decrypt(uk.keyEncrypted, ENCRYPTION_KEY) : '';
+                    const parsed = JSON.parse(decrypted);
+                    if (typeof parsed === 'object' && parsed !== null && parsed.apiKey) {
+                        personalServers.push({
+                            id: `personal-${uk.id}`,
+                            name: uk.name || 'ViTTS Cá nhân',
+                            baseUrl: parsed.baseUrl || 'http://10.64.11.16:8888',
+                            apiKey: parsed.apiKey,
+                        });
+                    } else if (decrypted) {
+                        personalServers.push({
+                            id: `personal-${uk.id}`,
+                            name: uk.name || 'ViTTS Cá nhân',
+                            baseUrl: 'http://10.64.11.16:8888',
+                            apiKey: decrypted,
+                        });
                     }
+                } catch {}
+            }
 
-                    // User baseUrl wins; else fall back to admin-configured baseUrl.
-                    const baseUrl = vittsCredentials.baseUrl || configuredBaseUrl;
-                    this.logger.log(`Using ViTTS provider with user credentials, baseUrl: ${baseUrl || 'provider default'}`);
-                    provider = this.ttsFactory.getProvider('VITTS' as any, {
-                        apiKey: vittsCredentials.apiKey,
-                        baseUrl,
-                    });
-                } catch (parseError) {
-                    throw new Error(`Invalid ViTTS credentials JSON: ${parseError.message}`);
+            const allAvailableServers = [...personalServers, ...adminServers.filter(s => s.enabled)];
+
+            // Match server by provider name or voiceId prefix
+            let serverMatchId = '';
+            if (dto.voiceId && dto.voiceId.startsWith('vitts:')) {
+                const parts = dto.voiceId.split(':');
+                if (parts.length >= 3) {
+                    serverMatchId = parts[1];
                 }
+            }
+
+            if (serverMatchId) {
+                targetServer = allAvailableServers.find(s => s.id === serverMatchId || s.id.includes(serverMatchId)) || null;
+            }
+
+            if (!targetServer && dto.provider) {
+                const normProvider = dto.provider.replace(/^VITTS_/, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                targetServer = allAvailableServers.find(s =>
+                    s.id.toLowerCase().replace(/[^a-z0-9]/g, '') === normProvider ||
+                    s.name.toLowerCase().replace(/[^a-z0-9]/g, '') === normProvider
+                ) || null;
+            }
+
+            // Fallback to first active server
+            if (!targetServer && allAvailableServers.length > 0) {
+                targetServer = allAvailableServers[0];
+            }
+
+            if (targetServer && targetServer.apiKey) {
+                this.logger.log(`Using ViTTS server "${targetServer.name || 'Default'}" at ${targetServer.baseUrl}`);
+
+                // Clean voiceId by removing the serverId prefix (e.g. vitts:server-1:vieneu:Adam -> vieneu:Adam)
+                if (dto.voiceId && dto.voiceId.startsWith('vitts:')) {
+                    const parts = dto.voiceId.split(':');
+                    if (parts.length >= 3) {
+                        dto.voiceId = parts.slice(2).join(':');
+                    }
+                }
+
+                provider = this.ttsFactory.getProvider('VITTS' as any, {
+                    apiKey: targetServer.apiKey,
+                    baseUrl: targetServer.baseUrl,
+                });
             } else {
-                // No personal key. A clone/reference voice needs the user's OWN ViTTS key
-                // (the reference audio lives on their personal ViTTS account).
-                const voiceId = dto.voiceId || '';
-                const isCloneOrRef = dto.vittsMode === 'clone' || voiceId.startsWith('vitts:ref:');
-                if (isCloneOrRef) {
-                    throw new Error('Giọng clone/tham chiếu yêu cầu API key ViTTS cá nhân. Vui lòng cấu hình trong Cài đặt, hoặc chọn giọng hệ thống.');
+                // Fallback to Gemini TTS
+                this.logger.warn('ViTTS not configured (no active server found) - falling back to Gemini TTS');
+                const geminiApiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
+                if (!geminiApiKey) {
+                    throw new Error('No TTS provider configured. Please add Gemini API key or ViTTS credentials in Settings.');
                 }
-
-                // Priority 2: Admin/system ViTTS credentials from system_configs (system voices)
-                const adminVittsEnabled = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.enabled' } });
-                const adminVittsApiKey = await this.prisma.systemConfig.findUnique({ where: { key: 'vitts.apiKey' } });
-
-                if (adminVittsEnabled?.value === 'true' && adminVittsApiKey?.value) {
-                    this.logger.log(`Using ViTTS admin credentials (system-level), baseUrl: ${configuredBaseUrl || 'provider default'}`);
-                    provider = this.ttsFactory.getProvider('VITTS' as any, {
-                        apiKey: adminVittsApiKey.value,
-                        baseUrl: configuredBaseUrl,
-                    });
-                } else {
-                    // Priority 3: Fallback to Gemini TTS
-                    this.logger.warn('ViTTS not configured (no user or admin credentials) - falling back to Gemini TTS');
-                    const geminiApiKey = await this.apiKeysService.getActiveKey(userId, 'GEMINI');
-                    if (!geminiApiKey) {
-                        throw new Error('No TTS provider configured. Please add Gemini API key or ViTTS credentials in Settings.');
-                    }
-                    this.logger.log('Using Gemini TTS as fallback (voice: Puck)');
-                    provider = this.ttsFactory.getDefaultProvider(geminiApiKey);
-                    dto.voiceId = 'Puck';
-                    dto.provider = 'GEMINI';
-                }
+                this.logger.log('Using Gemini TTS as fallback (voice: Puck)');
+                provider = this.ttsFactory.getDefaultProvider(geminiApiKey);
+                dto.voiceId = 'Puck';
+                dto.provider = 'GEMINI';
             }
         } else if (dto.provider === 'CLIPROXY') {
             // CLIProxy TTS - uses system CLIProxy config, no user API key needed
@@ -378,6 +430,7 @@ export class TTSService {
             pitch: dto.pitch,
             languageCode: dto.languageCode,
             multilingualMode: dto.multilingualMode,
+            vittsEngine: (dto as any).vittsEngine,
             vittsMode: dto.vittsMode as any,
             vittsDesignInstruct: dto.vittsDesignInstruct,
             vittsNormalize: dto.vittsNormalize,
@@ -410,7 +463,7 @@ export class TTSService {
         const geminiVoices = await geminiProvider.getVoices();
         results.push({ provider: 'Gemini TTS', voices: geminiVoices });
 
-        // Vbee default voices (hardcoded since no user credentials needed for list)
+        // Vbee default voices
         const vbeeVoices: Voice[] = [
             {
                 id: 'n_thainguyen_male_giangbaitrieuhoa_education_vc',
@@ -420,18 +473,46 @@ export class TTSService {
                 description: 'Giọng cá nhân Triệu Hòa - Giảng bài giáo dục',
             },
             {
-                id: 'hn_female_ngochuyen_news_48k-fhg',
-                name: 'Ngọc Huyền (Nữ)',
+                id: 'hn_female_ngochuyen_full_24k-st',
+                name: 'Ngọc Huyền 2.0 (Nữ HN)',
                 gender: 'female',
                 languageCode: 'vi-VN',
-                description: 'Giọng nữ Hà Nội',
+                description: 'Giọng nữ Hà Nội truyền cảm',
             },
             {
-                id: 'hn_male_manhdung_news_48k-fhg',
-                name: 'Mạnh Dũng (Nam)',
+                id: 'hn_male_manhdung_full_24k-st',
+                name: 'Mạnh Dũng 2.0 (Nam HN)',
                 gender: 'male',
                 languageCode: 'vi-VN',
-                description: 'Giọng nam Hà Nội',
+                description: 'Giọng nam Hà Nội mạnh mẽ',
+            },
+            {
+                id: 'hn_male_minhquan_yt_24k-pre',
+                name: 'Minh Quân Pro (Nam HN)',
+                gender: 'male',
+                languageCode: 'vi-VN',
+                description: 'Giọng nam tự nhiên trẻ trung',
+            },
+            {
+                id: 'sg_female_tuongvy_call_44k-fhg',
+                name: 'Tường Vy (Nữ SG)',
+                gender: 'female',
+                languageCode: 'vi-VN',
+                description: 'Giọng nữ Sài Gòn nhẹ nhàng',
+            },
+            {
+                id: 'sg_female_thaotrinh_full_44k-phg',
+                name: 'Thảo Trinh (Nữ SG)',
+                gender: 'female',
+                languageCode: 'vi-VN',
+                description: 'Giọng nữ Sài Gòn truyền cảm',
+            },
+            {
+                id: 'hue_female_huonggiang_full_48k-fhg',
+                name: 'Hương Giang (Nữ Huế)',
+                gender: 'female',
+                languageCode: 'vi-VN',
+                description: 'Giọng nữ Huế ngọt ngào',
             },
         ];
         results.push({ provider: 'Vbee TTS', voices: vbeeVoices });
