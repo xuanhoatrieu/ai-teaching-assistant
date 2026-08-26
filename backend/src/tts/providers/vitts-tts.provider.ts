@@ -160,6 +160,11 @@ export class ViTTSTTSProvider implements ITTSProvider {
                 }
             } else {
                 this.logger.error(`ViTTS error: ${JSON.stringify(errInfo)}`);
+                if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+                    throw new BadRequestException(
+                        `Máy chủ ViTTS xử lý quá thời gian chờ. Khi máy chủ vừa khởi động hoặc chuyển đổi model, GPU cần khoảng 30-45 giây để nạp trọng số (Cold Start). Vui lòng nhấn Tạo Audio lại.`
+                    );
+                }
                 if (['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH'].includes(error.code)) {
                     throw new BadRequestException(
                         `Không kết nối được máy chủ ViTTS (${this.baseUrl}). Máy chủ có thể đang tắt hoặc địa chỉ cấu hình sai. Vui lòng kiểm tra máy chủ ViTTS trong Cài đặt.`
@@ -186,7 +191,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
                 engine: 'vieneu',
                 speed,
             },
-            { headers: this.headers, timeout: 45000 },
+            { headers: this.headers, timeout: 120000 },
         );
         if (resp.data?.audio_url) {
             return this.downloadAudio(resp.data.audio_url);
@@ -199,7 +204,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
         const resp = await axios.post(
             `${this.baseUrl}/api/v1/tts/synthesize-with-ref`,
             { text, ref_id: refId, speed },
-            { headers: this.headers, timeout: 45000 },
+            { headers: this.headers, timeout: 120000 },
         );
         if (resp.data?.audio_url) {
             return this.downloadAudio(resp.data.audio_url);
@@ -215,7 +220,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
         const resp = await axios.post(
             `${this.baseUrl}/api/v1/omnivoice/generate-auto`,
             { text, speed, num_step: numStep, normalize },
-            { headers: this.headers, timeout: 30000 },
+            { headers: this.headers, timeout: 60000 },
         );
         return this.pollJob(resp.data.job_id);
     }
@@ -236,7 +241,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
             formData,
             {
                 headers: this.headers,
-                timeout: 30000,
+                timeout: 60000,
             },
         );
         return this.pollJob(resp.data.job_id);
@@ -246,7 +251,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
         const resp = await axios.post(
             `${this.baseUrl}/api/v1/omnivoice/generate-design`,
             { text, instruct, speed, num_step: numStep, normalize },
-            { headers: this.headers, timeout: 30000 },
+            { headers: this.headers, timeout: 60000 },
         );
         return this.pollJob(resp.data.job_id);
     }

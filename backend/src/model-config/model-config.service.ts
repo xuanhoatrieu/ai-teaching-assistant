@@ -48,6 +48,8 @@ const DEFAULT_MODELS: Record<TaskTypeValue, { provider: string; modelName: strin
 export class ModelConfigService {
     private readonly logger = new Logger(ModelConfigService.name);
     private readonly crypto = new CryptoUtil();
+    private availableModelsCache = new Map<string, { data: Record<string, AvailableModel[]>; expiresAt: number }>();
+    private vittsOptionsCache = new Map<string, { data: any; expiresAt: number }>();
 
     constructor(
         private prisma: PrismaService,
@@ -807,7 +809,7 @@ export class ModelConfigService {
     }
 
     /**
-     * Discover ViTTS voices across all active servers
+     * Discover ViTTS voices across all active servers in parallel
      */
     async discoverViTTSVoices(userId: string): Promise<AvailableModel[]> {
         const servers = await this.resolveAllViTTSServers(userId);
@@ -829,121 +831,106 @@ export class ModelConfigService {
             ];
         }
 
-        const allVoices: AvailableModel[] = [];
-
-        for (const server of servers) {
+        const serverPromises = servers.map(async (server) => {
+            const serverVoices: AvailableModel[] = [];
             const authHeaders: Record<string, string> = {};
             if (server.apiKey) {
                 authHeaders['X-API-Key'] = server.apiKey;
                 authHeaders['Authorization'] = `Bearer ${server.apiKey}`;
             }
-
             const serverSource = `ViTTS - ${server.name}`;
 
-            // 1. Fetch saved references (top priority)
-            try {
-                const refsResponse = await fetch(`${server.baseUrl}/api/v1/refs`, {
-                    headers: authHeaders,
-                    signal: AbortSignal.timeout(10000),
-                });
-                if (refsResponse.ok) {
-                    const refsData = await refsResponse.json();
-                    const refsArray = Array.isArray(refsData) ? refsData : (refsData.refs || []);
-                    for (const ref of refsArray) {
-                        allVoices.push({
-                            name: `vitts:${server.id}:ref:${ref.id}`,
-                            displayName: `ViTTS - ${ref.name || ref.id} 🎤 (${server.name})`,
-                            description: `Giọng tham chiếu đã lưu - ${server.name}`,
-                            supportedTasks: ['TTS', 'TTS_VOICE'],
-                            source: serverSource,
-                        });
-                    }
+            // Fetch refs, trained voices, presets, and standard voices in parallel with fast 2.5s timeout
+            const results = await Promise.allSettled([
+                fetch(`${server.baseUrl}/api/v1/refs`, { headers: authHeaders, signal: AbortSignal.timeout(2500) })
+                    .then(res => res.ok ? res.json() : null),
+                fetch(`${server.baseUrl}/api/v1/tts/trained-voices`, { headers: authHeaders, signal: AbortSignal.timeout(2500) })
+                    .then(res => res.ok ? res.json() : null),
+                fetch(`${server.baseUrl}/api/v1/tts/presets`, { headers: authHeaders, signal: AbortSignal.timeout(2500) })
+                    .then(res => res.ok ? res.json() : null),
+                fetch(`${server.baseUrl}/api/v1/tts/voices`, { headers: authHeaders, signal: AbortSignal.timeout(2500) })
+                    .then(res => res.ok ? res.json() : null),
+            ]);
+
+            // 1. Saved refs
+            if (results[0].status === 'fulfilled' && results[0].value) {
+                const refsData = results[0].value;
+                const refsArray = Array.isArray(refsData) ? refsData : (refsData.refs || []);
+                for (const ref of refsArray) {
+                    serverVoices.push({
+                        name: `vitts:${server.id}:ref:${ref.id}`,
+                        displayName: `ViTTS - ${ref.name || ref.id} 🎤 (${server.name})`,
+                        description: `Giọng tham chiếu đã lưu - ${server.name}`,
+                        supportedTasks: ['TTS', 'TTS_VOICE'],
+                        source: serverSource,
+                    });
                 }
-            } catch (refError: any) {
-                this.logger.warn(`Failed to fetch ViTTS saved refs for ${server.name}: ${refError.message}`);
             }
 
-            // 2. Fetch trained voices
-            try {
-                const voicesResponse = await fetch(`${server.baseUrl}/api/v1/tts/trained-voices`, {
-                    headers: authHeaders,
-                    signal: AbortSignal.timeout(10000),
-                });
-                if (voicesResponse.ok) {
-                    const voicesData = await voicesResponse.json();
-                    const voicesArray = Array.isArray(voicesData) ? voicesData : (voicesData.voices || []);
-                    for (const voice of voicesArray) {
-                        allVoices.push({
-                            name: `vitts:${server.id}:trained_${voice.id}`,
-                            displayName: `ViTTS - ${voice.name || voice.id} 🎓 (${server.name})`,
-                            description: `Giọng đã train - ${server.name}`,
-                            supportedTasks: ['TTS', 'TTS_VOICE'],
-                            source: serverSource,
-                        });
-                    }
+            // 2. Trained voices
+            if (results[1].status === 'fulfilled' && results[1].value) {
+                const voicesData = results[1].value;
+                const voicesArray = Array.isArray(voicesData) ? voicesData : (voicesData.voices || []);
+                for (const voice of voicesArray) {
+                    serverVoices.push({
+                        name: `vitts:${server.id}:trained_${voice.id}`,
+                        displayName: `ViTTS - ${voice.name || voice.id} 🎓 (${server.name})`,
+                        description: `Giọng đã train - ${server.name}`,
+                        supportedTasks: ['TTS', 'TTS_VOICE'],
+                        source: serverSource,
+                    });
                 }
-            } catch (voiceError: any) {
-                this.logger.warn(`Failed to fetch ViTTS trained voices for ${server.name}: ${voiceError.message}`);
             }
 
-            // 3. Fetch VieNeu Presets (/api/v1/tts/presets)
-            try {
-                const presetsRes = await fetch(`${server.baseUrl}/api/v1/tts/presets`, {
-                    headers: authHeaders,
-                    signal: AbortSignal.timeout(10000),
+            // 3. VieNeu Presets
+            if (results[2].status === 'fulfilled' && results[2].value && Array.isArray(results[2].value)) {
+                const regionOrder: Record<string, number> = { 'Bắc': 1, 'bac': 1, 'Trung': 2, 'trung': 2, 'Nam': 3, 'nam': 3 };
+                const genderOrder: Record<string, number> = { 'Nam': 1, 'nam': 1, 'male': 1, 'Nữ': 2, 'nu': 2, 'female': 2 };
+                const sortedPresets = [...results[2].value].sort((a: any, b: any) => {
+                    const rA = regionOrder[a.region || ''] || 99;
+                    const rB = regionOrder[b.region || ''] || 99;
+                    if (rA !== rB) return rA - rB;
+                    const gA = genderOrder[a.gender || ''] || 99;
+                    const gB = genderOrder[b.gender || ''] || 99;
+                    if (gA !== gB) return gA - gB;
+                    return (a.name || '').localeCompare(b.name || '', 'vi');
                 });
-                if (presetsRes.ok) {
-                    const presetsList = await presetsRes.json();
-                    if (Array.isArray(presetsList)) {
-                        const regionOrder: Record<string, number> = { 'Bắc': 1, 'bac': 1, 'Trung': 2, 'trung': 2, 'Nam': 3, 'nam': 3 };
-                        const genderOrder: Record<string, number> = { 'Nam': 1, 'nam': 1, 'male': 1, 'Nữ': 2, 'nu': 2, 'female': 2 };
-                        const sortedPresets = [...presetsList].sort((a: any, b: any) => {
-                            const rA = regionOrder[a.region || ''] || 99;
-                            const rB = regionOrder[b.region || ''] || 99;
-                            if (rA !== rB) return rA - rB;
-                            const gA = genderOrder[a.gender || ''] || 99;
-                            const gB = genderOrder[b.gender || ''] || 99;
-                            if (gA !== gB) return gA - gB;
-                            return (a.name || '').localeCompare(b.name || '', 'vi');
-                        });
-                        for (const p of sortedPresets) {
-                            allVoices.push({
-                                name: `vitts:${server.id}:vieneu:${p.id || p.name}`,
-                                displayName: `ViTTS - [Miền ${p.region || 'Bắc'}] ${p.gender || 'Nam'} - ${p.name}`,
-                                description: p.description || `Giọng ${p.gender || 'Nam'} miền ${p.region || 'Bắc'} - VieNeu-TTS 48kHz (${server.name})`,
-                                supportedTasks: ['TTS', 'TTS_VOICE'],
-                                source: serverSource,
-                            });
-                        }
-                    }
+                for (const p of sortedPresets) {
+                    serverVoices.push({
+                        name: `vitts:${server.id}:vieneu:${p.id || p.name}`,
+                        displayName: `ViTTS - [Miền ${p.region || 'Bắc'}] ${p.gender || 'Nam'} - ${p.name}`,
+                        description: p.description || `Giọng ${p.gender || 'Nam'} miền ${p.region || 'Bắc'} - VieNeu-TTS 48kHz (${server.name})`,
+                        supportedTasks: ['TTS', 'TTS_VOICE'],
+                        source: serverSource,
+                    });
                 }
-            } catch (pErr: any) {
-                this.logger.debug(`No VieNeu presets for ${server.name}: ${pErr.message}`);
             }
 
-            // 4. Fetch standard voices from ViTTS server (/api/v1/tts/voices)
-            try {
-                const serverVoicesRes = await fetch(`${server.baseUrl}/api/v1/tts/voices`, {
-                    headers: authHeaders,
-                    signal: AbortSignal.timeout(10000),
-                });
-                if (serverVoicesRes.ok) {
-                    const voicesList = await serverVoicesRes.json();
-                    const rawList = Array.isArray(voicesList) ? voicesList : (voicesList.voices || []);
-                    for (const item of rawList) {
-                        const voiceId = item.id || item.voice_id || item.name;
-                        const displayName = item.name || item.id;
-                        allVoices.push({
-                            name: `vitts:${server.id}:${voiceId}`,
-                            displayName: `ViTTS - ${displayName} (${server.name})`,
-                            description: item.description || `Giọng ${item.language || 'Tiếng Việt'} - ${server.name}`,
-                            supportedTasks: ['TTS', 'TTS_VOICE'],
-                            source: serverSource,
-                        });
-                    }
+            // 4. Standard voices
+            if (results[3].status === 'fulfilled' && results[3].value) {
+                const voicesList = results[3].value;
+                const rawList = Array.isArray(voicesList) ? voicesList : (voicesList.voices || []);
+                for (const item of rawList) {
+                    const voiceId = item.id || item.voice_id || item.name;
+                    const displayName = item.name || item.id;
+                    serverVoices.push({
+                        name: `vitts:${server.id}:${voiceId}`,
+                        displayName: `ViTTS - ${displayName} (${server.name})`,
+                        description: item.description || `Giọng ${item.language || 'Tiếng Việt'} - ${server.name}`,
+                        supportedTasks: ['TTS', 'TTS_VOICE'],
+                        source: serverSource,
+                    });
                 }
-            } catch (srvErr: any) {
-                this.logger.warn(`Failed to fetch ViTTS dynamic server voices for ${server.name}: ${srvErr.message}`);
+            }
+
+            return serverVoices;
+        });
+
+        const settledServers = await Promise.allSettled(serverPromises);
+        const allVoices: AvailableModel[] = [];
+        for (const res of settledServers) {
+            if (res.status === 'fulfilled' && Array.isArray(res.value)) {
+                allVoices.push(...res.value);
             }
         }
 
@@ -952,18 +939,40 @@ export class ModelConfigService {
 
     /**
      * Get all available models - Gemini + CLIProxy + Vbee + ViTTS
+     * Uses in-memory caching (TTL 45s) and parallel execution for lightning-fast loading
      */
     async getAllAvailableModels(userId: string) {
+        const cached = this.availableModelsCache.get(userId);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.data;
+        }
+
         const models: Record<string, AvailableModel[]> = {
             GEMINI: [],
             CLIPROXY: [],
         };
 
-        // Try to discover Gemini models (includes text, image, and base TTS)
-        try {
-            models.GEMINI = await this.discoverGeminiModels(userId);
-        } catch (error) {
-            // Return default list if discovery fails — try DB-discovered names first
+        // Run all discoveries in parallel for speed
+        const [
+            geminiSettled,
+            cliproxySettled,
+            vbeeSettled,
+            vittsServersSettled,
+            vittsVoicesSettled,
+            imageGenSettled,
+        ] = await Promise.allSettled([
+            this.discoverGeminiModels(userId),
+            this.discoverCLIProxyModels(),
+            this.discoverVbeeVoices(userId),
+            this.resolveAllViTTSServers(userId),
+            this.discoverViTTSVoices(userId),
+            this.discoverImageGenModels(),
+        ]);
+
+        // 1. Gemini
+        if (geminiSettled.status === 'fulfilled' && geminiSettled.value.length > 0) {
+            models.GEMINI = geminiSettled.value;
+        } else {
             let imageModelName = 'gemini-2.0-flash-image-generation';
             let ttsModelName = 'gemini-2.5-flash-preview-tts';
             if (this.systemConfigService) {
@@ -995,64 +1004,43 @@ export class ModelConfigService {
             ];
         }
 
-        // Discover CLIProxy models if enabled
-        try {
-            const cliproxyModels = await this.discoverCLIProxyModels();
-            if (cliproxyModels.length > 0) {
-                models.CLIPROXY = cliproxyModels;
-                this.logger.log(`Added ${cliproxyModels.length} CLIProxy models`);
-            }
-        } catch (error: any) {
-            this.logger.warn(`CLIProxy model discovery failed: ${error.message}`);
+        // 2. CLIProxy
+        if (cliproxySettled.status === 'fulfilled' && cliproxySettled.value.length > 0) {
+            models.CLIPROXY = cliproxySettled.value;
+            this.logger.log(`Added ${cliproxySettled.value.length} CLIProxy models`);
         }
 
-        // Add Vbee personal voices (if Vbee token is configured)
-        try {
-            const vbeeVoices = await this.discoverVbeeVoices(userId);
-            if (vbeeVoices.length > 0) {
-                // Merge Vbee voices into the GEMINI array (they'll be filtered by supportedTasks)
-                models.GEMINI = [...models.GEMINI, ...vbeeVoices];
-                this.logger.log(`Added ${vbeeVoices.length} Vbee voices to available models`);
-            }
-        } catch (error: any) {
-            this.logger.warn(`Vbee voice discovery failed: ${error.message}`);
+        // 3. Vbee
+        if (vbeeSettled.status === 'fulfilled' && vbeeSettled.value.length > 0) {
+            models.GEMINI = [...models.GEMINI, ...vbeeSettled.value];
+            this.logger.log(`Added ${vbeeSettled.value.length} Vbee voices to available models`);
         }
 
-        // Add ViTTS multi-server models and voices
-        try {
-            const servers = await this.resolveAllViTTSServers(userId);
-            if (servers.length > 0) {
-                models.VITTS = servers.map((server) => ({
-                    name: `vitts:${server.id}:auto`,
-                    displayName: server.name,
-                    description: `Máy chủ ViTTS - ${server.name}`,
-                    supportedTasks: ['TTS'],
-                    source: server.name,
-                }));
-            }
-
-            const vittsVoices = await this.discoverViTTSVoices(userId);
-            if (vittsVoices.length > 0) {
-                models.GEMINI = [...models.GEMINI, ...vittsVoices];
-                this.logger.log(`Added ${vittsVoices.length} ViTTS voices across ${servers.length} servers`);
-            }
-        } catch (error: any) {
-            this.logger.warn(`ViTTS voice discovery failed: ${error.message}`);
+        // 4. ViTTS Servers
+        if (vittsServersSettled.status === 'fulfilled' && vittsServersSettled.value.length > 0) {
+            const servers = vittsServersSettled.value;
+            models.VITTS = servers.map((server) => ({
+                name: `vitts:${server.id}:auto`,
+                displayName: server.name,
+                description: `Máy chủ ViTTS - ${server.name}`,
+                supportedTasks: ['TTS'],
+                source: server.name,
+            }));
         }
 
-        // Discover ImageGen models (Flux/ComfyUI) if enabled
-        try {
-            const imageGenModels = await this.discoverImageGenModels();
-            if (imageGenModels.length > 0) {
-                // Add as a separate category so frontend can show [ImageGen] label
-                (models as any).IMAGE_GEN = imageGenModels;
-                this.logger.log(`Added ${imageGenModels.length} ImageGen models`);
-            }
-        } catch (error: any) {
-            this.logger.warn(`ImageGen model discovery failed: ${error.message}`);
+        // 5. ViTTS Voices
+        if (vittsVoicesSettled.status === 'fulfilled' && vittsVoicesSettled.value.length > 0) {
+            models.GEMINI = [...models.GEMINI, ...vittsVoicesSettled.value];
+            this.logger.log(`Added ${vittsVoicesSettled.value.length} ViTTS voices`);
         }
 
-        // Discover Custom OpenAI models if enabled
+        // 6. ImageGen
+        if (imageGenSettled.status === 'fulfilled' && imageGenSettled.value.length > 0) {
+            (models as any).IMAGE_GEN = imageGenSettled.value;
+            this.logger.log(`Added ${imageGenSettled.value.length} ImageGen models`);
+        }
+
+        // 7. Custom OpenAI
         if (this.customOpenAI) {
             try {
                 const customProviders = await this.customOpenAI.getProviders();
@@ -1061,7 +1049,6 @@ export class ModelConfigService {
                         const customModelsList: AvailableModel[] = [];
                         const providerKey = cp.id.toUpperCase();
 
-                        // Add TTS models if enabled and supports TTS
                         if (cp.ttsType !== 'none') {
                             if (cp.ttsType === 'shopaikey') {
                                 customModelsList.push(
@@ -1088,9 +1075,6 @@ export class ModelConfigService {
                             }
                         }
 
-                        // Enumerate the provider's real catalog via /v1/models. Every
-                        // configured provider is OpenAI-compatible, so this lists ALL its
-                        // models (chat, embedding, image, tts) — not just a hardcoded set.
                         let listedRealModels = false;
                         try {
                             const realModels = await this.customOpenAI.listModels(cp.id);
@@ -1099,7 +1083,7 @@ export class ModelConfigService {
                                 const tasks = this.classifyCLIProxyModel(id);
                                 if (tasks.length === 0) continue;
                                 const name = `custom_openai:${cp.id}:${id}`;
-                                if (customModelsList.some((m) => m.name === name)) continue; // dedup
+                                if (customModelsList.some((m) => m.name === name)) continue;
 
                                 let emoji = '🧠';
                                 if (tasks.includes('IMAGE')) emoji = '🎨';
@@ -1118,13 +1102,6 @@ export class ModelConfigService {
                             this.logger.warn(`Could not list models for provider ${cp.id}: ${err.message}`);
                         }
 
-                        // No hardcoded fallback: if /v1/models returned nothing (e.g. the
-                        // key is expired and the gateway answered 401), show no chat models
-                        // rather than "ghost" models the provider may not actually serve.
-                        if (!listedRealModels) {
-                            this.logger.warn(`Provider ${cp.id} listed no real models (key may be invalid/expired); skipping fallback chat models`);
-                        }
-
                         if (customModelsList.length > 0) {
                             models[providerKey] = customModelsList;
                             this.logger.log(`Added dynamic provider ${providerKey} with ${customModelsList.length} models`);
@@ -1141,7 +1118,6 @@ export class ModelConfigService {
                             const apiKey = parsed.apiKey;
                             const rawBaseUrl = parsed.baseUrl || 'https://api.openai.com/v1';
                             
-                            // Normalize base URL to prevent doubled /v1
                             let cleanBaseUrl = rawBaseUrl.trim();
                             if (cleanBaseUrl.endsWith('/')) {
                                 cleanBaseUrl = cleanBaseUrl.slice(0, -1);
@@ -1150,10 +1126,9 @@ export class ModelConfigService {
                                 cleanBaseUrl = cleanBaseUrl.slice(0, -3);
                             }
                             
-                            this.logger.log(`Fetching personal OpenAI models from ${cleanBaseUrl}`);
                             const response = await fetch(`${cleanBaseUrl}/v1/models`, {
                                 headers: { 'Authorization': `Bearer ${apiKey}` },
-                                signal: AbortSignal.timeout(10000),
+                                signal: AbortSignal.timeout(3000),
                             });
                             
                             if (response.ok) {
@@ -1220,7 +1195,6 @@ export class ModelConfigService {
 
                                 for (const m of rawModels) {
                                     const modelId = m.id;
-                                    // Skip moderation models; embedding models are kept (RAG).
                                     if (modelId.includes('mod') && !modelId.includes('embed')) continue;
 
                                     const tasks = this.classifyCLIProxyModel(modelId);
@@ -1243,8 +1217,6 @@ export class ModelConfigService {
                                     models['PERSONAL'] = customModelsList;
                                     this.logger.log(`Added personal OpenAI provider with ${customModelsList.length} models for user ${userId}`);
                                 }
-                            } else {
-                                this.logger.warn(`Failed to fetch personal OpenAI models: HTTP ${response.status}`);
                             }
                         }
                     } catch (err: any) {
@@ -1255,6 +1227,12 @@ export class ModelConfigService {
                 this.logger.warn(`Custom OpenAI models discovery failed: ${error.message}`);
             }
         }
+
+        // Cache the result for 45s
+        this.availableModelsCache.set(userId, {
+            data: models,
+            expiresAt: Date.now() + 45000,
+        });
 
         return models;
     }
@@ -1378,8 +1356,15 @@ export class ModelConfigService {
     /**
      * Discover ViTTS options from the server's /api/v1/tts/options endpoint.
      * Returns modes, voice library, design attributes, and defaults for a specific server or default.
+     * Uses in-memory caching (TTL 45s) and parallel fetching for fast response.
      */
     async discoverViTTSOptions(userId: string, serverId?: string): Promise<any> {
+        const cacheKey = `${userId}:${serverId || 'default'}`;
+        const cached = this.vittsOptionsCache.get(cacheKey);
+        if (cached && cached.expiresAt > Date.now()) {
+            return cached.data;
+        }
+
         const servers = await this.resolveAllViTTSServers(userId);
 
         if (servers.length === 0) {
@@ -1400,79 +1385,60 @@ export class ModelConfigService {
                 authHeaders['Authorization'] = `Bearer ${apiKey}`;
             }
 
-            let optionsData: any = {};
+            // Fetch in parallel with 3s timeout
+            const [modelsSettled, optionsSettled, refsSettled, presetsSettled] = await Promise.allSettled([
+                fetch(`${baseUrl}/api/v1/tts/models`, { headers: authHeaders, signal: AbortSignal.timeout(3000) })
+                    .then(res => res.ok ? res.json() : null),
+                fetch(`${baseUrl}/api/v1/tts/options`, { headers: authHeaders, signal: AbortSignal.timeout(3000) })
+                    .then(res => res.ok ? res.json() : null),
+                fetch(`${baseUrl}/api/v1/refs`, { headers: authHeaders, signal: AbortSignal.timeout(3000) })
+                    .then(res => res.ok ? res.json() : null),
+                fetch(`${baseUrl}/api/v1/tts/presets`, { headers: authHeaders, signal: AbortSignal.timeout(3000) })
+                    .then(res => res.ok ? res.json() : null),
+            ]);
+
             let availableEngines: string[] = ['omnivoice'];
-
-            // 1. Check /api/v1/tts/models for available engines
-            try {
-                const modelsRes = await fetch(`${baseUrl}/api/v1/tts/models`, {
-                    headers: authHeaders,
-                    signal: AbortSignal.timeout(6000),
-                });
-                if (modelsRes.ok) {
-                    const mData = await modelsRes.json();
-                    if (mData.current_engines && Array.isArray(mData.current_engines)) {
-                        availableEngines = mData.current_engines;
-                    } else if (mData.available_models && Array.isArray(mData.available_models)) {
-                        availableEngines = Array.from(new Set(mData.available_models.map((m: any) => m.engine || m.id)));
-                    } else if (mData.engine) {
-                        availableEngines = [mData.engine];
-                    }
+            if (modelsSettled.status === 'fulfilled' && modelsSettled.value) {
+                const mData = modelsSettled.value;
+                if (mData.current_engines && Array.isArray(mData.current_engines)) {
+                    availableEngines = mData.current_engines;
+                } else if (mData.available_models && Array.isArray(mData.available_models)) {
+                    availableEngines = Array.from(new Set(mData.available_models.map((m: any) => m.engine || m.id)));
+                } else if (mData.engine) {
+                    availableEngines = [mData.engine];
                 }
-            } catch {}
+            }
 
-            // 2. Fetch /api/v1/tts/options
-            try {
-                const response = await fetch(`${baseUrl}/api/v1/tts/options`, {
-                    headers: authHeaders,
-                    signal: AbortSignal.timeout(8000),
-                });
-                if (response.ok) {
-                    optionsData = await response.json();
-                    if (optionsData.engines && typeof optionsData.engines === 'object') {
-                        availableEngines = Object.keys(optionsData.engines);
-                    }
+            let optionsData: any = {};
+            if (optionsSettled.status === 'fulfilled' && optionsSettled.value) {
+                optionsData = optionsSettled.value;
+                if (optionsData.engines && typeof optionsData.engines === 'object') {
+                    availableEngines = Object.keys(optionsData.engines);
                 }
-            } catch {}
+            }
 
-            // 3. Fetch voice library (refs)
             let voiceLibrary: any[] = [];
-            try {
-                const refsRes = await fetch(`${baseUrl}/api/v1/refs`, {
-                    headers: authHeaders,
-                    signal: AbortSignal.timeout(6000),
-                });
-                if (refsRes.ok) {
-                    const rawRefs = await refsRes.json();
-                    const refsList = Array.isArray(rawRefs) ? rawRefs : (rawRefs.refs || []);
-                    voiceLibrary = refsList.map((v: any) => ({
-                        ref_id: v.id || v.ref_id || v.name,
-                        name: v.name || v.id,
-                        gender: (v.name || '').toLowerCase().includes('female') || (v.name || '').toLowerCase().includes('nữ') ? 'female' : 'male',
-                        language: v.language || 'vi',
-                        duration_sec: v.duration_sec || null,
-                    }));
-                }
-            } catch {}
+            if (refsSettled.status === 'fulfilled' && refsSettled.value) {
+                const rawRefs = refsSettled.value;
+                const refsList = Array.isArray(rawRefs) ? rawRefs : (rawRefs.refs || []);
+                voiceLibrary = refsList.map((v: any) => ({
+                    ref_id: v.id || v.ref_id || v.name,
+                    name: v.name || v.id,
+                    gender: (v.name || '').toLowerCase().includes('female') || (v.name || '').toLowerCase().includes('nữ') ? 'female' : 'male',
+                    language: v.language || 'vi',
+                    duration_sec: v.duration_sec || null,
+                }));
+            }
 
-            // 4. Fetch VieNeu Presets if engine contains vieneu
             let vieneuPresets: any[] = [];
-            if (availableEngines.includes('vieneu')) {
-                if (optionsData.engines?.vieneu?.presets) {
-                    vieneuPresets = optionsData.engines.vieneu.presets;
-                } else {
-                    try {
-                        const presetsRes = await fetch(`${baseUrl}/api/v1/tts/presets`, {
-                            headers: authHeaders,
-                            signal: AbortSignal.timeout(6000),
-                        });
-                        if (presetsRes.ok) {
-                            vieneuPresets = await presetsRes.json();
-                        }
-                    } catch {}
-                }
+            if (optionsData.engines?.vieneu?.presets) {
+                vieneuPresets = optionsData.engines.vieneu.presets;
+            } else if (presetsSettled.status === 'fulfilled' && presetsSettled.value && Array.isArray(presetsSettled.value)) {
+                vieneuPresets = presetsSettled.value;
+            }
 
-                // Sort presets by [Miền Bắc]-nam, nữ, [Miền Trung], [Miền Nam]
+            // Sort presets by [Miền Bắc]-nam, nữ, [Miền Trung], [Miền Nam]
+            if (vieneuPresets.length > 0) {
                 const regionOrder: Record<string, number> = { 'Bắc': 1, 'bac': 1, 'Trung': 2, 'trung': 2, 'Nam': 3, 'nam': 3 };
                 const genderOrder: Record<string, number> = { 'Nam': 1, 'nam': 1, 'male': 1, 'Nữ': 2, 'nu': 2, 'female': 2 };
                 vieneuPresets.sort((a: any, b: any) => {
@@ -1486,7 +1452,6 @@ export class ModelConfigService {
                 });
             }
 
-            // Extract OmniVoice design attributes and modes
             const omniEngine = optionsData.engines?.omnivoice || optionsData;
             const designAttributes = omniEngine.design_attributes || optionsData.design_attributes || {
                 gender: ['male', 'female'],
@@ -1501,7 +1466,7 @@ export class ModelConfigService {
                 { id: 'design', name: 'Voice Design', description: 'Thiết kế giọng theo thuộc tính' },
             ];
 
-            return {
+            const result = {
                 ...optionsData,
                 available_engines: availableEngines,
                 vieneu_presets: vieneuPresets,
@@ -1512,6 +1477,14 @@ export class ModelConfigService {
                 serverId: server.id,
                 serverName: server.name,
             };
+
+            // Cache result for 45s
+            this.vittsOptionsCache.set(cacheKey, {
+                data: result,
+                expiresAt: Date.now() + 45000,
+            });
+
+            return result;
         } catch (error: any) {
             this.logger.error(`Failed to discover ViTTS options for ${server.name}: ${error.message}`);
             return { error: error.message };

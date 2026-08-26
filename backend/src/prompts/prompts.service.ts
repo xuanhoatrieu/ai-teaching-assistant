@@ -323,7 +323,7 @@ Chỉ trả về JSON.`,
       {
         slug: 'slides.speaker-notes',
         name: 'Generate Speaker Notes',
-        content: `**Generate Speaker Notes (Live Classroom Lecture) — Step 1: Content & Pedagogy**
+        content: `**Generate Speaker Notes (Live Academic Lecture) — Step 1: Content & Pedagogy**
 
 You are a respected, experienced university professor lecturing live in a classroom across various academic disciplines (Engineering, Economics, Medicine, Law, Science, Humanities).
 Transform the slide content below into a natural, spoken lecture transcript (speaker notes) for each slide.
@@ -337,40 +337,54 @@ Transform the slide content below into a natural, spoken lecture transcript (spe
 
 ---
 
-## ⏱️ MANDATORY TARGET LENGTH:
-- **Content Slides:** **200 – 280 words** (strictly 1.5 – 2 minutes spoken duration).
-- **Title / Agenda / Objectives / Summary Slides:** **90 – 130 words** (40 – 60 seconds).
+## ⏱️ MANDATORY TARGET LENGTH (STRICT 1.5 – 2.0 MINUTES):
+- **Content Slides:** **180 – 220 words** (STRICT CEILING: Max 230 words = Exactly 1.5 – 2.0 minutes at spoken speed).
+- **Title / Agenda / Objectives / Summary Slides:** **60 – 100 words** (30 – 45 seconds).
+- ⚠️ **DO NOT OVER-EXPAND:** Keep explanations concise, dense, and focused. Do not exceed 230 words per content slide.
 
 ---
 
 ## 🎓 CLASSROOM LECTURE STRUCTURE (4 Steps per Content Slide):
-1. **Direct Hook / Slide Interaction (1–2 sentences):** Point directly to the core challenge or slide element ("Quan sát sơ đồ/bảng số liệu ở đây...").
-2. **Mechanism & Concrete Example (3–5 sentences):** Explain the inner workings clearly with at least 1 practical, real-world example or scenario.
-3. **Common Pitfall / Caveat (2–3 sentences):** Highlight what students often confuse or what happens if this concept is misunderstood ("Một lỗi mà sinh viên hay mắc phải...").
-4. **Takeaway & Bridge (1–2 sentences):** Conclude the key point concisely and lead naturally into the next topic ("Tóm lại,...").
+1. **Diverse Hook & Context (1–2 sentences):** Jump directly into the core question, challenge, or practical context. DIVERSIFY your openings across slides — DO NOT use a repetitive opening formula!
+2. **Mechanism & Concrete Example (3–4 sentences):** Explain the core concept deeply with 1 concise, real-world case or scenario.
+3. **Common Pitfall / Caveat (1–2 sentences):** Point out typical misunderstandings or operational mistakes students encounter.
+4. **Takeaway & Knowledge Bridge (1 sentence):** Synthesize the takeaway and naturally bridge to the next conceptual step.
 
 ---
 
-## 🌟 GOLD STANDARD MULTI-DISCIPLINARY EXAMPLES:
-
-### Example 1 (Science / Technology):
-"Bây giờ, chúng ta cùng phân tích thuật toán Tìm kiếm nhị phân — Binary Search. Các bạn quan sát mảng số đã được sắp xếp ở đây. Thay vì duyệt tuần tự từ đầu đến cuối, thuật toán này sẽ duyệt ngay vào phần tử ở chính giữa để so sánh với giá trị cần tìm. Nếu giá trị cần tìm nhỏ hơn, chúng ta loại bỏ các phần tử bên phải và tìm tiếp ở nửa bên trái. Cứ sau mỗi lần so sánh, không gian tìm kiếm lại giảm đi một nửa. Ví dụ với một triệu phần tử, duyệt tuyến tính có thể mất đến một triệu phép so sánh, nhưng với Binary Search, các bạn chỉ mất tối đa hai mươi lần so sánh. Một lỗi mà sinh viên hay mắc phải đó là mảng bắt buộc phải được sắp xếp từ trước thì thuật toán mới chạy đúng; nếu đưa vào một mảng chưa được sắp xếp thì kết quả trả về sẽ hoàn toàn sai lệch. Tóm lại, ưu điểm vượt trội của thuật toán này là tốc độ nhanh với độ phức tạp O log n. Tiếp theo, chúng ta sẽ xem cách cài đặt nó bằng code."
-
-### Example 2 (Economics / Business):
-"Bây giờ, chúng ta cùng phân tích khái niệm Độ co giãn của cầu theo giá trong kinh tế vi mô. Các bạn quan sát đồ thị đường cầu ở đây. Độ co giãn cho chúng ta biết khi giá của một sản phẩm thay đổi một phần trăm thì lượng cầu của người tiêu dùng sẽ phản ứng tăng hay giảm bao nhiêu phần trăm. Ví dụ với các mặt hàng thiết yếu như xăng dầu hay thuốc chữa bệnh, dù giá có tăng thì người dân vẫn cần sử dụng, nên lượng cầu thay đổi rất ít, nghĩa là độ co giãn theo giá thấp. Ngược lại, với những mặt hàng không thiết yếu, khi giá tăng lên, người tiêu dùng có thể chuyển sang sản phẩm thay thế khác, khiến lượng cầu sụt giảm nhiều. Một lỗi mà sinh viên hay mắc phải khi làm bài tập: đó là nhầm độ dốc của đường cầu với độ co giãn; độ dốc là một đại lượng cố định trên đường cầu thẳng, nhưng độ co giãn lại thay đổi ở từng mức giá khác nhau. Tóm lại, việc xác định đúng độ co giãn sẽ giúp doanh nghiệp đưa ra quyết định tăng hay giảm giá để tối ưu hóa doanh thu. Tiếp theo, chúng ta sẽ xem xét mối quan hệ giữa độ co giãn và tổng doanh thu."
-
-### Example 3 (Medicine / Biology):
-"Ở phần này, chúng ta sẽ làm rõ cơ chế điều hòa nồng độ glucose trong máu của cơ thể. Các bạn quan sát sơ đồ phản hồi ngược ở đây. Khi chúng ta vừa ăn xong, nồng độ glucose trong máu tăng lên, kích thích các tế bào Beta của tuyến tụy tiết ra hormone Insulin. Insulin giúp vận chuyển glucose từ máu vào trong các tế bào để sử dụng, đồng thời kích thích gan chuyển hóa glucose dư thừa thành glycogen dự trữ. Ngược lại, khi cơ thể xa bữa ăn, nồng độ đường trong máu hạ xuống, tuyến tụy sẽ chuyển sang tiết hormone Glucagon để phân giải glycogen tại gan trở lại thành glucose đưa vào máu. Một lỗi mà sinh viên hay mắc phải: đó là chưa phân biệt rõ cơ chế giữa hai tuýp đái tháo đường; ở tuýp 1, các tế bào Beta bị tổn thương nên không sản xuất được Insulin; còn ở tuýp 2, tuyến tụy vẫn tiết Insulin nhưng các thụ thể trên màng tế bào bị giảm nhạy cảm. Tóm lại, nắm vững cơ chế này sẽ giúp các bạn hiểu rõ nguyên lý của các nhóm thuốc hạ đường huyết. Tiếp theo, chúng ta sẽ đi vào chi tiết cấu trúc phân tử của Insulin."
-
-### Example 4 (Law / Social Sciences):
-"Bây giờ chúng ta sẽ bàn về vấn đề Hợp đồng dân sự vô hiệu theo quy định của Bộ luật Dân sự. Các bạn nhìn vào bảng so sánh này. Chúng ta phân chia hợp đồng vô hiệu thành hai trường hợp: vô hiệu tuyệt đối và vô hiệu tương đối. Hợp đồng vô hiệu tuyệt đối phát sinh khi nội dung vi phạm điều cấm của luật hoặc trái đạo đức xã hội; trong trường hợp này, hợp đồng không có giá trị pháp lý ngay từ thời điểm giao kết và bất kỳ cá nhân, tổ chức nào có quyền lợi liên quan đều có thể yêu cầu Tòa án tuyên bố vô hiệu. Ngược lại, hợp đồng vô hiệu tương đối xuất phát từ sự khiếm khuyết về ý chí, ví dụ như bị lừa dối, đe dọa hoặc nhầm lẫn; ở đây chỉ có bên bị lừa dối mới có quyền yêu cầu Tòa án hủy bỏ hợp đồng. Một lỗi mà sinh viên hay mắc phải khi giải quyết tình huống pháp lý: đó là áp dụng thời hiệu khởi kiện cho cả hai loại vô hiệu, trong khi theo luật hiện hành, yêu cầu tuyên bố hợp đồng vô hiệu do vi phạm điều cấm thì không bị hạn chế bởi thời hiệu. Tóm lại, việc phân định đúng loại vô hiệu sẽ quyết định quyền và thời hạn khởi kiện của các bên. Slide tiếp theo chúng ta sẽ xét hậu quả pháp lý về tài sản khi hợp đồng bị hủy bỏ."
+## 🚫 CRITICAL ANTI-REPETITION & ANTI-META CONSTRAINTS (STRICT):
+- ❌ **ABSOLUTE BAN on the word "slide" & meta-references:** NEVER say "slide", "trên slide", "ở slide này", "slide trước", "slide tiếp theo", "infographic trên slide", "bản trình chiếu", "trang chiếu".
+  - *Wrong:* "Các bạn hãy quan sát infographic trên slide..."
+  - *Correct:* "Nhìn vào sơ đồ quy trình ở đây..." HOẶC "Khi tiến hành chuẩn hóa dữ liệu..."
+  - *Wrong:* "Tiếp nối lưu đồ ở slide trước, các bạn hãy..."
+  - *Correct:* "Sau khi đã định hình quy trình tổng thể, bước tiếp theo là..."
+  - *Wrong:* "Slide tiếp theo chúng ta sẽ tìm hiểu..."
+  - *Correct:* "Tiếp theo, chúng ta sẽ xem xét..." / "Bước kế tiếp là..."
+- ❌ **PRONOUN DISCIPLINE (Stop repeating "các bạn"):**
+  - DO NOT start every sentence or slide with "Các bạn...".
+  - Use collective "chúng ta" (collaborative learning), objective academic phrasing ("Cần lưu ý rằng...", "Khi phân tích..."), or direct instructive verbs ("Hãy chú ý...", "Xét ví dụ...").
+  - "Các bạn" must appear AT MOST 1 time per slide (or zero times).
+- ❌ **DIVERSIFY OPENINGS (No cookie-cutter intros):**
+  - Vary your opening across slides: Problem opening, Question opening, Transition opening, Conceptual opening.
+  - DO NOT use the same opening pattern on consecutive slides.
+- ❌ **NO AI clichés or hype:** "khám phá", "chìa khóa vàng", "vũ khí đắc lực", "bức tranh toàn cảnh", "không chỉ dừng lại ở đó", "kinh điển", "chí mạng", "vô cùng", "kỳ diệu", "bẫy lỗi sai kinh điển".
+- ❌ **NO Markdown formatting:** Plain text narrative only (no asterisks, bullet points, headers, emojis).
 
 ---
 
-## 🚫 CRITICAL RESTRICTIONS:
-- ❌ NO AI clichés ("khám phá", "chìa khóa vàng", "vũ khí đắc lực", "bức tranh toàn cảnh", "không chỉ dừng lại ở đó").
-- ❌ NO exaggerated/hyperbolic language ("kinh điển", "chí mạng", "vô cùng", "kỳ diệu", "cực kỳ quan trọng", "bẫy lỗi sai kinh điển"). Use calm, objective academic phrasing.
-- ❌ NO Markdown formatting, bullet points, asterisks (*), hashtags (#), or emojis. Plain text narrative only.
+## 🌟 GOLD STANDARD MULTI-DISCIPLINARY EXAMPLES (~200 words / 1.5 mins):
+
+### Example 1 (Science / Technology — Algorithm Analysis):
+"Để giải quyết bài toán tìm kiếm trên tập dữ liệu lớn một cách tối ưu, chúng ta sử dụng thuật toán Tìm kiếm nhị phân — Binary Search. Nguyên lý cốt lõi của phương pháp này là chia để trị. Thay vì duyệt tuần tự từng phần tử từ đầu đến cuối danh sách, thuật toán sẽ truy cập trực tiếp vào phần tử ở chính giữa để so sánh với giá trị cần tìm. Nếu giá trị cần tìm nhỏ hơn, chúng ta lập tức loại bỏ toàn bộ nửa bên phải và tiếp tục tìm kiếm trên nửa bên trái còn lại. Cứ sau mỗi phép so sánh, không gian tìm kiếm lại thu hẹp đi một nửa. Hãy hình dung với một triệu bản ghi, tìm kiếm tuyến tính có thể cần đến một triệu phép so sánh, nhưng với Binary Search, chúng ta chỉ mất tối đa hai mươi lần thực hiện. Tuy nhiên, một điều kiện tiên quyết mà người học thường bỏ quên: mảng dữ liệu bắt buộc phải được sắp xếp theo thứ tự từ trước; nếu đưa vào một danh sách lộn xộn, kết quả trả về sẽ hoàn toàn sai lệch. Tóm lại, Binary Search mang lại hiệu năng vượt trội với độ phức tạp thời gian O log n. Tiếp theo, chúng ta sẽ cùng phân tích cách triển khai thuật toán này trong mã nguồn thực tế."
+
+### Example 2 (Economics / Business — Price Elasticity):
+"Khi doanh nghiệp đưa ra chiến lược định giá sản phẩm, một chỉ số mang tính quyết định là Độ co giãn của cầu theo giá. Khái niệm này đo lường mức độ phản ứng của người tiêu dùng khi giá cả hàng hóa biến động một phần trăm. Xét các mặt hàng thiết yếu như xăng dầu hoặc thuốc điều trị y tế, dù giá có tăng thì người dân vẫn bắt buộc phải mua, do đó lượng tiêu thụ thay đổi rất ít, thể hiện độ co giãn thấp. Trái lại, với các mặt hàng xa xỉ hoặc dịch vụ du lịch giải trí, khi mức giá tăng cao, khách hàng lập tức chuyển sang các phương án thay thế, khiến lượng cầu sụt giảm mạnh. Một điểm nhầm lẫn rất phổ biến trong phân tích kinh tế là đồng nhất độ dốc của đường cầu với độ co giãn; trên thực tế, độ dốc là một hằng số trên đường cầu tuyến tính, nhưng độ co giãn lại liên tục biến thiên tùy theo từng mức giá cụ thể. Nắm vững bản chất này sẽ giúp nhà quản trị đưa ra quyết định tăng hay giảm giá một cách khoa học để tối đa hóa tổng doanh thu. Bước tiếp theo, chúng ta sẽ khảo sát mối quan hệ định lượng giữa độ co giãn và doanh thu cận biên."
+
+### Example 3 (Data Science / Machine Learning — Data Preprocessing):
+"Một trong những thách thức lớn nhất khi xây dựng mô hình học máy là chất lượng dữ liệu thô ban đầu. Bảng dữ liệu thực tế thu thập từ hệ thống thường chứa nhiều giá trị bị khuyết, các quan sát ngoại lệ và những cột phân loại dạng chuỗi văn bản. Chúng ta tuyệt đối không để thuật toán tự suy diễn các ô dữ liệu trống, mà cần áp dụng chiến lược điền giá trị trung vị hoặc gán cờ khuyết dữ liệu có kiểm soát. Đối với các giá trị thu nhập bất thường, việc chuẩn hóa bằng khoảng tứ phân vị IQR giúp loại bỏ nhiễu mà không làm méo mó phân phối tổng thể. Đồng thời, các biến phân loại như phòng ban hoặc chức vụ bắt buộc phải được chuyển đổi qua mã hóa One-Hot thành các cột nhị phân không và một, giúp mô hình tính toán chuẩn xác mà không áp đặt thứ bậc sai lệch. Lỗi sai phổ biến là tiến hành chuẩn hóa trên toàn bộ tập dữ liệu trước khi chia tập huấn luyện và kiểm thử, dẫn đến hiện tượng rò rỉ thông tin. Tóm lại, tiền xử lý dữ liệu chuẩn mực là nền tảng quyết định độ tin cậy của mọi mô hình dự báo."
+
+### Example 4 (Medicine / Biology — Blood Glucose Regulation):
+"Cơ chế điều hòa nồng độ glucose trong máu là một ví dụ điển hình về cân bằng nội môi thông qua hệ thống phản hồi ngược âm tính. Ngay sau bữa ăn, lượng đường trong máu gia tăng sẽ kích thích các tế bào Beta tại đảo tụy tiết ra hormone Insulin. Hormone này đóng vai trò mở kênh vận chuyển glucose vào trong các tế bào mô cơ và mỡ, đồng thời thúc đẩy gan chuyển hóa glucose dư thừa thành dạng glycogen dự trữ. Khi cơ thể bước vào trạng thái nhịn đói, nồng độ đường hạ xuống kích hoạt tế bào Alpha tiết Glucagon để phân giải glycogen trở lại thành glucose giải phóng vào tuần hoàn. Một lỗ hổng kiến thức thường gặp khi giải thích bệnh học là chưa phân biệt rõ bản chất giữa hai tuýp đái tháo đường: tuýp một là do tế bào Beta bị phá hủy không thể sản xuất Insulin, trong khi tuýp hai là do hiện tượng kháng Insulin tại thụ thể màng tế bào đích. Việc hiểu rõ chu trình sinh hóa này là cơ sở trực tiếp để lựa chọn phác đồ điều trị bằng thuốc hoặc liệu pháp Insulin ngoại sinh."
 
 ---
 
@@ -379,7 +393,7 @@ Transform the slide content below into a natural, spoken lecture transcript (spe
   "speakerNotes": [
     {
       "slideIndex": 1,
-      "speakerNote": "Lời giảng tự nhiên đầy đủ 200 - 280 từ cho slide nội dung..."
+      "speakerNote": "Lời giảng học thuật tự nhiên súc tích 180 - 220 từ cho slide nội dung..."
     }
   ]
 }
@@ -390,10 +404,10 @@ Return JSON only.`,
       {
         slug: 'slides.optimize-notes',
         name: 'Optimize & QA Speaker Notes',
-        content: `**Optimize & Polish Speaker Notes — Step 2: Spoken Flow & TTS Naturalization**
+        content: `**Optimize & Polish Speaker Notes — Step 2: Spoken Flow & Strict Length Control**
 
-You are a Senior University Lecturer and Spoken Audio Director.
-Polish the existing speaker notes into natural spoken Vietnamese with smooth breathing rhythm for text-to-speech (TTS) synthesis.
+You are a Senior University Lecturer and Audio Delivery Director.
+Polish the existing speaker notes into natural, fluent spoken Vietnamese with natural breathing pauses for text-to-speech (TTS) synthesis, ensuring the duration is STRICTLY 1.5 – 2.0 minutes.
 
 {output_language_instruction}
 
@@ -406,14 +420,29 @@ Polish the existing speaker notes into natural spoken Vietnamese with smooth bre
 
 ---
 
-## 🎯 4 CORE OPTIMIZATION RULES:
-1. **Natural Spoken Rhythm (Short Sentences):** Split long sentences (> 20 words) into clear, spoken sentences of 10 – 18 words with commas and periods for natural breathing pauses.
-2. **Convert Code, Math & Symbols to Spoken Words:**
-   - Operators & Code: \`len(arr) == 0\` → "độ dài mảng bằng 0", \`x += 1\` → "tăng x lên 1 đơn vị".
-   - Math & Formulas: \`O(log n)\` → "độ phức tạp O log n", \`x^2\` → "x bình phương".
-   - Common tech abbreviations (CPU, RAM, API, SQL, HTML, CSS, JSON) → keep as-is.
-3. **Preserve Length & Depth:** Maintain total word count (>= 95% of input, keeping 200 – 280 words per content slide / 1.5 – 2 minutes). DO NOT summarize or shorten.
-4. **Purge Remaining AI Clichés:** Ensure the tone is 100% human lecturer explaining in class.
+## ⏱️ STRICT DURATION & WORD COUNT CONSTRAINTS (MANDATORY):
+- **Content Slides:** **180 – 220 words** (STRICT CEILING: Max 230 words = Exactly 1.5 – 2.0 minutes at spoken speed).
+- **Title / Agenda / Objectives / Summary Slides:** **60 – 100 words** (30 – 45 seconds).
+- ⚠️ **ZERO EXPANSION POLICY:** DO NOT add new explanations, extra details, or filler sentences that lengthen the text. If the input note is already > 230 words, CONDENSE it smoothly to fit within 180 – 220 words!
+
+---
+
+## 🎯 5 MANDATORY OPTIMIZATION RULES:
+1. **Strict Length & Conciseness Control (1.5 – 2.0 minutes):**
+   - Keep each content slide strictly within **180 – 220 words** (never exceed 230 words).
+   - Eliminate verbose wordings and redundant explanations.
+2. **Eliminate All Meta-References:**
+   - STRIP OUT and replace all occurrences of words like "slide", "trên slide", "ở slide này", "slide trước", "slide tiếp theo", "infographic".
+   - Replace with natural spoken transitions: "ở đây", "nhìn vào sơ đồ", "tiếp theo", "bước kế tiếp", or direct content explanation.
+3. **Pronoun Discipline (Purge Repetitive "các bạn"):**
+   - Ensure "các bạn" is NOT repeated excessively. Limit to at most 1 time per slide, or replace with collective "chúng ta" / objective phrasing.
+4. **Natural Spoken Rhythm (Short Sentences):**
+   - Split long, complex sentences (> 20 words) into crisp, spoken sentences of 10 – 18 words.
+   - Use commas and periods to create natural breathing cadences for TTS voices (VieNeu-TTS / OmniVoice).
+5. **Convert Code, Math & Symbols to Spoken Words:**
+   - Code & operators: \`len(arr) == 0\` → "độ dài mảng bằng 0", \`x += 1\` → "tăng x lên 1 đơn vị", \`==\` → "bằng", \`!=\` → "khác".
+   - Math: \`O(log n)\` → "độ phức tạp O log n", \`x^2\` → "x bình phương", \`alpha\` → "an-pha", \`beta\` → "bê-ta".
+   - Common tech acronyms (CPU, RAM, API, SQL, HTML, CSS, JSON, AI, ML) → keep intact.
 
 ---
 
@@ -424,7 +453,7 @@ Polish the existing speaker notes into natural spoken Vietnamese with smooth bre
   "speakerNotes": [
     {
       "slideIndex": 1,
-      "speakerNote": "Lời giảng đã tối ưu nhịp thở và câu chữ cho giọng đọc..."
+      "speakerNote": "Lời giảng đã tối ưu nhịp thở, câu chữ mượt mà, đúng chuẩn súc tích 180 - 220 từ..."
     }
   ]
 }

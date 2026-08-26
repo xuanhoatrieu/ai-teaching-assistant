@@ -281,16 +281,33 @@ export class SlidesService {
     }
 
     /**
-     * Helper to clean AI cliché expressions and normalize formatting for spoken lecture
+     * Helper to clean AI cliché expressions, eliminate meta-references to 'slide',
+     * and normalize formatting for spoken lecture
      */
     private cleanAntiAIPhrases(text: string): string {
         if (!text) return '';
         let cleaned = text;
 
         const replacements: Array<[RegExp, string]> = [
+            // Meta-slide & Presentation references (purge 'slide', 'infographic trên slide', 'slide trước')
+            [/\b(?:chào\s+mừng\s+(?:các\s+bạn|quý\s+vị|mọi\s+người)\s+đến\s+với\s+(?:slide|bài\s+học)\s+(?:tiếp\s+theo|này|hôm\s+nay))\b[,\.\:\s]*/gi, ''],
+            [/\b(?:tiếp\s+nối\s+(?:lưu\s+đồ|sơ\s+đồ|nội\s+dung|ý\s+chính)?\s*(?:ở|tại)?\s*slide\s+trước)[,\s]*/gi, 'Tiếp theo, '],
+            [/\b(?:ở|tại|trong|trên)\s+slide\s+(?:trước|vừa\s+rồi|vừa\s+qua)[,\s]*/gi, 'ở phần trước, '],
+            [/\b(?:slide\s+tiếp\s+theo|ở\s+slide\s+sau|trong\s+slide\s+kế\s+tiếp)\s+(?:chúng\s+ta\s+sẽ|chúng\s+mình\s+sẽ)?/gi, 'tiếp theo chúng ta sẽ'],
+            [/\b(?:trên|trong|ở|tại)\s+slide\s+(?:này|đây|hiện\s+tại)?[,\s]*/gi, 'ở đây, '],
+            [/\b(?:infographic|lưu\s+đồ|hình\s+ảnh)\s+trên\s+slide\b/gi, 'sơ đồ minh họa'],
+            [/\b(?:quan\s+sát\s+)?infographic\s+(?:ở\s+đây|này)?\b/gi, 'sơ đồ này'],
+            [/\btrên\s+slide\b/gi, 'ở đây'],
+            [/\bslide\s+này\b/gi, 'phần này'],
+
+            // Repetitive cookie-cutter hooks
+            [/\bcác\s+bạn\s+hãy\s+quan\s+sát\b/gi, 'quan sát'],
+            [/\bcác\s+bạn\s+hãy\s+nhìn\s+vào\b/gi, 'nhìn vào'],
+            [/\bcác\s+bạn\s+hãy\s+chú\s+ý\b/gi, 'hãy chú ý'],
+            [/\bcác\s+bạn\s+hãy\b/gi, 'hãy'],
+
             // AI Clichés & Metaphors
             [/\b(?:hãy\s+cùng\s+(?:tôi|chúng\s+ta)\s+khám\s+phá|bước\s+vào\s+hành\s+trình\s+khám\s+phá)\b/gi, 'bây giờ chúng ta sẽ tìm hiểu'],
-            [/\b(?:chào\s+mừng\s+(?:các\s+bạn|quý\s+vị|mọi\s+người)\s+đến\s+với\s+slide\s+(?:tiếp\s+theo|này))\b[,\.\:\s]*/gi, ''],
             [/\b(?:cung\s+cấp\s+(?:một\s+)?cái\s+nhìn\s+sâu\s+sắc|mang\s+lại\s+cái\s+nhìn\s+toàn\s+diện)\b/gi, 'giúp chúng ta hiểu rõ'],
             [/\b(?:chiếc\s+)?chìa\s+khóa\s+vàng\b/gi, 'yếu tố then chốt'],
             [/\b(?:vũ\s+khí\s+đắc\s+lực|công\s+cụ\s+vạn\s+năng)\b/gi, 'công cụ hiệu quả'],
@@ -310,6 +327,9 @@ export class SlidesService {
             cleaned = cleaned.replace(pattern, replacement);
         }
 
+        // Deduplicate excessive "các bạn" (keep max 1 per note, replace subsequent with "chúng ta")
+        cleaned = this.deduplicatePronouns(cleaned);
+
         // Clean Markdown markers and bracketed slide tags that degrade TTS
         cleaned = cleaned
             .replace(/[*#_~`]/g, '')
@@ -318,6 +338,23 @@ export class SlidesService {
             .trim();
 
         return cleaned;
+    }
+
+    /**
+     * Deduplicate excessive "các bạn" within a single speaker note.
+     * Leaves the 1st occurrence if appropriate, and converts subsequent ones to "chúng ta".
+     */
+    private deduplicatePronouns(text: string): string {
+        if (!text) return '';
+        let count = 0;
+        return text.replace(/\b([Cc]ác\s+bạn)\b/g, (match) => {
+            count++;
+            if (count === 1) {
+                return match;
+            }
+            const isCapital = match[0] === 'C';
+            return isCapital ? 'Chúng ta' : 'chúng ta';
+        });
     }
 
     /**
@@ -431,7 +468,7 @@ export class SlidesService {
             }).join('\n\n');
 
             const promptContent = previousSlideBridge
-                ? `[Ý chính slide trước để nối mạch tự nhiên: "${previousSlideBridge}"]\n\n${slidesContent}`
+                ? `[Chủ đề vừa giải thích ở phần trước để nối mạch tự nhiên: "${previousSlideBridge}"]\n(Lưu ý: Tuyệt đối KHÔNG dùng từ "slide trước" hay "slide", hãy nối mạch kiến thức tự nhiên)\n\n${slidesContent}`
                 : slidesContent;
 
             // Build prompt

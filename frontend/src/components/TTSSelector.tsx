@@ -389,6 +389,11 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
     };
 
     const handleProviderChange = (newProvider: Provider) => {
+        if (newProvider === 'VITTS') {
+            const targetServerId = activeServerId || vittsServers[0]?.id || '';
+            handleSelectViTTSServer(targetServerId);
+            return;
+        }
         setProvider(newProvider);
         let newVoice = '';
         let newModel = selectedModel;
@@ -436,10 +441,8 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                         {ttsModels.some(m => m.name.startsWith('cliproxy:')) ? '🌐 Gemini AI' : '🌟 Gemini AI'}
                     </button>
                     <button className={`provider-btn ${provider === 'VBEE' ? 'active' : ''}`} onClick={() => handleProviderChange('VBEE')} disabled={isSaving}>🇻🇳 Vbee TTS</button>
-                    {vittsServers.map((s) => (
-                        <button key={s.id} className={`provider-btn ${provider === 'VITTS' && activeServerId === s.id ? 'active' : ''}`} onClick={() => handleSelectViTTSServer(s.id)} disabled={isSaving}>🎙️ {s.name}</button>
-                    ))}
-                    {Array.from(new Set(ttsModels.filter(m => m.source && !['Gemini SDK', 'CLIProxy'].includes(m.source) && !vittsServers.some(s => s.name === m.source)).map(m => m.source as string))).map((cp) => (
+                    <button className={`provider-btn ${provider === 'VITTS' ? 'active' : ''}`} onClick={() => handleProviderChange('VITTS')} disabled={isSaving}>🎙️ ViTTS</button>
+                    {Array.from(new Set(ttsModels.filter(m => m.source && !['Gemini SDK', 'CLIProxy', 'VBEE'].includes(m.source) && !vittsServers.some(s => s.name === m.source) && !m.name.startsWith('vitts:')).map(m => m.source as string))).map((cp) => (
                         <button key={cp} className={`provider-btn ${provider === cp ? 'active' : ''}`} onClick={() => handleProviderChange(cp)} disabled={isSaving}>⚡ {cp}</button>
                     ))}
                 </div>
@@ -471,6 +474,30 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
 
             {provider === 'VITTS' && (
                 <div className="vitts-omnivoice">
+                    {vittsServers.length > 1 && (
+                        <div className="tts-row">
+                            <label className="tts-label">🖥️ Máy chủ ViTTS:</label>
+                            <select
+                                className="tts-select"
+                                value={activeServerId}
+                                onChange={(e) => handleSelectViTTSServer(e.target.value)}
+                                disabled={isSaving || vittsLoading}
+                            >
+                                {vittsServers.map((s) => (
+                                    <option key={s.id} value={s.id}>
+                                        🖥️ {s.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
+                    {vittsServers.length === 0 && !vittsLoading && (
+                        <div className="tts-info">
+                            ⚠️ Chưa tìm thấy máy chủ ViTTS khả dụng. Vui lòng cấu hình API Key / Máy chủ ViTTS trong <strong>Cài đặt</strong>.
+                        </div>
+                    )}
+
                     {vittsLoading ? (
                         <div className="tts-loading">⏳ Đang tải cấu hình máy chủ ViTTS...</div>
                     ) : (
