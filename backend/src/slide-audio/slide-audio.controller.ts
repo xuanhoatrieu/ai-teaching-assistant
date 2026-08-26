@@ -70,8 +70,10 @@ export class SlideAudioController {
 
         setImmediate(async () => {
             try {
-                await this.jobService.updateProgress(job.id, 0, 'Đang tạo lời giảng cho các slide...');
-                await this.slidesService.generateSpeakerNotes(lessonId, userId);
+                await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị tạo lời giảng...');
+                await this.slidesService.generateSpeakerNotes(lessonId, userId, async (pct, msg) => {
+                    await this.jobService.updateProgress(job.id, pct, msg);
+                });
                 await this.jobService.completeJob(job.id);
             } catch (error) {
                 this.logger.error(`[generateSpeakerNotes] Job ${job.id} failed:`, error);
@@ -105,8 +107,10 @@ export class SlideAudioController {
 
         setImmediate(async () => {
             try {
-                await this.jobService.updateProgress(job.id, 0, 'Đang tối ưu lời giảng...');
-                await this.slidesService.optimizeSpeakerNotes(lessonId, userId);
+                await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị tối ưu lời giảng...');
+                await this.slidesService.optimizeSpeakerNotes(lessonId, userId, async (pct, msg) => {
+                    await this.jobService.updateProgress(job.id, pct, msg);
+                });
                 await this.jobService.completeJob(job.id);
             } catch (error) {
                 this.logger.error(`[optimizeSpeakerNotes] Job ${job.id} failed:`, error);

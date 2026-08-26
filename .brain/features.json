@@ -39,11 +39,15 @@
         "tts": {
             "status": "implemented",
             "features": [
-                {"name": "Multi-Provider TTS", "description": "Gemini TTS + Vbee + ViTTS (voice cloning)"},
+                {"name": "Multi-Provider TTS", "description": "Gemini TTS + Vbee + ViTTS (multi-server & dual-engine)"},
                 {"name": "CLIProxy TTS", "description": "4-format audio parser for CLIProxy responses"},
                 {"name": "Speaker Notes Model Selection", "description": "Independent AI model for speaker note generation"},
+                {"name": "ViTTS Multi-Server Architecture", "description": "Support multiple independent ViTTS servers configurable from Admin/User Settings (API Key & Base URL)"},
+                {"name": "ViTTS Dual-Engine Support", "description": "Automatic detection and 2-level UI for VieNeu-TTS (48kHz) and OmniVoice (24kHz)"},
+                {"name": "VieNeu-TTS 48kHz Presets & Clone", "description": "20 presets sorted by [Miền Bắc]-Nam/Nữ, [Miền Trung], [Miền Nam] + Voice Cloning from Voice Library"},
                 {"name": "ViTTS OmniVoice Multi-Mode", "description": "3 modes: Auto Voice, Voice Design (gender/age/pitch/style/accent), Voice Cloning (ref library). Async job polling."},
-                {"name": "ViTTS Options Discovery", "description": "GET /user/model-config/vitts-options endpoint fetches modes, voice library, design attributes from ViTTS server"}
+                {"name": "ViTTS Options Discovery", "description": "GET /user/model-config/vitts-options endpoint fetches engines, presets, voice library, design attributes from ViTTS server"},
+                {"name": "Audio Cache-Busting", "description": "Timestamp query parameter ensures browser immediately plays newly synthesized audio files without caching old ones"}
             ]
         },
         "prompts": {
@@ -51,7 +55,11 @@
             "features": [
                 {"name": "DB-Driven Prompts", "description": "Database prompts with seedV2() sync"},
                 {"name": "PromptComposer", "description": "Role + Task prompt combination"},
-                {"name": "Admin Prompt Editor", "description": "Widened modal with monospace font"}
+                {"name": "Admin Prompt Editor", "description": "Widened modal with monospace font"},
+                {"name": "Few-Shot Pedagogical Speaker Notes", "description": "University lecturer persona with gold standard few-shot learning and 4-step classroom structure (200-280 words / 1.5-2 mins)"},
+                {"name": "Slide Chunking Generation Pipeline", "description": "Micro-batch processing (4 slides/chunk) for uniform quality, zero JSON breaks, and real-time progress reporting"},
+                {"name": "TTS Spoken Flow & Breathing Optimization", "description": "Short sentences (10-18 words), code/math-to-speech conversion, and duration preservation"},
+                {"name": "Hybrid Anti-AI Regex Filter", "description": "Deterministic post-processor purging AI cliché phrases and metaphors from speaker notes"}
             ]
         },
         "export": {

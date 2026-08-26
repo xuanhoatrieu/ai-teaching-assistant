@@ -281,10 +281,105 @@ export class SlidesService {
     }
 
     /**
-     * Generate speaker notes for all slides using AI (Step 4)
-     * Uses the focused 'slides.speaker-notes' prompt with slide content as input.
+     * Helper to clean AI cliché expressions and normalize formatting for spoken lecture
      */
-    async generateSpeakerNotes(lessonId: string, userId: string) {
+    private cleanAntiAIPhrases(text: string): string {
+        if (!text) return '';
+        let cleaned = text;
+
+        const replacements: Array<[RegExp, string]> = [
+            // AI Clichés & Metaphors
+            [/\b(?:hãy\s+cùng\s+(?:tôi|chúng\s+ta)\s+khám\s+phá|bước\s+vào\s+hành\s+trình\s+khám\s+phá)\b/gi, 'bây giờ chúng ta sẽ tìm hiểu'],
+            [/\b(?:chào\s+mừng\s+(?:các\s+bạn|quý\s+vị|mọi\s+người)\s+đến\s+với\s+slide\s+(?:tiếp\s+theo|này))\b[,\.\:\s]*/gi, ''],
+            [/\b(?:cung\s+cấp\s+(?:một\s+)?cái\s+nhìn\s+sâu\s+sắc|mang\s+lại\s+cái\s+nhìn\s+toàn\s+diện)\b/gi, 'giúp chúng ta hiểu rõ'],
+            [/\b(?:chiếc\s+)?chìa\s+khóa\s+vàng\b/gi, 'yếu tố then chốt'],
+            [/\b(?:vũ\s+khí\s+đắc\s+lực|công\s+cụ\s+vạn\s+năng)\b/gi, 'công cụ hiệu quả'],
+            [/\b(?:bức\s+tranh\s+toàn\s+cảnh|bức\s+tranh\s+tổng\s+thể)\b/gi, 'tổng quan toàn bộ'],
+            [/\b(?:đóng\s+vai\s+trò\s+(?:vô\s+cùng|hết\s+sức|cực\s+kỳ)\s+(?:quan\s+trọng|then\s+chốt|quan\s+yếu))\b/gi, 'rất quan trọng'],
+            [/\b(?:không\s+chỉ\s+dừng\s+lại\s+ở\s+đó|chưa\s+dừng\s+lại\s+ở\s+đó)[,\s]*/gi, 'Bên cạnh đó, '],
+            [/\b(?:mở\s+ra\s+(?:một\s+)?cánh\s+cửa|mở\s+ra\s+chân\s+trời\s+mới)\b/gi, 'tạo điều kiện'],
+            [/\b(?:vô\s+cùng\s+thú\s+vị|hết\s+sức\s+tuyệt\s+vời|đầy\s+hứa\s+hẹn)\b/gi, 'đáng chú ý'],
+            [/\b(?:như\s+chúng\s+ta\s+đã\s+biết|như\s+ai\s+cũng\s+biết)[,\s]*/gi, ''],
+            [/\b(?:trải\s+nghiệm\s+tuyệt\s+vời|sức\s+mạnh\s+kỳ\s+diệu)\b/gi, 'hiệu quả thực tế'],
+            [/\b(?:kinh\s+điển)\b/gi, 'thường gặp'],
+            [/\b(?:chí\s+mạng)\b/gi, 'lớn'],
+            [/\b(?:vô\s+cùng|hết\s+sức|cực\s+kỳ)\s+/gi, ''],
+        ];
+
+        for (const [pattern, replacement] of replacements) {
+            cleaned = cleaned.replace(pattern, replacement);
+        }
+
+        // Clean Markdown markers and bracketed slide tags that degrade TTS
+        cleaned = cleaned
+            .replace(/[*#_~`]/g, '')
+            .replace(/\[\s*slide\s*\d+\s*\]/gi, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+
+        return cleaned;
+    }
+
+    /**
+     * Helper to safely parse AI speaker notes JSON response for a batch
+     */
+    private parseSpeakerNotesJSON(
+        rawResult: string,
+        fallbackSlides: Array<{ slideIndex: number; title: string; content?: string | null }>,
+    ): Array<{ slideIndex: number; speakerNote: string }> {
+        let speakerNotes: Array<{ slideIndex: number; speakerNote: string }> = [];
+        try {
+            let jsonStr = rawResult;
+            const jsonStartTag = rawResult.indexOf('```json');
+            if (jsonStartTag !== -1) {
+                const contentStart = jsonStartTag + '```json'.length;
+                const lastBackticks = rawResult.lastIndexOf('```');
+                if (lastBackticks > contentStart) {
+                    jsonStr = rawResult.substring(contentStart, lastBackticks);
+                }
+            } else {
+                const firstOpenBrace = rawResult.indexOf('{');
+                const lastCloseBrace = rawResult.lastIndexOf('}');
+                if (firstOpenBrace !== -1 && lastCloseBrace > firstOpenBrace) {
+                    jsonStr = rawResult.substring(firstOpenBrace, lastCloseBrace + 1);
+                }
+            }
+
+            const data = JSON.parse(jsonStr.trim());
+            const parsedArray = Array.isArray(data) ? data : (data.speakerNotes || data.slides || []);
+            if (Array.isArray(parsedArray) && parsedArray.length > 0) {
+                speakerNotes = parsedArray.map((item: any, idx: number) => ({
+                    slideIndex: item.slideIndex !== undefined ? Number(item.slideIndex) : (fallbackSlides[idx]?.slideIndex ?? (idx + 1)),
+                    speakerNote: this.cleanAntiAIPhrases(item.speakerNote || item.note || item.content || ''),
+                })).filter(n => n.speakerNote.trim().length > 0);
+            }
+        } catch (e) {
+            this.logger.warn(`Failed to parse batch speaker notes JSON: ${e.message}. Raw snippet: ${rawResult.substring(0, 200)}...`);
+        }
+
+        // Fill in missing slides with safe fallback if any slide was skipped
+        for (const slide of fallbackSlides) {
+            if (!speakerNotes.some(n => n.slideIndex === slide.slideIndex)) {
+                speakerNotes.push({
+                    slideIndex: slide.slideIndex,
+                    speakerNote: this.cleanAntiAIPhrases(slide.content || `Nội dung slide ${slide.slideIndex}: ${slide.title}`),
+                });
+            }
+        }
+
+        return speakerNotes;
+    }
+
+    /**
+     * Generate speaker notes for all slides using AI (Step 4 - Button 1)
+     * Uses slide chunking (micro-batches of 4 slides) for uniform high quality,
+     * rolling narrative continuity, and anti-AI pedagogical voice.
+     */
+    async generateSpeakerNotes(
+        lessonId: string,
+        userId: string,
+        onProgress?: (percent: number, message: string) => Promise<void>,
+    ) {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
             include: { subject: true },
@@ -304,66 +399,69 @@ export class SlidesService {
             throw new BadRequestException('No slides found. Complete Step 3 first.');
         }
 
-        // Build slides_content string for the prompt
-        const slidesContent = slides.map(s => {
-            let content = '';
-            if (s.content) {
-                try {
-                    const parsed = JSON.parse(s.content);
-                    content = Array.isArray(parsed) ? parsed.join(', ') : s.content;
-                } catch {
-                    // Content is plain text, not JSON
-                    content = s.content;
-                }
-            }
-            return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual: ${s.visualIdea}` : ''}`;
-        }).join('\n\n');
-
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
+        const BATCH_SIZE = 4;
+        const allSpeakerNotes: Array<{ slideIndex: number; speakerNote: string }> = [];
+        let previousSlideBridge = '';
 
-        // Build prompt using the new focused speaker-notes prompt
-        const prompt = await this.promptComposer.buildFullPrompt(
-            lesson.subjectId,
-            'slides.speaker-notes',
-            {
-                title: lesson.title,
-                slides_content: slidesContent,
-            },
-        );
+        this.logger.log(`Generating speaker notes for ${slides.length} slides in batches of ${BATCH_SIZE} using model ${modelConfig.modelName}`);
 
-        this.logger.debug(`Generated speaker notes prompt (${prompt.length} chars)`);
+        for (let i = 0; i < slides.length; i += BATCH_SIZE) {
+            const batch = slides.slice(i, i + BATCH_SIZE);
+            const batchStartIndex = i + 1;
+            const batchEndIndex = Math.min(i + BATCH_SIZE, slides.length);
 
-        // Generate using AI
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
-        const result = aiResult.content;
-        this.logger.log(`Speaker notes generated via ${aiResult.provider} (${aiResult.model})`);
+            if (onProgress) {
+                const percent = Math.round((i / slides.length) * 100);
+                await onProgress(percent, `Đang tạo lời giảng (Slide ${batchStartIndex} - ${batchEndIndex} / ${slides.length})...`);
+            }
 
-        // Parse JSON response
-        let speakerNotes: Array<{ slideIndex: number; speakerNote: string }> = [];
-        try {
-            let jsonStr = result;
-            const jsonStartTag = result.indexOf('```json');
-            if (jsonStartTag !== -1) {
-                const contentStart = jsonStartTag + '```json'.length;
-                const lastBackticks = result.lastIndexOf('```');
-                if (lastBackticks > contentStart) {
-                    jsonStr = result.substring(contentStart, lastBackticks);
+            // Build slides_content string for this specific batch
+            const slidesContent = batch.map(s => {
+                let content = '';
+                if (s.content) {
+                    try {
+                        const parsed = JSON.parse(s.content);
+                        content = Array.isArray(parsed) ? parsed.join(', ') : s.content;
+                    } catch {
+                        content = s.content;
+                    }
                 }
-            }
+                return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual Idea: ${s.visualIdea}` : ''}`;
+            }).join('\n\n');
 
-            const data = JSON.parse(jsonStr.trim());
-            speakerNotes = data.speakerNotes || data;
+            const promptContent = previousSlideBridge
+                ? `[Ý chính slide trước để nối mạch tự nhiên: "${previousSlideBridge}"]\n\n${slidesContent}`
+                : slidesContent;
 
-            if (!Array.isArray(speakerNotes)) {
-                throw new Error('Response is not an array');
+            // Build prompt
+            const prompt = await this.promptComposer.buildFullPrompt(
+                lesson.subjectId,
+                'slides.speaker-notes',
+                {
+                    title: lesson.title,
+                    slides_content: promptContent,
+                },
+            );
+
+            // Generate using AI
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
+            const batchNotes = this.parseSpeakerNotesJSON(aiResult.content, batch);
+            allSpeakerNotes.push(...batchNotes);
+
+            // Update rolling narrative bridge
+            if (batchNotes.length > 0) {
+                const lastNote = batchNotes[batchNotes.length - 1];
+                previousSlideBridge = lastNote.speakerNote.substring(0, 140);
             }
-        } catch (parseError) {
-            this.logger.error(`Failed to parse speaker notes: ${parseError.message}`);
-            throw new BadRequestException(`Failed to parse AI response: ${parseError.message}`);
+        }
+
+        if (onProgress) {
+            await onProgress(95, 'Đang lưu trữ lời giảng...');
         }
 
         // Update Slide.speakerNote in DB
-        for (const note of speakerNotes) {
+        for (const note of allSpeakerNotes) {
             const existingSlide = slides.find(s => s.slideIndex === note.slideIndex);
             if (existingSlide) {
                 await this.prisma.slide.update({
@@ -387,7 +485,7 @@ export class SlidesService {
                 }
                 const scriptData = JSON.parse(jsonStr.trim());
                 if (scriptData.slides && Array.isArray(scriptData.slides)) {
-                    for (const note of speakerNotes) {
+                    for (const note of allSpeakerNotes) {
                         const slide = scriptData.slides.find((s: any) => s.slideIndex === note.slideIndex);
                         if (slide) {
                             slide.speakerNote = note.speakerNote;
@@ -405,13 +503,12 @@ export class SlidesService {
 
         // Upsert SlideAudio records
         const slideAudios: any[] = [];
-        for (const note of speakerNotes) {
+        for (const note of allSpeakerNotes) {
             const existingAudio = await this.prisma.slideAudio.findUnique({
                 where: { lessonId_slideIndex: { lessonId, slideIndex: note.slideIndex } },
             });
 
             if (existingAudio) {
-                // Update speaker note, reset status if note changed
                 const updated = await this.prisma.slideAudio.update({
                     where: { id: existingAudio.id },
                     data: {
@@ -422,7 +519,6 @@ export class SlidesService {
                 });
                 slideAudios.push(updated);
             } else {
-                // Create new record
                 const created = await this.prisma.slideAudio.create({
                     data: {
                         lessonId,
@@ -436,18 +532,20 @@ export class SlidesService {
             }
         }
 
-        this.logger.log(`✅ Generated ${speakerNotes.length} speaker notes for lesson ${lessonId}`);
+        this.logger.log(`✅ Generated ${allSpeakerNotes.length} speaker notes for lesson ${lessonId}`);
 
         return slideAudios;
     }
 
     /**
      * Optimize & QA speaker notes (Step 4 - Button 2)
-     * - Quality check: word count, idea coverage
-     * - Language cleanup: remove figurative/dramatic language
-     * - TTS optimization: convert code/symbols to speech
+     * Micro-batch processing for spoken rhythm, TTS pauses, and anti-AI phrase sanitization.
      */
-    async optimizeSpeakerNotes(lessonId: string, userId: string) {
+    async optimizeSpeakerNotes(
+        lessonId: string,
+        userId: string,
+        onProgress?: (percent: number, message: string) => Promise<void>,
+    ) {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
             include: { subject: true },
@@ -473,76 +571,66 @@ export class SlidesService {
             throw new BadRequestException('No speaker notes found. Generate speaker notes first (Button 1).');
         }
 
-        // Build slides_content string (same as generateSpeakerNotes)
-        const slidesContent = slides.map(s => {
-            let content = '';
-            if (s.content) {
-                try {
-                    const parsed = JSON.parse(s.content);
-                    content = Array.isArray(parsed) ? parsed.join(', ') : s.content;
-                } catch {
-                    content = s.content;
-                }
-            }
-            return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual: ${s.visualIdea}` : ''}`;
-        }).join('\n\n');
-
-        // Build speaker_notes string from existing notes
-        const speakerNotesContent = slides.map(s => {
-            return `--- Slide ${s.slideIndex} ---\n${s.speakerNote || '(chưa có speaker note)'}`;
-        }).join('\n\n');
-
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
+        const BATCH_SIZE = 4;
+        const allOptimizedNotes: Array<{ slideIndex: number; speakerNote: string }> = [];
 
-        // Build prompt using the optimize-notes prompt
-        const prompt = await this.promptComposer.buildFullPrompt(
-            lesson.subjectId,
-            'slides.optimize-notes',
-            {
-                slides_content: slidesContent,
-                speaker_notes: speakerNotesContent,
-            },
-        );
+        this.logger.log(`Optimizing speaker notes for ${slides.length} slides in batches of ${BATCH_SIZE} using model ${modelConfig.modelName}`);
 
-        this.logger.debug(`Generated optimize notes prompt (${prompt.length} chars)`);
+        for (let i = 0; i < slides.length; i += BATCH_SIZE) {
+            const batch = slides.slice(i, i + BATCH_SIZE);
+            const batchStartIndex = i + 1;
+            const batchEndIndex = Math.min(i + BATCH_SIZE, slides.length);
 
-        // Generate using AI
-        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
-        const result = aiResult.content;
-        this.logger.log(`Speaker notes optimized via ${aiResult.provider} (${aiResult.model})`);
+            if (onProgress) {
+                const percent = Math.round((i / slides.length) * 100);
+                await onProgress(percent, `Đang tối ưu lời giảng (Slide ${batchStartIndex} - ${batchEndIndex} / ${slides.length})...`);
+            }
 
-        // Parse JSON response (same logic as generateSpeakerNotes)
-        let optimizedNotes: Array<{ slideIndex: number; speakerNote: string }> = [];
-        try {
-            let jsonStr = result;
-            const jsonStartTag = result.indexOf('```json');
-            if (jsonStartTag !== -1) {
-                const contentStart = jsonStartTag + '```json'.length;
-                const lastBackticks = result.lastIndexOf('```');
-                if (lastBackticks > contentStart) {
-                    jsonStr = result.substring(contentStart, lastBackticks);
+            // Build slides_content string for this batch
+            const slidesContent = batch.map(s => {
+                let content = '';
+                if (s.content) {
+                    try {
+                        const parsed = JSON.parse(s.content);
+                        content = Array.isArray(parsed) ? parsed.join(', ') : s.content;
+                    } catch {
+                        content = s.content;
+                    }
                 }
-            }
+                return `--- Slide ${s.slideIndex} (${s.slideType}) ---\nTitle: ${s.title}\nContent: ${content}${s.visualIdea ? `\nVisual Idea: ${s.visualIdea}` : ''}`;
+            }).join('\n\n');
 
-            const data = JSON.parse(jsonStr.trim());
-            optimizedNotes = data.speakerNotes || data;
+            // Build speaker_notes string for this batch
+            const speakerNotesContent = batch.map(s => {
+                return `--- Slide ${s.slideIndex} ---\n${s.speakerNote || '(chưa có speaker note)'}`;
+            }).join('\n\n');
 
-            if (!Array.isArray(optimizedNotes)) {
-                throw new Error('Response is not an array');
-            }
-        } catch (parseError) {
-            this.logger.error(`Failed to parse optimized notes: ${parseError.message}`);
-            throw new BadRequestException(`Failed to parse AI response: ${parseError.message}`);
+            // Build prompt
+            const prompt = await this.promptComposer.buildFullPrompt(
+                lesson.subjectId,
+                'slides.optimize-notes',
+                {
+                    slides_content: slidesContent,
+                    speaker_notes: speakerNotesContent,
+                },
+            );
+
+            // Generate using AI
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
+            const batchNotes = this.parseSpeakerNotesJSON(aiResult.content, batch);
+            allOptimizedNotes.push(...batchNotes);
         }
 
-        // Update Slide.speakerNote in DB
-        const slideAudios: any[] = [];
-        for (const note of optimizedNotes) {
-            const existingSlide = slides.find(s => s.slideIndex === note.slideIndex);
-            // NOTE: Do NOT update Slide.speakerNote here - keep it as the raw version from Button 1
-            // Only update SlideAudio.speakerNote with the optimized version
+        if (onProgress) {
+            await onProgress(95, 'Đang cập nhật lời giảng đã tối ưu...');
+        }
 
-            // Also update SlideAudio if exists
+        // Update SlideAudio in DB
+        const slideAudios: any[] = [];
+        for (const note of allOptimizedNotes) {
+            const existingSlide = slides.find(s => s.slideIndex === note.slideIndex);
+
             const existingAudio = await this.prisma.slideAudio.findFirst({
                 where: { lessonId, slideIndex: note.slideIndex },
             });
@@ -583,7 +671,7 @@ export class SlidesService {
                 }
                 const scriptData = JSON.parse(jsonStr.trim());
                 if (scriptData.slides && Array.isArray(scriptData.slides)) {
-                    for (const note of optimizedNotes) {
+                    for (const note of allOptimizedNotes) {
                         const slide = scriptData.slides.find((s: any) => s.slideIndex === note.slideIndex);
                         if (slide) {
                             slide.speakerNote = note.speakerNote;
@@ -595,11 +683,11 @@ export class SlidesService {
                     });
                 }
             } catch (e) {
-                this.logger.warn(`Could not sync optimized notes to slideScript: ${e.message}`);
+                this.logger.warn(`Could not sync optimized speaker notes to slideScript: ${e.message}`);
             }
         }
 
-        this.logger.log(`✅ Optimized ${optimizedNotes.length} speaker notes for lesson ${lessonId}`);
+        this.logger.log(`✅ Optimized ${allOptimizedNotes.length} speaker notes for lesson ${lessonId}`);
 
         return slideAudios;
     }

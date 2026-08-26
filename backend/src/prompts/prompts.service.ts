@@ -323,10 +323,10 @@ Chỉ trả về JSON.`,
       {
         slug: 'slides.speaker-notes',
         name: 'Generate Speaker Notes',
-        content: `**Generate Speaker Notes (Lecture Transcript) — Step 1: Create Content**
+        content: `**Generate Speaker Notes (Live Classroom Lecture) — Step 1: Content & Pedagogy**
 
-Act as a professional university lecturer and presenter.
-Rewrite the slide content below into a natural, spoken lecture transcript (speaker notes) for each slide.
+You are a respected, experienced university professor lecturing live in a classroom across various academic disciplines (Engineering, Economics, Medicine, Law, Science, Humanities).
+Transform the slide content below into a natural, spoken lecture transcript (speaker notes) for each slide.
 
 {output_language_instruction}
 
@@ -337,71 +337,52 @@ Rewrite the slide content below into a natural, spoken lecture transcript (speak
 
 ---
 
-## ⚠️ MANDATORY LENGTH REQUIREMENTS (CRITICAL):
-
-| Slide type | MINIMUM word count | Speaking duration |
-|-----------|-------------------|-------------------|
-| title/agenda | 100 words | 40-60 seconds |
-| objectives | 100 words | 40-60 seconds |
-| **content** | **200 words** | **1.5-2 minutes** |
-| summary | 100 words | 40-60 seconds |
-
-⛔ IF a content slide's speaker note is under 200 words → YOU HAVE FAILED. Rewrite it longer.
-⛔ Each content slide MUST have all 3 parts: opening + detailed explanation + transition.
+## ⏱️ MANDATORY TARGET LENGTH:
+- **Content Slides:** **200 – 280 words** (strictly 1.5 – 2 minutes spoken duration).
+- **Title / Agenda / Objectives / Summary Slides:** **90 – 130 words** (40 – 60 seconds).
 
 ---
 
-## 🎤 WRITING RULES:
-
-### Required structure: Opening → Explanation → Transition
-1. **Opening (1-2 sentences):** Connect from the previous slide with a SHORT, SIMPLE sentence. Example: "Next, let's look at...", "This section covers...", "Now we move to...". DO NOT start with exaggerated openers like "Let's begin with a very real scenario" or "To feel the power of".
-2. **Explanation (main body, 70-80% of content):** Explain each point from the slide — DO NOT read bullet points verbatim. Instead, EXPLAIN, provide EXAMPLES, and ANALYZE.
-3. **Transition (1-2 sentences):** Summarize the key point and lead into the next slide.
-
-**Important: Do NOT write the labels "Opening", "Explanation", "Transition" in the speakerNote. Write as a continuous, flowing narrative.**
-
-### The explanation section MUST include:
-- Clear explanation of every point in the slide (do not skip any)
-- At least 1-2 concrete illustrative examples
-- Brief analysis to clarify meaning
-- Logical connections between points
-- Emphasis on key takeaways
-
-## 🗣️ TONE & STYLE:
-- Write as a university lecture transcript — NORMAL, natural tone
-- Tone = a lecturer talking normally to students in class
-- NOT: event MC, motivational speaker, YouTuber, advertisement, literary essay
-- Direct, clear, straight to the technical content
-- DO NOT use excessive intensifiers ("very practical", "extremely important", "absolutely essential")
-- DO NOT use metaphors, imagery, literary comparisons, or hyperbole
-- **Format: PLAIN TEXT ONLY.** Do NOT use Markdown, lists, bullet points, asterisks (*), hashtags (#), or emojis. TTS engines do not read these well.
-- Do not just read the text. Explain and expand on the points naturally.
-
-### AVOID:
-- ❌ Reading bullet points verbatim
-- ❌ Writing too briefly without explanation
-- ❌ Starting every sentence the same way
-- ❌ Using too many rhetorical questions
-- ❌ Exaggerated openings
+## 🎓 CLASSROOM LECTURE STRUCTURE (4 Steps per Content Slide):
+1. **Direct Hook / Slide Interaction (1–2 sentences):** Point directly to the core challenge or slide element ("Quan sát sơ đồ/bảng số liệu ở đây...").
+2. **Mechanism & Concrete Example (3–5 sentences):** Explain the inner workings clearly with at least 1 practical, real-world example or scenario.
+3. **Common Pitfall / Caveat (2–3 sentences):** Highlight what students often confuse or what happens if this concept is misunderstood ("Một lỗi mà sinh viên hay mắc phải...").
+4. **Takeaway & Bridge (1–2 sentences):** Conclude the key point concisely and lead naturally into the next topic ("Tóm lại,...").
 
 ---
 
-## Output format (JSON):
+## 🌟 GOLD STANDARD MULTI-DISCIPLINARY EXAMPLES:
 
+### Example 1 (Science / Technology):
+"Bây giờ, chúng ta cùng phân tích thuật toán Tìm kiếm nhị phân — Binary Search. Các bạn quan sát mảng số đã được sắp xếp ở đây. Thay vì duyệt tuần tự từ đầu đến cuối, thuật toán này sẽ duyệt ngay vào phần tử ở chính giữa để so sánh với giá trị cần tìm. Nếu giá trị cần tìm nhỏ hơn, chúng ta loại bỏ các phần tử bên phải và tìm tiếp ở nửa bên trái. Cứ sau mỗi lần so sánh, không gian tìm kiếm lại giảm đi một nửa. Ví dụ với một triệu phần tử, duyệt tuyến tính có thể mất đến một triệu phép so sánh, nhưng với Binary Search, các bạn chỉ mất tối đa hai mươi lần so sánh. Một lỗi mà sinh viên hay mắc phải đó là mảng bắt buộc phải được sắp xếp từ trước thì thuật toán mới chạy đúng; nếu đưa vào một mảng chưa được sắp xếp thì kết quả trả về sẽ hoàn toàn sai lệch. Tóm lại, ưu điểm vượt trội của thuật toán này là tốc độ nhanh với độ phức tạp O log n. Tiếp theo, chúng ta sẽ xem cách cài đặt nó bằng code."
+
+### Example 2 (Economics / Business):
+"Bây giờ, chúng ta cùng phân tích khái niệm Độ co giãn của cầu theo giá trong kinh tế vi mô. Các bạn quan sát đồ thị đường cầu ở đây. Độ co giãn cho chúng ta biết khi giá của một sản phẩm thay đổi một phần trăm thì lượng cầu của người tiêu dùng sẽ phản ứng tăng hay giảm bao nhiêu phần trăm. Ví dụ với các mặt hàng thiết yếu như xăng dầu hay thuốc chữa bệnh, dù giá có tăng thì người dân vẫn cần sử dụng, nên lượng cầu thay đổi rất ít, nghĩa là độ co giãn theo giá thấp. Ngược lại, với những mặt hàng không thiết yếu, khi giá tăng lên, người tiêu dùng có thể chuyển sang sản phẩm thay thế khác, khiến lượng cầu sụt giảm nhiều. Một lỗi mà sinh viên hay mắc phải khi làm bài tập: đó là nhầm độ dốc của đường cầu với độ co giãn; độ dốc là một đại lượng cố định trên đường cầu thẳng, nhưng độ co giãn lại thay đổi ở từng mức giá khác nhau. Tóm lại, việc xác định đúng độ co giãn sẽ giúp doanh nghiệp đưa ra quyết định tăng hay giảm giá để tối ưu hóa doanh thu. Tiếp theo, chúng ta sẽ xem xét mối quan hệ giữa độ co giãn và tổng doanh thu."
+
+### Example 3 (Medicine / Biology):
+"Ở phần này, chúng ta sẽ làm rõ cơ chế điều hòa nồng độ glucose trong máu của cơ thể. Các bạn quan sát sơ đồ phản hồi ngược ở đây. Khi chúng ta vừa ăn xong, nồng độ glucose trong máu tăng lên, kích thích các tế bào Beta của tuyến tụy tiết ra hormone Insulin. Insulin giúp vận chuyển glucose từ máu vào trong các tế bào để sử dụng, đồng thời kích thích gan chuyển hóa glucose dư thừa thành glycogen dự trữ. Ngược lại, khi cơ thể xa bữa ăn, nồng độ đường trong máu hạ xuống, tuyến tụy sẽ chuyển sang tiết hormone Glucagon để phân giải glycogen tại gan trở lại thành glucose đưa vào máu. Một lỗi mà sinh viên hay mắc phải: đó là chưa phân biệt rõ cơ chế giữa hai tuýp đái tháo đường; ở tuýp 1, các tế bào Beta bị tổn thương nên không sản xuất được Insulin; còn ở tuýp 2, tuyến tụy vẫn tiết Insulin nhưng các thụ thể trên màng tế bào bị giảm nhạy cảm. Tóm lại, nắm vững cơ chế này sẽ giúp các bạn hiểu rõ nguyên lý của các nhóm thuốc hạ đường huyết. Tiếp theo, chúng ta sẽ đi vào chi tiết cấu trúc phân tử của Insulin."
+
+### Example 4 (Law / Social Sciences):
+"Bây giờ chúng ta sẽ bàn về vấn đề Hợp đồng dân sự vô hiệu theo quy định của Bộ luật Dân sự. Các bạn nhìn vào bảng so sánh này. Chúng ta phân chia hợp đồng vô hiệu thành hai trường hợp: vô hiệu tuyệt đối và vô hiệu tương đối. Hợp đồng vô hiệu tuyệt đối phát sinh khi nội dung vi phạm điều cấm của luật hoặc trái đạo đức xã hội; trong trường hợp này, hợp đồng không có giá trị pháp lý ngay từ thời điểm giao kết và bất kỳ cá nhân, tổ chức nào có quyền lợi liên quan đều có thể yêu cầu Tòa án tuyên bố vô hiệu. Ngược lại, hợp đồng vô hiệu tương đối xuất phát từ sự khiếm khuyết về ý chí, ví dụ như bị lừa dối, đe dọa hoặc nhầm lẫn; ở đây chỉ có bên bị lừa dối mới có quyền yêu cầu Tòa án hủy bỏ hợp đồng. Một lỗi mà sinh viên hay mắc phải khi giải quyết tình huống pháp lý: đó là áp dụng thời hiệu khởi kiện cho cả hai loại vô hiệu, trong khi theo luật hiện hành, yêu cầu tuyên bố hợp đồng vô hiệu do vi phạm điều cấm thì không bị hạn chế bởi thời hiệu. Tóm lại, việc phân định đúng loại vô hiệu sẽ quyết định quyền và thời hạn khởi kiện của các bên. Slide tiếp theo chúng ta sẽ xét hậu quả pháp lý về tài sản khi hợp đồng bị hủy bỏ."
+
+---
+
+## 🚫 CRITICAL RESTRICTIONS:
+- ❌ NO AI clichés ("khám phá", "chìa khóa vàng", "vũ khí đắc lực", "bức tranh toàn cảnh", "không chỉ dừng lại ở đó").
+- ❌ NO exaggerated/hyperbolic language ("kinh điển", "chí mạng", "vô cùng", "kỳ diệu", "cực kỳ quan trọng", "bẫy lỗi sai kinh điển"). Use calm, objective academic phrasing.
+- ❌ NO Markdown formatting, bullet points, asterisks (*), hashtags (#), or emojis. Plain text narrative only.
+
+---
+
+## Output format (JSON only):
 {
   "speakerNotes": [
     {
       "slideIndex": 1,
-      "speakerNote": "Welcome everyone. Today we will explore..."
-    },
-    {
-      "slideIndex": 2,
-      "speakerNote": "Today's lesson covers the following topics. First..."
+      "speakerNote": "Lời giảng tự nhiên đầy đủ 200 - 280 từ cho slide nội dung..."
     }
   ]
 }
-
-⚠️ REMINDER: Each speakerNote for content slides must be AT LEAST 200 words. Explain all points in the slide fully. Review before returning.
 
 Return JSON only.`,
         variables: ['{title}', '{slides_content}', '{output_language_instruction}'],
@@ -409,111 +390,45 @@ Return JSON only.`,
       {
         slug: 'slides.optimize-notes',
         name: 'Optimize & QA Speaker Notes',
-        content: `**Optimize & QA Speaker Notes — Step 2**
+        content: `**Optimize & Polish Speaker Notes — Step 2: Spoken Flow & TTS Naturalization**
 
-Act as a professional university lecturer and TTS content optimizer.
-Review, improve, and optimize the existing speaker notes for text-to-speech quality.
+You are a Senior University Lecturer and Spoken Audio Director.
+Polish the existing speaker notes into natural spoken Vietnamese with smooth breathing rhythm for text-to-speech (TTS) synthesis.
 
 {output_language_instruction}
 
 **Input:**
-- Original slide content (for cross-checking):
+- Original slide content:
 {slides_content}
 
-- Current speaker notes (from Step 1):
+- Current speaker notes:
 {speaker_notes}
 
 ---
 
-## ⛔ MANDATORY PRINCIPLES — READ CAREFULLY BEFORE STARTING
-
-1. **PRESERVE paragraph structure:** Keep the same number of paragraphs, sentence order, and narrative flow.
-2. **ADD ONLY, DO NOT REMOVE:** If you find missing content → add new sentences.
-3. **OUTPUT word count >= 95% of INPUT word count.** Violating this = FAILURE.
-4. **Replace ALL metaphors, hyperbole, and excessive intensifiers** with direct, natural language appropriate for a university lecturer.
-5. **TONE = NORMAL LECTURER.** Every sentence should sound like a lecturer explaining, NOT a motivational speaker/MC/advertisement.
-6. **Format: PLAIN TEXT ONLY.** Remove any Markdown formatting, bullet points, asterisks (*), hashtags (#), or emojis from speaker notes. TTS engines do not read these well.
-
----
-
-## ✅ TASK 1 (HIGHEST PRIORITY): NORMALIZE TONE
-
-⚠️ THIS IS THE MOST IMPORTANT TASK. If output still has exaggerated tone = FAILURE.
-
-**Standard:** A university lecturer speaking NORMALLY in class.
-
-**Read EACH SENTENCE and ask:** "Does this sound like a normal lecturer or like a motivational speaker/MC/advertisement?"
-- If it sounds like **a motivational speaker, event MC, advertisement, or literary essay** → rewrite in normal tone
-- If it sounds like **a lecturer explaining** → keep as-is
-
-**Signs to fix:**
-- Long-winded, exaggerated slide openers → shorten to 1 direct sentence
-- Metaphors, imagery, literary comparisons ("golden key", "open the door", "nightmare")
-- Excessive intensifiers ("very", "extremely", "absolutely", "incredibly")
-- Advertising language ("indispensable", "undeniable", "amazing")
-- Hyperbole ("mind-blowing", "magical", "explosive", "legendary")
-
-**Note:** Only fix the wording. PRESERVE the meaning and paragraph structure.
+## 🎯 4 CORE OPTIMIZATION RULES:
+1. **Natural Spoken Rhythm (Short Sentences):** Split long sentences (> 20 words) into clear, spoken sentences of 10 – 18 words with commas and periods for natural breathing pauses.
+2. **Convert Code, Math & Symbols to Spoken Words:**
+   - Operators & Code: \`len(arr) == 0\` → "độ dài mảng bằng 0", \`x += 1\` → "tăng x lên 1 đơn vị".
+   - Math & Formulas: \`O(log n)\` → "độ phức tạp O log n", \`x^2\` → "x bình phương".
+   - Common tech abbreviations (CPU, RAM, API, SQL, HTML, CSS, JSON) → keep as-is.
+3. **Preserve Length & Depth:** Maintain total word count (>= 95% of input, keeping 200 – 280 words per content slide / 1.5 – 2 minutes). DO NOT summarize or shorten.
+4. **Purge Remaining AI Clichés:** Ensure the tone is 100% human lecturer explaining in class.
 
 ---
 
-## ✅ TASK 2: QUALITY AUDIT
+## Format: PLAIN TEXT NARRATIVE ONLY (NO Markdown, asterisks, bullets, emojis).
 
-Cross-check speaker notes against original slide content to find and fix issues:
-
-| Issue | Action |
-|-------|--------|
-| Slide has 4 points, speaker note only explains 2 | Add explanation for the 2 missing points |
-| Speaker note < 200 words (content slide) | Add more examples and detailed explanation |
-| Speaker note < 100 words (title/agenda/summary slide) | Add more content |
-| Missing illustrative examples | Add at least 1 example |
-| Incorrect or contradictory explanation | Fix to match slide content |
-
----
-
-## ✅ TASK 3: TTS OPTIMIZATION
-
-Speaker notes will be read aloud by TTS. Convert ALL technical content to natural spoken form.
-
-### Code-to-speech conversion rules:
-- Function/variable names with underscores → describe in words, DO NOT keep raw code names
-- Operators → write as words ("equals", "less than", "greater than", "not equal to")
-- Code statements → paraphrase as natural sentences
-
-**Examples:**
-❌ \`calculate_sum(a, b)\` → ✅ "the calculate sum function, which takes two parameters a and b"
-❌ \`if n <= 1: return 1\` → ✅ "if n is less than or equal to 1, then return 1"
-❌ \`factorial(n-1)\` → ✅ "call the factorial function with the parameter n minus 1"
-
-### Abbreviation rules (priority order):
-1. **Domain abbreviations with well-known expansions → expand in the output language:**
-   EOL → "end of line character", EOF → "end of file", OS → "operating system", IDE → "integrated development environment", OOP → "object-oriented programming"
-
-2. **Common tech abbreviations → keep as-is (TTS reads them automatically):**
-   CPU, RAM, SSD, API, HTML, CSS, SQL, HTTP, JSON, XML
-
-### ⚠️ DO NOT SPLIT short abbreviations into individual letters:
-- ❌ DO NOT write: "p y" (splitting py into p y)
-- ✅ KEEP AS-IS: "py", "js", "ts", "cpp", "exe", "dll"
-- Abbreviations of 2-4 characters NOT in the expansion list → keep as-is, DO NOT split
-
----
-
-## Output format (JSON):
-
+## Output format (JSON only):
 {
   "speakerNotes": [
     {
       "slideIndex": 1,
-      "speakerNote": "Reviewed, tone-corrected, and TTS-optimized speaker note..."
+      "speakerNote": "Lời giảng đã tối ưu nhịp thở và câu chữ cho giọng đọc..."
     }
   ]
 }
 
-⚠️ FINAL CHECK:
-1. Output word count >= 95% of input? If not → add content.
-2. Were any sentences deleted? If yes → add them back.
-3. Were any narrative paragraphs turned into lists? If yes → rewrite as narrative.
 Return JSON only.`,
         variables: ['{slides_content}', '{speaker_notes}', '{output_language_instruction}'],
       },
