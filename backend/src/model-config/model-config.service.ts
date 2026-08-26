@@ -745,8 +745,33 @@ export class ModelConfigService {
             defaultVoice?: string;
             designInstruct?: string;
         }> = [];
+        const seenBaseUrls = new Set<string>();
 
-        // 1. Check user personal ViTTS keys from ApiKeys table
+        // 1. Check Admin System ViTTS servers FIRST (highest priority for multi-server)
+        if (this.systemConfigService) {
+            try {
+                const adminServers = await this.systemConfigService.getViTTSServers();
+                for (const s of adminServers) {
+                    if (s.enabled && s.baseUrl) {
+                        const cleanUrl = s.baseUrl.replace(/\/+$/, '').toLowerCase();
+                        seenBaseUrls.add(cleanUrl);
+                        result.push({
+                            id: s.id,
+                            name: s.name,
+                            baseUrl: s.baseUrl.replace(/\/+$/, ''),
+                            apiKey: s.apiKey,
+                            isPersonal: false,
+                            defaultVoice: s.defaultVoice,
+                            designInstruct: s.designInstruct,
+                        });
+                    }
+                }
+            } catch (err: any) {
+                this.logger.warn(`Failed to load admin ViTTS servers: ${err.message}`);
+            }
+        }
+
+        // 2. Check user personal ViTTS keys from ApiKeys table (deduplicate against admin servers)
         try {
             const userKeys = await this.prisma.apiKey.findMany({
                 where: { userId, service: 'VITTS' as any },
@@ -770,39 +795,22 @@ export class ModelConfigService {
                 }
 
                 if (apiKey) {
-                    result.push({
-                        id: `personal-${uk.id}`,
-                        name: uk.name || 'ViTTS Cá nhân',
-                        baseUrl: baseUrl.replace(/\/+$/, ''),
-                        apiKey,
-                        isPersonal: true,
-                    });
+                    const cleanUrl = baseUrl.replace(/\/+$/, '').toLowerCase();
+                    // If an admin server already manages this URL, don't create a duplicate entry
+                    if (!seenBaseUrls.has(cleanUrl)) {
+                        seenBaseUrls.add(cleanUrl);
+                        result.push({
+                            id: `personal-${uk.id}`,
+                            name: uk.name ? `${uk.name} (Cá nhân)` : 'ViTTS Cá nhân',
+                            baseUrl: baseUrl.replace(/\/+$/, ''),
+                            apiKey,
+                            isPersonal: true,
+                        });
+                    }
                 }
             }
         } catch (err: any) {
             this.logger.warn(`Failed to load personal ViTTS keys: ${err.message}`);
-        }
-
-        // 2. Check Admin System ViTTS servers
-        if (this.systemConfigService) {
-            try {
-                const adminServers = await this.systemConfigService.getViTTSServers();
-                for (const s of adminServers) {
-                    if (s.enabled && s.baseUrl) {
-                        result.push({
-                            id: s.id,
-                            name: s.name,
-                            baseUrl: s.baseUrl.replace(/\/+$/, ''),
-                            apiKey: s.apiKey,
-                            isPersonal: false,
-                            defaultVoice: s.defaultVoice,
-                            designInstruct: s.designInstruct,
-                        });
-                    }
-                }
-            } catch (err: any) {
-                this.logger.warn(`Failed to load admin ViTTS servers: ${err.message}`);
-            }
         }
 
         return result;
