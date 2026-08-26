@@ -314,18 +314,18 @@ export class TTSService {
                 try {
                     const decrypted = uk.keyEncrypted ? await decrypt(uk.keyEncrypted, ENCRYPTION_KEY) : '';
                     const parsed = JSON.parse(decrypted);
-                    if (typeof parsed === 'object' && parsed !== null && parsed.apiKey) {
+                    if (typeof parsed === 'object' && parsed !== null) {
                         personalServers.push({
                             id: `personal-${uk.id}`,
-                            name: uk.name || 'ViTTS Cá nhân',
-                            baseUrl: parsed.baseUrl || 'http://10.64.11.16:8888',
-                            apiKey: parsed.apiKey,
+                            name: uk.name ? (uk.name.includes('(Cá nhân)') ? uk.name : `${uk.name} (Cá nhân)`) : 'ViTTS Cá nhân',
+                            baseUrl: (parsed.baseUrl || 'http://117.0.36.6:8888').replace(/\/+$/, ''),
+                            apiKey: parsed.apiKey || '',
                         });
                     } else if (decrypted) {
                         personalServers.push({
                             id: `personal-${uk.id}`,
-                            name: uk.name || 'ViTTS Cá nhân',
-                            baseUrl: 'http://10.64.11.16:8888',
+                            name: uk.name ? (uk.name.includes('(Cá nhân)') ? uk.name : `${uk.name} (Cá nhân)`) : 'ViTTS Cá nhân',
+                            baseUrl: 'http://117.0.36.6:8888',
                             apiKey: decrypted,
                         });
                     }
@@ -360,7 +360,7 @@ export class TTSService {
                 targetServer = allAvailableServers[0];
             }
 
-            if (targetServer && targetServer.apiKey) {
+            if (targetServer && (targetServer.apiKey || targetServer.baseUrl)) {
                 this.logger.log(`Using ViTTS server "${targetServer.name || 'Default'}" at ${targetServer.baseUrl}`);
 
                 // Clean voiceId by removing the serverId prefix (e.g. vitts:server-1:vieneu:Adam -> vieneu:Adam)
@@ -372,7 +372,7 @@ export class TTSService {
                 }
 
                 provider = this.ttsFactory.getProvider('VITTS' as any, {
-                    apiKey: targetServer.apiKey,
+                    apiKey: targetServer.apiKey || '',
                     baseUrl: targetServer.baseUrl,
                 });
             } else {

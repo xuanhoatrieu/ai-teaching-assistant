@@ -66,10 +66,27 @@ export class ApiKeysService {
             orderBy: { createdAt: 'desc' },
         });
 
-        return keys.map((key) => ({
-            ...key,
-            keyEncrypted: key.keyEncrypted ? '••••••••' : null,
-            hasKey: !!key.keyEncrypted,
+        return Promise.all(keys.map(async (key) => {
+            let metadata: any = undefined;
+            if (key.keyEncrypted && (key.service === 'VITTS' || key.service === 'OPENAI' || key.service === 'VBEE')) {
+                try {
+                    const decrypted = await this.crypto.decrypt(key.keyEncrypted);
+                    const parsed = JSON.parse(decrypted);
+                    if (typeof parsed === 'object' && parsed !== null) {
+                        metadata = {
+                            baseUrl: parsed.baseUrl,
+                            appId: parsed.appId,
+                            voiceCodes: parsed.voiceCodes,
+                        };
+                    }
+                } catch {}
+            }
+            return {
+                ...key,
+                keyEncrypted: key.keyEncrypted ? '••••••••' : null,
+                hasKey: !!key.keyEncrypted,
+                metadata,
+            };
         }));
     }
 
@@ -90,7 +107,38 @@ export class ApiKeysService {
         const updateData: any = {};
         if (data.name) updateData.name = data.name;
         if (data.key) {
-            updateData.keyEncrypted = await this.crypto.encrypt(data.key);
+            try {
+                const parsedNew = JSON.parse(data.key);
+                if (typeof parsedNew === 'object' && parsedNew !== null) {
+                    const existing = await this.prisma.apiKey.findUnique({ where: { id } });
+                    if (existing?.keyEncrypted) {
+                        const oldDecrypted = await this.crypto.decrypt(existing.keyEncrypted);
+                        try {
+                            const parsedOld = JSON.parse(oldDecrypted);
+                            if (typeof parsedOld === 'object' && parsedOld !== null) {
+                                if (!parsedNew.apiKey && parsedOld.apiKey) {
+                                    parsedNew.apiKey = parsedOld.apiKey;
+                                }
+                                if (!parsedNew.token && parsedOld.token) {
+                                    parsedNew.token = parsedOld.token;
+                                }
+                                if (!parsedNew.appId && parsedOld.appId) {
+                                    parsedNew.appId = parsedOld.appId;
+                                }
+                            }
+                        } catch {
+                            if (!parsedNew.apiKey && oldDecrypted) {
+                                parsedNew.apiKey = oldDecrypted;
+                            }
+                        }
+                    }
+                    updateData.keyEncrypted = await this.crypto.encrypt(JSON.stringify(parsedNew));
+                } else {
+                    updateData.keyEncrypted = await this.crypto.encrypt(data.key);
+                }
+            } catch {
+                updateData.keyEncrypted = await this.crypto.encrypt(data.key);
+            }
         }
         return this.prisma.apiKey.update({
             where: { id, userId, isSystem: false },

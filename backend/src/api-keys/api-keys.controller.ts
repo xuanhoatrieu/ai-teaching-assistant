@@ -174,6 +174,39 @@ export class UserApiKeysController {
             }
         }
 
+        if (dto.service === ('VITTS' as any)) {
+            try {
+                let apiKey = dto.key;
+                let baseUrl = 'http://117.0.36.6:8888';
+                try {
+                    const parsed = JSON.parse(dto.key);
+                    apiKey = parsed.apiKey || dto.key;
+                    baseUrl = parsed.baseUrl || baseUrl;
+                } catch {}
+
+                const cleanBaseUrl = baseUrl.replace(/\/+$/, '');
+                const authHeaders: Record<string, string> = {};
+                if (apiKey) {
+                    authHeaders['X-API-Key'] = apiKey;
+                    authHeaders['Authorization'] = `Bearer ${apiKey}`;
+                }
+
+                // Check /api/v1/tts/models or /api/v1/tts/options
+                const response = await fetch(`${cleanBaseUrl}/api/v1/tts/models`, {
+                    headers: authHeaders,
+                    signal: AbortSignal.timeout(10000),
+                });
+
+                if (response.ok) {
+                    return { success: true, message: `Kết nối thành công tới máy chủ ViTTS (${cleanBaseUrl})!` };
+                } else {
+                    return { success: false, message: `Lỗi kết nối ViTTS: HTTP ${response.status} (Kiểm tra lại Base URL hoặc API Key)` };
+                }
+            } catch (err: any) {
+                return { success: false, message: `Lỗi kết nối ViTTS: ${err.message}` };
+            }
+        }
+
         return { success: true, message: 'Dịch vụ này hiện chưa hỗ trợ kiểm tra kết nối trực tiếp.' };
     }
 

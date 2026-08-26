@@ -101,7 +101,10 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
     const [designAccent, setDesignAccent] = useState('');
     const [vittsNormalize, setVittsNormalize] = useState(true);
 
-    const activeServerId = currentVittsServerId || vittsServers[0]?.id || (selectedVoice.startsWith('vitts:') ? selectedVoice.split(':')[1] : '');
+    const parsedServerIdFromVoice = (selectedVoice.startsWith('vitts:') && selectedVoice.split(':').length >= 3)
+        ? selectedVoice.split(':')[1]
+        : '';
+    const activeServerId = currentVittsServerId || parsedServerIdFromVoice || vittsServers[0]?.id || '';
 
     const buildDesignInstruct = useCallback(() => {
         const parts: string[] = [];
@@ -489,6 +492,15 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                    )}
+
+                    {vittsServers.length === 1 && (
+                        <div className="tts-row">
+                            <label className="tts-label">🖥️ Máy chủ ViTTS:</label>
+                            <span style={{ padding: '0.35rem 0.75rem', background: 'rgba(255, 255, 255, 0.06)', borderRadius: '6px', fontSize: '0.875rem', color: '#38bdf8', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                🖥️ {vittsServers[0].name}
+                            </span>
                         </div>
                     )}
 

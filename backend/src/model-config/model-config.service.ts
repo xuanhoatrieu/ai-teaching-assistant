@@ -726,6 +726,7 @@ export class ModelConfigService {
 
     /**
      * Resolve all active ViTTS servers (admin + personal)
+     * Duplicate IPs/baseUrls are explicitly allowed because personal accounts have distinct API keys, quotas, and voice models.
      */
     async resolveAllViTTSServers(userId: string): Promise<Array<{
         id: string;
@@ -745,21 +746,20 @@ export class ModelConfigService {
             defaultVoice?: string;
             designInstruct?: string;
         }> = [];
-        const seenBaseUrls = new Set<string>();
 
-        // 1. Check Admin System ViTTS servers FIRST (highest priority for multi-server)
+        // 1. Check Admin System ViTTS servers (always included if enabled)
         if (this.systemConfigService) {
             try {
                 const adminServers = await this.systemConfigService.getViTTSServers();
                 for (const s of adminServers) {
                     if (s.enabled && s.baseUrl) {
-                        const cleanUrl = s.baseUrl.replace(/\/+$/, '').toLowerCase();
-                        seenBaseUrls.add(cleanUrl);
+                        const rawName = s.name || 'ViTTS Hệ thống';
+                        const displayName = rawName.includes('(Hệ thống)') ? rawName : `${rawName} (Hệ thống)`;
                         result.push({
                             id: s.id,
-                            name: s.name,
+                            name: displayName,
                             baseUrl: s.baseUrl.replace(/\/+$/, ''),
-                            apiKey: s.apiKey,
+                            apiKey: s.apiKey || '',
                             isPersonal: false,
                             defaultVoice: s.defaultVoice,
                             designInstruct: s.designInstruct,
@@ -771,7 +771,7 @@ export class ModelConfigService {
             }
         }
 
-        // 2. Check user personal ViTTS keys from ApiKeys table (deduplicate against admin servers)
+        // 2. Check user personal ViTTS keys from ApiKeys table (always included even if duplicate IP)
         try {
             const userKeys = await this.prisma.apiKey.findMany({
                 where: { userId, service: 'VITTS' as any },
@@ -794,19 +794,16 @@ export class ModelConfigService {
                     apiKey = uk.keyEncrypted ? await this.crypto.decrypt(uk.keyEncrypted) : '';
                 }
 
-                if (apiKey) {
-                    const cleanUrl = baseUrl.replace(/\/+$/, '').toLowerCase();
-                    // If an admin server already manages this URL, don't create a duplicate entry
-                    if (!seenBaseUrls.has(cleanUrl)) {
-                        seenBaseUrls.add(cleanUrl);
-                        result.push({
-                            id: `personal-${uk.id}`,
-                            name: uk.name ? `${uk.name} (Cá nhân)` : 'ViTTS Cá nhân',
-                            baseUrl: baseUrl.replace(/\/+$/, ''),
-                            apiKey,
-                            isPersonal: true,
-                        });
-                    }
+                if (apiKey || baseUrl) {
+                    const rawName = uk.name || 'ViTTS Cá nhân';
+                    const displayName = rawName.includes('(Cá nhân)') ? rawName : `${rawName} (Cá nhân)`;
+                    result.push({
+                        id: `personal-${uk.id}`,
+                        name: displayName,
+                        baseUrl: baseUrl.replace(/\/+$/, ''),
+                        apiKey,
+                        isPersonal: true,
+                    });
                 }
             }
         } catch (err: any) {
@@ -1496,6 +1493,23 @@ export class ModelConfigService {
         } catch (error: any) {
             this.logger.error(`Failed to discover ViTTS options for ${server.name}: ${error.message}`);
             return { error: error.message };
+        }
+    }
+
+    /**
+     * Invalidate caches (when user keys or system configs change)
+     */
+    clearCache(userId?: string) {
+        if (userId) {
+            this.availableModelsCache.delete(userId);
+            for (const key of this.vittsOptionsCache.keys()) {
+                if (key.startsWith(`${userId}:`)) {
+                    this.vittsOptionsCache.delete(key);
+                }
+            }
+        } else {
+            this.availableModelsCache.clear();
+            this.vittsOptionsCache.clear();
         }
     }
 }

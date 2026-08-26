@@ -712,17 +712,18 @@ export function UserSettingsPage() {
         setTestResult(null);
         if (key) {
             setEditingKey(key);
+            const meta = (key as any).metadata || {};
             setFormData({
                 name: key.name,
                 service: key.service,
                 key: '',
                 vbeeToken: '',
-                vbeeAppId: '',
-                vbeeVoiceCodes: '',
+                vbeeAppId: meta.appId || '',
+                vbeeVoiceCodes: meta.voiceCodes || '',
                 vittsApiKey: '',
-                vittsBaseUrl: 'http://10.64.11.16:8888',
+                vittsBaseUrl: meta.baseUrl || 'http://117.0.36.6:8888',
                 openaiApiKey: '',
-                openaiBaseUrl: 'https://api.openai.com/v1',
+                openaiBaseUrl: meta.baseUrl || 'https://api.openai.com/v1',
             });
         } else {
             setEditingKey(null);
@@ -734,7 +735,7 @@ export function UserSettingsPage() {
                 vbeeAppId: '',
                 vbeeVoiceCodes: '',
                 vittsApiKey: '',
-                vittsBaseUrl: 'http://10.64.11.16:8888',
+                vittsBaseUrl: 'http://117.0.36.6:8888',
                 openaiApiKey: '',
                 openaiBaseUrl: 'https://api.openai.com/v1',
             });
@@ -758,7 +759,7 @@ export function UserSettingsPage() {
         let keyToSubmit = formData.key;
         
         if (formData.service === 'OPENAI') {
-            if (!formData.openaiApiKey) {
+            if (!formData.openaiApiKey && !editingKey) {
                 setTestResult({ success: false, message: 'Vui lòng nhập OpenAI API Key trước khi test.' });
                 setIsTesting(false);
                 return;
@@ -768,13 +769,13 @@ export function UserSettingsPage() {
                 baseUrl: formData.openaiBaseUrl || 'https://api.openai.com/v1'
             });
         } else if (formData.service === 'GEMINI') {
-            if (!formData.key) {
+            if (!formData.key && !editingKey) {
                 setTestResult({ success: false, message: 'Vui lòng nhập Gemini API Key trước khi test.' });
                 setIsTesting(false);
                 return;
             }
         } else if (formData.service === 'VBEE') {
-            if (!formData.vbeeToken || !formData.vbeeAppId) {
+            if ((!formData.vbeeToken || !formData.vbeeAppId) && !editingKey) {
                 setTestResult({ success: false, message: 'Vui lòng nhập Vbee Token và App ID trước khi test.' });
                 setIsTesting(false);
                 return;
@@ -783,6 +784,16 @@ export function UserSettingsPage() {
                 token: formData.vbeeToken,
                 appId: formData.vbeeAppId,
                 voiceCodes: formData.vbeeVoiceCodes || ''
+            });
+        } else if (formData.service === 'VITTS') {
+            if (!formData.vittsApiKey && !editingKey) {
+                setTestResult({ success: false, message: 'Vui lòng nhập ViTTS API Key trước khi test.' });
+                setIsTesting(false);
+                return;
+            }
+            keyToSubmit = JSON.stringify({
+                apiKey: formData.vittsApiKey,
+                baseUrl: formData.vittsBaseUrl || 'http://117.0.36.6:8888'
             });
         }
         
@@ -814,8 +825,10 @@ export function UserSettingsPage() {
         let keyToSubmit = formData.key;
         if (formData.service === 'VBEE') {
             if (!formData.vbeeToken || !formData.vbeeAppId) {
-                setError('Vui lòng nhập cả Vbee Token và App ID');
-                return;
+                if (!editingKey) {
+                    setError('Vui lòng nhập cả Vbee Token và App ID');
+                    return;
+                }
             }
             keyToSubmit = JSON.stringify({
                 token: formData.vbeeToken,
@@ -823,16 +836,16 @@ export function UserSettingsPage() {
                 voiceCodes: formData.vbeeVoiceCodes || ''
             });
         } else if (formData.service === 'VITTS') {
-            if (!formData.vittsApiKey) {
+            if (!formData.vittsApiKey && !editingKey) {
                 setError('Vui lòng nhập ViTTS API Key');
                 return;
             }
             keyToSubmit = JSON.stringify({
                 apiKey: formData.vittsApiKey,
-                baseUrl: formData.vittsBaseUrl || 'http://10.64.11.16:8888'
+                baseUrl: formData.vittsBaseUrl || 'http://117.0.36.6:8888'
             });
         } else if (formData.service === 'OPENAI') {
-            if (!formData.openaiApiKey) {
+            if (!formData.openaiApiKey && !editingKey) {
                 setError('Vui lòng nhập OpenAI API Key');
                 return;
             }
