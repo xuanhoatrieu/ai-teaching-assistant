@@ -69,7 +69,7 @@ export function PptxAudioToolPage() {
     const [multilingualMode, setMultilingualMode] = useState<string>('');
     const [vittsMode, setVittsMode] = useState<string>('');
     const [vittsDesignInstruct, setVittsDesignInstruct] = useState<string>('');
-    const [vittsNormalize, setVittsNormalize] = useState<boolean>(true);
+    const [vittsNormalize, setVittsNormalize] = useState<boolean>(false);
     const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
     const shouldStopGenerating = useRef(false);
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { ModelSelector } from '../ModelSelector';
 import { api } from '../../lib/api';
@@ -43,10 +43,52 @@ export function Step5GeneratePPTX() {
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
     const [slideProgress, setSlideProgress] = useState<SlideProgress[]>([]);
     const [totalSlides, setTotalSlides] = useState(0);
-    const [pptxBlob, setPptxBlob] = useState<Blob | null>(null);
-    const [pptxNoAudioBlob, setPptxNoAudioBlob] = useState<Blob | null>(null);
     const [contentGenerated, setContentGenerated] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
+
+    // Ephemeral PPTX state (download and auto-cleanup)
+    const [tempFileKey, setTempFileKey] = useState<string | null>(null);
+    const [tempFileKeyNoAudio, setTempFileKeyNoAudio] = useState<string | null>(null);
+    const [tempFileSize, setTempFileSize] = useState<number | null>(null);
+    const [tempFileSizeNoAudio, setTempFileSizeNoAudio] = useState<number | null>(null);
+    const [downloadingAudio, setDownloadingAudio] = useState(false);
+    const [downloadingNoAudio, setDownloadingNoAudio] = useState(false);
+
+    const tempFileKeyRef = useRef<string | null>(null);
+    const tempFileKeyNoAudioRef = useRef<string | null>(null);
+    const isGeneratingNoAudioRef = useRef(false);
+
+    useEffect(() => {
+        tempFileKeyRef.current = tempFileKey;
+    }, [tempFileKey]);
+
+    useEffect(() => {
+        tempFileKeyNoAudioRef.current = tempFileKeyNoAudio;
+    }, [tempFileKeyNoAudio]);
+
+    // Cleanup temp PPTX files when component unmounts (navigating away / switching steps)
+    useEffect(() => {
+        return () => {
+            const key = tempFileKeyRef.current || tempFileKeyNoAudioRef.current;
+            if (key) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${key}`).catch(() => {});
+            }
+        };
+    }, [lessonId]);
+
+    // Reset and cleanup temp files when template changes
+    useEffect(() => {
+        if (tempFileKeyRef.current) {
+            api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyRef.current}`).catch(() => {});
+            setTempFileKey(null);
+            setTempFileSize(null);
+        }
+        if (tempFileKeyNoAudioRef.current) {
+            api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyNoAudioRef.current}`).catch(() => {});
+            setTempFileKeyNoAudio(null);
+            setTempFileSizeNoAudio(null);
+        }
+    }, [selectedTemplate, lessonId]);
 
     const hasSlideScript = !!lessonData?.slideScript;
 
@@ -169,6 +211,51 @@ export function Step5GeneratePPTX() {
         },
     });
 
+    const checkTempStatus = useCallback(async () => {
+        if (!lessonId) return;
+        try {
+            const res = await api.get(`/lessons/${lessonId}/pptx/temp-status`);
+            if (res.data?.audioFileKey) {
+                setTempFileKey(res.data.audioFileKey);
+                if (res.data.audioFileSize) setTempFileSize(res.data.audioFileSize);
+            }
+            if (res.data?.noAudioFileKey) {
+                setTempFileKeyNoAudio(res.data.noAudioFileKey);
+                if (res.data.noAudioFileSize) setTempFileSizeNoAudio(res.data.noAudioFileSize);
+            }
+        } catch (err) {
+            console.warn('[Step5] Could not check temp status:', err);
+        }
+    }, [lessonId]);
+
+    const packagingJob = useJobPolling({
+        intervalMs: 600,
+        onComplete: async (jobStatus) => {
+            setStatus('completed');
+            setProgress(100);
+            const fileKey = jobStatus?.result?.fileKey;
+            const fileSize = jobStatus?.result?.fileSize;
+            if (fileKey) {
+                if (isGeneratingNoAudioRef.current) {
+                    setTempFileKeyNoAudio(fileKey);
+                    if (fileSize) setTempFileSizeNoAudio(fileSize);
+                } else {
+                    setTempFileKey(fileKey);
+                    if (fileSize) setTempFileSize(fileSize);
+                }
+            }
+            // Double check temp status from backend in case of reload or missed result
+            await checkTempStatus();
+        },
+        onError: (msg) => {
+            setStatus('error');
+            setError(`Lỗi khi đóng gói PowerPoint: ${msg}`);
+        },
+        onCancelled: async () => {
+            setStatus('completed');
+        },
+    });
+
     const checkActiveJob = useCallback(async () => {
         try {
             const response = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=pptx-generate-content`);
@@ -183,16 +270,32 @@ export function Step5GeneratePPTX() {
         return false;
     }, [lessonId]);
 
-    // Load saved optimizedContent from database on mount
+    const checkActivePackagingJob = useCallback(async () => {
+        try {
+            const response = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=pptx-packaging`);
+            if (response.data?.id) {
+                setStatus('generating_pptx');
+                packagingJob.startPolling(response.data.id);
+                return true;
+            }
+        } catch (err) {
+            console.error('Failed to check active packaging job:', err);
+        }
+        return false;
+    }, [lessonId]);
+
+    // Load saved optimizedContent from database on mount & check active jobs / available temp downloads
     useEffect(() => {
         if (lessonId) {
             const init = async () => {
-                const isActive = await checkActiveJob();
-                await loadSavedContent(isActive);
+                const isContentActive = await checkActiveJob();
+                const isPackagingActive = await checkActivePackagingJob();
+                await loadSavedContent(isContentActive || isPackagingActive);
+                await checkTempStatus();
             };
             init();
         }
-    }, [lessonId, loadSavedContent, checkActiveJob]);
+    }, [lessonId, loadSavedContent, checkActiveJob, checkActivePackagingJob, checkTempStatus]);
 
     // Reload slide contents reactively when job progress changes
     useEffect(() => {
@@ -201,70 +304,105 @@ export function Step5GeneratePPTX() {
         }
     }, [contentJob.jobStatus?.progress, contentJob.isRunning, loadSavedContent]);
 
-    const isJobRunning = contentJob.isRunning;
-    const currentProgress = isJobRunning && contentJob.jobStatus ? contentJob.jobStatus.progress : progress;
+    const isJobRunning = contentJob.isRunning || packagingJob.isRunning;
+    const currentProgress = contentJob.isRunning && contentJob.jobStatus
+        ? contentJob.jobStatus.progress
+        : packagingJob.isRunning && packagingJob.jobStatus
+            ? packagingJob.jobStatus.progress
+            : progress;
 
     const handleGeneratePptx = useCallback(async () => {
+        if (tempFileKey) {
+            api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKey}`).catch(() => {});
+            setTempFileKey(null);
+            setTempFileSize(null);
+        }
+
         setStatus('generating_pptx');
-        setProgress(90);
+        setProgress(0);
         setError(null);
+        isGeneratingNoAudioRef.current = false;
 
         try {
-            const response = await fetch(`/api/lessons/${lessonId}/pptx/generate`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-                },
-                body: JSON.stringify({ templateId: selectedTemplate }),
+            const response = await api.post(`/lessons/${lessonId}/pptx/start-packaging`, {
+                templateId: selectedTemplate,
+                skipAudio: false,
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => null);
-                const errorMsg = errorData?.message || 'Không thể tạo file PPTX';
-                throw new Error(Array.isArray(errorMsg) ? errorMsg.join(', ') : errorMsg);
+            if (response.data?.jobId) {
+                packagingJob.startPolling(response.data.jobId);
+            } else {
+                throw new Error('Không nhận được mã tiến trình đóng gói');
             }
-
-            const blob = await response.blob();
-            setPptxBlob(blob);
-            setProgress(100);
-            setStatus('completed');
         } catch (err: any) {
             setStatus('error');
-            setError(err.message || 'Không thể tạo file PowerPoint');
+            setError(err.response?.data?.message || err.message || 'Không thể bắt đầu đóng gói PowerPoint');
         }
-    }, [lessonId, selectedTemplate]);
+    }, [lessonId, selectedTemplate, tempFileKey]);
 
     const handleGeneratePptxNoAudio = useCallback(async () => {
+        if (tempFileKeyNoAudio) {
+            api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyNoAudio}`).catch(() => {});
+            setTempFileKeyNoAudio(null);
+            setTempFileSizeNoAudio(null);
+        }
+
         setStatus('generating_pptx');
-        setProgress(90);
+        setProgress(0);
         setError(null);
+        isGeneratingNoAudioRef.current = true;
 
         try {
-            const response = await fetch(`/api/lessons/${lessonId}/pptx/generate`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-                },
-                body: JSON.stringify({ templateId: selectedTemplate, skipAudio: true }),
+            const response = await api.post(`/lessons/${lessonId}/pptx/start-packaging`, {
+                templateId: selectedTemplate,
+                skipAudio: true,
             });
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => null);
-                const errorMsg = errorData?.message || 'Không thể tạo file PPTX';
-                throw new Error(Array.isArray(errorMsg) ? errorMsg.join(', ') : errorMsg);
+            if (response.data?.jobId) {
+                packagingJob.startPolling(response.data.jobId);
+            } else {
+                throw new Error('Không nhận được mã tiến trình đóng gói');
             }
-
-            const blob = await response.blob();
-            setPptxNoAudioBlob(blob);
-            setProgress(100);
-            setStatus('completed');
         } catch (err: any) {
             setStatus('error');
-            setError(err.message || 'Không thể tạo file PowerPoint');
+            setError(err.response?.data?.message || err.message || 'Không thể bắt đầu đóng gói PowerPoint');
         }
-    }, [lessonId, selectedTemplate]);
+    }, [lessonId, selectedTemplate, tempFileKeyNoAudio]);
+
+    const handleDownloadTempFile = async (key: string, isNoAudio: boolean) => {
+        if (isNoAudio) setDownloadingNoAudio(true);
+        else setDownloadingAudio(true);
+
+        try {
+            const token = localStorage.getItem('accessToken');
+            const res = await fetch(`/api/lessons/${lessonId}/pptx/download-temp?fileKey=${key}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!res.ok) {
+                const errData = await res.json().catch(() => null);
+                throw new Error(errData?.message || 'Không thể tải file PowerPoint tạm thời (có thể file đã hết hạn hoặc bị xóa)');
+            }
+
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${lessonData?.title || 'presentation'}${isNoAudio ? '_no_audio' : ''}.pptx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (err: any) {
+            console.error('Download error:', err);
+            setError(err.message || 'Lỗi khi tải file PowerPoint');
+        } finally {
+            if (isNoAudio) setDownloadingNoAudio(false);
+            else setDownloadingAudio(false);
+        }
+    };
 
     const handleGenerateContent = useCallback(async () => {
         setStatus('generating_images');
@@ -299,6 +437,22 @@ export function Step5GeneratePPTX() {
         setStatus('idle');
         await loadSavedContent(false);
     }, [contentJob, loadSavedContent]);
+
+    const stopPackaging = useCallback(async () => {
+        if (!window.confirm('Dừng quá trình đóng gói PowerPoint?')) {
+            return;
+        }
+        const jobId = packagingJob.jobStatus?.id;
+        try {
+            if (jobId) {
+                await api.post(`/generation-jobs/${jobId}/cancel`);
+            }
+        } catch (err) {
+            console.error('[Step5] Failed to cancel packaging job:', err);
+        }
+        packagingJob.stopPolling();
+        setStatus('completed');
+    }, [packagingJob]);
 
     // Regenerate ALL slides from scratch (clear existing data first)
     const handleRegenerateAll = useCallback(async () => {
@@ -337,7 +491,7 @@ export function Step5GeneratePPTX() {
             setSlideProgress(prev => prev.map(s =>
                 s.slideIndex === slideIndex ? { ...s, isRegenerating: false, phase: 'error' } : s
             ));
-            setError(`Không thể tạo lại nội dung slide ${slideIndex + 1}`);
+            setError(`Không thể tạo lại nội dung slide ${slideIndex}`);
         }
     };
 
@@ -363,33 +517,7 @@ export function Step5GeneratePPTX() {
             setSlideProgress(prev => prev.map(s =>
                 s.slideIndex === slideIndex ? { ...s, isRegenerating: false, phase: 'error' } : s
             ));
-            setError(`Không thể tạo lại hình ảnh slide ${slideIndex + 1}`);
-        }
-    };
-
-    const handleDownload = () => {
-        if (pptxBlob) {
-            const url = URL.createObjectURL(pptxBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${lessonData?.title || 'presentation'}.pptx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-    };
-
-    const handleDownloadNoAudio = () => {
-        if (pptxNoAudioBlob) {
-            const url = URL.createObjectURL(pptxNoAudioBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${lessonData?.title || 'presentation'}_no_audio.pptx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            setError(`Không thể tạo lại hình ảnh slide ${slideIndex}`);
         }
     };
 
@@ -460,6 +588,43 @@ export function Step5GeneratePPTX() {
                 </div>
             )}
 
+            {/* Download Ready Banner */}
+            {(tempFileKey || tempFileKeyNoAudio) && (status === 'idle' || status === 'completed') && (
+                <div className="download-ready-banner">
+                    <div className="download-ready-content">
+                        <span className="download-ready-badge">🎉 ĐÃ ĐÓNG GÓI XONG</span>
+                        <h3>File PowerPoint đã sẵn sàng tải về!</h3>
+                        <p>
+                            File PPTX được lưu tạm trên máy chủ. Bạn có thể tải trực tiếp về máy tính cá nhân. File sẽ tự động dọn dẹp khi bạn chuyển tính năng khác.
+                        </p>
+                        <div className="download-ready-buttons">
+                            {tempFileKey && (
+                                <button
+                                    className="btn-download-hero primary"
+                                    onClick={() => handleDownloadTempFile(tempFileKey, false)}
+                                    disabled={downloadingAudio}
+                                >
+                                    {downloadingAudio
+                                        ? '⏳ Đang tải file về máy...'
+                                        : `📥 TẢI PPTX (CÓ AUDIO)${tempFileSize ? ` • ${(tempFileSize / (1024 * 1024)).toFixed(1)} MB` : ''}`}
+                                </button>
+                            )}
+                            {tempFileKeyNoAudio && (
+                                <button
+                                    className="btn-download-hero secondary"
+                                    onClick={() => handleDownloadTempFile(tempFileKeyNoAudio, true)}
+                                    disabled={downloadingNoAudio}
+                                >
+                                    {downloadingNoAudio
+                                        ? '⏳ Đang tải file về máy...'
+                                        : `📥 TẢI PPTX (KHÔNG AUDIO)${tempFileSizeNoAudio ? ` • ${(tempFileSizeNoAudio / (1024 * 1024)).toFixed(1)} MB` : ''}`}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Main Action Buttons */}
             {hasSlideScript && (status === 'idle' || status === 'completed') && (
                 <div className="action-buttons-row">
@@ -488,16 +653,28 @@ export function Step5GeneratePPTX() {
                     {contentGenerated && (
                         <>
                             <button
-                                className="btn-secondary"
-                                onClick={pptxBlob ? handleDownload : handleGeneratePptx}
+                                className={`btn-secondary ${tempFileKey ? 'btn-download-ready' : ''}`}
+                                onClick={tempFileKey ? () => handleDownloadTempFile(tempFileKey, false) : handleGeneratePptx}
+                                disabled={isJobRunning || downloadingAudio}
                             >
-                                {pptxBlob ? '📥 Tải PPTX (có Audio)' : '📦 Tạo PPTX (có Audio)'}
+                                {downloadingAudio
+                                    ? '⏳ Đang tải file...'
+                                    : tempFileKey
+                                        ? `📥 Tải PPTX (có Audio)${tempFileSize ? ` (${(tempFileSize / (1024 * 1024)).toFixed(1)} MB)` : ''}`
+                                        : '📦 Tạo PPTX (có Audio)'
+                                }
                             </button>
                             <button
-                                className="btn-secondary"
-                                onClick={pptxNoAudioBlob ? handleDownloadNoAudio : handleGeneratePptxNoAudio}
+                                className={`btn-secondary ${tempFileKeyNoAudio ? 'btn-download-ready' : ''}`}
+                                onClick={tempFileKeyNoAudio ? () => handleDownloadTempFile(tempFileKeyNoAudio, true) : handleGeneratePptxNoAudio}
+                                disabled={isJobRunning || downloadingNoAudio}
                             >
-                                {pptxNoAudioBlob ? '📥 Tải PPTX (không Audio)' : '📦 Tạo PPTX (không Audio)'}
+                                {downloadingNoAudio
+                                    ? '⏳ Đang tải file...'
+                                    : tempFileKeyNoAudio
+                                        ? `📥 Tải PPTX (không Audio)${tempFileSizeNoAudio ? ` (${(tempFileSizeNoAudio / (1024 * 1024)).toFixed(1)} MB)` : ''}`
+                                        : '📦 Tạo PPTX (không Audio)'
+                                }
                             </button>
                         </>
                     )}
@@ -528,12 +705,17 @@ export function Step5GeneratePPTX() {
                         <span className="progress-text">{Math.round(currentProgress)}%</span>
                     </div>
                     <p className="progress-status">
-                        {status === 'generating_images' && (isJobRunning && contentJob.jobStatus ? contentJob.jobStatus.message : `🖼️ Đang tạo slide...`)}
-                        {status === 'generating_pptx' && '📦 Đang đóng gói PowerPoint...'}
+                        {status === 'generating_images' && (contentJob.isRunning && contentJob.jobStatus ? contentJob.jobStatus.message : `🖼️ Đang tạo slide...`)}
+                        {status === 'generating_pptx' && (packagingJob.isRunning && packagingJob.jobStatus ? packagingJob.jobStatus.message : `📦 Đang đóng gói PowerPoint...`)}
                     </p>
-                    {status === 'generating_images' && isJobRunning && (
+                    {status === 'generating_images' && contentJob.isRunning && (
                         <button className="btn-stop" onClick={stopGenerating}>
                             ⏹️ Dừng tạo
+                        </button>
+                    )}
+                    {status === 'generating_pptx' && packagingJob.isRunning && (
+                        <button className="btn-stop" onClick={stopPackaging}>
+                            ⏹️ Dừng đóng gói
                         </button>
                     )}
                 </div>
@@ -547,7 +729,7 @@ export function Step5GeneratePPTX() {
                         {slideProgress.map((slide) => (
                             <div key={slide.slideIndex} className={`slide-card ${slide.phase} ${slide.isRegenerating ? 'regenerating' : ''}`}>
                                 <div className="slide-card-header">
-                                    <span className="slide-number">Slide {slide.slideIndex + 1}</span>
+                                    <span className="slide-number">Slide {slide.slideIndex}</span>
                                     <span className="slide-title">{slide.title}</span>
                                     <span className="slide-status">
                                         {slide.phase === 'pending' && '⏳'}

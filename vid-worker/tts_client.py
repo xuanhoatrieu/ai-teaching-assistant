@@ -84,7 +84,7 @@ class TTSClient:
                             "ref_id": ref_id,
                             "speed": speed,
                             "num_step": 32,
-                            "normalize": "true"
+                            "normalize": "false"
                         }
                         response = self.session.post(
                             f"{self.base_url}/api/v1/omnivoice/generate-clone-ref",
@@ -97,7 +97,7 @@ class TTSClient:
                             "instruct": instruct,
                             "speed": speed,
                             "num_step": 32,
-                            "normalize": True
+                            "normalize": False
                         }
                         response = self.session.post(
                             f"{self.base_url}/api/v1/omnivoice/generate-design",
@@ -109,7 +109,7 @@ class TTSClient:
                             "text": text,
                             "speed": speed,
                             "num_step": 32,
-                            "normalize": True
+                            "normalize": False
                         }
                         response = self.session.post(
                             f"{self.base_url}/api/v1/omnivoice/generate-auto",

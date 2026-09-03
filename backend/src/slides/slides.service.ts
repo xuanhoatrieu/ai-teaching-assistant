@@ -416,6 +416,7 @@ export class SlidesService {
         lessonId: string,
         userId: string,
         onProgress?: (percent: number, message: string) => Promise<void>,
+        isCancelled?: () => Promise<boolean>,
     ) {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
@@ -444,6 +445,11 @@ export class SlidesService {
         this.logger.log(`Generating speaker notes for ${slides.length} slides in batches of ${BATCH_SIZE} using model ${modelConfig.modelName}`);
 
         for (let i = 0; i < slides.length; i += BATCH_SIZE) {
+            if (isCancelled && await isCancelled()) {
+                this.logger.log(`[generateSpeakerNotes] Job cancelled by user at batch starting at slide ${i + 1}`);
+                break;
+            }
+
             const batch = slides.slice(i, i + BATCH_SIZE);
             const batchStartIndex = i + 1;
             const batchEndIndex = Math.min(i + BATCH_SIZE, slides.length);
@@ -582,6 +588,7 @@ export class SlidesService {
         lessonId: string,
         userId: string,
         onProgress?: (percent: number, message: string) => Promise<void>,
+        isCancelled?: () => Promise<boolean>,
     ) {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
@@ -615,6 +622,11 @@ export class SlidesService {
         this.logger.log(`Optimizing speaker notes for ${slides.length} slides in batches of ${BATCH_SIZE} using model ${modelConfig.modelName}`);
 
         for (let i = 0; i < slides.length; i += BATCH_SIZE) {
+            if (isCancelled && await isCancelled()) {
+                this.logger.log(`[optimizeSpeakerNotes] Job cancelled by user at batch starting at slide ${i + 1}`);
+                break;
+            }
+
             const batch = slides.slice(i, i + BATCH_SIZE);
             const batchStartIndex = i + 1;
             const batchEndIndex = Math.min(i + BATCH_SIZE, slides.length);

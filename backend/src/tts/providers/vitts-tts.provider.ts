@@ -58,7 +58,7 @@ export class ViTTSTTSProvider implements ITTSProvider {
 
         const speed = options?.vittsSpeed ?? options?.speed ?? 1.0;
         const numStep = options?.vittsNumStep ?? 32;
-        const normalize = options?.vittsNormalize ?? true;
+        const normalize = options?.vittsNormalize ?? false;
 
         try {
             let audioBytes: Buffer;

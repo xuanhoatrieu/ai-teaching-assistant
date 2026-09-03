@@ -71,11 +71,28 @@ export class SlideAudioController {
         setImmediate(async () => {
             try {
                 await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị tạo lời giảng...');
-                await this.slidesService.generateSpeakerNotes(lessonId, userId, async (pct, msg) => {
-                    await this.jobService.updateProgress(job.id, pct, msg);
-                });
+                await this.slidesService.generateSpeakerNotes(
+                    lessonId,
+                    userId,
+                    async (pct, msg) => {
+                        await this.jobService.updateProgress(job.id, pct, msg);
+                    },
+                    async () => {
+                        return this.jobService.isJobCancelled(job.id);
+                    },
+                );
+
+                if (await this.jobService.isJobCancelled(job.id)) {
+                    this.logger.log(`[generateSpeakerNotes] Job ${job.id} was cancelled.`);
+                    return;
+                }
+
                 await this.jobService.completeJob(job.id);
             } catch (error) {
+                if (await this.jobService.isJobCancelled(job.id)) {
+                    this.logger.log(`[generateSpeakerNotes] Job ${job.id} was cancelled during execution.`);
+                    return;
+                }
                 this.logger.error(`[generateSpeakerNotes] Job ${job.id} failed:`, error);
                 await this.jobService.failJob(job.id, error?.message || 'Unknown error');
             }
@@ -108,11 +125,28 @@ export class SlideAudioController {
         setImmediate(async () => {
             try {
                 await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị tối ưu lời giảng...');
-                await this.slidesService.optimizeSpeakerNotes(lessonId, userId, async (pct, msg) => {
-                    await this.jobService.updateProgress(job.id, pct, msg);
-                });
+                await this.slidesService.optimizeSpeakerNotes(
+                    lessonId,
+                    userId,
+                    async (pct, msg) => {
+                        await this.jobService.updateProgress(job.id, pct, msg);
+                    },
+                    async () => {
+                        return this.jobService.isJobCancelled(job.id);
+                    },
+                );
+
+                if (await this.jobService.isJobCancelled(job.id)) {
+                    this.logger.log(`[optimizeSpeakerNotes] Job ${job.id} was cancelled.`);
+                    return;
+                }
+
                 await this.jobService.completeJob(job.id);
             } catch (error) {
+                if (await this.jobService.isJobCancelled(job.id)) {
+                    this.logger.log(`[optimizeSpeakerNotes] Job ${job.id} was cancelled during execution.`);
+                    return;
+                }
                 this.logger.error(`[optimizeSpeakerNotes] Job ${job.id} failed:`, error);
                 await this.jobService.failJob(job.id, error?.message || 'Unknown error');
             }
@@ -139,15 +173,18 @@ export class SlideAudioController {
         );
     }
 
-    // Generate audio for all slides
+    // Generate audio for slides (all or range)
     @Post('generate-all')
     async generateAllAudios(
         @Param('lessonId') lessonId: string,
-        @Body('multilingualMode') multilingualMode: string,
-        @Body('vittsMode') vittsMode: string,
-        @Body('vittsDesignInstruct') vittsDesignInstruct: string,
-        @Body('vittsNormalize') vittsNormalize: boolean,
-        @Request() req,
+        @Request() req: any,
+        @Body('multilingualMode') multilingualMode?: string,
+        @Body('vittsMode') vittsMode?: string,
+        @Body('vittsDesignInstruct') vittsDesignInstruct?: string,
+        @Body('vittsNormalize') vittsNormalize?: boolean,
+        @Body('fromSlide') fromSlide?: number,
+        @Body('toSlide') toSlide?: number,
+        @Body('onlyMissingOrError') onlyMissingOrError?: boolean,
     ) {
         const userId = req.user.id;
 
@@ -164,8 +201,9 @@ export class SlideAudioController {
             userId,
         });
 
-        // Capture TTS params for the background job closure
+        // Capture TTS params and range filters for the background job closure
         const ttsParams = { multilingualMode, vittsMode, vittsDesignInstruct, vittsNormalize };
+        const rangeParams = { fromSlide, toSlide, onlyMissingOrError };
 
         setImmediate(async () => {
             try {
@@ -174,8 +212,22 @@ export class SlideAudioController {
                     throw new Error('Không tìm thấy thông tin audio cho slide. Vui lòng khởi tạo trước.');
                 }
 
-                // Filter slide audios that need generation (with speakerNote)
-                const slidesToGenerate = slideAudios.filter(s => s.speakerNote?.trim());
+                // Filter slide audios that have speakerNote
+                let slidesToGenerate = slideAudios.filter(s => s.speakerNote?.trim());
+
+                // Apply slide range filter (1-based index)
+                if (rangeParams.fromSlide !== undefined && rangeParams.fromSlide !== null && !isNaN(Number(rangeParams.fromSlide))) {
+                    slidesToGenerate = slidesToGenerate.filter(s => s.slideIndex >= Number(rangeParams.fromSlide));
+                }
+                if (rangeParams.toSlide !== undefined && rangeParams.toSlide !== null && !isNaN(Number(rangeParams.toSlide))) {
+                    slidesToGenerate = slidesToGenerate.filter(s => s.slideIndex <= Number(rangeParams.toSlide));
+                }
+
+                // Apply quick filter: only missing or error
+                if (rangeParams.onlyMissingOrError) {
+                    slidesToGenerate = slidesToGenerate.filter(s => s.status !== 'done' && s.status !== 'completed' && (!s.audioUrl || s.status === 'error' || s.status === 'pending'));
+                }
+
                 const total = slidesToGenerate.length;
 
                 if (total === 0) {
@@ -187,11 +239,16 @@ export class SlideAudioController {
                 await this.jobService.updateProgress(job.id, 0, `Bắt đầu tạo audio cho ${total} slide...`);
 
                 for (let i = 0; i < total; i++) {
+                    if (await this.jobService.isJobCancelled(job.id)) {
+                        this.logger.log(`[generateAllAudios] Job ${job.id} cancelled by user at slide ${i + 1}/${total}.`);
+                        return;
+                    }
+
                     const slideAudio = slidesToGenerate[i];
                     await this.jobService.updateProgress(
                         job.id,
                         Math.round((i / total) * 100),
-                        `Đang tạo audio cho slide ${slideAudio.slideIndex + 1}/${total}...`
+                        `Đang tạo audio cho slide ${slideAudio.slideIndex} (${i + 1}/${total})...`
                     );
 
                     try {
@@ -209,9 +266,18 @@ export class SlideAudioController {
                     }
                 }
 
+                if (await this.jobService.isJobCancelled(job.id)) {
+                    this.logger.log(`[generateAllAudios] Job ${job.id} cancelled after loop.`);
+                    return;
+                }
+
                 await this.slideAudioService.updateLessonStep(lessonId, 4);
                 await this.jobService.completeJob(job.id);
             } catch (error) {
+                if (await this.jobService.isJobCancelled(job.id)) {
+                    this.logger.log(`[generateAllAudios] Job ${job.id} was cancelled during execution.`);
+                    return;
+                }
                 this.logger.error(`[generateAllAudios] Job ${job.id} failed:`, error);
                 await this.jobService.failJob(job.id, error?.message || 'Unknown error');
             }
@@ -239,6 +305,25 @@ export class SlideAudioController {
             vittsMode,
             vittsDesignInstruct,
             vittsNormalize,
+        );
+    }
+
+    // Import speaker notes from parsed TXT array
+    @Post('import-speaker-notes')
+    async importSpeakerNotes(
+        @Param('lessonId') lessonId: string,
+        @Body() body: {
+            notes: Array<{ slideIndex: number; speakerNote: string }>;
+            target?: 'raw' | 'optimized' | 'both';
+        },
+    ) {
+        if (!body.notes || !Array.isArray(body.notes) || body.notes.length === 0) {
+            throw new BadRequestException('Danh sách lời giảng không hợp lệ');
+        }
+        return this.slideAudioService.importSpeakerNotes(
+            lessonId,
+            body.notes,
+            body.target || 'optimized',
         );
     }
 

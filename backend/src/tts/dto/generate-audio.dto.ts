@@ -54,5 +54,5 @@ export class GenerateAudioDto {
 
     @IsOptional()
     @IsBoolean()
-    vittsNormalize?: boolean; // SEA-G2P Normalize, default true
+    vittsNormalize?: boolean; // SEA-G2P Normalize, default false
 }

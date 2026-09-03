@@ -15,7 +15,7 @@ export interface TTSOptions {
     vittsDesignInstruct?: string; // Voice Design: "A young female with high pitch..."
     vittsSpeed?: number; // 0.5-2.0, default 1.0
     vittsNumStep?: number; // 4-64, default 32
-    vittsNormalize?: boolean; // SEA-G2P Normalize, default true
+    vittsNormalize?: boolean; // SEA-G2P Normalize, default false
 }
 
 /**

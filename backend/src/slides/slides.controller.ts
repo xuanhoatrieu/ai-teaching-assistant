@@ -174,10 +174,13 @@ export class SlidesController {
                     }
 
                     const slide = slidesToProcess[i];
+                    const progressMsg = total < slides.length
+                        ? `Đang tạo nội dung & ảnh cho slide ${slide.slideIndex}/${slides.length} (${i + 1}/${total} cần tạo)...`
+                        : `Đang tạo nội dung & ảnh cho slide ${slide.slideIndex}/${slides.length}...`;
                     await this.jobService.updateProgress(
                         job.id,
                         Math.round((i / total) * 100),
-                        `Đang tạo nội dung & ảnh cho slide ${slide.slideIndex + 1}/${slides.length}...`
+                        progressMsg
                     );
 
                     try {

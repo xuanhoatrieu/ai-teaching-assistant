@@ -9,6 +9,7 @@ interface JobStatus {
     total: number;
     message: string | null;
     error: string | null;
+    result?: any;
     createdAt: string;
 }
 

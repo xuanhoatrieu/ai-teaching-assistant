@@ -2,6 +2,8 @@ import {
     Controller,
     Get,
     Post,
+    Delete,
+    Query,
     Param,
     Body,
     Res,
@@ -9,6 +11,8 @@ import {
     Request,
     Sse,
     MessageEvent,
+    HttpException,
+    HttpStatus,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { Observable } from 'rxjs';
@@ -16,6 +20,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PptxService, GenerationProgress } from './pptx.service';
 import { GeneratePptxDto } from './dto/generate-pptx.dto';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { GenerationJobService } from '../generation-job/generation-job.service';
 import { APIService } from '@prisma/client';
 
 @Controller('lessons/:lessonId/pptx')
@@ -24,6 +29,7 @@ export class PptxController {
     constructor(
         private pptxService: PptxService,
         private apiKeysService: ApiKeysService,
+        private jobService: GenerationJobService,
     ) { }
 
     /**
@@ -173,7 +179,95 @@ export class PptxController {
     }
 
     /**
-     * Generate and download PPTX file
+     * Start background packaging job with real-time slide-by-slide progress
+     */
+    @Post('start-packaging')
+    async startPackaging(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: GeneratePptxDto,
+        @Request() req,
+    ) {
+        const userId = req.user.id;
+
+        // Check if there is already an active packaging job
+        const activeJob = await this.jobService.getActiveJob(lessonId, 'pptx-packaging');
+        if (activeJob) {
+            return { jobId: activeJob.id, status: 'processing' };
+        }
+
+        // Clean up any stale temp files before starting new packaging
+        this.pptxService.cleanupTempPptx(lessonId);
+
+        const job = await this.jobService.createJob({
+            type: 'pptx-packaging',
+            lessonId,
+            userId,
+        });
+
+        setImmediate(() => {
+            this.pptxService.packagePresentationWithJob(
+                job.id,
+                lessonId,
+                dto.templateId,
+                userId,
+                dto.skipAudio
+            );
+        });
+
+        return { jobId: job.id, status: 'processing' };
+    }
+
+    /**
+     * Check if temporary PPTX files are available for download
+     */
+    @Get('temp-status')
+    async getTempStatus(@Param('lessonId') lessonId: string) {
+        return this.pptxService.getAvailableTempFiles(lessonId);
+    }
+
+    /**
+     * Download temporary PPTX file
+     */
+    @Get('download-temp')
+    async downloadTemp(
+        @Param('lessonId') lessonId: string,
+        @Query('fileKey') fileKey: string,
+        @Res() res: Response,
+    ) {
+        if (!fileKey) {
+            throw new HttpException('fileKey is required', HttpStatus.BAD_REQUEST);
+        }
+
+        const { filePath } = this.pptxService.getTempPptxFile(lessonId, fileKey);
+
+        const lesson = await this.pptxService['prisma'].lesson.findUnique({
+            where: { id: lessonId },
+            select: { title: true },
+        });
+
+        const safeTitle = (lesson?.title || 'presentation')
+            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
+            .replace(/\s+/g, '_')
+            .substring(0, 50);
+
+        const filename = `${safeTitle}.pptx`;
+
+        res.download(filePath, filename);
+    }
+
+    /**
+     * Immediately cleanup temporary PPTX files when user navigates away or switches feature
+     */
+    @Delete('cleanup-temp')
+    async cleanupTemp(
+        @Param('lessonId') lessonId: string,
+        @Query('fileKey') fileKey?: string,
+    ) {
+        return this.pptxService.cleanupTempPptx(lessonId, fileKey);
+    }
+
+    /**
+     * Generate and download PPTX file (Legacy synchronous endpoint)
      */
     @Post('generate')
     async generatePptx(
@@ -206,3 +300,4 @@ export class PptxController {
         res.send(buffer);
     }
 }
+

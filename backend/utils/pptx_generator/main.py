@@ -4,12 +4,13 @@ FastAPI server for generating PowerPoint presentations from templates
 """
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict
 import tempfile
 import os
+import json
 import logging
 
 logger = logging.getLogger("pptx-generator")
@@ -87,6 +88,7 @@ class GeneratePPTXRequest(BaseModel):
     slides: List[SlideContent]
     titleBgPath: Optional[str] = None     # Background image for title slide
     contentBgPath: Optional[str] = None   # Background image for content slides
+    targetFilePath: Optional[str] = None  # Explicit output path on disk (avoids Base64 in RAM)
 
 
 @app.get("/health")
@@ -247,6 +249,32 @@ async def generate_pptx_buffer(request: GeneratePPTXRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate PPTX: {str(e)}")
+
+
+@app.post("/generate-stream")
+async def generate_pptx_stream(request: GeneratePPTXRequest):
+    """
+    Generate a PPTX file and stream real-time progress events per slide as NDJSON.
+    Allows backend and frontend to display exact slide progress and avoids Base64 memory bloat.
+    """
+    def event_stream():
+        try:
+            generator = pptx_service.generate_presentation_stream(
+                template_path=request.templatePath,
+                lesson_title=request.lessonTitle,
+                slides=[s.model_dump() for s in request.slides],
+                title_bg_path=request.titleBgPath,
+                content_bg_path=request.contentBgPath,
+                output_path=request.targetFilePath
+            )
+            for event in generator:
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+        except Exception as e:
+            logger.error(f"Error in generate_pptx_stream: {e}")
+            yield json.dumps({"step": "error", "error": str(e)}, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
+
 
 
 # ========================

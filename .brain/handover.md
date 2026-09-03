@@ -1,28 +1,30 @@
 # 📋 HANDOVER DOCUMENT
-## AI Teaching Assistant — Pedagogical Speaker Notes & Chunking Release (v1.5.21)
+## AI Teaching Assistant — Async Packaging & Audio Pipeline Release (v1.5.25)
 
-📍 **Đang làm:** Đã hoàn thành nâng cấp hệ thống tạo lời giảng chuẩn sư phạm, loại bỏ văn phong AI và tối ưu hóa xử lý phân mảnh (Slide Chunking).
-🔢 **Đến bước:** Kiểm tra hoạt động trên môi trường chạy thực tế và sẵn sàng đẩy bản phát hành `v1.5.21`.
+📍 **Đang làm:** Đã hoàn thành toàn bộ hệ thống đóng gói PowerPoint bất đồng bộ kèm Audio (Step 5), nâng cấp tiến trình tạo âm thanh nền (Step 4), tối ưu bộ nhớ tạm thời tự động dọn dẹp (Ephemeral Storage) và điều chỉnh nhịp hiển thị tiến trình mượt mà.
+🔢 **Đến bước:** Đã kiểm thử thực tế, lưu thông tin phiên làm việc và chuẩn bị commit & push gắn tag `v1.5.25` lên GitHub.
 
 ---
 
-### ✅ ĐÃ XONG (v1.5.21):
-- **Cải tiến Prompt Few-Shot Chuẩn Sư Phạm (`slides.speaker-notes`):**
-  - Đóng vai Giảng viên đại học giàu kinh nghiệm giảng bài trực tiếp trên lớp.
-  - Cấu trúc 4 bước: [Bối cảnh / Đặt vấn đề] ➔ [Bản chất & Ví dụ thực tế] ➔ [Cảnh báo lỗi sai thường gặp] ➔ [Chốt ý & Dẫn dắt].
-  - Ràng buộc thời lượng: 200 - 280 từ / slide nội dung (~1.5 - 2 phút nói).
-  - Tích hợp mẫu chuẩn Before/After loại bỏ hoàn toàn các câu sáo rỗng AI.
-- **Tối ưu Lời giảng cho TTS (`slides.optimize-notes`):**
-  - Tách câu dài thành các câu ngắn (10 - 18 từ) có nhịp thở ngắt nghỉ tự nhiên cho VieNeu / TTS.
-  - Chuyển đổi mã code, công thức toán học, ký hiệu và từ viết tắt sang văn nói.
-  - Bảo toàn độ dài >= 95% đầu vào (giữ nguyên 1.5 - 2 phút).
-- **Cơ chế Slide Chunking (Micro-Batching 4 slides/cụm):**
-  - Chia nhỏ bài giảng thành các lô 4 slide để AI sinh lời giảng đồng đều từ slide đầu đến slide cuối, triệt tiêu 100% nguy cơ đứt gãy JSON / quá tải token.
-  - Tự động duy trì mạch nối ngữ cảnh giữa các slide.
-  - Báo cáo tiến độ % thời gian thực qua `GenerationJob` lên giao diện Bước 4.
-- **Bộ lọc Hậu kỳ Hybrid Anti-AI (Code Regex):**
-  - Quét sạch các cụm từ hoa mỹ/sáo rỗng còn sót lại và định dạng văn bản thô thuần túy cho TTS.
-- **Cập nhật phiên bản hệ thống lên `1.5.21`:** Build backend và frontend thành công không lỗi.
+### ✅ ĐÃ XONG (v1.5.25):
+
+1. **Hệ thống đóng gói PPTX bất đồng bộ kèm Audio (Step 5):**
+   - Chuyển đổi đóng gói PPTX sang `GenerationJob` chạy ngầm, không block trình duyệt, hỗ trợ hủy tiến trình giữa chừng.
+   - Kết nối trực tiếp giữa Python FastAPI và NestJS qua dòng sự kiện NDJSON (`/generate-stream`), thông báo từng slide theo thời gian thực.
+   - Sửa lỗi lệch chỉ số slide (`slideIndex + 1`) giữa dữ liệu kịch bản và ảnh/audio.
+   - Cơ chế lưu trữ tạm thời tự động dọn dẹp (`uploads/temp-pptx/`): tạo file tạm khi đóng gói và tự động dọn dẹp sạch sẽ khi rời trang / đổi template / chuyển bước.
+   - Endpoint phát hiện file tạm `GET /lessons/:lessonId/pptx/temp-status` cho phép khôi phục nút tải và dung lượng file ngay cả khi F5 reload trang.
+   - Banner tải file nổi bật **🎉 ĐÃ ĐÓNG GÓI XONG** kèm dung lượng file MB thực tế và nút CTA lớn trực quan.
+   - Khắc phục hiện tượng tiến trình nhảy vọt lên 95%: rút ngắn chu kỳ polling xuống 600ms, phân bổ tiến trình hợp lý (nhúng slide 8% ➔ 63% với micro-pacing 40ms/slide, nén đa phương tiện 65% ➔ 95% qua các giai đoạn rõ ràng).
+
+2. **Hệ thống tạo âm thanh nền bất đồng bộ (Step 4):**
+   - Chuyển đổi tiến trình sinh âm thanh hàng loạt sang Background Job (`audio-generation`), hiển thị tiến độ từng slide chi tiết.
+   - Hỗ trợ khôi phục tiến trình khi reload trang (`checkActiveJob`) và hủy tác vụ (`cancelJob`).
+   - Tích hợp trình phát nghe thử audio kèm sóng âm, nút tải gói toàn bộ âm thanh bài học định dạng ZIP.
+
+3. **Tối ưu hóa TTS & ViTTS:**
+   - Hỗ trợ song song ViTTS hệ thống và ViTTS cá nhân, tự động khử trùng lặp IP server.
+   - Tối ưu hóa timeout tổng hợp giọng nói cho các đoạn lời giảng dài.
 
 ---
 📍 Đã lưu! Để tiếp tục: Gõ /recap

@@ -9,6 +9,7 @@ export interface JobStatus {
     total: number;
     message: string | null;
     error: string | null;
+    result?: any;
     createdAt: Date;
 }
 
@@ -64,6 +65,7 @@ export class GenerationJobService {
             total: job.total,
             message: job.message,
             error: job.error,
+            result: job.result,
             createdAt: job.createdAt,
         };
     }
@@ -130,6 +132,17 @@ export class GenerationJobService {
         });
         this.logger.log(`[cancelJob] Job ${jobId} cancel requested (updated ${result.count})`);
         return { cancelled: result.count > 0 };
+    }
+
+    /**
+     * Check if a job has been cancelled.
+     */
+    async isJobCancelled(jobId: string): Promise<boolean> {
+        const job = await this.prisma.generationJob.findUnique({
+            where: { id: jobId },
+            select: { status: true },
+        });
+        return job?.status === 'cancelled';
     }
 
     /**

@@ -6,9 +6,13 @@ import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { AiProviderService } from '../ai/ai-provider.service';
+import { GenerationJobService } from '../generation-job/generation-job.service';
 import { APIService } from '@prisma/client';
 import { getOutputLanguageInstruction } from '../ai/language-instruction';
 import * as path from 'path';
+import * as fs from 'fs';
+import { createInterface } from 'readline';
+import { Readable } from 'stream';
 
 interface SlideContent {
     slideIndex: number;
@@ -58,6 +62,7 @@ export class PptxService {
         private modelConfig: ModelConfigService,
         private apiKeys: ApiKeysService,
         private aiProvider: AiProviderService,
+        private jobService: GenerationJobService,
     ) {
         this.pythonServiceUrl = process.env.PPTX_SERVICE_URL || 'http://localhost:3002';
     }
@@ -332,17 +337,149 @@ export class PptxService {
 
 
     /**
-     * Generate PPTX file by calling Python service
+     * Get temporary directory for ephemeral PPTX exports
      */
-    async generatePptx(
+    getTempDir(): string {
+        const dir = path.join(process.cwd(), 'uploads', 'temp-pptx');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        return dir;
+    }
+
+    /**
+     * Cleanup temporary PPTX files for a lesson and garbage-collect files older than 1 hour
+     */
+    cleanupTempPptx(lessonId: string, fileKey?: string): { success: boolean; deletedCount: number } {
+        const tempDir = this.getTempDir();
+        let deletedCount = 0;
+
+        try {
+            if (!fs.existsSync(tempDir)) return { success: true, deletedCount: 0 };
+
+            const files = fs.readdirSync(tempDir);
+            const now = Date.now();
+            const ONE_HOUR = 60 * 60 * 1000;
+
+            for (const file of files) {
+                const fullPath = path.join(tempDir, file);
+                const belongsToLesson = file.startsWith(`${lessonId}_`);
+                const isTargetFile = fileKey ? file === `${lessonId}_${fileKey}.pptx` : belongsToLesson;
+
+                let isExpired = false;
+                try {
+                    const stats = fs.statSync(fullPath);
+                    if (now - stats.mtimeMs > ONE_HOUR) {
+                        isExpired = true;
+                    }
+                } catch {}
+
+                if (isTargetFile || isExpired) {
+                    try {
+                        if (fs.existsSync(fullPath)) {
+                            fs.unlinkSync(fullPath);
+                            deletedCount++;
+                            this.logger.log(`[cleanupTempPptx] Deleted temp file: ${file}`);
+                        }
+                    } catch (e: any) {
+                        this.logger.warn(`[cleanupTempPptx] Could not delete ${file}: ${e.message}`);
+                    }
+                }
+            }
+        } catch (err: any) {
+            this.logger.error(`[cleanupTempPptx] Error during cleanup: ${err.message}`);
+        }
+
+        return { success: true, deletedCount };
+    }
+
+    /**
+     * Locate temporary PPTX file for download
+     */
+    getTempPptxFile(lessonId: string, fileKey: string): { filePath: string; filename: string } {
+        const safeKey = fileKey.replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeKey) {
+            throw new HttpException('Invalid file key', HttpStatus.BAD_REQUEST);
+        }
+
+        const tempDir = this.getTempDir();
+        const filePath = path.join(tempDir, `${lessonId}_${safeKey}.pptx`);
+
+        if (!fs.existsSync(filePath)) {
+            throw new NotFoundException('File PowerPoint tạm thời không tồn tại hoặc đã bị xóa để giải phóng bộ nhớ.');
+        }
+
+        return { filePath, filename: `presentation_${safeKey}.pptx` };
+    }
+
+    /**
+     * Check if temporary PPTX files are available for download for a lesson
+     */
+    getAvailableTempFiles(lessonId: string): {
+        audioFileKey: string | null;
+        noAudioFileKey: string | null;
+        audioFileSize?: number;
+        noAudioFileSize?: number;
+    } {
+        const tempDir = this.getTempDir();
+        if (!fs.existsSync(tempDir)) {
+            return { audioFileKey: null, noAudioFileKey: null };
+        }
+
+        let audioFileKey: string | null = null;
+        let noAudioFileKey: string | null = null;
+        let audioFileSize: number | undefined;
+        let noAudioFileSize: number | undefined;
+        let newestAudioMtime = 0;
+        let newestNoAudioMtime = 0;
+
+        const files = fs.readdirSync(tempDir);
+        const ONE_HOUR = 60 * 60 * 1000;
+        const now = Date.now();
+
+        for (const file of files) {
+            if (!file.startsWith(`${lessonId}_`) || !file.endsWith('.pptx')) continue;
+
+            const fullPath = path.join(tempDir, file);
+            try {
+                const stats = fs.statSync(fullPath);
+                if (now - stats.mtimeMs > ONE_HOUR) continue;
+
+                const fileKey = file.substring(lessonId.length + 1).replace(/\.pptx$/, '');
+
+                if (fileKey.includes('noaudio')) {
+                    if (stats.mtimeMs > newestNoAudioMtime) {
+                        newestNoAudioMtime = stats.mtimeMs;
+                        noAudioFileKey = fileKey;
+                        noAudioFileSize = stats.size;
+                    }
+                } else {
+                    if (stats.mtimeMs > newestAudioMtime) {
+                        newestAudioMtime = stats.mtimeMs;
+                        audioFileKey = fileKey;
+                        audioFileSize = stats.size;
+                    }
+                }
+            } catch {}
+        }
+
+        return {
+            audioFileKey,
+            noAudioFileKey,
+            audioFileSize,
+            noAudioFileSize,
+        };
+    }
+
+    /**
+     * Prepare data payload for Python PPTX generator
+     */
+    async preparePackagingData(
         lessonId: string,
         templateId: string,
         userId: string,
         skipAudio?: boolean
-    ): Promise<Buffer> {
-        this.logger.log(`Generating PPTX for lesson ${lessonId} with template ${templateId}${skipAudio ? ' (no audio)' : ''}`);
-
-        // Get lesson with slides
+    ) {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
             include: {
@@ -356,33 +493,17 @@ export class PptxService {
             throw new NotFoundException(`Lesson ${lessonId} not found`);
         }
 
-        // Get template path and background URLs
         const templateInfo = await this.getTemplateInfo(templateId, userId);
         const templatePath = templateInfo.fileUrl || 'blank';
 
-        // Convert background URLs to local paths for Python service
         const titleBgPath = templateInfo.titleBgUrl ? this.getLocalPath(templateInfo.titleBgUrl) : undefined;
         const contentBgPath = templateInfo.contentBgUrl ? this.getLocalPath(templateInfo.contentBgUrl) : undefined;
 
-        this.logger.log(`[PPTX] Template: ${templatePath}`);
-        this.logger.log(`[PPTX] Title BG URL: ${templateInfo.titleBgUrl || 'none'}`);
-        this.logger.log(`[PPTX] Title BG Path: ${titleBgPath || 'none'}`);
-        this.logger.log(`[PPTX] Title BG Exists: ${titleBgPath ? require('fs').existsSync(titleBgPath) : false}`);
-        this.logger.log(`[PPTX] Content BG URL: ${templateInfo.contentBgUrl || 'none'}`);
-        this.logger.log(`[PPTX] Content BG Path: ${contentBgPath || 'none'}`);
-        this.logger.log(`[PPTX] Content BG Exists: ${contentBgPath ? require('fs').existsSync(contentBgPath) : false}`);
-
-        // Get audio from BOTH sources:
-        // 1. Slide.audioUrl (new model) - preferred
-        // 2. SlideAudio table (legacy) - fallback for old data
         const slideAudios = await this.prisma.slideAudio.findMany({
             where: { lessonId },
             orderBy: { slideIndex: 'asc' },
         });
-        this.logger.log(`[PPTX] Found ${slideAudios.length} legacy audio records in SlideAudio table`);
 
-        // Build slide content for Python service
-        // IMPORTANT: Use optimizedContentJson (AI-generated) if available, fallback to original content
         const slideContents: SlideContent[] = lesson.slides.map(slide => {
             let audioUrl = null as string | null;
             let audioSource = 'skipped';
@@ -396,48 +517,192 @@ export class PptxService {
                 }
             }
             const audioPath = audioUrl ? this.getLocalPath(audioUrl) : undefined;
-            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: audio=${audioSource}, audioUrl=${audioUrl || 'NULL'}, audioPath=${audioPath || 'NULL'}`);
 
-            // Parse optimized content if available - send structured bullets to Python
             let bullets: OptimizedBullet[] | undefined;
             let contentArray: string[] = [];
 
             if (slide.optimizedContentJson) {
                 try {
                     bullets = JSON.parse(slide.optimizedContentJson) as OptimizedBullet[];
-                    // Also create flat content as fallback
                     contentArray = bullets.map(b => b.point
                         ? `${b.emoji} ${b.point}: ${b.description}`
                         : b.description
                     );
-                    this.logger.log(`[PPTX] Slide ${slide.slideIndex}: Sending ${bullets.length} structured bullets`);
                 } catch (e) {
-                    this.logger.warn(`[PPTX] Failed to parse optimizedContentJson for slide ${slide.slideIndex}`);
                     contentArray = this.parseContent(slide.content);
                 }
             } else {
                 contentArray = this.parseContent(slide.content);
-                this.logger.log(`[PPTX] Slide ${slide.slideIndex}: Using original content (no AI optimization)`);
             }
 
-            // DEBUG: Log image path conversion
             const imagePath = slide.imageUrl ? this.getLocalPath(slide.imageUrl) : undefined;
-            this.logger.log(`[PPTX] Slide ${slide.slideIndex}: imageUrl=${slide.imageUrl || 'NULL'}, imagePath=${imagePath || 'NULL'}`);
-
-            // Use SlideAudio.speakerNote (optimized from Step 4) first, fallback to Slide.speakerNote (raw)
             const slideAudioForNotes = slideAudios.find(a => a.slideIndex === slide.slideIndex);
 
             return {
                 slideIndex: slide.slideIndex,
                 title: slide.title,
                 content: contentArray,
-                bullets,  // Send structured bullets for proper rendering
+                bullets,
                 imagePath,
                 audioPath,
                 speakerNote: slideAudioForNotes?.speakerNote || slide.speakerNote || '',
                 slideType: slide.slideType || 'content',
             };
         });
+
+        return {
+            lesson,
+            templatePath,
+            titleBgPath,
+            contentBgPath,
+            slideContents,
+        };
+    }
+
+    /**
+     * Package presentation asynchronously with real-time slide-by-slide progress
+     */
+    async packagePresentationWithJob(
+        jobId: string,
+        lessonId: string,
+        templateId: string,
+        userId: string,
+        skipAudio?: boolean
+    ): Promise<void> {
+        this.logger.log(`[packagePresentationWithJob] Starting job ${jobId} for lesson ${lessonId}`);
+
+        try {
+            await this.jobService.updateProgress(jobId, 5, 'Đang chuẩn bị tài nguyên bài học...');
+
+            const { lesson, templatePath, titleBgPath, contentBgPath, slideContents } =
+                await this.preparePackagingData(lessonId, templateId, userId, skipAudio);
+
+            const prefix = skipAudio ? 'noaudio_' : 'audio_';
+            const fileKey = `${prefix}${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+            const tempDir = this.getTempDir();
+            const targetFilePath = path.join(tempDir, `${lessonId}_${fileKey}.pptx`);
+
+            this.logger.log(`[packagePresentationWithJob] Calling Python /generate-stream with target ${targetFilePath}`);
+
+            const response = await fetch(`${this.pythonServiceUrl}/generate-stream`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    templatePath,
+                    lessonTitle: lesson.title,
+                    slides: slideContents,
+                    titleBgPath,
+                    contentBgPath,
+                    targetFilePath,
+                }),
+            });
+
+            if (!response.ok || !response.body) {
+                const errorText = await response.text();
+                throw new Error(`Python service failed: ${errorText}`);
+            }
+
+            const nodeStream = Readable.fromWeb(response.body as any);
+            const rl = createInterface({ input: nodeStream, crlfDelay: Infinity });
+
+            let finalFileSize = 0;
+            let savingInterval: NodeJS.Timeout | null = null;
+            const clearSavingInterval = () => {
+                if (savingInterval) {
+                    clearInterval(savingInterval);
+                    savingInterval = null;
+                }
+            };
+
+            try {
+                for await (const line of rl) {
+                    if (!line.trim()) continue;
+
+                    const isCancelled = await this.jobService.isJobCancelled(jobId);
+                    if (isCancelled) {
+                        clearSavingInterval();
+                        this.logger.log(`[packagePresentationWithJob] Job ${jobId} cancelled. Cleaning up.`);
+                        try {
+                            if (fs.existsSync(targetFilePath)) fs.unlinkSync(targetFilePath);
+                        } catch {}
+                        return;
+                    }
+
+                    try {
+                        const event = JSON.parse(line);
+                        if (event.step === 'init') {
+                            await this.jobService.updateProgress(jobId, 8, event.message || 'Đang chuẩn bị mẫu PowerPoint...');
+                        } else if (event.step === 'slide') {
+                            const total = event.total || slideContents.length;
+                            const pct = Math.round(8 + (event.index / total) * 55);
+                            await this.jobService.updateProgress(jobId, pct, event.message);
+                        } else if (event.step === 'saving') {
+                            clearSavingInterval();
+                            const savingStages = [
+                                { pct: 72, msg: 'Đang nén dữ liệu đa phương tiện (WAV & PNG)...' },
+                                { pct: 80, msg: 'Đang tối ưu dung lượng tệp PowerPoint...' },
+                                { pct: 88, msg: 'Đang hoàn thiện cấu trúc tài liệu PPTX...' },
+                                { pct: 95, msg: 'Đang ghi file hoàn tất vào hệ thống...' },
+                            ];
+                            let stageIdx = 0;
+                            await this.jobService.updateProgress(jobId, 65, 'Đang nén các tệp âm thanh và hình ảnh vào PowerPoint...');
+                            savingInterval = setInterval(async () => {
+                                if (stageIdx < savingStages.length) {
+                                    const stage = savingStages[stageIdx++];
+                                    try {
+                                        await this.jobService.updateProgress(jobId, stage.pct, stage.msg);
+                                    } catch {}
+                                }
+                            }, 1800);
+                        } else if (event.step === 'done') {
+                            clearSavingInterval();
+                            finalFileSize = event.fileSize || 0;
+                        } else if (event.step === 'error') {
+                            clearSavingInterval();
+                            throw new Error(event.error || 'Lỗi khi đóng gói PowerPoint');
+                        }
+                    } catch (parseErr: any) {
+                        if (parseErr.message && parseErr.message.includes('Lỗi khi đóng gói')) throw parseErr;
+                        this.logger.warn(`[packagePresentationWithJob] Line parse warning: ${parseErr.message}`);
+                    }
+                }
+            } finally {
+                clearSavingInterval();
+            }
+
+            if (!fs.existsSync(targetFilePath)) {
+                throw new Error('File PPTX chưa được tạo thành công.');
+            }
+
+            const safeFilename = `${(lesson.title || 'presentation').replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')}.pptx`;
+
+            await this.jobService.updateProgress(jobId, 100, 'Đã tạo xong file PowerPoint!');
+            await this.jobService.completeJob(jobId, {
+                fileKey,
+                filename: safeFilename,
+                fileSize: finalFileSize || fs.statSync(targetFilePath).size,
+            });
+
+            this.logger.log(`[packagePresentationWithJob] Job ${jobId} completed. FileKey: ${fileKey}`);
+        } catch (err: any) {
+            this.logger.error(`[packagePresentationWithJob] Job ${jobId} failed: ${err.message}`, err.stack);
+            await this.jobService.failJob(jobId, err.message || 'Không thể đóng gói file PowerPoint');
+        }
+    }
+
+    /**
+     * Generate PPTX file by calling Python service (Legacy direct buffer download)
+     */
+    async generatePptx(
+        lessonId: string,
+        templateId: string,
+        userId: string,
+        skipAudio?: boolean
+    ): Promise<Buffer> {
+        this.logger.log(`Generating PPTX for lesson ${lessonId} with template ${templateId}${skipAudio ? ' (no audio)' : ''}`);
+
+        const { lesson, templatePath, titleBgPath, contentBgPath, slideContents } =
+            await this.preparePackagingData(lessonId, templateId, userId, skipAudio);
 
         // Call Python service with background image paths
         const response = await fetch(`${this.pythonServiceUrl}/generate-buffer`, {

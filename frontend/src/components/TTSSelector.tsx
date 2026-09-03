@@ -99,7 +99,7 @@ export function TTSSelector({ onChange }: TTSSelectorProps) {
     const [designPitch, setDesignPitch] = useState('normal');
     const [designStyle, setDesignStyle] = useState('normal');
     const [designAccent, setDesignAccent] = useState('');
-    const [vittsNormalize, setVittsNormalize] = useState(true);
+    const [vittsNormalize, setVittsNormalize] = useState(false);
 
     const parsedServerIdFromVoice = (selectedVoice.startsWith('vitts:') && selectedVoice.split(':').length >= 3)
         ? selectedVoice.split(':')[1]

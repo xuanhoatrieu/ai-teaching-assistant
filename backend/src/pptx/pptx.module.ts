@@ -7,6 +7,7 @@ import { PromptsModule } from '../prompts/prompts.module';
 import { ModelConfigModule } from '../model-config/model-config.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { AIModule } from '../ai/ai.module';
+import { GenerationJobModule } from '../generation-job/generation-job.module';
 
 @Module({
     imports: [
@@ -16,6 +17,7 @@ import { AIModule } from '../ai/ai.module';
         ModelConfigModule,
         ApiKeysModule,
         AIModule,
+        GenerationJobModule,
     ],
     controllers: [PptxController],
     providers: [PptxService],

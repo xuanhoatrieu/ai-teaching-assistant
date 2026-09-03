@@ -12,6 +12,7 @@ from pptx.oxml.ns import qn
 from pptx.oxml import parse_xml
 from lxml import etree
 import os
+import time
 import tempfile
 import shutil
 from typing import List, Dict, Any, Optional
@@ -126,6 +127,99 @@ class PPTXGeneratorService:
         prs.save(output_path)
         
         return output_path
+
+    def generate_presentation_stream(
+        self,
+        template_path: str,
+        lesson_title: str,
+        slides: List[Dict[str, Any]],
+        title_bg_path: Optional[str] = None,
+        content_bg_path: Optional[str] = None,
+        output_path: Optional[str] = None
+    ):
+        """
+        Generate PPTX presentation while yielding real-time progress events per slide.
+        Yields dicts with step, index, total, message, and final outputPath.
+        """
+        total = len(slides)
+        yield {
+            "step": "init",
+            "total": total,
+            "message": "Đang chuẩn bị mẫu PowerPoint..."
+        }
+
+        # Create presentation (from template or blank)
+        if template_path and os.path.exists(template_path) and template_path != 'blank':
+            prs = Presentation(template_path)
+        else:
+            prs = Presentation()
+            prs.slide_width = Inches(10)
+            prs.slide_height = Inches(5.625)
+
+        # Clear existing slides if using template
+        while len(prs.slides) > 0:
+            rId = prs.slides._sldIdLst[0].rId
+            prs.part.drop_rel(rId)
+            del prs.slides._sldIdLst[0]
+
+        for i, slide_data in enumerate(slides):
+            slide_type = slide_data.get('slideType', 'content')
+            slide_index = slide_data.get('slideIndex', i + 1)
+            title = slide_data.get('title', f"Slide {i + 1}")
+
+            yield {
+                "step": "slide",
+                "index": i + 1,
+                "total": total,
+                "slideIndex": slide_index,
+                "title": title,
+                "message": f"Đang nhúng slide {i + 1}/{total}: {title[:30]}..."
+            }
+
+            blank_layout = self._find_blank_layout(prs)
+            slide = prs.slides.add_slide(blank_layout)
+            self._clear_placeholders(slide)
+
+            if slide_type == 'title' or i == 0:
+                self._add_title_slide(slide, slide_data, title_bg_path)
+            elif slide_type in ['agenda', 'objectives'] or i == 1:
+                self._add_agenda_slide(slide, slide_data, content_bg_path)
+            else:
+                self._add_content_slide_v2(slide, slide_data, content_bg_path)
+
+            speaker_note = slide_data.get('speakerNote', '')
+            if speaker_note:
+                self._add_speaker_notes(slide, speaker_note)
+
+            audio_path = slide_data.get('audioPath')
+            if audio_path and os.path.exists(audio_path):
+                self._add_audio_with_autoplay(slide, audio_path)
+
+            time.sleep(0.04)
+
+        yield {
+            "step": "saving",
+            "total": total,
+            "message": "Đang nén và hoàn tất file PowerPoint..."
+        }
+
+        if not output_path:
+            output_path = tempfile.mktemp(suffix='.pptx')
+
+        parent_dir = os.path.dirname(output_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+
+        prs.save(output_path)
+
+        file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+        yield {
+            "step": "done",
+            "total": total,
+            "outputPath": output_path,
+            "fileSize": file_size,
+            "message": "Đã tạo xong file PowerPoint!"
+        }
     
     def _find_blank_layout(self, prs: Presentation):
         """

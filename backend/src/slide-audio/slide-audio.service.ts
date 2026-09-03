@@ -951,7 +951,7 @@ export class SlideAudioService {
 
         return {
             filePath,
-            fileName: `${safeTitle}_slide_${slideIndex + 1}.mp3`,
+            fileName: `${safeTitle}_slide_${slideIndex}.mp3`,
         };
     }
 
@@ -1087,4 +1087,106 @@ export class SlideAudioService {
 
         return updated;
     }
+
+    /**
+     * Import speaker notes from text array into Slide and/or SlideAudio records.
+     */
+    async importSpeakerNotes(
+        lessonId: string,
+        notes: Array<{ slideIndex: number; speakerNote: string }>,
+        target: 'raw' | 'optimized' | 'both' = 'optimized',
+    ) {
+        this.logger.log(`[importSpeakerNotes] Importing ${notes.length} notes for lesson ${lessonId} (target=${target})`);
+
+        // 1. Update Slide table (Step 1 - raw notes)
+        if (target === 'raw' || target === 'both') {
+            for (const item of notes) {
+                await this.prisma.slide.updateMany({
+                    where: { lessonId, slideIndex: item.slideIndex },
+                    data: { speakerNote: item.speakerNote },
+                });
+            }
+        }
+
+        // 2. Update SlideAudio table (Step 2 - optimized notes)
+        if (target === 'optimized' || target === 'both') {
+            for (const item of notes) {
+                const existing = await this.prisma.slideAudio.findUnique({
+                    where: { lessonId_slideIndex: { lessonId, slideIndex: item.slideIndex } },
+                });
+
+                if (existing) {
+                    await this.prisma.slideAudio.update({
+                        where: { id: existing.id },
+                        data: {
+                            speakerNote: item.speakerNote,
+                            status: existing.audioUrl ? 'pending' : existing.status,
+                        },
+                    });
+                } else {
+                    const slide = await this.prisma.slide.findFirst({
+                        where: { lessonId, slideIndex: item.slideIndex },
+                    });
+                    await this.prisma.slideAudio.create({
+                        data: {
+                            lessonId,
+                            slideIndex: item.slideIndex,
+                            slideTitle: slide?.title || `Slide ${item.slideIndex}`,
+                            speakerNote: item.speakerNote,
+                            status: 'pending',
+                        },
+                    });
+                }
+            }
+        }
+
+        // 3. Sync to lesson.slideScript for consistency
+        try {
+            const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
+            if (lesson?.slideScript) {
+                let jsonStr = lesson.slideScript;
+                const jsonStartTag = jsonStr.indexOf('```json');
+                if (jsonStartTag !== -1) {
+                    const contentStart = jsonStartTag + '```json'.length;
+                    const lastBackticks = jsonStr.lastIndexOf('```');
+                    if (lastBackticks > contentStart) {
+                        jsonStr = jsonStr.substring(contentStart, lastBackticks);
+                    }
+                }
+                const scriptData = JSON.parse(jsonStr.trim());
+                if (scriptData.slides && Array.isArray(scriptData.slides)) {
+                    for (const item of notes) {
+                        const s = scriptData.slides.find((slide: any) => slide.slideIndex === item.slideIndex);
+                        if (s) {
+                            s.speakerNote = item.speakerNote;
+                        }
+                    }
+                    await this.prisma.lesson.update({
+                        where: { id: lessonId },
+                        data: { slideScript: JSON.stringify(scriptData, null, 2) },
+                    });
+                }
+            }
+        } catch (e: any) {
+            this.logger.warn(`Could not sync imported notes to slideScript: ${e.message}`);
+        }
+
+        // 4. Return updated data
+        const slides = await this.prisma.slide.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+        const slideAudios = await this.prisma.slideAudio.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        return {
+            success: true,
+            importedCount: notes.length,
+            slides,
+            slideAudios,
+        };
+    }
 }
+

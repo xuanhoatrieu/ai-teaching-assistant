@@ -13,7 +13,7 @@ async function testClone() {
     formData.append('ref_id', REF_ID);
     formData.append('speed', '1');
     formData.append('num_step', '32');
-    formData.append('normalize', 'true');
+    formData.append('normalize', 'false');
     console.log('Body:', formData.toString());
     try {
         const resp = await axios.post(BASE+'/api/v1/omnivoice/generate-clone-ref', formData.toString(), {
@@ -27,7 +27,7 @@ async function testDesign() {
     console.log('\n=== Test Design ===');
     try {
         const resp = await axios.post(BASE+'/api/v1/omnivoice/generate-design', 
-            { text: TEXT, instruct: 'female, young adult', speed: 1.0, num_step: 32, normalize: true },
+            { text: TEXT, instruct: 'female, young adult', speed: 1.0, num_step: 32, normalize: false },
             { headers: { 'X-API-Key': KEY }, timeout: 30000 });
         console.log('Design OK:', JSON.stringify(resp.data));
     } catch (e) { console.log('Design ERR:', e.response?.status, JSON.stringify(e.response?.data)); }
@@ -37,7 +37,7 @@ async function testAuto() {
     console.log('\n=== Test Auto ===');
     try {
         const resp = await axios.post(BASE+'/api/v1/omnivoice/generate-auto', 
-            { text: TEXT, speed: 1.0, num_step: 32, normalize: true },
+            { text: TEXT, speed: 1.0, num_step: 32, normalize: false },
             { headers: { 'X-API-Key': KEY }, timeout: 30000 });
         console.log('Auto OK:', JSON.stringify(resp.data));
     } catch (e) { console.log('Auto ERR:', e.response?.status, JSON.stringify(e.response?.data)); }
