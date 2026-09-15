@@ -200,6 +200,7 @@ function MyTemplatesSection() {
             {showModal && (
                 <div className="modal-overlay" onClick={closeModal}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="sheet-handle" onClick={closeModal} />
                         <div className="modal-header">
                             <h2>Thêm Mẫu PPTX</h2>
                             <button className="modal-close" onClick={closeModal}>×</button>
@@ -650,6 +651,7 @@ function ChangePasswordSection() {
 }
 
 export function UserSettingsPage() {
+    const [activeTab, setActiveTab] = useState<'account' | 'models' | 'apikeys' | 'templates'>('account');
     const [keys, setKeys] = useState<UserApiKey[]>([]);
     const [serviceStatus, setServiceStatus] = useState<Record<string, boolean>>({});
     const [isLoading, setIsLoading] = useState(true);
@@ -899,94 +901,166 @@ export function UserSettingsPage() {
     return (
         <div className="user-settings">
             <div className="settings-header">
-                <h1>⚙️ Cài đặt</h1>
-                <p>Quản lý API Keys cá nhân của bạn</p>
+                <h1>⚙️ Cài đặt cá nhân</h1>
+                <p>Quản lý tài khoản, cấu hình AI, API Keys và mẫu bài giảng</p>
             </div>
 
             {error && <div className="settings-message error">{error}</div>}
             {successMsg && <div className="settings-message success">{successMsg}</div>}
 
-            {/* Profile Info Section */}
-            <ProfileSection />
+            {/* Mobile / Responsive Segmented Tabs */}
+            <div className="settings-tabs-nav" role="tablist">
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'account'}
+                    className={`settings-tab-btn ${activeTab === 'account' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('account')}
+                >
+                    <span className="tab-icon">👤</span>
+                    <span className="tab-text">Tài khoản</span>
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'models'}
+                    className={`settings-tab-btn ${activeTab === 'models' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('models')}
+                >
+                    <span className="tab-icon">🤖</span>
+                    <span className="tab-text">Model AI</span>
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'apikeys'}
+                    className={`settings-tab-btn ${activeTab === 'apikeys' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('apikeys')}
+                >
+                    <span className="tab-icon">🔑</span>
+                    <span className="tab-text">API Keys</span>
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'templates'}
+                    className={`settings-tab-btn ${activeTab === 'templates' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('templates')}
+                >
+                    <span className="tab-icon">📑</span>
+                    <span className="tab-text">Mẫu Slide</span>
+                </button>
+            </div>
 
-            {/* Change Password Section */}
-            <ChangePasswordSection />
-
-            {/* Service Status Cards */}
-            <section className="settings-section">
-                <h2>Trạng thái dịch vụ</h2>
-                <p className="section-desc">
-                    Các dịch vụ có thể sử dụng key hệ thống hoặc key cá nhân của bạn
-                </p>
-                <div className="service-status-grid">
-                    {SERVICE_OPTIONS.map(service => (
-                        <div key={service.value} className="service-status-card">
-                            <span className="service-icon">{service.icon}</span>
-                            <div className="service-info">
-                                <h3>{service.label}</h3>
-                                <p>{service.desc}</p>
-                            </div>
-                            <span className={`status-badge ${serviceStatus[service.value] ? 'ready' : 'unavailable'}`}>
-                                {serviceStatus[service.value] ? '✓ Sẵn sàng' : '✗ Chưa cấu hình'}
-                            </span>
-                        </div>
-                    ))}
+            {/* Tab: Account & Password */}
+            {activeTab === 'account' && (
+                <div className="tab-content-fade">
+                    <ProfileSection />
+                    <ChangePasswordSection />
                 </div>
-            </section>
+            )}
 
-            {/* User's API Keys */}
-            <section className="settings-section">
-                <div className="section-header">
-                    <div>
-                        <h2>API Keys cá nhân</h2>
+            {/* Tab: AI Models */}
+            {activeTab === 'models' && (
+                <div className="tab-content-fade">
+                    <ModelConfigSection />
+                </div>
+            )}
+
+            {/* Tab: API Keys & Service Status */}
+            {activeTab === 'apikeys' && (
+                <div className="tab-content-fade">
+                    {/* Service Status Cards */}
+                    <section className="settings-section">
+                        <h2>Trạng thái dịch vụ</h2>
                         <p className="section-desc">
-                            Key cá nhân sẽ được ưu tiên sử dụng thay vì key hệ thống
+                            Các dịch vụ có thể sử dụng key hệ thống hoặc key cá nhân của bạn
                         </p>
-                    </div>
-                    <button className="btn-add" onClick={() => handleOpenModal()}>
-                        + Thêm Key
-                    </button>
-                </div>
-
-                {keys.length === 0 ? (
-                    <div className="empty-keys">
-                        <span>🔑</span>
-                        <p>Bạn chưa có API Key cá nhân nào</p>
-                        <small>Thêm key để sử dụng quota riêng của bạn</small>
-                    </div>
-                ) : (
-                    <div className="user-keys-list">
-                        {keys.map(key => {
-                            const info = getServiceInfo(key.service);
-                            return (
-                                <div key={key.id} className="user-key-item">
-                                    <span className="key-icon">{info.icon}</span>
-                                    <div className="key-details">
-                                        <strong>{key.name}</strong>
-                                        <span>{info.label}</span>
+                        <div className="service-status-grid">
+                            {SERVICE_OPTIONS.map(service => (
+                                <div key={service.value} className="service-status-card">
+                                    <span className="service-icon">{service.icon}</span>
+                                    <div className="service-info">
+                                        <h3>{service.label}</h3>
+                                        <p>{service.desc}</p>
                                     </div>
-                                    <div className="key-actions">
-                                        <button onClick={() => handleOpenModal(key)}>✏️</button>
-                                        <button onClick={() => handleDelete(key.id)}>🗑️</button>
-                                    </div>
+                                    <span className={`status-badge ${serviceStatus[service.value] ? 'ready' : 'unavailable'}`}>
+                                        {serviceStatus[service.value] ? '✓ Sẵn sàng' : '✗ Chưa cấu hình'}
+                                    </span>
                                 </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </section>
+                            ))}
+                        </div>
+                    </section>
 
-            {/* Model Configuration Section */}
-            <ModelConfigSection />
+                    {/* User's API Keys */}
+                    <section className="settings-section">
+                        <div className="section-header">
+                            <div>
+                                <h2>API Keys cá nhân</h2>
+                                <p className="section-desc">
+                                    Key cá nhân sẽ được ưu tiên sử dụng thay vì key hệ thống
+                                </p>
+                            </div>
+                            <button className="btn-add" onClick={() => handleOpenModal()}>
+                                + Thêm Key
+                            </button>
+                        </div>
 
-            {/* My Templates Section */}
-            <MyTemplatesSection />
+                        {keys.length === 0 ? (
+                            <div className="empty-keys">
+                                <span>🔑</span>
+                                <p>Bạn chưa có API Key cá nhân nào</p>
+                                <small>Thêm key để sử dụng quota riêng của bạn</small>
+                            </div>
+                        ) : (
+                            <div className="user-keys-list">
+                                {keys.map(key => {
+                                    const info = getServiceInfo(key.service);
+                                    return (
+                                        <div key={key.id} className="user-key-item">
+                                            <span className="key-icon">{info.icon}</span>
+                                            <div className="key-details">
+                                                <strong>{key.name}</strong>
+                                                <span>{info.label}</span>
+                                            </div>
+                                            <div className="key-actions">
+                                                <button 
+                                                    className="btn-action-edit"
+                                                    onClick={() => handleOpenModal(key)} 
+                                                    title="Sửa API Key"
+                                                >
+                                                    ✏️ Sửa
+                                                </button>
+                                                <button 
+                                                    className="btn-action-delete"
+                                                    onClick={() => handleDelete(key.id)} 
+                                                    title="Xóa API Key"
+                                                >
+                                                    🗑️ Xóa
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            )}
+
+            {/* Tab: Templates */}
+            {activeTab === 'templates' && (
+                <div className="tab-content-fade">
+                    <MyTemplatesSection />
+                </div>
+            )}
 
 
             {/* Modal */}
             {showModal && (
                 <div className="modal-overlay" onClick={handleCloseModal}>
                     <div className="modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="sheet-handle" onClick={handleCloseModal} />
                         <div className="modal-header">
                             <h2>{editingKey ? 'Sửa API Key' : 'Thêm API Key'}</h2>
                             <button className="modal-close" onClick={handleCloseModal}>×</button>

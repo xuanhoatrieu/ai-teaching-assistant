@@ -24,6 +24,8 @@ export function UserLayout() {
     const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [isToolsSheetOpen, setIsToolsSheetOpen] = useState(false);
+    const [dismissProfileBanner, setDismissProfileBanner] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -38,9 +40,10 @@ export function UserLayout() {
         fetchLinks();
     }, []);
 
-    // Close mobile menu when changing location
+    // Close mobile menu & sheets when changing location
     useEffect(() => {
         setIsMobileMenuOpen(false);
+        setIsToolsSheetOpen(false);
     }, [location]);
 
     useEffect(() => {
@@ -53,14 +56,19 @@ export function UserLayout() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    const isSubjectsActive = location.pathname === '/' || location.pathname.startsWith('/subjects') || location.pathname.startsWith('/lessons');
+    const isPptxActive = location.pathname === '/pptx-audio-tool';
+    const isSettingsActive = location.pathname === '/settings';
+
     return (
         <div className="user-layout">
             <header className="user-header">
-                <div className="header-logo">
+                <Link to="/" className="header-logo" onClick={() => setIsMobileMenuOpen(false)}>
+                    <span className="logo-badge">🎓</span>
                     <h1>AI Teaching Assistant</h1>
-                </div>
+                </Link>
 
-                {/* Hamburger menu button */}
+                {/* Hamburger menu button for mobile header drawer */}
                 <button 
                     className={`mobile-menu-toggle ${isMobileMenuOpen ? 'active' : ''}`}
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -72,10 +80,13 @@ export function UserLayout() {
                 </button>
 
                 {/* Mobile menu overlay */}
-                {isMobileMenuOpen && (
+                {(isMobileMenuOpen || isToolsSheetOpen) && (
                     <div 
                         className="mobile-menu-overlay" 
-                        onClick={() => setIsMobileMenuOpen(false)}
+                        onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            setIsToolsSheetOpen(false);
+                        }}
                     />
                 )}
 
@@ -130,44 +141,122 @@ export function UserLayout() {
                     </div>
 
                     <div className="header-right">
-                        <span className="user-email">{user?.email}</span>
+                        <div className="user-profile-badge">
+                            <span className="user-avatar-icon">👤</span>
+                            <span className="user-email">{user?.email}</span>
+                        </div>
                         {user?.role === 'ADMIN' && (
-                            <Link to="/admin" className="admin-link" onClick={() => setIsMobileMenuOpen(false)}>Admin</Link>
+                            <Link to="/admin" className="admin-link" onClick={() => setIsMobileMenuOpen(false)}>🛡️ Admin</Link>
                         )}
-                        <button className="logout-btn" onClick={() => { setIsMobileMenuOpen(false); logout(); }}>Logout</button>
+                        <button className="logout-btn" onClick={() => { setIsMobileMenuOpen(false); logout(); }}>Đăng xuất</button>
                     </div>
                 </div>
             </header>
 
-            {user?.requireProfileUpdate && (
-                <div className="profile-update-banner" style={{
-                    backgroundColor: '#fffbeb',
-                    borderBottom: '1px solid #fef3c7',
-                    color: '#b45309',
-                    padding: '10px 20px',
-                    textAlign: 'center',
-                    fontSize: '0.9rem',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    gap: '10px'
-                }}>
-                    <span>⚠️</span>
-                    <strong>Thông báo:</strong> Thầy/cô vui lòng bổ sung đầy đủ Họ tên, Số điện thoại và Đơn vị công tác để hoàn thiện thông tin tài khoản.
-                    <Link to="/settings" style={{
-                        color: '#d97706',
-                        textDecoration: 'underline',
-                        fontWeight: 'bold',
-                        marginLeft: '5px'
-                    }}>
-                        Cập nhật ngay
-                    </Link>
+            {user?.requireProfileUpdate && !dismissProfileBanner && (
+                <div className="profile-update-banner">
+                    <div className="banner-text">
+                        <span className="banner-icon">⚠️</span>
+                        <span>Vui lòng bổ sung đầy đủ <strong>Họ tên, SĐT và Đơn vị</strong>.</span>
+                    </div>
+                    <div className="banner-actions">
+                        <Link to="/settings" className="banner-cta">
+                            Cập nhật ngay →
+                        </Link>
+                        <button 
+                            className="banner-dismiss-btn" 
+                            onClick={() => setDismissProfileBanner(true)}
+                            aria-label="Đóng thông báo"
+                        >
+                            ✕
+                        </button>
+                    </div>
                 </div>
             )}
 
             <main className="user-main">
                 <Outlet />
             </main>
+
+            {/* Mobile Bottom Sheet for Tools */}
+            <div className={`mobile-bottom-sheet ${isToolsSheetOpen ? 'open' : ''}`}>
+                <div className="sheet-handle" onClick={() => setIsToolsSheetOpen(false)} />
+                <div className="sheet-header">
+                    <h3>🧰 Công cụ & Tiện ích giảng dạy</h3>
+                    <button className="sheet-close-btn" onClick={() => setIsToolsSheetOpen(false)}>✕</button>
+                </div>
+                <div className="sheet-body">
+                    {usefulLinks.length === 0 ? (
+                        <p className="sheet-empty">Chưa có liên kết công cụ nào được cấu hình.</p>
+                    ) : (
+                        <div className="sheet-tools-grid">
+                            {usefulLinks.map(link => (
+                                <a
+                                    key={link.id}
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="sheet-tool-card"
+                                    onClick={() => setIsToolsSheetOpen(false)}
+                                >
+                                    <span className="sheet-tool-icon">{link.icon}</span>
+                                    <div className="sheet-tool-info">
+                                        <span className="sheet-tool-title">{link.title}</span>
+                                        {link.description && <span className="sheet-tool-desc">{link.description}</span>}
+                                    </div>
+                                    <span className="sheet-tool-arrow">↗</span>
+                                </a>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Mobile Bottom Navigation Bar (Thumb-zone 44px+) */}
+            <nav className="mobile-bottom-nav" aria-label="Điều hướng chính">
+                <Link
+                    to="/"
+                    className={`bottom-nav-item ${isSubjectsActive ? 'active' : ''}`}
+                >
+                    <span className="bottom-nav-icon">📚</span>
+                    <span className="bottom-nav-label">Môn học</span>
+                </Link>
+
+                <Link
+                    to="/pptx-audio-tool"
+                    className={`bottom-nav-item ${isPptxActive ? 'active' : ''}`}
+                >
+                    <span className="bottom-nav-icon">🎙️</span>
+                    <span className="bottom-nav-label">Audio PPTX</span>
+                </Link>
+
+                <button
+                    type="button"
+                    className={`bottom-nav-item bottom-nav-btn ${isToolsSheetOpen ? 'active' : ''}`}
+                    onClick={() => setIsToolsSheetOpen(!isToolsSheetOpen)}
+                >
+                    <span className="bottom-nav-icon">🧰</span>
+                    <span className="bottom-nav-label">Công cụ</span>
+                </button>
+
+                <Link
+                    to="/settings"
+                    className={`bottom-nav-item ${isSettingsActive ? 'active' : ''}`}
+                >
+                    <span className="bottom-nav-icon">⚙️</span>
+                    <span className="bottom-nav-label">Cài đặt</span>
+                </Link>
+
+                {user?.role === 'ADMIN' && (
+                    <Link
+                        to="/admin"
+                        className={`bottom-nav-item admin-tab ${location.pathname.startsWith('/admin') ? 'active' : ''}`}
+                    >
+                        <span className="bottom-nav-icon">🛡️</span>
+                        <span className="bottom-nav-label">Admin</span>
+                    </Link>
+                )}
+            </nav>
 
             <footer className="user-footer">
                 <span>© {new Date().getFullYear()} AI Teaching Assistant</span>

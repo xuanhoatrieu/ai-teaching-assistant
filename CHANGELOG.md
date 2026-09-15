@@ -1,8 +1,26 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+## [v1.5.26] - 2026-09-15 - Mobile UI/UX Redesign (Touch-First & Thumb-Zone)
 
-## [2026-05-15] - Moodle XML Export Polish
+### Added
+- **Mobile Navigation & Bottom Navigation Bar**
+  - Fixed bottom navigation bar (`📚 Môn học`, `🎙️ Audio PPTX`, `🧰 Công cụ`, `⚙️ Cài đặt`, `🛡️ Admin`) with glassmorphism backdrop blur and iOS safe area padding
+  - Slide-up Tools Bottom Sheet modal for mobile quick access
+  - Admin mobile quick-exit button (`[ 🏠 Về App ]`) directly in mobile header
+- **User Settings Segmented Tabs**
+  - Divided settings into 4 swipe-friendly tabs (`👤 Tài khoản`, `🤖 Model AI`, `🔑 API Keys`, `📑 Mẫu Slide`)
+  - Converted API key and slide template dialogs into mobile Bottom Sheets with drag handle
+- **Admin Settings & Users Mobile Optimization**
+  - 6 dedicated segmented tabs for CLIProxy, Custom OpenAI, Image Gen, ViTTS, SMTP, and System Keys
+  - Converted 8-column user table into responsive Mobile Cards with highlighted status and touch-first action buttons
+  - Fixed dark theme consistency for Admin reset password modal
+- **Workflow Stepper & Lesson Editor UX**
+  - Mobile progress bar and step counter banner (`Bước X/6 · Y%`)
+  - Fixed sticky bottom action bar for smooth step navigation without scrolling
+  - Segmented slide card view in Step 4 (Content | Original script | Optimized script)
+  - Responsive question cards with highlighted correct answers in Step 6
+
 
 ### Changed
 - **Moodle XML Question Name**: Updated XML export to include the question content preview (truncated to 200 characters) in the question name field (`B1-1-01: Nội dung câu hỏi...`) instead of just the ID. This makes questions identifiable in Moodle's question bank list.

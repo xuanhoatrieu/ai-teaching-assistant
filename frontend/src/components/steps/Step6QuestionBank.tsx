@@ -566,7 +566,7 @@ export function Step6QuestionBank() {
                     {!isGeneratingReview && !isAppendingReview && reviewQuestions.length > 0 && (
                         <div className="questions-preview">
                             <h3>Câu hỏi Ôn tập ({reviewQuestions.length})</h3>
-                            <div className="questions-table-wrapper">
+                            <div className="questions-table-wrapper desktop-questions-table">
                                 <table className="questions-table">
                                     <thead>
                                         <tr>
@@ -662,6 +662,124 @@ export function Step6QuestionBank() {
                                         ))}
                                     </tbody>
                                 </table>
+                            </div>
+
+                            {/* Mobile Review Questions Cards */}
+                            <div className="mobile-review-cards">
+                                {reviewQuestions.map((q) => (
+                                    <div key={q.id} className="review-card-item">
+                                        <div className="review-card-top">
+                                            <span className="review-q-id">{q.questionId || q.id}</span>
+                                            <div className="review-card-btns">
+                                                {editingReviewId === q.id ? (
+                                                    <button className="btn-save" onClick={() => handleUpdateReview(q)}>💾 Lưu</button>
+                                                ) : (
+                                                    <button className="btn-edit" onClick={() => setEditingReviewId(q.id)}>✏️ Sửa</button>
+                                                )}
+                                                <button className="btn-delete" onClick={() => handleDeleteReview(q.id)}>🗑️ Xóa</button>
+                                            </div>
+                                        </div>
+
+                                        <div className="review-card-question">
+                                            {editingReviewId === q.id ? (
+                                                <textarea
+                                                    value={q.question}
+                                                    onChange={(e) => setReviewQuestions(prev =>
+                                                        prev.map(p => p.id === q.id ? { ...p, question: e.target.value } : p)
+                                                    )}
+                                                    className="edit-textarea"
+                                                    rows={3}
+                                                />
+                                            ) : (
+                                                <div className="q-text-bold">{q.question}</div>
+                                            )}
+                                        </div>
+
+                                        <div className="review-card-answers">
+                                            <div className="review-ans-item correct">
+                                                <span className="ans-tag">A (Đúng):</span>
+                                                {editingReviewId === q.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={q.correctAnswer}
+                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                            prev.map(p => p.id === q.id ? { ...p, correctAnswer: e.target.value } : p)
+                                                        )}
+                                                        className="edit-input"
+                                                    />
+                                                ) : (
+                                                    <span>{q.correctAnswer}</span>
+                                                )}
+                                            </div>
+
+                                            <div className="review-ans-item">
+                                                <span className="ans-tag">B:</span>
+                                                {editingReviewId === q.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={q.optionB}
+                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                            prev.map(p => p.id === q.id ? { ...p, optionB: e.target.value } : p)
+                                                        )}
+                                                        className="edit-input"
+                                                    />
+                                                ) : (
+                                                    <span>{q.optionB}</span>
+                                                )}
+                                            </div>
+
+                                            <div className="review-ans-item">
+                                                <span className="ans-tag">C:</span>
+                                                {editingReviewId === q.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={q.optionC}
+                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                            prev.map(p => p.id === q.id ? { ...p, optionC: e.target.value } : p)
+                                                        )}
+                                                        className="edit-input"
+                                                    />
+                                                ) : (
+                                                    <span>{q.optionC}</span>
+                                                )}
+                                            </div>
+
+                                            <div className="review-ans-item">
+                                                <span className="ans-tag">D:</span>
+                                                {editingReviewId === q.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={q.optionD}
+                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                            prev.map(p => p.id === q.id ? { ...p, optionD: e.target.value } : p)
+                                                        )}
+                                                        className="edit-input"
+                                                    />
+                                                ) : (
+                                                    <span>{q.optionD}</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {(q.explanation || editingReviewId === q.id) && (
+                                            <div className="review-card-exp">
+                                                <span className="exp-label">💡 Giải thích:</span>
+                                                {editingReviewId === q.id ? (
+                                                    <input
+                                                        type="text"
+                                                        value={q.explanation || ''}
+                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                            prev.map(p => p.id === q.id ? { ...p, explanation: e.target.value } : p)
+                                                        )}
+                                                        className="edit-input"
+                                                    />
+                                                ) : (
+                                                    <span>{q.explanation}</span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}

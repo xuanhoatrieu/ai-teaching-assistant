@@ -40,9 +40,16 @@ export function AdminLayout() {
                     ☰ Menu
                 </button>
                 <div className="admin-mobile-title">
-                    <span>AI Teaching</span>
+                    <span className="admin-app-name">AI Teaching</span>
                     <span className="admin-badge">Admin</span>
                 </div>
+                <button 
+                    className="admin-quick-exit" 
+                    onClick={handleExitAdmin}
+                    title="Quay lại ứng dụng người dùng"
+                >
+                    🏠 Về App
+                </button>
             </header>
 
             {/* Mobile Admin Overlay */}

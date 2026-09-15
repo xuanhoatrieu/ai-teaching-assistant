@@ -13,7 +13,7 @@
 }
 
 .settings-header {
-    margin-bottom: 32px;
+    margin-bottom: 24px;
 }
 
 .settings-header h1 {
@@ -25,6 +25,71 @@
 .settings-header p {
     margin: 0;
     color: #94a3b8;
+}
+
+/* ═══════ SEGMENTED TABS NAV ═══════ */
+.settings-tabs-nav {
+    display: flex;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.7);
+    padding: 6px;
+    border-radius: 14px;
+    border: 1px solid rgba(59, 130, 246, 0.15);
+    margin-bottom: 24px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.settings-tab-btn {
+    flex: 1;
+    min-width: 110px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    min-height: 42px;
+}
+
+.settings-tab-btn:hover {
+    color: #e2e8f0;
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.settings-tab-btn.active {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(139, 92, 246, 0.2));
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.settings-tab-btn .tab-icon {
+    font-size: 16px;
+}
+
+.tab-content-fade {
+    animation: fadeInTab 0.25s ease-out;
+}
+
+@keyframes fadeInTab {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Messages */
@@ -210,20 +275,41 @@
 .user-key-item .key-actions {
     display: flex;
     gap: 8px;
+    align-items: center;
 }
 
-.user-key-item .key-actions button {
-    padding: 6px 10px;
-    background: rgba(100, 116, 139, 0.2);
-    border: none;
+.btn-action-edit, .btn-action-delete {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
     border-radius: 6px;
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
-    transition: background 0.2s ease;
+    border: none;
+    transition: all 0.2s;
+    min-height: 36px;
 }
 
-.user-key-item .key-actions button:hover {
-    background: rgba(100, 116, 139, 0.4);
+.btn-action-edit {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.btn-action-edit:hover {
+    background: rgba(59, 130, 246, 0.25);
+}
+
+.btn-action-delete {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.btn-action-delete:hover {
+    background: rgba(239, 68, 68, 0.25);
 }
 
 /* Modal */
@@ -534,18 +620,35 @@
         padding: 8px 14px;
     }
 
-    /* Modal full width */
+    /* Modal full width as Bottom Sheet */
     .modal-overlay {
-        padding: 12px;
+        padding: 0;
         align-items: flex-end;
     }
 
     .modal-content {
         max-width: 100%;
         width: 100%;
-        border-radius: 16px 16px 0 0;
-        max-height: 85vh;
+        border-radius: 20px 20px 0 0;
+        max-height: 88vh;
         overflow-y: auto;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.6);
+        animation: slideUpSheet 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+        padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    }
+
+    @keyframes slideUpSheet {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+
+    .sheet-handle {
+        width: 36px;
+        height: 4px;
+        background: rgba(148, 163, 184, 0.4);
+        border-radius: 2px;
+        margin: 10px auto 4px;
+        cursor: pointer;
     }
 
     .modal-actions {

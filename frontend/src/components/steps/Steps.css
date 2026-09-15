@@ -489,6 +489,116 @@
     .download-actions button {
         width: 100%;
     }
+
+    /* Review Questions Mobile Card View */
+    .desktop-questions-table {
+        display: none !important;
+    }
+
+    .mobile-review-cards {
+        display: flex !important;
+        flex-direction: column;
+        gap: 14px;
+        margin-top: 12px;
+    }
+
+    .review-card-item {
+        background: rgba(30, 41, 59, 0.7);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 12px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        backdrop-filter: blur(8px);
+    }
+
+    .review-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .review-q-id {
+        font-size: 12px;
+        font-weight: 700;
+        color: #a5b4fc;
+        background: rgba(99, 102, 241, 0.15);
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+
+    .review-card-btns {
+        display: flex;
+        gap: 8px;
+    }
+
+    .review-card-btns button {
+        padding: 6px 12px;
+        font-size: 12px;
+        min-height: 36px;
+    }
+
+    .q-text-bold {
+        font-size: 14px;
+        font-weight: 600;
+        color: #f8fafc;
+        line-height: 1.4;
+    }
+
+    .review-card-answers {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        background: rgba(15, 23, 42, 0.4);
+        padding: 12px;
+        border-radius: 8px;
+    }
+
+    .review-ans-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 13px;
+        color: #cbd5e1;
+    }
+
+    .review-ans-item.correct {
+        color: #86efac;
+        font-weight: 600;
+    }
+
+    .ans-tag {
+        font-size: 12px;
+        color: #94a3b8;
+        min-width: 65px;
+        flex-shrink: 0;
+    }
+
+    .review-card-exp {
+        font-size: 12px;
+        color: #94a3b8;
+        background: rgba(245, 158, 11, 0.08);
+        border: 1px solid rgba(245, 158, 11, 0.2);
+        padding: 8px 12px;
+        border-radius: 6px;
+    }
+
+    .exp-label {
+        font-weight: 600;
+        color: #fbbf24;
+        margin-right: 4px;
+    }
+}
+
+/* Default state for desktop */
+.desktop-questions-table {
+    display: block;
+}
+
+.mobile-review-cards {
+    display: none;
 }
 
 /* View Toggle */

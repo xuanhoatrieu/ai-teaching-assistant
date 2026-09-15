@@ -135,7 +135,7 @@ export function UsersPage() {
 
             {error && <div className="error-banner">{error}</div>}
 
-            <div className="data-table">
+            <div className="data-table desktop-users-table">
                 <table>
                     <thead>
                         <tr>
@@ -257,43 +257,101 @@ export function UsersPage() {
                 </table>
             </div>
 
+            {/* Mobile User Cards */}
+            <div className="mobile-users-cards">
+                {users.length === 0 ? (
+                    <div className="empty-state">Không tìm thấy người dùng nào</div>
+                ) : (
+                    users.map((user) => (
+                        <div key={user.id} className="user-card-item">
+                            <div className="user-card-header">
+                                <div>
+                                    <div className="user-card-name">{user.fullName || 'Chưa cập nhật tên'}</div>
+                                    <div className="user-card-email">{user.email}</div>
+                                </div>
+                                <div className="user-card-badges">
+                                    <span className={`role-badge ${user.role.toLowerCase()}`}>{user.role}</span>
+                                    <span className={`status-badge ${user.status?.toLowerCase() || 'approved'}`}>
+                                        {user.status === 'APPROVED' ? 'Đã duyệt' : user.status === 'REJECTED' ? 'Từ chối' : 'Chờ duyệt'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="user-card-details">
+                                <div className="detail-row">
+                                    <span className="detail-label">📱 SĐT:</span>
+                                    <span className="detail-value">{user.phone || 'Chưa cập nhật'}</span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="detail-label">🏢 Đơn vị:</span>
+                                    <span className="detail-value">{user.organization || 'Chưa cập nhật'}</span>
+                                </div>
+                                <div className="detail-row">
+                                    <span className="detail-label">📅 Ngày ĐK:</span>
+                                    <span className="detail-value">{new Date(user.createdAt).toLocaleDateString('vi-VN')}</span>
+                                </div>
+                            </div>
+                            <div className="user-card-actions">
+                                {user.status === 'PENDING' && (
+                                    <>
+                                        <button
+                                            onClick={() => handleUpdateStatus(user.id, 'APPROVED')}
+                                            disabled={actionLoading !== null}
+                                            className="btn-user-action btn-approve"
+                                        >
+                                            ✓ Duyệt
+                                        </button>
+                                        <button
+                                            onClick={() => handleUpdateStatus(user.id, 'REJECTED')}
+                                            disabled={actionLoading !== null}
+                                            className="btn-user-action btn-reject"
+                                        >
+                                            ✕ Từ chối
+                                        </button>
+                                    </>
+                                )}
+                                <button
+                                    onClick={() => handleOpenResetModal(user)}
+                                    disabled={actionLoading !== null}
+                                    className="btn-user-action btn-reset"
+                                >
+                                    🔑 Đặt lại MK
+                                </button>
+                                {user.id !== currentUser?.id && (
+                                    <button
+                                        onClick={() => handleDelete(user.id, user.email)}
+                                        disabled={actionLoading !== null}
+                                        className="btn-user-action btn-delete"
+                                    >
+                                        🗑️ Xóa
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
             {/* Reset Password Modal */}
             {resettingUser && (
-                <div className="modal-overlay" onClick={handleCloseResetModal} style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    zIndex: 1000
-                }}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()} style={{
-                        backgroundColor: 'white',
-                        padding: '24px',
-                        borderRadius: '8px',
-                        width: '400px',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                    }}>
+                <div className="admin-modal-backdrop" onClick={handleCloseResetModal}>
+                    <div className="admin-modal-content" onClick={e => e.stopPropagation()}>
+                        <div className="sheet-handle"></div>
                         <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0 }}>Đặt lại mật khẩu</h2>
-                            <button onClick={handleCloseResetModal} style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0 }}>×</button>
+                            <h2 style={{ fontSize: '1.25rem', fontWeight: 'bold', margin: 0, color: '#f1f5f9' }}>Đặt lại mật khẩu</h2>
+                            <button onClick={handleCloseResetModal} style={{ border: 'none', background: 'none', fontSize: '1.5rem', cursor: 'pointer', padding: 0, color: '#94a3b8' }}>×</button>
                         </div>
 
-                        <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '16px', marginTop: 0 }}>
-                            Thay đổi mật khẩu cho tài khoản: <strong>{resettingUser.email}</strong>
+                        <p style={{ fontSize: '0.9rem', color: '#94a3b8', marginBottom: '16px', marginTop: 0 }}>
+                            Thay đổi mật khẩu cho tài khoản: <strong style={{ color: '#f1f5f9' }}>{resettingUser.email}</strong>
                         </p>
 
-                        {resetError && <div className="error-banner" style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#fee2e2', color: '#991b1b', borderRadius: '4px', fontSize: '0.85rem' }}>{resetError}</div>}
-                        {resetSuccess && <div className="success-banner" style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#dcfce7', color: '#166534', borderRadius: '4px', fontSize: '0.85rem' }}>{resetSuccess}</div>}
+                        {resetError && <div className="error-banner" style={{ marginBottom: '12px' }}>{resetError}</div>}
+                        {resetSuccess && <div className="success-banner" style={{ marginBottom: '12px', padding: '10px 14px', backgroundColor: 'rgba(34, 197, 94, 0.15)', color: '#86efac', border: '1px solid rgba(34, 197, 94, 0.3)', borderRadius: '8px', fontSize: '0.875rem' }}>{resetSuccess}</div>}
 
                         {!resetSuccess && (
                             <form onSubmit={handleResetPasswordSubmit}>
-                                <div className="form-group" style={{ marginBottom: '16px' }}>
-                                    <label htmlFor="new-pass" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '6px', textAlign: 'left' }}>Mật khẩu mới *</label>
+                                <div className="setting-group" style={{ marginBottom: '16px' }}>
+                                    <label htmlFor="new-pass" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 500, marginBottom: '6px', textAlign: 'left', color: '#cbd5e1' }}>Mật khẩu mới *</label>
                                     <input
                                         id="new-pass"
                                         type="text"
@@ -301,15 +359,15 @@ export function UsersPage() {
                                         onChange={e => setNewPassword(e.target.value)}
                                         placeholder="Nhập mật khẩu mới (ít nhất 6 ký tự)"
                                         required
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px', boxSizing: 'border-box' }}
+                                        style={{ width: '100%', padding: '10px', backgroundColor: '#0f172a', color: '#f1f5f9', border: '1px solid rgba(148, 163, 184, 0.2)', borderRadius: '8px', boxSizing: 'border-box' }}
                                     />
                                 </div>
 
                                 <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                                    <button type="button" className="secondary-btn" onClick={handleCloseResetModal} style={{ padding: '6px 12px', border: '1px solid #d1d5db', borderRadius: '4px', background: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                    <button type="button" className="secondary-btn" onClick={handleCloseResetModal} style={{ padding: '8px 16px', margin: 0 }}>
                                         Hủy
                                     </button>
-                                    <button type="submit" disabled={isResetting} style={{ padding: '6px 12px', border: 'none', borderRadius: '4px', background: '#3b82f6', color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+                                    <button type="submit" className="primary-btn" disabled={isResetting} style={{ padding: '8px 16px', margin: 0 }}>
                                         {isResetting ? 'Đang cập nhật...' : 'Xác nhận'}
                                     </button>
                                 </div>

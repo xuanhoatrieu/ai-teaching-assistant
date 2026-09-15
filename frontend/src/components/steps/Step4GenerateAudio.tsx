@@ -82,6 +82,7 @@ export function Step4GenerateAudio() {
     const [importFileName, setImportFileName] = useState<string>('');
     const [isImporting, setIsImporting] = useState<boolean>(false);
     const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [mobileSlideTab, setMobileSlideTab] = useState<Record<number, 'content' | 'raw' | 'opt'>>({});
     const exportMenuRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -991,6 +992,8 @@ export function Step4GenerateAudio() {
                     const isGenerating = generatingSlides.has(slide.slideIndex) || audio?.status === 'GENERATING';
                     const isRecording = recordingSlide === slide.slideIndex;
 
+                    const activeCardTab = mobileSlideTab[slide.slideIndex] || 'opt';
+
                     return (
                         <div key={slide.id} className={`slide-card ${audio?.status?.toLowerCase() || 'pending'}`}>
                             {/* Card Header: Slide Number + Title */}
@@ -1000,10 +1003,35 @@ export function Step4GenerateAudio() {
                                 <span className="slide-type-badge">{slide.slideType}</span>
                             </div>
 
+                            {/* Mobile Card Segmented Tab */}
+                            <div className="mobile-card-tabs">
+                                <button
+                                    type="button"
+                                    className={`card-tab-btn ${activeCardTab === 'content' ? 'active' : ''}`}
+                                    onClick={() => setMobileSlideTab(prev => ({ ...prev, [slide.slideIndex]: 'content' }))}
+                                >
+                                    📋 Nội dung
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`card-tab-btn ${activeCardTab === 'raw' ? 'active' : ''}`}
+                                    onClick={() => setMobileSlideTab(prev => ({ ...prev, [slide.slideIndex]: 'raw' }))}
+                                >
+                                    ✨ Lời giảng gốc
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`card-tab-btn ${activeCardTab === 'opt' ? 'active' : ''}`}
+                                    onClick={() => setMobileSlideTab(prev => ({ ...prev, [slide.slideIndex]: 'opt' }))}
+                                >
+                                    ✅ Tối ưu
+                                </button>
+                            </div>
+
                             {/* Card Body: 3-Column Layout */}
                             <div className="card-body card-body-3col">
                                 {/* Col 1: Slide Content */}
-                                <div className="card-content-col">
+                                <div className={`card-content-col ${activeCardTab === 'content' ? 'mobile-col-visible' : 'mobile-col-hidden'}`}>
                                     <div className="col-label">📋 Nội dung Slide</div>
                                     {contentItems.length > 0 ? (
                                         <ul className="content-bullets">
@@ -1020,7 +1048,7 @@ export function Step4GenerateAudio() {
                                 </div>
 
                                 {/* Col 2: Raw Speaker Note (Button 1) */}
-                                <div className="card-note-col card-note-raw">
+                                <div className={`card-note-col card-note-raw ${activeCardTab === 'raw' ? 'mobile-col-visible' : 'mobile-col-hidden'}`}>
                                     <div className="col-label">✨ Lời Giảng (Bước 1)</div>
                                     {rawNote ? (
                                         <div className="note-content">
@@ -1032,7 +1060,7 @@ export function Step4GenerateAudio() {
                                 </div>
 
                                 {/* Col 3: Optimized Speaker Note (Button 2) */}
-                                <div className="card-note-col card-note-optimized">
+                                <div className={`card-note-col card-note-optimized ${activeCardTab === 'opt' ? 'mobile-col-visible' : 'mobile-col-hidden'}`}>
                                     <div className="col-label">✅ Lời Giảng (Tối Ưu)</div>
                                     {isEditing ? (
                                         <div className="edit-mode">

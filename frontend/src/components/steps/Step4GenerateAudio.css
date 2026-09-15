@@ -772,8 +772,56 @@
     font-style: italic;
 }
 
+/* Mobile Card Tabs */
+.mobile-card-tabs {
+    display: none;
+}
+
+.mobile-col-visible,
+.mobile-col-hidden {
+    display: block;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
+    .mobile-card-tabs {
+        display: flex;
+        gap: 6px;
+        padding: 8px 12px;
+        background: rgba(15, 23, 42, 0.5);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .card-tab-btn {
+        padding: 8px 12px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        background: rgba(51, 65, 85, 0.4);
+        color: #94a3b8;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: all 0.2s;
+        min-height: 36px;
+    }
+
+    .card-tab-btn.active {
+        background: rgba(99, 102, 241, 0.25);
+        color: #c7d2fe;
+        font-weight: 600;
+        border-color: rgba(99, 102, 241, 0.5);
+    }
+
+    .mobile-col-hidden {
+        display: none !important;
+    }
+
+    .mobile-col-visible {
+        display: block !important;
+    }
 
     .card-body,
     .card-body.card-body-3col {

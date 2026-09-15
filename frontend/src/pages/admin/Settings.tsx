@@ -583,6 +583,9 @@ export function SettingsPage() {
         }
     };
 
+    // Admin Navigation Tab
+    const [adminTab, setAdminTab] = useState<'cliproxy' | 'openai' | 'imagegen' | 'vitts' | 'smtp' | 'system'>('cliproxy');
+
     if (isLoading) {
         return <div className="admin-page loading">Loading...</div>;
     }
@@ -596,12 +599,61 @@ export function SettingsPage() {
                 </div>
             </div>
 
-            {/* CLIProxy Section */}
-            <div className="settings-section cliproxy-section">
-                <h2>🌐 CLIProxy AI Provider</h2>
-                <p className="section-desc">
-                    CLIProxy allows using shared AI resources without individual API keys.
-                </p>
+            {/* Admin Segmented Tabs Navigation */}
+            <div className="admin-tabs-nav">
+                <button
+                    type="button"
+                    className={`admin-tab-btn ${adminTab === 'cliproxy' ? 'active' : ''}`}
+                    onClick={() => setAdminTab('cliproxy')}
+                >
+                    🌐 CLIProxy AI
+                </button>
+                <button
+                    type="button"
+                    className={`admin-tab-btn ${adminTab === 'openai' ? 'active' : ''}`}
+                    onClick={() => setAdminTab('openai')}
+                >
+                    🤖 Custom OpenAI
+                </button>
+                <button
+                    type="button"
+                    className={`admin-tab-btn ${adminTab === 'imagegen' ? 'active' : ''}`}
+                    onClick={() => setAdminTab('imagegen')}
+                >
+                    🎨 Image Gen
+                </button>
+                <button
+                    type="button"
+                    className={`admin-tab-btn ${adminTab === 'vitts' ? 'active' : ''}`}
+                    onClick={() => setAdminTab('vitts')}
+                >
+                    🎙️ Cụm ViTTS
+                </button>
+                <button
+                    type="button"
+                    className={`admin-tab-btn ${adminTab === 'smtp' ? 'active' : ''}`}
+                    onClick={() => setAdminTab('smtp')}
+                >
+                    📧 Cấu hình SMTP
+                </button>
+                <button
+                    type="button"
+                    className={`admin-tab-btn ${adminTab === 'system' ? 'active' : ''}`}
+                    onClick={() => setAdminTab('system')}
+                >
+                    ⚙️ Hệ thống & Khóa
+                </button>
+            </div>
+
+            {/* Tab 1: CLIProxy */}
+            {adminTab === 'cliproxy' && (
+                <div className="admin-tab-pane">
+                    {/* CLIProxy Section */}
+                    <div className="settings-section cliproxy-section">
+                        <h2>🌐 CLIProxy AI Provider</h2>
+                        <p className="section-desc">
+                            CLIProxy allows using shared AI resources without individual API keys.
+                        </p>
 
                 <div className="setting-group">
                     <label className="toggle-label">
@@ -744,85 +796,91 @@ export function SettingsPage() {
                     </>
                 )}
             </div>
+        </div>
+        )}
 
-            {/* Custom OpenAI Providers Section */}
-            <div className="settings-section cliproxy-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <h2 style={{ margin: 0 }}>🌐 Custom OpenAI Compatible Providers</h2>
-                    <button className="primary-btn" onClick={() => handleOpenCustomModal()} style={{ padding: '8px 16px', fontSize: '14px', margin: 0 }}>
-                        ➕ Add Provider
-                    </button>
-                </div>
-                <p className="section-desc">
-                    Thêm các nhà cung cấp AI tương thích chuẩn OpenAI SDK (như ShopAIKey, DeepSeek, local LLMs) để sử dụng cho sinh văn bản và sinh âm thanh TTS.
-                </p>
-
-                {customProviders.length === 0 ? (
-                    <div className="empty-state" style={{ padding: '24px', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', color: '#888' }}>
-                        Chưa cấu hình nhà cung cấp tùy chọn nào. Bấm nút "Add Provider" để thêm.
+        {/* Tab 2: Custom OpenAI Providers */}
+        {adminTab === 'openai' && (
+            <div className="admin-tab-pane">
+                {/* Custom OpenAI Providers Section */}
+                <div className="settings-section cliproxy-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h2 style={{ margin: 0 }}>🌐 Custom OpenAI Compatible Providers</h2>
+                        <button className="primary-btn" onClick={() => handleOpenCustomModal()} style={{ padding: '8px 16px', fontSize: '14px', margin: 0 }}>
+                            ➕ Add Provider
+                        </button>
                     </div>
-                ) : (
-                    <div className="providers-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        {customProviders.map((provider) => (
-                            <div key={provider.id} className="provider-item-card" style={{ padding: '16px', border: '1px solid #3d3d3d', borderRadius: '8px', backgroundColor: 'rgba(0,0,0,0.2)' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
-                                    <div>
-                                        <h3 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                            {provider.name}
-                                            <span className={`status-badge ${provider.enabled ? 'enabled' : 'disabled'}`} style={{ fontSize: '11px', padding: '2px 6px', margin: 0 }}>
-                                                {provider.enabled ? 'Enabled' : 'Disabled'}
-                                            </span>
-                                            {provider.ttsType !== 'none' && (
-                                                <span className="status-badge" style={{ fontSize: '11px', padding: '2px 6px', backgroundColor: '#1976d2', color: 'white', margin: 0 }}>
-                                                    🎙️ TTS ({provider.ttsType})
+                    <p className="section-desc">
+                        Thêm các nhà cung cấp AI tương thích chuẩn OpenAI SDK (như ShopAIKey, DeepSeek, local LLMs) để sử dụng cho sinh văn bản và sinh âm thanh TTS.
+                    </p>
+
+                    {customProviders.length === 0 ? (
+                        <div className="empty-state" style={{ padding: '24px', textAlign: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '8px', color: '#888' }}>
+                            Chưa cấu hình nhà cung cấp tùy chọn nào. Bấm nút "Add Provider" để thêm.
+                        </div>
+                    ) : (
+                        <div className="providers-list" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {customProviders.map((provider) => (
+                                <div key={provider.id} className="provider-item-card" style={{ padding: '16px', border: '1px solid #3d3d3d', borderRadius: '8px', backgroundColor: 'rgba(0,0,0,0.2)' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px', flexWrap: 'wrap', gap: '12px' }}>
+                                        <div>
+                                            <h3 style={{ margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                {provider.name}
+                                                <span className={`status-badge ${provider.enabled ? 'enabled' : 'disabled'}`} style={{ fontSize: '11px', padding: '2px 6px', margin: 0 }}>
+                                                    {provider.enabled ? 'Enabled' : 'Disabled'}
                                                 </span>
-                                            )}
-                                        </h3>
-                                        <div style={{ fontSize: '13px', color: '#aaa', wordBreak: 'break-all' }}>
-                                            <strong>URL:</strong> {provider.url}
+                                                {provider.ttsType !== 'none' && (
+                                                    <span className="status-badge" style={{ fontSize: '11px', padding: '2px 6px', backgroundColor: '#1976d2', color: 'white', margin: 0 }}>
+                                                        🎙️ TTS ({provider.ttsType})
+                                                    </span>
+                                                )}
+                                            </h3>
+                                            <div style={{ fontSize: '13px', color: '#aaa', wordBreak: 'break-all' }}>
+                                                <strong>URL:</strong> {provider.url}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '8px' }}>
+                                            <button className="secondary-btn" onClick={() => handleTestCustomProvider(provider.id)} disabled={customTestResults[provider.id]?.loading} style={{ padding: '4px 8px', fontSize: '12px', margin: 0 }}>
+                                                {customTestResults[provider.id]?.loading ? 'Testing...' : '⚡ Test'}
+                                            </button>
+                                            <button className="secondary-btn" onClick={() => handleOpenCustomModal(provider)} style={{ padding: '4px 8px', fontSize: '12px', margin: 0 }}>
+                                                ✏️ Edit
+                                            </button>
+                                            <button className="secondary-btn" onClick={() => handleDeleteCustomProvider(provider.id)} style={{ padding: '4px 8px', fontSize: '12px', borderColor: '#d32f2f', color: '#ff6666', margin: 0 }}>
+                                                🗑️ Delete
+                                            </button>
                                         </div>
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button className="secondary-btn" onClick={() => handleTestCustomProvider(provider.id)} disabled={customTestResults[provider.id]?.loading} style={{ padding: '4px 8px', fontSize: '12px', margin: 0 }}>
-                                            {customTestResults[provider.id]?.loading ? 'Testing...' : '⚡ Test'}
-                                        </button>
-                                        <button className="secondary-btn" onClick={() => handleOpenCustomModal(provider)} style={{ padding: '4px 8px', fontSize: '12px', margin: 0 }}>
-                                            ✏️ Edit
-                                        </button>
-                                        <button className="secondary-btn" onClick={() => handleDeleteCustomProvider(provider.id)} style={{ padding: '4px 8px', fontSize: '12px', borderColor: '#d32f2f', color: '#ff6666', margin: 0 }}>
-                                            🗑️ Delete
-                                        </button>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                        <label className="toggle-label" style={{ margin: 0, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={provider.enabled}
+                                                onChange={() => handleToggleCustomProvider(provider)}
+                                            />
+                                            <span>Kích hoạt</span>
+                                        </label>
                                     </div>
+
+                                    {customTestResults[provider.id] && (
+                                        <div className={`test-result ${customTestResults[provider.id].success ? 'success' : 'error'}`} style={{ marginTop: '12px', fontSize: '13px', padding: '8px' }}>
+                                            {customTestResults[provider.id].success ? '✅' : '❌'} {customTestResults[provider.id].message}
+                                        </div>
+                                    )}
                                 </div>
+                            ))}
+                        </div>
+                    )}
 
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <label className="toggle-label" style={{ margin: 0, fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={provider.enabled}
-                                            onChange={() => handleToggleCustomProvider(provider)}
-                                        />
-                                        <span>Kích hoạt</span>
-                                    </label>
-                                </div>
-
-                                {customTestResults[provider.id] && (
-                                    <div className={`test-result ${customTestResults[provider.id].success ? 'success' : 'error'}`} style={{ marginTop: '12px', fontSize: '13px', padding: '8px' }}>
-                                        {customTestResults[provider.id].success ? '✅' : '❌'} {customTestResults[provider.id].message}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
-
-                {/* Modal Form */}
-                {isCustomModalOpen && (
-                    <div className="custom-modal-backdrop" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.7)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
-                        <div className="custom-modal-content" style={{ width: '90%', maxWidth: '500px', backgroundColor: '#1e1e1e', borderRadius: '8px', border: '1px solid #3d3d3d', padding: '24px', boxSizing: 'border-box' }}>
-                            <h3 style={{ marginTop: 0, marginBottom: '20px', borderBottom: '1px solid #3d3d3d', paddingBottom: '10px', color: 'white' }}>
-                                {editingCustomId ? '✏️ Edit OpenAI Provider' : '➕ Add Custom OpenAI Provider'}
-                            </h3>
+                    {/* Modal Form */}
+                    {isCustomModalOpen && (
+                        <div className="admin-modal-backdrop" onClick={() => setIsCustomModalOpen(false)}>
+                            <div className="admin-modal-content" onClick={e => e.stopPropagation()}>
+                                <div className="sheet-handle"></div>
+                                <h3 style={{ marginTop: 0, marginBottom: '20px', borderBottom: '1px solid #3d3d3d', paddingBottom: '10px', color: 'white' }}>
+                                    {editingCustomId ? '✏️ Edit OpenAI Provider' : '➕ Add Custom OpenAI Provider'}
+                                </h3>
 
                             <div className="setting-group" style={{ marginBottom: '16px' }}>
                                 <label style={{ display: 'block', marginBottom: '6px', color: '#ccc' }}>Tên nhà cung cấp</label>
@@ -896,13 +954,18 @@ export function SettingsPage() {
                     </div>
                 )}
             </div>
+        </div>
+        )}
 
-            {/* Image Gen (Flux/ComfyUI) Section */}
-            <div className="settings-section cliproxy-section">
-                <h2>🎨 Image Generation (Flux/ComfyUI)</h2>
-                <p className="section-desc">
-                    Configure a local or remote image generation provider using OpenAI Images API compatible endpoints.
-                </p>
+        {/* Tab 3: Image Generation */}
+        {adminTab === 'imagegen' && (
+            <div className="admin-tab-pane">
+                {/* Image Gen (Flux/ComfyUI) Section */}
+                <div className="settings-section cliproxy-section">
+                    <h2>🎨 Image Generation (Flux/ComfyUI)</h2>
+                    <p className="section-desc">
+                        Configure a local or remote image generation provider using OpenAI Images API compatible endpoints.
+                    </p>
 
                 <div className="setting-group">
                     <label className="toggle-label">
@@ -998,12 +1061,17 @@ export function SettingsPage() {
                     </>
                 )}
             </div>
+        </div>
+        )}
 
-            {/* ViTTS System Config Section (Multi-Server) */}
-            <div className="settings-section cliproxy-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                    <div>
-                        <h2>🎙️ Quản lý Đa Máy Chủ ViTTS (Multi-Server ViTTS)</h2>
+        {/* Tab 4: ViTTS Multi-Server */}
+        {adminTab === 'vitts' && (
+            <div className="admin-tab-pane">
+                {/* ViTTS System Config Section (Multi-Server) */}
+                <div className="settings-section cliproxy-section">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <div>
+                            <h2>🎙️ Quản lý Đa Máy Chủ ViTTS (Multi-Server ViTTS)</h2>
                         <p className="section-desc" style={{ marginBottom: 0 }}>
                             Quản lý danh sách các máy chủ GPU / LAN ViTTS (VieNeu-TTS / OmniVoice). Hệ thống tự động quét và phân chia giọng đọc theo từng máy chủ ở Bước 4.
                         </p>
@@ -1120,28 +1188,9 @@ export function SettingsPage() {
 
                 {/* Modal Thêm / Sửa Máy Chủ ViTTS */}
                 {isVittsModalOpen && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        zIndex: 1000,
-                        backdropFilter: 'blur(4px)'
-                    }}>
-                        <div style={{
-                            backgroundColor: '#1e1e1e',
-                            borderRadius: '12px',
-                            padding: '24px',
-                            width: '100%',
-                            maxWidth: '520px',
-                            border: '1px solid #333',
-                            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
-                        }}>
+                    <div className="admin-modal-backdrop" onClick={() => setIsVittsModalOpen(false)}>
+                        <div className="admin-modal-content" onClick={e => e.stopPropagation()}>
+                            <div className="sheet-handle"></div>
                             <h3 style={{ marginTop: 0, marginBottom: '16px', color: '#fff', fontSize: '18px' }}>
                                 {editingVittsServerId ? '✏️ Chỉnh Sửa Máy Chủ ViTTS' : '➕ Thêm Máy Chủ ViTTS Mới'}
                             </h3>
@@ -1204,13 +1253,18 @@ export function SettingsPage() {
                     </div>
                 )}
             </div>
+        </div>
+        )}
 
-            {/* SMTP Config Section */}
-            <div className="settings-section cliproxy-section">
-                <h2>📧 SMTP Email Configuration</h2>
-                <p className="section-desc">
-                    Cấu hình máy chủ gửi thư SMTP để phục vụ tính năng Quên mật khẩu và Khôi phục tài khoản.
-                </p>
+        {/* Tab 5: SMTP Configuration */}
+        {adminTab === 'smtp' && (
+            <div className="admin-tab-pane">
+                {/* SMTP Config Section */}
+                <div className="settings-section cliproxy-section">
+                    <h2>📧 SMTP Email Configuration</h2>
+                    <p className="section-desc">
+                        Cấu hình máy chủ gửi thư SMTP để phục vụ tính năng Quên mật khẩu và Khôi phục tài khoản.
+                    </p>
 
                 <div className="setting-group">
                     <label className="toggle-label">
@@ -1310,62 +1364,69 @@ export function SettingsPage() {
                     </>
                 )}
             </div>
+        </div>
+        )}
 
-            {/* API Keys Section */}
-            <div className="settings-section">
-                <h2>🔑 API Keys</h2>
+        {/* Tab 6: System Keys & Admin Links */}
+        {adminTab === 'system' && (
+            <div className="admin-tab-pane">
+                {/* API Keys Section */}
+                <div className="settings-section">
+                    <h2>🔑 API Keys</h2>
 
-                {message && (
-                    <div className={`message-banner ${message.includes('Failed') ? 'error' : 'success'}`}>
-                        {message}
+                    {message && (
+                        <div className={`message-banner ${message.includes('Failed') ? 'error' : 'success'}`}>
+                            {message}
+                        </div>
+                    )}
+
+                    <div className="setting-group">
+                        <label htmlFor="gemini-key">
+                            Gemini API Key
+                            {settings?.hasGeminiKey && <span className="configured-badge">✓ Configured</span>}
+                        </label>
+                        <input
+                            id="gemini-key"
+                            type="password"
+                            value={geminiKey}
+                            onChange={(e) => setGeminiKey(e.target.value)}
+                            placeholder={settings?.hasGeminiKey ? 'Enter new key to update' : 'Enter your Gemini API key'}
+                        />
+                        <p className="help-text">
+                            {cliproxyEnabled
+                                ? 'Used as fallback when CLIProxy is unavailable'
+                                : 'Required for AI content generation'}
+                        </p>
                     </div>
-                )}
 
-                <div className="setting-group">
-                    <label htmlFor="gemini-key">
-                        Gemini API Key
-                        {settings?.hasGeminiKey && <span className="configured-badge">✓ Configured</span>}
-                    </label>
-                    <input
-                        id="gemini-key"
-                        type="password"
-                        value={geminiKey}
-                        onChange={(e) => setGeminiKey(e.target.value)}
-                        placeholder={settings?.hasGeminiKey ? 'Enter new key to update' : 'Enter your Gemini API key'}
-                    />
-                    <p className="help-text">
-                        {cliproxyEnabled
-                            ? 'Used as fallback when CLIProxy is unavailable'
-                            : 'Required for AI content generation'}
-                    </p>
+                    <div className="setting-group">
+                        <label htmlFor="encryption-key">
+                            Encryption Key
+                            {settings?.hasEncryptionKey && <span className="configured-badge">✓ Configured</span>}
+                        </label>
+                        <input
+                            id="encryption-key"
+                            type="password"
+                            value={encryptionKey}
+                            onChange={(e) => setEncryptionKey(e.target.value)}
+                            placeholder={settings?.hasEncryptionKey ? 'Enter new key to update' : 'Enter encryption key (min 16 chars)'}
+                        />
+                        <p className="help-text">Used for encrypting user credentials</p>
+                    </div>
+
+                    <button
+                        className="primary-btn"
+                        onClick={handleSave}
+                        disabled={isSaving || (!geminiKey && !encryptionKey)}
+                    >
+                        {isSaving ? 'Saving...' : 'Save Settings'}
+                    </button>
                 </div>
-
-                <div className="setting-group">
-                    <label htmlFor="encryption-key">
-                        Encryption Key
-                        {settings?.hasEncryptionKey && <span className="configured-badge">✓ Configured</span>}
-                    </label>
-                    <input
-                        id="encryption-key"
-                        type="password"
-                        value={encryptionKey}
-                        onChange={(e) => setEncryptionKey(e.target.value)}
-                        placeholder={settings?.hasEncryptionKey ? 'Enter new key to update' : 'Enter encryption key (min 16 chars)'}
-                    />
-                    <p className="help-text">Used for encrypting user credentials</p>
-                </div>
-
-                <button
-                    className="primary-btn"
-                    onClick={handleSave}
-                    disabled={isSaving || (!geminiKey && !encryptionKey)}
-                >
-                    {isSaving ? 'Saving...' : 'Save Settings'}
-                </button>
+                
+                {/* Useful Links Admin Section */}
+                <UsefulLinksAdmin />
             </div>
-            
-            {/* Useful Links Admin Section */}
-            <UsefulLinksAdmin />
+        )}
         </div>
     );
 }
