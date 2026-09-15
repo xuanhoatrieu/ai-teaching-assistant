@@ -23,7 +23,6 @@ export function UserLayout() {
     const location = useLocation();
     const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isToolsSheetOpen, setIsToolsSheetOpen] = useState(false);
     const [dismissProfileBanner, setDismissProfileBanner] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -40,9 +39,8 @@ export function UserLayout() {
         fetchLinks();
     }, []);
 
-    // Close mobile menu & sheets when changing location
+    // Close tools sheet when changing location
     useEffect(() => {
-        setIsMobileMenuOpen(false);
         setIsToolsSheetOpen(false);
     }, [location]);
 
@@ -63,34 +61,37 @@ export function UserLayout() {
     return (
         <div className="user-layout">
             <header className="user-header">
-                <Link to="/" className="header-logo" onClick={() => setIsMobileMenuOpen(false)}>
+                <Link to="/" className="header-logo">
                     <span className="logo-badge">🎓</span>
                     <h1>AI Teaching Assistant</h1>
                 </Link>
 
-                {/* Hamburger menu button for mobile header drawer */}
-                <button 
-                    className={`mobile-menu-toggle ${isMobileMenuOpen ? 'active' : ''}`}
-                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                    aria-label="Toggle menu"
-                >
-                    <span className="bar"></span>
-                    <span className="bar"></span>
-                    <span className="bar"></span>
-                </button>
+                {/* Mobile Header Actions (Clean, Thumb-Friendly, No Duplicate Hamburger) */}
+                <div className="mobile-header-actions">
+                    <div className="mobile-user-chip" title={user?.email || ''}>
+                        <span className="mobile-user-icon">👤</span>
+                        <span className="mobile-user-name">{user?.email ? user.email.split('@')[0] : ''}</span>
+                    </div>
+                    <button 
+                        className="mobile-logout-btn" 
+                        onClick={logout}
+                        aria-label="Đăng xuất"
+                        title="Đăng xuất"
+                    >
+                        🚪
+                    </button>
+                </div>
 
-                {/* Mobile menu overlay */}
-                {(isMobileMenuOpen || isToolsSheetOpen) && (
+                {/* Overlay for Tools Bottom Sheet */}
+                {isToolsSheetOpen && (
                     <div 
-                        className="mobile-menu-overlay" 
-                        onClick={() => {
-                            setIsMobileMenuOpen(false);
-                            setIsToolsSheetOpen(false);
-                        }}
+                        className="mobile-sheet-overlay" 
+                        onClick={() => setIsToolsSheetOpen(false)}
                     />
                 )}
 
-                <div className={`header-navigation-wrapper ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+                {/* Desktop Navigation (Hidden on mobile via CSS) */}
+                <div className="header-navigation-wrapper">
                     <div className="header-left">
                         <nav className="header-nav">
                             {menuItems.map((item) => (
@@ -98,7 +99,6 @@ export function UserLayout() {
                                     key={item.path}
                                     to={item.path}
                                     className={`nav-link ${location.pathname === item.path ? 'active' : ''}`}
-                                    onClick={() => setIsMobileMenuOpen(false)}
                                 >
                                     <span>{item.icon}</span>
                                     {item.label}
@@ -124,7 +124,6 @@ export function UserLayout() {
                                                     target="_blank" 
                                                     rel="noopener noreferrer"
                                                     className="dropdown-item"
-                                                    onClick={() => setIsMobileMenuOpen(false)}
                                                 >
                                                     <span className="item-icon">{link.icon}</span>
                                                     <div className="item-content">
@@ -146,9 +145,9 @@ export function UserLayout() {
                             <span className="user-email">{user?.email}</span>
                         </div>
                         {user?.role === 'ADMIN' && (
-                            <Link to="/admin" className="admin-link" onClick={() => setIsMobileMenuOpen(false)}>🛡️ Admin</Link>
+                            <Link to="/admin" className="admin-link">🛡️ Admin</Link>
                         )}
-                        <button className="logout-btn" onClick={() => { setIsMobileMenuOpen(false); logout(); }}>Đăng xuất</button>
+                        <button className="logout-btn" onClick={logout}>Đăng xuất</button>
                     </div>
                 </div>
             </header>

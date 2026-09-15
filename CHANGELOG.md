@@ -1,6 +1,20 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+## [v1.5.27] - 2026-09-16 - Mobile UI Layout Polish & MinIO Registry Fix
+
+### Fixed
+- **Mobile Navigation Polish (User App)**:
+  - Removed duplicate hamburger menu button and sliding drawer from mobile header.
+  - Eliminated horizontal viewport scrolling by removing off-screen `transform: translateX(100%)` and adding global `overflow-x: hidden; max-width: 100vw;`.
+  - Added streamlined mobile header actions with user chip and quick logout button.
+  - Added dedicated logout button in User Settings account tab.
+- **Admin Layout Mobile Optimization**:
+  - Enforced `flex-direction: column !important;` on `.admin-layout` in mobile media query so header stays at the top and content takes 100% full width instead of being squeezed into a tiny 50px side column.
+  - Added close button `✕` in Admin mobile sidebar drawer header.
+- **Docker Compose & MinIO Fix**:
+  - Updated community MinIO image to `quay.io/minio/minio:latest` across all docker-compose configurations (`docker-compose.yml`, `docker-compose.registry.yml`, `docker-compose.prod.yml`) resolving Docker Hub 404 access denied errors.
+  - Removed obsolete `version: '3.8'` attribute.
+
 ## [v1.5.26] - 2026-09-15 - Mobile UI/UX Redesign (Touch-First & Thumb-Zone)
 
 ### Added

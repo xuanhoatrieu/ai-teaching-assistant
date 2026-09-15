@@ -651,6 +651,7 @@ function ChangePasswordSection() {
 }
 
 export function UserSettingsPage() {
+    const { logout } = useAuth();
     const [activeTab, setActiveTab] = useState<'account' | 'models' | 'apikeys' | 'templates'>('account');
     const [keys, setKeys] = useState<UserApiKey[]>([]);
     const [serviceStatus, setServiceStatus] = useState<Record<string, boolean>>({});
@@ -957,6 +958,17 @@ export function UserSettingsPage() {
                 <div className="tab-content-fade">
                     <ProfileSection />
                     <ChangePasswordSection />
+                    <section className="settings-section logout-section">
+                        <h2>Đăng xuất</h2>
+                        <p className="section-desc">Đăng xuất khỏi tài khoản trên thiết bị này</p>
+                        <button 
+                            className="btn-settings-logout" 
+                            onClick={logout}
+                            type="button"
+                        >
+                            🚪 Đăng xuất tài khoản
+                        </button>
+                    </section>
                 </div>
             )}
 

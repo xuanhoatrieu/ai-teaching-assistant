@@ -62,8 +62,17 @@ export function AdminLayout() {
 
             <aside className={`admin-sidebar ${isAdminSidebarOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
-                    <h1>AI Teaching</h1>
-                    <span className="admin-badge">Admin</span>
+                    <div className="sidebar-header-title">
+                        <h1>AI Teaching</h1>
+                        <span className="admin-badge">Admin</span>
+                    </div>
+                    <button 
+                        className="admin-sidebar-close-btn" 
+                        onClick={() => setIsAdminSidebarOpen(false)}
+                        aria-label="Đóng menu"
+                    >
+                        ✕
+                    </button>
                 </div>
 
                 <nav className="sidebar-nav">

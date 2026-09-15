@@ -2,8 +2,6 @@
 # Uses images from GitHub Container Registry
 # Change GITHUB_REPO to your actual repo name
 
-version: '3.8'
-
 x-common-env: &common-env
   NODE_ENV: production
 
@@ -40,7 +38,7 @@ services:
 
   # MinIO Object Storage
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: ai-teaching-minio
     command: server /data --console-address ":9001"
     environment:
