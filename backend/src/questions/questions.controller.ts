@@ -22,6 +22,12 @@ import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { InteractiveQuestionService } from './interactive-question.service';
 import { ReviewQuestionService } from './review-question.service';
+import {
+    EnglishQuestionService,
+    CreateEnglishQuestionDto,
+    UpdateEnglishQuestionDto,
+    GenerateEnglishQuestionsDto,
+} from './english-question.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { GenerationJobService } from '../generation-job/generation-job.service';
 import * as ExcelJS from 'exceljs';
@@ -68,6 +74,7 @@ export class QuestionsController {
     constructor(
         private readonly interactiveQuestionService: InteractiveQuestionService,
         private readonly reviewQuestionService: ReviewQuestionService,
+        private readonly englishQuestionService: EnglishQuestionService,
         private readonly prisma: PrismaService,
         private readonly jobService: GenerationJobService,
     ) { }
@@ -642,6 +649,164 @@ export class QuestionsController {
         }
 
         return { imported, skipped, duplicates, errors };
+    }
+
+    // ==================== ENGLISH QUESTIONS ====================
+
+    /**
+     * GET /lessons/:lessonId/english-questions
+     */
+    @Get('english-questions')
+    async getEnglishQuestions(@Param('lessonId') lessonId: string) {
+        return this.englishQuestionService.getQuestions(lessonId);
+    }
+
+    /**
+     * POST /lessons/:lessonId/english-questions
+     */
+    @Post('english-questions')
+    async createEnglishQuestion(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: CreateEnglishQuestionDto,
+    ) {
+        return this.englishQuestionService.createQuestion(lessonId, dto);
+    }
+
+    /**
+     * POST /lessons/:lessonId/english-questions/generate
+     */
+    @Post('english-questions/generate')
+    async generateEnglishQuestions(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: GenerateEnglishQuestionsDto,
+        @Req() req: any,
+    ) {
+        const userId = req.user.id;
+        const total = dto.totalCount || 10;
+
+        const job = await this.jobService.createJob({
+            type: 'generate-questions',
+            lessonId,
+            userId,
+            total,
+            payload: dto,
+        });
+
+        setImmediate(async () => {
+            try {
+                await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị tạo câu hỏi tiếng Anh...');
+                const slidesContent = await this.getSlidesContent(lessonId);
+
+                await this.jobService.updateProgress(job.id, 20, `Đang tạo ${total} câu hỏi ngành Ngôn ngữ Anh...`);
+                await this.englishQuestionService.generateFromLesson(
+                    lessonId,
+                    slidesContent,
+                    userId,
+                    dto,
+                );
+
+                await this.jobService.completeJob(job.id);
+            } catch (error: any) {
+                this.logger.error(`[generateEnglishQuestions] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
+    }
+
+    /**
+     * POST /lessons/:lessonId/english-questions/append
+     */
+    @Post('english-questions/append')
+    async appendEnglishQuestions(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: GenerateEnglishQuestionsDto,
+        @Req() req: any,
+    ) {
+        const userId = req.user.id;
+        const total = dto.totalCount || 5;
+
+        const job = await this.jobService.createJob({
+            type: 'append-questions',
+            lessonId,
+            userId,
+            total,
+            payload: dto,
+        });
+
+        setImmediate(async () => {
+            try {
+                await this.jobService.updateProgress(job.id, 0, 'Đang chuẩn bị thêm câu hỏi tiếng Anh...');
+                const slidesContent = await this.getSlidesContent(lessonId);
+
+                await this.jobService.updateProgress(job.id, 20, `Đang tạo thêm ${total} câu hỏi tiếng Anh...`);
+                await this.englishQuestionService.appendFromLesson(
+                    lessonId,
+                    slidesContent,
+                    userId,
+                    dto,
+                );
+
+                await this.jobService.completeJob(job.id);
+            } catch (error: any) {
+                this.logger.error(`[appendEnglishQuestions] Job ${job.id} failed:`, error);
+                await this.jobService.failJob(job.id, error?.message || 'Unknown error');
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
+    }
+
+    /**
+     * PUT /lessons/:lessonId/english-questions/:qid
+     */
+    @Put('english-questions/:qid')
+    async updateEnglishQuestion(
+        @Param('qid') qid: string,
+        @Body() dto: UpdateEnglishQuestionDto,
+    ) {
+        return this.englishQuestionService.updateQuestion(qid, dto);
+    }
+
+    /**
+     * DELETE /lessons/:lessonId/english-questions/:qid
+     */
+    @Delete('english-questions/:qid')
+    async deleteEnglishQuestion(@Param('qid') qid: string) {
+        await this.englishQuestionService.deleteQuestion(qid);
+        return { success: true };
+    }
+
+    /**
+     * DELETE /lessons/:lessonId/english-questions
+     */
+    @Delete('english-questions')
+    async deleteAllEnglishQuestions(@Param('lessonId') lessonId: string) {
+        const count = await this.englishQuestionService.deleteAllQuestions(lessonId);
+        return { success: true, count };
+    }
+
+    /**
+     * GET /lessons/:lessonId/english-questions/export/moodle-xml
+     */
+    @Get('english-questions/export/moodle-xml')
+    async exportEnglishQuestionsMoodleXml(
+        @Param('lessonId') lessonId: string,
+        @Res() res: Response,
+    ) {
+        await this.englishQuestionService.exportMoodleXml(lessonId, res);
+    }
+
+    /**
+     * GET /lessons/:lessonId/english-questions/export/excel
+     */
+    @Get('english-questions/export/excel')
+    async exportEnglishQuestionsExcel(
+        @Param('lessonId') lessonId: string,
+        @Res() res: Response,
+    ) {
+        await this.englishQuestionService.exportExcel(lessonId, res);
     }
 
     // ==================== HELPERS ====================

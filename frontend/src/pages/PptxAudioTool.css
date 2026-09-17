@@ -831,7 +831,7 @@
     color: #f1f5f9;
 }
 
-.question-config {
+.pptx-audio-tool .question-config {
     display: flex;
     gap: 16px;
     align-items: flex-end;
@@ -1037,7 +1037,7 @@
     .step-btn { padding: 8px 10px; }
     .audio-header { flex-direction: column; }
     .header-actions { width: 100%; }
-    .question-config { flex-direction: column; }
+    .pptx-audio-tool .question-config { flex-direction: column; }
 
     /* Card header */
     .pptx-audio-tool .card-header {

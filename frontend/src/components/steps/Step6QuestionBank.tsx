@@ -1,9 +1,35 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Component, type ErrorInfo, type ReactNode } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api } from '../../lib/api';
 import { useJobPolling } from '../../hooks/useJobPolling';
 import { ModelSelector } from '../ModelSelector';
 import './Steps.css';
+
+class QuestionErrorBoundary extends Component<{ children: ReactNode; fallbackText?: string }, { hasError: boolean; error: Error | null }> {
+    constructor(props: { children: ReactNode; fallbackText?: string }) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error: Error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        console.error('Question card render error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="question-card question-error-card" style={{ padding: '12px 16px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', color: '#be123c', margin: '8px 0' }}>
+                    <p style={{ margin: 0, fontWeight: 600 }}>⚠️ {this.props.fallbackText || 'Định dạng câu hỏi này gặp lỗi hiển thị'}: {this.state.error?.message}</p>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
 
 // Review Question structure (matches prompt)
 interface ReviewQuestion {
@@ -30,6 +56,151 @@ interface InteractiveQuestion {
     points: number;
 }
 
+// English Question structure
+interface EnglishQuestion {
+    id: string;
+    questionOrder: number;
+    questionType: string; // MC, MR, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY
+    subDiscipline?: string;
+    difficulty?: number;
+    title?: string;
+    questionText: string;
+    dataJson: string;
+    explanation?: string;
+    points?: number;
+}
+
+const QUESTION_TYPE_OPTIONS = [
+    { id: 'MC', label: 'Multiple Choice (1 đáp án)', badge: 'MC', icon: '🔘' },
+    { id: 'MR', label: 'Multiple Response (Nhiều đáp án)', badge: 'MR', icon: '☑️' },
+    { id: 'MATCH', label: 'Matching (Nối cột / Ghép đôi)', badge: 'MATCH', icon: '🔄' },
+    { id: 'CLOZE', label: 'Cloze / Embedded (Điền khuyết)', badge: 'CLOZE', icon: '📝' },
+    { id: 'SHORTANSWER', label: 'Short Answer (Điền từ / IPA)', badge: 'SA', icon: '✍️' },
+    { id: 'TRUEFALSE', label: 'True / False (Đúng / Sai)', badge: 'TF', icon: '⚖️' },
+    { id: 'ESSAY', label: 'Essay / Analysis (Tự luận / Phân tích)', badge: 'ESSAY', icon: '📄' },
+];
+
+const SUB_DISCIPLINE_OPTIONS = [
+    { id: 'ALL', label: '🌐 Toàn diện (Ngôn ngữ Anh & Ngôn ngữ học)' },
+    { id: 'PHONETICS', label: '🗣️ Ngữ âm & Âm vị học (Phonetics & Phonology)' },
+    { id: 'MORPHOLOGY', label: '🧩 Hình thái học & Cấu tạo từ (Morphology)' },
+    { id: 'SYNTAX', label: '🌳 Cú pháp học (Syntax & Tree Diagrams)' },
+    { id: 'SEMANTICS', label: '🧠 Ngữ nghĩa & Ngữ dụng học (Semantics & Pragmatics)' },
+    { id: 'TRANSLATION', label: '🌏 Biên - Phiên dịch (Translation Studies)' },
+    { id: 'ELT', label: '🎓 Phương pháp giảng dạy tiếng Anh (ELT / TESOL)' },
+];
+
+function renderEssayRubric(data: any) {
+    const raw = data?.graderInfo || data?.rubric;
+    if (!raw) return <p className="essay-rubric">Giảng viên chấm tự luận trên LMS.</p>;
+    if (typeof raw === 'string') return <p className="essay-rubric">{raw}</p>;
+    if (typeof raw === 'object') {
+        const criteria = Array.isArray(raw.criteria) ? raw.criteria : null;
+        const totalPoints = typeof raw.totalPoints === 'object' ? JSON.stringify(raw.totalPoints) : raw.totalPoints;
+        return (
+            <div className="essay-rubric-card">
+                {totalPoints !== undefined && totalPoints !== null && (
+                    <div className="rubric-total-badge">
+                        🎯 <strong>Tổng điểm:</strong> {String(totalPoints)}đ
+                    </div>
+                )}
+                {criteria && criteria.length > 0 ? (
+                    <div className="rubric-criteria-list">
+                        {criteria.map((c: any, cIdx: number) => {
+                            const name = typeof c === 'string'
+                                ? c
+                                : (typeof c?.name === 'string' ? c.name : (typeof c?.criterion === 'string' ? c.criterion : `Tiêu chí ${cIdx + 1}`));
+                            const points = typeof c === 'object' && c?.points !== undefined
+                                ? ` (${typeof c.points === 'object' ? JSON.stringify(c.points) : c.points}đ)`
+                                : '';
+                            const descRaw = typeof c === 'object' ? (c?.description || c?.desc || '') : '';
+                            const desc = typeof descRaw === 'object' ? JSON.stringify(descRaw) : String(descRaw);
+                            return (
+                                <div key={cIdx} className="rubric-criterion-item">
+                                    • <strong>{name}</strong>{points}{desc ? `: ${desc}` : ''}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <p className="essay-rubric">{JSON.stringify(raw)}</p>
+                )}
+            </div>
+        );
+    }
+    return <p className="essay-rubric">{String(raw)}</p>;
+}
+
+
+function formatClozePrompt(text: string): string {
+    if (!text) return '';
+    return text.replace(/\{(\d+):[A-Z_]+:[^}]+\}/g, '[ ______ ]');
+}
+
+function renderClozeVisual(rawText: string) {
+    if (!rawText) return null;
+    const regex = /\{(\d+):([A-Z_]+):([^}]+)\}/g;
+    const parts: Array<{ type: 'text' | 'blank'; content?: string; points?: string; qType?: string; answers?: string[] }> = [];
+
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(rawText)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push({ type: 'text', content: rawText.substring(lastIndex, match.index) });
+        }
+        const points = match[1];
+        const qType = match[2];
+        const rawAnswers = match[3];
+        const answers = rawAnswers.split('~').map(a => a.replace(/^=/, '').trim()).filter(Boolean);
+
+        parts.push({
+            type: 'blank',
+            points,
+            qType,
+            answers,
+        });
+        lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < rawText.length) {
+        parts.push({ type: 'text', content: rawText.substring(lastIndex) });
+    }
+
+    let blankCount = 0;
+    return (
+        <div className="cloze-visual-container">
+            <div className="cloze-visual-sentence">
+                {parts.map((p, idx) => {
+                    if (p.type === 'text') {
+                        return <span key={idx}>{p.content}</span>;
+                    }
+                    blankCount++;
+                    const currentNum = blankCount;
+                    return (
+                        <span key={idx} className="cloze-interactive-blank">
+                            <span className="cloze-blank-badge">#{currentNum}</span>
+                            <span className="cloze-answers-list">
+                                {p.answers?.map((ans, aIdx) => (
+                                    <span key={aIdx} className="cloze-single-answer">
+                                        {aIdx > 0 && <span className="cloze-or-sep">hoặc</span>}
+                                        <span className="cloze-ans-text">{ans}</span>
+                                    </span>
+                                ))}
+                            </span>
+                            <span className="cloze-points-badge">{p.points}đ</span>
+                        </span>
+                    );
+                })}
+            </div>
+            <details className="cloze-code-details">
+                <summary className="cloze-code-summary">📋 Xem mã Moodle Cloze nguồn</summary>
+                <code className="cloze-raw-code">{rawText}</code>
+            </details>
+        </div>
+    );
+}
+
 export function Step6QuestionBank() {
     const { lessonId, lessonData } = useLessonEditor();
 
@@ -44,11 +215,22 @@ export function Step6QuestionBank() {
     const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
     const [interactiveQuestions, setInteractiveQuestions] = useState<InteractiveQuestion[]>([]);
 
+    // English Questions state
+    const [englishQuestions, setEnglishQuestions] = useState<EnglishQuestion[]>([]);
+    const [englishLevelCounts, setEnglishLevelCounts] = useState({ level1: 20, level2: 20, level3: 10 });
+    const [selectedSubDiscipline, setSelectedSubDiscipline] = useState('ALL');
+    const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([
+        'MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY'
+    ]);
+    const [isGeneratingEnglish, setIsGeneratingEnglish] = useState(false);
+    const [isAppendingEnglish, setIsAppendingEnglish] = useState(false);
+    const [editingEnglishId, setEditingEnglishId] = useState<string | null>(null);
+
     // UI state
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
     const [editingInteractiveId, setEditingInteractiveId] = useState<string | null>(null);
-    const [activeTab, setActiveTab] = useState<'review' | 'interactive'>('review');
+    const [activeTab, setActiveTab] = useState<'review' | 'interactive' | 'english'>('review');
 
     // Excel import (review questions)
     const reviewImportInputRef = useRef<HTMLInputElement>(null);
@@ -65,12 +247,14 @@ export function Step6QuestionBank() {
 
     const loadQuestions = async () => {
         try {
-            const [reviewRes, interactiveRes] = await Promise.all([
+            const [reviewRes, interactiveRes, englishRes] = await Promise.all([
                 api.get(`/lessons/${lessonId}/review-questions`),
                 api.get(`/lessons/${lessonId}/interactive-questions`),
+                api.get(`/lessons/${lessonId}/english-questions`),
             ]);
             setReviewQuestions(reviewRes.data || []);
             setInteractiveQuestions(interactiveRes.data || []);
+            setEnglishQuestions(englishRes.data || []);
         } catch (err) {
             console.error('Failed to load questions', err);
         }
@@ -238,7 +422,6 @@ export function Step6QuestionBank() {
             setMessage({ type: 'error', text: 'Không thể xuất Excel câu hỏi tương tác' });
         }
     };
-
     const handleExportMoodleXml = async () => {
         try {
             const response = await api.get(`/lessons/${lessonId}/review-questions/export/moodle-xml`, {
@@ -251,9 +434,172 @@ export function Step6QuestionBank() {
             document.body.appendChild(link);
             link.click();
             link.remove();
+            window.URL.revokeObjectURL(url);
         } catch (err) {
             setMessage({ type: 'error', text: 'Không thể xuất Moodle XML' });
         }
+    };
+
+    // ========== ENGLISH QUESTIONS HANDLERS ==========
+    const generateEnglishJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingEnglish(false);
+            const res = await api.get(`/lessons/${lessonId}/english-questions`);
+            const questions = res.data || [];
+            setEnglishQuestions(questions);
+            setMessage({ type: 'success', text: `✓ Đã tạo ${questions.length} câu hỏi tiếng Anh!` });
+        },
+        onError: (msg) => {
+            setIsGeneratingEnglish(false);
+            setMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const appendEnglishJob = useJobPolling({
+        onComplete: async () => {
+            setIsAppendingEnglish(false);
+            const res = await api.get(`/lessons/${lessonId}/english-questions`);
+            const questions = res.data || [];
+            setEnglishQuestions(questions);
+            setMessage({ type: 'success', text: `✓ Đã thêm câu hỏi tiếng Anh! Tổng: ${questions.length} câu` });
+        },
+        onError: (msg) => {
+            setIsAppendingEnglish(false);
+            setMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const handleGenerateEnglish = async () => {
+        if (selectedQuestionTypes.length === 0) {
+            setMessage({ type: 'error', text: 'Vui lòng chọn ít nhất 1 dạng câu hỏi.' });
+            return;
+        }
+        if (englishQuestions.length > 0 && !confirm('⚠️ Thao tác này sẽ XÓA toàn bộ câu hỏi tiếng Anh cũ và tạo mới. Tiếp tục?')) return;
+        setIsGeneratingEnglish(true);
+        setMessage(null);
+        try {
+            const total = englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3;
+            const response = await api.post(`/lessons/${lessonId}/english-questions/generate`, {
+                totalCount: total,
+                level1: englishLevelCounts.level1,
+                level2: englishLevelCounts.level2,
+                level3: englishLevelCounts.level3,
+                questionTypes: selectedQuestionTypes,
+                subDiscipline: selectedSubDiscipline,
+            });
+            if (response.data?.jobId) {
+                generateEnglishJob.startPolling(response.data.jobId);
+            }
+        } catch (err: any) {
+            setIsGeneratingEnglish(false);
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo câu hỏi tiếng Anh' });
+        }
+    };
+
+    const handleAppendEnglish = async () => {
+        if (selectedQuestionTypes.length === 0) {
+            setMessage({ type: 'error', text: 'Vui lòng chọn ít nhất 1 dạng câu hỏi.' });
+            return;
+        }
+        setIsAppendingEnglish(true);
+        setMessage(null);
+        try {
+            const total = englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3;
+            const response = await api.post(`/lessons/${lessonId}/english-questions/append`, {
+                totalCount: total,
+                level1: englishLevelCounts.level1,
+                level2: englishLevelCounts.level2,
+                level3: englishLevelCounts.level3,
+                questionTypes: selectedQuestionTypes,
+                subDiscipline: selectedSubDiscipline,
+            });
+            if (response.data?.jobId) {
+                appendEnglishJob.startPolling(response.data.jobId);
+            }
+        } catch (err: any) {
+            setIsAppendingEnglish(false);
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo thêm câu hỏi tiếng Anh' });
+        }
+    };
+
+    const handleUpdateEnglish = async (q: EnglishQuestion) => {
+        try {
+            await api.put(`/lessons/${lessonId}/english-questions/${q.id}`, {
+                questionType: q.questionType,
+                subDiscipline: q.subDiscipline,
+                difficulty: q.difficulty,
+                title: q.title,
+                questionText: q.questionText,
+                dataJson: q.dataJson,
+                explanation: q.explanation,
+                points: q.points,
+            });
+            setEditingEnglishId(null);
+            setMessage({ type: 'success', text: '✓ Đã lưu câu hỏi tiếng Anh!' });
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể lưu câu hỏi tiếng Anh' });
+        }
+    };
+
+    const handleDeleteEnglish = async (id: string) => {
+        if (!confirm('Xác nhận xóa câu hỏi này?')) return;
+        try {
+            await api.delete(`/lessons/${lessonId}/english-questions/${id}`);
+            setEnglishQuestions(prev => prev.filter(q => q.id !== id));
+            setMessage({ type: 'success', text: '✓ Đã xóa câu hỏi!' });
+        } catch (err: any) {
+            setMessage({ type: 'error', text: 'Không thể xóa câu hỏi' });
+        }
+    };
+
+    const handleExportEnglishMoodleXml = async () => {
+        try {
+            const response = await api.get(`/lessons/${lessonId}/english-questions/export/moodle-xml`, {
+                responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/xml; charset=utf-8' }));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `${lessonData?.title || 'lesson'}_english_moodle.xml`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Không thể xuất file Moodle XML tiếng Anh' });
+        }
+    };
+
+    const handleExportEnglishExcel = async () => {
+        try {
+            const response = await api.get(`/lessons/${lessonId}/english-questions/export/excel`, {
+                responseType: 'blob',
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `${lessonData?.title || 'lesson'}_english_questions.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            setMessage({ type: 'error', text: 'Không thể xuất file Excel câu hỏi tiếng Anh' });
+        }
+    };
+
+    const toggleQuestionType = (type: string) => {
+        setSelectedQuestionTypes(prev =>
+            prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+        );
+    };
+
+    const selectAllQuestionTypes = () => {
+        setSelectedQuestionTypes(['MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY']);
+    };
+
+    const deselectAllQuestionTypes = () => {
+        setSelectedQuestionTypes([]);
     };
 
     const handleDownloadReviewTemplate = async () => {
@@ -316,36 +662,40 @@ export function Step6QuestionBank() {
             <div className="step-header">
                 <h2>❓ Bước 6: Ngân Hàng Câu Hỏi</h2>
                 <div className="header-actions">
-                    <input
-                        type="file"
-                        ref={reviewImportInputRef}
-                        accept=".xlsx"
-                        style={{ display: 'none' }}
-                        onChange={handleImportReviewExcel}
-                    />
-                    <button className="btn-secondary" onClick={handleDownloadReviewTemplate}>
-                        📥 Tải file mẫu Ôn tập
-                    </button>
-                    <button
-                        className="btn-secondary"
-                        onClick={() => reviewImportInputRef.current?.click()}
-                        disabled={isImportingReview}
-                    >
-                        {isImportingReview ? '⏳ Đang import...' : '📤 Import Excel Ôn tập'}
-                    </button>
-                    {interactiveQuestions.length > 0 && (
+                    {activeTab === 'review' && (
+                        <>
+                            <input
+                                type="file"
+                                ref={reviewImportInputRef}
+                                accept=".xlsx"
+                                style={{ display: 'none' }}
+                                onChange={handleImportReviewExcel}
+                            />
+                            <button className="btn-secondary" onClick={handleDownloadReviewTemplate}>
+                                📥 Tải file mẫu Ôn tập
+                            </button>
+                            <button
+                                className="btn-secondary"
+                                onClick={() => reviewImportInputRef.current?.click()}
+                                disabled={isImportingReview}
+                            >
+                                {isImportingReview ? '⏳ Đang import...' : '📤 Import Excel Ôn tập'}
+                            </button>
+                            {reviewQuestions.length > 0 && (
+                                <button className="btn-secondary" onClick={handleExportReviewExcel}>
+                                    📊 Xuất Excel Ôn tập
+                                </button>
+                            )}
+                            {reviewQuestions.length > 0 && (
+                                <button className="btn-secondary" onClick={handleExportMoodleXml}>
+                                    📋 Xuất Moodle XML
+                                </button>
+                            )}
+                        </>
+                    )}
+                    {activeTab === 'interactive' && interactiveQuestions.length > 0 && (
                         <button className="btn-secondary" onClick={handleExportInteractiveExcel}>
                             📊 Xuất Excel Tương tác
-                        </button>
-                    )}
-                    {reviewQuestions.length > 0 && (
-                        <button className="btn-secondary" onClick={handleExportReviewExcel}>
-                            📊 Xuất Excel Ôn tập
-                        </button>
-                    )}
-                    {reviewQuestions.length > 0 && (
-                        <button className="btn-secondary" onClick={handleExportMoodleXml}>
-                            📋 Xuất Moodle XML
                         </button>
                     )}
                 </div>
@@ -354,7 +704,7 @@ export function Step6QuestionBank() {
             <ModelSelector taskType="QUESTIONS" compact />
 
             <p className="step-description">
-                Tạo câu hỏi tương tác (kiểm tra tập trung) và câu hỏi ôn tập (theo Bloom Taxonomy).
+                Tạo câu hỏi tương tác (kiểm tra tập trung), câu hỏi ôn tập (Bloom Taxonomy) và câu hỏi chuyên ngành Ngôn ngữ Anh (Moodle XML).
             </p>
 
             {!hasOutline && (
@@ -382,6 +732,12 @@ export function Step6QuestionBank() {
                     onClick={() => setActiveTab('review')}
                 >
                     📝 Câu hỏi Ôn tập ({reviewQuestions.length})
+                </button>
+                <button
+                    className={`tab ${activeTab === 'english' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('english')}
+                >
+                    🇬🇧 Câu hỏi Tiếng Anh ({englishQuestions.length})
                 </button>
             </div>
 
@@ -784,8 +1140,369 @@ export function Step6QuestionBank() {
                         </div>
                     )}
                 </div>
-            )
-            }
+            )}
+
+            {/* ========== ENGLISH QUESTIONS TAB ========== */}
+            {activeTab === 'english' && hasOutline && (
+                <div className="question-section">
+                    <div className="question-config english-config-container">
+                        <h3>🇬🇧 Ngân Hàng Câu Hỏi Tiếng Anh (Ngành Ngôn Ngữ Anh)</h3>
+                        <p className="hint">
+                            Tạo câu hỏi chuyên sâu ngành Ngôn ngữ Anh & Ngôn ngữ học, hỗ trợ đa dạng cấu trúc xuất chuẩn Moodle XML (Multiple Choice, Matching, Cloze, Short Answer, True/False, Essay).
+                        </p>
+
+                        {/* Hàng 1: Số lượng câu hỏi 3 mức & Phân môn chuyên sâu (Thẳng hàng nhau) */}
+                        <div className="english-config-top-row">
+                            {/* Cột 1: Số lượng câu hỏi theo mức độ (Bloom Taxonomy) */}
+                            <div className="english-config-col bloom-col">
+                                <label className="config-section-label">📊 Số lượng câu hỏi theo mức độ (Bloom):</label>
+                                <div className="level-inputs">
+                                    <div className="level-input">
+                                        <label>
+                                            <span className="level-badge level-know">Biết</span>
+                                            Mức độ 1
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="50"
+                                            value={englishLevelCounts.level1}
+                                            onChange={(e) => setEnglishLevelCounts({ ...englishLevelCounts, level1: +e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="level-input">
+                                        <label>
+                                            <span className="level-badge level-understand">Hiểu</span>
+                                            Mức độ 2
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="50"
+                                            value={englishLevelCounts.level2}
+                                            onChange={(e) => setEnglishLevelCounts({ ...englishLevelCounts, level2: +e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="level-input">
+                                        <label>
+                                            <span className="level-badge level-apply">Vận dụng</span>
+                                            Mức độ 3
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="50"
+                                            value={englishLevelCounts.level3}
+                                            onChange={(e) => setEnglishLevelCounts({ ...englishLevelCounts, level3: +e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Cột 2: Phân môn chuyên sâu (Thẳng hàng với các ô số lượng) */}
+                            <div className="english-config-col discipline-col">
+                                <label className="config-section-label">🎯 Phân môn chuyên sâu:</label>
+                                <div className="discipline-input-card">
+                                    <label className="discipline-sublabel">
+                                        <span className="level-badge level-discipline">Chuyên đề</span>
+                                        Lĩnh vực học thuật
+                                    </label>
+                                    <select
+                                        value={selectedSubDiscipline}
+                                        onChange={(e) => setSelectedSubDiscipline(e.target.value)}
+                                        className="select-subdiscipline"
+                                    >
+                                        {SUB_DISCIPLINE_OPTIONS.map(opt => (
+                                            <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Hàng 2: Chọn dạng câu hỏi chia làm 3 cột */}
+                        <div className="english-config-section types-selector-box">
+                            <div className="types-header">
+                                <label className="types-label">
+                                    Các dạng câu hỏi ({selectedQuestionTypes.length}/{QUESTION_TYPE_OPTIONS.length} đã chọn):
+                                </label>
+                                <div className="types-quick-actions">
+                                    <button
+                                        type="button"
+                                        className="btn-text-action"
+                                        onClick={selectAllQuestionTypes}
+                                    >
+                                        ✓ Chọn tất cả
+                                    </button>
+                                    <span className="divider">|</span>
+                                    <button
+                                        type="button"
+                                        className="btn-text-action"
+                                        onClick={deselectAllQuestionTypes}
+                                    >
+                                        ✗ Bỏ chọn
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="type-checkboxes-grid three-columns">
+                                {QUESTION_TYPE_OPTIONS.map(type => {
+                                    const isChecked = selectedQuestionTypes.includes(type.id);
+                                    return (
+                                        <label
+                                            key={type.id}
+                                            className={`type-checkbox-card ${isChecked ? 'checked' : ''}`}
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                toggleQuestionType(type.id);
+                                            }}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isChecked}
+                                                onChange={() => {}}
+                                            />
+                                            <span className="type-icon">{type.icon}</span>
+                                            <span className="type-label-text">{type.label}</span>
+                                            <span className="type-badge-mini">{type.badge}</span>
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="config-actions-row">
+                            <button
+                                className="btn-primary"
+                                onClick={handleGenerateEnglish}
+                                disabled={isGeneratingEnglish || isAppendingEnglish || selectedQuestionTypes.length === 0 || (englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3 === 0)}
+                            >
+                                {isGeneratingEnglish ? '🔄 Đang tạo...' : '🤖 Tạo Mới Câu Hỏi Tiếng Anh'}
+                            </button>
+                            {englishQuestions.length > 0 && (
+                                <button
+                                    className="btn-secondary"
+                                    onClick={handleAppendEnglish}
+                                    disabled={isGeneratingEnglish || isAppendingEnglish || selectedQuestionTypes.length === 0 || (englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3 === 0)}
+                                >
+                                    {isAppendingEnglish ? '⏳ Đang thêm...' : `➕ Thêm ${englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3} Câu Hỏi Nữa`}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    {message && (
+                        <div className={`${message.type}-message`} style={{ marginTop: 16 }}>
+                            {message.text}
+                        </div>
+                    )}
+
+                    {isGeneratingEnglish && (
+                        <div className="generating-state">
+                            <div className="loading-spinner"></div>
+                            <p>{generateEnglishJob.jobStatus?.message || 'Đang tạo câu hỏi tiếng Anh chuyên ngành với AI...'}</p>
+                            <p className="hint">Tổng số: {englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3} câu (Biết: {englishLevelCounts.level1}, Hiểu: {englishLevelCounts.level2}, Vận dụng: {englishLevelCounts.level3})</p>
+                        </div>
+                    )}
+
+                    {isAppendingEnglish && (
+                        <div className="generating-state">
+                            <div className="loading-spinner"></div>
+                            <p>{appendEnglishJob.jobStatus?.message || 'Đang thêm câu hỏi tiếng Anh...'}</p>
+                            <p className="hint">Tổng số: {englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3} câu</p>
+                        </div>
+                    )}
+
+                    {!isGeneratingEnglish && !isAppendingEnglish && englishQuestions.length > 0 && (
+                        <div className="questions-preview">
+                            <div className="preview-header-english">
+                                <h3>Danh sách câu hỏi Tiếng Anh ({englishQuestions.length})</h3>
+                                <div className="preview-actions">
+                                    <button className="btn-secondary btn-sm" onClick={handleExportEnglishExcel}>
+                                        📊 Xuất Excel
+                                    </button>
+                                    <button className="btn-primary btn-sm" onClick={handleExportEnglishMoodleXml}>
+                                        📋 Xuất Moodle XML
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="questions-list">
+                                {englishQuestions.map((q) => {
+                                    const isEditing = editingEnglishId === q.id;
+                                    let parsedData: any = {};
+                                    try {
+                                        parsedData = JSON.parse(q.dataJson);
+                                    } catch {
+                                        parsedData = {};
+                                    }
+
+                                    return (
+                                        <QuestionErrorBoundary key={q.id} fallbackText={`Lỗi hiển thị câu ${q.questionOrder || ''}`}>
+                                            <div className="question-card english-card">
+                                                <div className="question-header">
+                                                    <span className={`badge-qtype badge-${String(q.questionType).toLowerCase()}`}>
+                                                        {q.questionType}
+                                                    </span>
+                                                    {q.subDiscipline && (
+                                                        <span className="badge-subdiscipline">
+                                                            {typeof q.subDiscipline === 'object' ? JSON.stringify(q.subDiscipline) : String(q.subDiscipline)}
+                                                        </span>
+                                                    )}
+                                                    <span className="question-points">{typeof q.points === 'object' ? JSON.stringify(q.points) : (q.points || 1)} điểm</span>
+                                                    <div className="question-actions">
+                                                        {isEditing ? (
+                                                            <button className="btn-save" onClick={() => handleUpdateEnglish(q)}>💾 Lưu</button>
+                                                        ) : (
+                                                            <button className="btn-edit" onClick={() => setEditingEnglishId(q.id)}>✏️ Sửa</button>
+                                                        )}
+                                                        <button className="btn-delete" onClick={() => handleDeleteEnglish(q.id)}>🗑️ Xóa</button>
+                                                    </div>
+                                                </div>
+
+                                                {isEditing ? (
+                                                    <textarea
+                                                        value={q.questionText}
+                                                        onChange={(e) => setEnglishQuestions(prev =>
+                                                            prev.map(p => p.id === q.id ? { ...p, questionText: e.target.value } : p)
+                                                        )}
+                                                        className="edit-textarea"
+                                                    />
+                                                ) : (
+                                                    <p className="question-text">
+                                                        <strong>{q.title ? `${typeof q.title === 'object' ? JSON.stringify(q.title) : q.title}: ` : ''}</strong>
+                                                        {q.questionType === 'CLOZE'
+                                                            ? formatClozePrompt(typeof q.questionText === 'object' ? JSON.stringify(q.questionText) : String(q.questionText ?? ''))
+                                                            : (typeof q.questionText === 'object' ? JSON.stringify(q.questionText) : String(q.questionText ?? ''))}
+                                                    </p>
+                                                )}
+
+                                                {/* MC / MR Options */}
+                                                {(q.questionType === 'MC' || q.questionType === 'MR') && Array.isArray(parsedData.options) && (
+                                                    <div className="english-options-list">
+                                                        {parsedData.options.map((opt: any, optIdx: number) => {
+                                                            const isCorrect = opt.fraction > 0 || opt.isCorrect;
+                                                            const optText = typeof opt === 'object' && opt.text !== undefined
+                                                                ? (typeof opt.text === 'object' ? JSON.stringify(opt.text) : String(opt.text))
+                                                                : (typeof opt === 'object' ? JSON.stringify(opt) : String(opt ?? ''));
+                                                            return (
+                                                                <div key={optIdx} className={`english-option-item ${isCorrect ? 'correct' : ''}`}>
+                                                                    <span className="opt-letter">{String.fromCharCode(65 + optIdx)}</span>
+                                                                    <span className="opt-text">{optText}</span>
+                                                                    {isCorrect && <span className="opt-check">✓ Đáp án đúng</span>}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+
+                                                {/* Matching Pairs */}
+                                                {(q.questionType === 'MATCH' || q.questionType === 'MATCHING') && Array.isArray(parsedData.pairs) && (
+                                                    <div className="matching-preview-box">
+                                                        <table className="matching-table">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Thuật ngữ / Nội dung</th>
+                                                                    <th></th>
+                                                                    <th>Khái niệm / Ghép đôi</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                {parsedData.pairs.map((pair: any, pIdx: number) => {
+                                                                    const leftVal = pair.left ?? pair.subquestion ?? pair.question ?? '';
+                                                                    const rightVal = pair.right ?? pair.answer ?? pair.match ?? '';
+                                                                    return (
+                                                                        <tr key={pIdx}>
+                                                                            <td className="match-sub">
+                                                                                {typeof leftVal === 'object' ? JSON.stringify(leftVal) : String(leftVal)}
+                                                                            </td>
+                                                                            <td className="match-arrow">➔</td>
+                                                                            <td className="match-ans">
+                                                                                {typeof rightVal === 'object' ? JSON.stringify(rightVal) : String(rightVal)}
+                                                                            </td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                )}
+
+                                                {/* Cloze Text */}
+                                                {q.questionType === 'CLOZE' && (
+                                                    <div className="cloze-preview-box">
+                                                        <div className="cloze-tag">📝 Mô phỏng câu hỏi điền khuyết (Cloze):</div>
+                                                        {renderClozeVisual(typeof (parsedData.clozeText || q.questionText) === 'object' ? JSON.stringify(parsedData.clozeText || q.questionText) : String(parsedData.clozeText || q.questionText))}
+                                                    </div>
+                                                )}
+
+                                                {/* Short Answer */}
+                                                {q.questionType === 'SHORTANSWER' && (
+                                                    <div className="shortanswer-preview-box">
+                                                        <span className="sa-label">🔑 Đáp án chấp nhận:</span>
+                                                        <div className="sa-keys">
+                                                            {(Array.isArray(parsedData.acceptableAnswers)
+                                                                ? parsedData.acceptableAnswers
+                                                                : (parsedData.acceptableAnswers ? [parsedData.acceptableAnswers] : (parsedData.correctAnswer ? [parsedData.correctAnswer] : []))
+                                                            ).map((ans: any, aIdx: number) => (
+                                                                <span key={aIdx} className="sa-key-chip">
+                                                                    {typeof ans === 'object' ? JSON.stringify(ans) : String(ans ?? '')}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* True/False */}
+                                                {q.questionType === 'TRUEFALSE' && (
+                                                    <div className="truefalse-preview-box">
+                                                        <span className="tf-label">Mệnh đề:</span>
+                                                        <span className={`tf-badge ${String(parsedData.correctAnswer).toLowerCase() === 'true' || parsedData.correctAnswer === true ? 'true' : 'false'}`}>
+                                                            {String(parsedData.correctAnswer).toLowerCase() === 'true' || parsedData.correctAnswer === true ? 'TRUE (ĐÚNG)' : 'FALSE (SAI)'}
+                                                        </span>
+                                                        {parsedData.feedbackTrue && (
+                                                            <span className="tf-feedback" style={{ marginLeft: '10px', fontSize: '0.85rem', color: '#64748b' }}>
+                                                                (Giải thích: {parsedData.correctAnswer ? parsedData.feedbackTrue : parsedData.feedbackFalse})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                {/* Essay */}
+                                                {q.questionType === 'ESSAY' && (
+                                                    <div className="essay-preview-box">
+                                                        <span className="essay-label">📋 Hướng dẫn chấm / Barem (Grader Info):</span>
+                                                        {renderEssayRubric(parsedData)}
+                                                    </div>
+                                                )}
+
+                                                {/* Explanation */}
+                                                {(q.explanation || isEditing) && (
+                                                    <div className="review-card-exp">
+                                                        <span className="exp-label">💡 Giải thích học thuật:</span>
+                                                        {isEditing ? (
+                                                            <input
+                                                                type="text"
+                                                                value={typeof q.explanation === 'object' ? JSON.stringify(q.explanation) : (q.explanation || '')}
+                                                                onChange={(e) => setEnglishQuestions(prev =>
+                                                                    prev.map(p => p.id === q.id ? { ...p, explanation: e.target.value } : p)
+                                                                )}
+                                                                className="edit-input"
+                                                            />
+                                                        ) : (
+                                                            <span>{typeof q.explanation === 'object' ? JSON.stringify(q.explanation) : String(q.explanation)}</span>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </QuestionErrorBoundary>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
         </div >
     );
 }

@@ -642,6 +642,81 @@ Chỉ trả về JSON.`,
         variables: ['{title}', '{lesson_id}', '{slide_script}', '{count_level1}', '{count_level2}', '{count_level3}'],
       },
       {
+        slug: 'questions.english',
+        name: 'English Language & Linguistics Questions',
+        content: `**Create English Language & Linguistics Questions (Ngành Ngôn Ngữ Anh)**
+
+**Context:** You are an expert university professor in English Linguistics and English Studies (ngành Ngôn ngữ Anh). Your task is to generate rigorous academic questions based on the provided lesson material.
+
+**Input:**
+- Lesson Title: {title}
+- Lesson Content (slides / outline):
+{slide_script}
+
+- Sub-discipline Focus: {sub_discipline}
+- Requested Question Types: {question_types}
+- Number of questions by Bloom cognitive level:
+  + Level 1 (Remember / Nhận biết): {count_level1} questions
+  + Level 2 (Understand / Thông hiểu): {count_level2} questions
+  + Level 3 (Apply & Analyze / Vận dụng & Phân tích): {count_level3} questions
+  + Total Target Count: {total_count} questions
+
+---
+
+## 🎯 MANDATORY ACADEMIC RULES:
+1. Grounding: All questions must be grounded in the provided lesson content. Do NOT invent facts or cite external topics outside the lesson scope.
+2. Academic Rigor: Use precise terminology suitable for undergraduate English majors:
+   - For Phonetics & Phonology: Use exact Unicode IPA symbols (/θ/, /ð/, /ʃ/, /tʃ/, /dʒ/, /ŋ/, /æ/, /ʌ/, /ə/, etc.) and precise articulatory terms (voicing, place, manner).
+   - For Morphology: Clearly identify roots, affixes, inflectional vs derivational morphemes, allomorphs, and word-formation processes (blending, clipping, compounding).
+   - For Syntax: Use phrase structure rules, constituency tests, labeled brackets [TP [NP ...] [VP ...]], and structural ambiguity analysis.
+   - For Semantics & Pragmatics: Use precise terms (entailment, presupposition, hyponymy, conversational maxims, speech acts).
+   - For Translation: Compare source vs target text, identify translation techniques (Vinay & Darbelnet), and critique errors.
+   - For ELT/TESOL: Formulate pedagogical scenarios, SLA theories, and error correction techniques.
+   - For C1/C2 Skills: Use authentic Cambridge/IELTS Academic formats (Word Formation, Open Cloze, Key Word Transformation).
+3. Question Types Specification:
+   - "MC" (Multiple Choice single answer): single: true, 4 options (A, B, C, D) with 1 correct answer (fraction: 100).
+   - "MR" (Multiple Response): single: false, 4-5 options with 2+ correct answers (sum of correct fractions = 100, distractors fraction = -50).
+   - "MATCH" (Matching): 3-5 subquestion-answer pairs (e.g. term ⇄ definition, IPA symbol ⇄ description, sentence ⇄ translation technique).
+   - "CLOZE": Text with embedded answers using Moodle Cloze syntax.
+     CRITICAL CLOZE RULES:
+     * ALWAYS use weight 1 for every blank: '{1:SHORTANSWER:=word}' (do NOT use 2, 3 as blank numbering!).
+     * For verb conjugation / word transformation exercises, ALWAYS provide the base word in brackets right after the blank (e.g., 'She usually {1:SHORTANSWER:=travels} (travel) by train, but today she {1:SHORTANSWER:=is travelling~=is traveling} (travel) by bus.') so students know what word to conjugate!
+     * Include both UK and US spelling variations separated by '~=' where applicable.
+   - "SHORTANSWER": Question with 1-3 acceptable answer strings.
+   - "TRUEFALSE": Theoretical proposition with correctAnswer: true or false.
+   - "ESSAY": In-depth analysis question (e.g., bracketed syntax tree, translation critique) with scoring criteria (graderInfo).
+
+---
+
+## Output Format (JSON ONLY, no markdown wrapper outside JSON):
+{
+  "questions": [
+    {
+      "questionOrder": 1,
+      "questionType": "MC",
+      "subDiscipline": "PHONETICS",
+      "difficulty": 1,
+      "title": "PHON-01: Articulatory Description",
+      "questionText": "Which of the following describes the sound /tʃ/?",
+      "data": {
+        "single": true,
+        "options": [
+          {"text": "Voiceless post-alveolar affricate", "isCorrect": true, "fraction": 100, "feedback": "Correct!"},
+          {"text": "Voiceless alveolar fricative", "isCorrect": false, "fraction": 0, "feedback": "Incorrect"},
+          {"text": "Voiced post-alveolar affricate", "isCorrect": false, "fraction": 0, "feedback": "Incorrect"},
+          {"text": "Voiceless velar plosive", "isCorrect": false, "fraction": 0, "feedback": "Incorrect"}
+        ]
+      },
+      "explanation": "/tʃ/ is produced by stopping airflow behind alveolar ridge and releasing with friction without vocal cord vibration.",
+      "points": 1
+    }
+  ]
+}
+
+Return JSON only.`,
+        variables: ['{title}', '{slide_script}', '{sub_discipline}', '{question_types}', '{total_count}', '{count_level1}', '{count_level2}', '{count_level3}'],
+      },
+      {
         slug: 'slides.design',
         name: 'Design Slide Content',
         content: `## TASK

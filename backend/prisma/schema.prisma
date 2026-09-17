@@ -73,6 +73,7 @@ model Lesson {
   template             PPTXTemplate?         @relation(fields: [templateId], references: [id])
   questionBank         QuestionBank?
   reviewQuestions      ReviewQuestion[]
+  englishQuestions     EnglishQuestion[]
   slideAudios          SlideAudio[]
   slides               Slide[]
   syllabusLesson       SyllabusLesson?
@@ -289,6 +290,25 @@ model ReviewQuestion {
 
   @@unique([lessonId, questionId])
   @@map("review_questions")
+}
+
+model EnglishQuestion {
+  id            String   @id @default(uuid())
+  lessonId      String   @map("lesson_id")
+  questionOrder Int      @default(0) @map("question_order")
+  questionType  String   @map("question_type") // MC, MR, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY
+  subDiscipline String?  @map("sub_discipline") // PHONETICS, MORPHOLOGY, SYNTAX, SEMANTICS, TRANSLATION, ELT, C1_C2, GENERAL
+  difficulty    Int      @default(1) // 1 (Remember), 2 (Understand), 3 (Apply/Analyze)
+  title         String?
+  questionText  String   @map("question_text")
+  dataJson      String   @map("data_json")
+  explanation   String?
+  points        Int      @default(1)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  lesson        Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@map("english_questions")
 }
 
 model SystemConfig {

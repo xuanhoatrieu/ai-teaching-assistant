@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.6.0] - 2026-09-17 - English Linguistics Questions Tab & Polymorphic Moodle XML Export
+
+### Added
+- **English Linguistics Questions Tab (Step 6)**:
+  - Added dedicated Tab 3: `🇬🇧 Câu hỏi Tiếng Anh` for English Studies / English Language & Linguistics major.
+  - Multi-select Question Types picker supporting: Multiple Choice (1 answer), Multiple Response (multiple answers), Matching (nối cột), Cloze (embedded answers for Open Cloze & Word Formation), Short Answer (thuật ngữ & phiên mã IPA), True/False, and Essay (tự luận, cây cú pháp, bình dịch).
+  - Sub-discipline selector: Comprehensive, Phonetics & Phonology, Morphology, Syntax, Semantics & Pragmatics, Translation Studies, ELT / TESOL, and Advanced C1/C2 Skills.
+  - Interactive adaptive question cards rendering customized UI for each question type (matching pairs table, cloze highlighted blanks, short answer key chips, essay scoring criteria).
+- **Polymorphic Moodle XML Export**:
+  - Full Moodle XML export engine in `moodle-xml.helper.ts` supporting `<question type="multichoice">`, `<question type="match">`, `<question type="cloze">`, `<question type="shortanswer">`, `<question type="truefalse">`, `<question type="essay">`.
+  - Automatic category organization (`$course$/top/[Lesson_Title]/English_Questions`).
+  - Full Unicode and IPA character set preservation wrapped in `<![CDATA[ ... ]]>` ensuring seamless import into Moodle LMS without XML parser errors.
+- **Cloze (Embedded Answers) & Moodle XML Import Polish**:
+  - Normalized blank point weights to `{1:...}` in Moodle XML generation to prevent unintended multi-point scoring (e.g. `Marked out of 3.00`).
+  - Added automatic instruction prompt injection (`<p><strong>...</strong></p>`) into Moodle Cloze XML question text.
+  - Required base root verbs in brackets after blanks (e.g. `(travel)`) for verb conjugation / word transformation questions so students know what base word to conjugate.
+  - Supported British and American spelling variants in Cloze answers (e.g. `{1:SHORTANSWER:=is travelling~=is traveling}`).
+  - Added strict allowable Moodle fraction mapping for Multiple Response (MR) questions to avoid `cannotimport` error in Moodle LMS.
+- **Enhanced Web App Cloze Preview UI**:
+  - Formatted question card titles to clean natural text using blanks `[ ______ ]` instead of leaking raw Moodle syntax `{1:SHORTANSWER:=...}`.
+  - Implemented interactive visual Cloze preview simulating Moodle with styled badges for answers and point values.
+  - Added collapsible `📋 Xem mã Moodle Cloze nguồn` code section for quick copy-pasting.
+- **Dedicated Excel Export**:
+  - Export English questions to formatted `.xlsx` spreadsheet with question type, sub-discipline, difficulty, question text, option/pair/cloze details, and academic explanations.
+- **Database & Backend Architecture**:
+  - Added `EnglishQuestion` model in Prisma schema (`english_questions` table).
+  - Created `EnglishQuestionService` and integrated with `GenerationJobService` for smooth async background generation.
+  - Registered `questions.english` academic prompt template in `PromptsService`.
+
 ## [v1.5.27] - 2026-09-16 - Mobile UI Layout Polish & MinIO Registry Fix
 
 ### Fixed
