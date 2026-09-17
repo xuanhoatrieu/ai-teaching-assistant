@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiProviderService } from '../ai/ai-provider.service';
 import { ModelConfigService } from '../model-config/model-config.service';
@@ -107,7 +107,7 @@ export class UpdateEnglishQuestionDto {
 }
 
 @Injectable()
-export class EnglishQuestionService {
+export class EnglishQuestionService implements OnModuleInit {
     private readonly logger = new Logger(EnglishQuestionService.name);
 
     constructor(
@@ -116,6 +116,49 @@ export class EnglishQuestionService {
         private modelConfigService: ModelConfigService,
         private promptComposer: PromptComposerService,
     ) { }
+
+    async onModuleInit() {
+        await this.ensureTableExists();
+    }
+
+    /**
+     * Ensure the english_questions table exists safely (idempotent, zero impact on other tables)
+     */
+    private async ensureTableExists() {
+        try {
+            await this.prisma.$executeRawUnsafe(`
+                CREATE TABLE IF NOT EXISTS "english_questions" (
+                    "id" TEXT NOT NULL,
+                    "lesson_id" TEXT NOT NULL,
+                    "question_order" INTEGER NOT NULL DEFAULT 0,
+                    "question_type" TEXT NOT NULL,
+                    "sub_discipline" TEXT,
+                    "difficulty" INTEGER NOT NULL DEFAULT 1,
+                    "title" TEXT,
+                    "question_text" TEXT NOT NULL,
+                    "data_json" TEXT NOT NULL,
+                    "explanation" TEXT,
+                    "points" INTEGER NOT NULL DEFAULT 1,
+                    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    CONSTRAINT "english_questions_pkey" PRIMARY KEY ("id")
+                );
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'english_questions_lesson_id_fkey'
+                    ) THEN
+                        ALTER TABLE "english_questions" ADD CONSTRAINT "english_questions_lesson_id_fkey" 
+                        FOREIGN KEY ("lesson_id") REFERENCES "lessons"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+                    END IF;
+                END $$;
+                CREATE INDEX IF NOT EXISTS "english_questions_lesson_id_idx" ON "english_questions"("lesson_id");
+            `);
+            this.logger.log('✅ English questions table verified / ready');
+        } catch (error: any) {
+            this.logger.warn(`⚠️ Could not auto-verify english_questions table: ${error.message}`);
+        }
+    }
 
     /**
      * Get all English questions for a lesson
