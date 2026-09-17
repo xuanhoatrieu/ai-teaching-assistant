@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.6.1] - 2026-09-18 - Fix Active Job Resume for English & Review Questions
+
+### Fixed
+- **Background Job State Resume (Step 6)**:
+  - Added automatic active job detection (`checkActiveJobs`) on component mount / tab return.
+  - Automatically switches to the active tab (English or Review) and displays real-time progress indicators and spinners when returning or reopening browser.
+  - Auto-reloads newly generated questions into preview immediately upon background job completion.
+- **Backend Job Type Isolation**:
+  - Separated English questions job types to `generate-english-questions` and `append-english-questions` to prevent collisions with review questions jobs.
+
 ## [v1.6.0] - 2026-09-17 - English Linguistics Questions Tab & Polymorphic Moodle XML Export
 
 ### Added

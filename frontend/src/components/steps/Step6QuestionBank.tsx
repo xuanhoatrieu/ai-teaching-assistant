@@ -469,6 +469,55 @@ export function Step6QuestionBank() {
         },
     });
 
+    // Resume active generation jobs when mounting or returning to Step 6
+    useEffect(() => {
+        if (!lessonId) return;
+
+        const checkActiveJobs = async () => {
+            try {
+                // 1. Check English question generation job
+                const resGenEng = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=generate-english-questions`);
+                if (resGenEng.data?.id) {
+                    setActiveTab('english');
+                    setIsGeneratingEnglish(true);
+                    generateEnglishJob.startPolling(resGenEng.data.id);
+                    return;
+                }
+
+                // 2. Check English question append job
+                const resAppEng = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=append-english-questions`);
+                if (resAppEng.data?.id) {
+                    setActiveTab('english');
+                    setIsAppendingEnglish(true);
+                    appendEnglishJob.startPolling(resAppEng.data.id);
+                    return;
+                }
+
+                // 3. Check Review question generation job
+                const resGenRev = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=review-questions`);
+                if (resGenRev.data?.id) {
+                    setActiveTab('review');
+                    setIsGeneratingReview(true);
+                    generateJob.startPolling(resGenRev.data.id);
+                    return;
+                }
+
+                // 4. Check Review question append job
+                const resAppRev = await api.get(`/generation-jobs/active?lessonId=${lessonId}&type=append-questions`);
+                if (resAppRev.data?.id) {
+                    setActiveTab('review');
+                    setIsAppendingReview(true);
+                    appendJob.startPolling(resAppRev.data.id);
+                    return;
+                }
+            } catch (err) {
+                console.error('Failed to check active jobs in Step6:', err);
+            }
+        };
+
+        checkActiveJobs();
+    }, [lessonId]);
+
     const handleGenerateEnglish = async () => {
         if (selectedQuestionTypes.length === 0) {
             setMessage({ type: 'error', text: 'Vui lòng chọn ít nhất 1 dạng câu hỏi.' });

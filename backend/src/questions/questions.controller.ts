@@ -685,7 +685,7 @@ export class QuestionsController {
         const total = dto.totalCount || 10;
 
         const job = await this.jobService.createJob({
-            type: 'generate-questions',
+            type: 'generate-english-questions',
             lessonId,
             userId,
             total,
@@ -728,7 +728,7 @@ export class QuestionsController {
         const total = dto.totalCount || 5;
 
         const job = await this.jobService.createJob({
-            type: 'append-questions',
+            type: 'append-english-questions',
             lessonId,
             userId,
             total,
