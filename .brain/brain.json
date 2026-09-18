@@ -2,7 +2,7 @@
     "meta": {
         "schema_version": "1.1.0",
         "awf_version": "3.3.0",
-        "updated_at": "2026-04-09T23:11:00+07:00"
+        "updated_at": "2026-09-18T07:02:40+07:00"
     },
     "project": {
         "name": "AI Teaching Assistant",
@@ -675,8 +675,9 @@
             "⭐ CLIProxy TTS modalities: Must use UPPERCASE 'AUDIO' in modalities array AND generationConfig.responseModalities. Lowercase 'audio' causes Gemini to default to TEXT modality → 400 error",
             "⭐ CLIProxy TTS response format: Audio data returned in message.images[].image_url.url as data URI (data:audio/L16;codec=pcm;rate=24000;base64,...). NOT in message.audio.data (OpenAI format) or inline_data (Gemini format)",
             "⭐ CLIProxy TTS model name: CLIProxy /v1/models returns ALIASES (display names like 'Gemini 2.5 Flash Preview TTS'). Config must use actual model ID 'gemini-2.5-flash-preview-tts'. User/admin config may have 'cliproxy:' prefix — strip before API call",
-            "⭐ CLIProxy TTS fallback: When CLIProxy TTS fails, tts.service.ts falls back to Gemini SDK. MUST override dto.model to 'gemini-2.5-flash-preview-tts' — CLIProxy display name is invalid for Gemini SDK",
-            "⭐ CLIProxy TTS generationConfig: Add speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName alongside OpenAI-format audio.voice to ensure CLIProxy forwards voice config correctly to Gemini API"
+            "⭐ CLIProxy TTS generationConfig: Add speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName alongside OpenAI-format audio.voice to ensure CLIProxy forwards voice config correctly to Gemini API",
+            "⭐ Background Job Resume: Component mount in step views must call /generation-jobs/active?lessonId=...&type=... to restore active polling and UI indicators if user reloads or navigates away",
+            "⭐ Moodle XML Grade Fraction: Multiple Response questions in Moodle require exact valid grade options (e.g., 33.33333% not 0.3333 or 33.34%) and Cloze weights should default to 1 point per blank"
         ],
         "conventions": [
             "API routes: /lessons/:id/resource",
@@ -693,6 +694,7 @@
             "slides.image": "Step 5 - Tạo prompt cho Imagen (educational illustration style)",
             "questions.interactive": "Step 6 - 5 câu hỏi kiểm tra tập trung (MC/MR)",
             "questions.review": "Step 6 - 15 câu Bloom taxonomy (Biết/Hiểu/Vận dụng)",
+            "questions.english": "Step 6 - Ngân hàng câu hỏi tiếng Anh đa dạng (MC, MR, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY)",
             "handout.generate": "Tạo tài liệu handout"
         },
         "prompt_constraints": {
