@@ -264,6 +264,24 @@
     overflow-y: auto;
 }
 
+.modal-large .form-group {
+    margin-bottom: 14px;
+}
+
+.form-group textarea.desc-textarea {
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.form-group textarea.req-textarea {
+    padding: 10px 14px;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
 /* Form Row (2 columns) */
 .form-row {
     display: grid;
@@ -279,7 +297,7 @@
 .form-divider {
     display: flex;
     align-items: center;
-    margin: 24px 0 16px 0;
+    margin: 20px 0 14px 0;
 }
 
 .form-divider::before,
@@ -296,6 +314,66 @@
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 1px;
+}
+
+/* Section sublabel */
+.section-sublabel {
+    display: block;
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+/* Quick Tags Container */
+.quick-tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+/* Quick Tag Chip */
+.quick-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 20px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+}
+
+.quick-tag-chip:hover {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #e2e8f0;
+    transform: translateY(-1px);
+}
+
+.quick-tag-chip.active {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(37, 99, 235, 0.35));
+    border-color: #3b82f6;
+    color: #93c5fd;
+    font-weight: 600;
+    box-shadow: 0 2px 10px rgba(59, 130, 246, 0.25);
+}
+
+.quick-tag-chip .tag-icon {
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+    transition: color 0.2s ease;
+}
+
+.quick-tag-chip.active .tag-icon {
+    color: #38bdf8;
 }
 
 /* Delete Confirmation Modal */

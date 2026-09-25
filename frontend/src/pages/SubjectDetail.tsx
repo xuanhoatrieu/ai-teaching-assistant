@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { subjectsApi, lessonsApi, type Subject, type Lesson, type CreateSubjectData } from '../lib/subjects-api';
+import {
+    subjectsApi,
+    lessonsApi,
+    type Subject,
+    type Lesson,
+    type CreateSubjectData,
+    INSTITUTION_TYPES,
+    LANGUAGE_OPTIONS,
+    QUICK_TAG_OPTIONS,
+} from '../lib/subjects-api';
 import { VideoListPanel } from '../components/VideoListPanel';
+import { RemotionVideoListPanel } from '../components/remotion/RemotionVideoListPanel';
 import { SyllabusPanel } from '../components/syllabus/SyllabusPanel';
 import { syllabusApi, type Syllabus } from '../lib/syllabus-api';
 import './SubjectDetail.css';
-
-const INSTITUTION_TYPES = ['Đại học', 'Cao đẳng', 'THPT', 'Doanh nghiệp', 'Khác'];
-const LANGUAGE_OPTIONS = [
-    { value: 'vi', label: '🇻🇳 Tiếng Việt', desc: 'Toàn bộ nội dung bằng tiếng Việt' },
-    { value: 'en', label: '🇬🇧 English', desc: 'All content in English' },
-    { value: 'vi-en', label: '🌐 Song ngữ (Bilingual)', desc: 'Slide EN, Speaker Notes VI' },
-];
 
 export function SubjectDetailPage() {
     const { id } = useParams<{ id: string }>();
@@ -20,7 +23,7 @@ export function SubjectDetailPage() {
     const [lessons, setLessons] = useState<Lesson[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState<'lessons' | 'videos' | 'syllabus'>('lessons');
+    const [activeTab, setActiveTab] = useState<'lessons' | 'videos' | 'video-remotion' | 'syllabus'>('lessons');
 
     // Create lesson modal
     const [showModal, setShowModal] = useState(false);
@@ -42,17 +45,16 @@ export function SubjectDetailPage() {
 
     // Edit subject modal
     const [showEditModal, setShowEditModal] = useState(false);
-    const [editForm, setEditForm] = useState<CreateSubjectData>({
+    const [editForm, setEditForm] = useState({
         name: '',
         description: '',
         institutionType: 'Đại học',
-        expertiseArea: '',
-        courseName: '',
+        majorArea: '',
         targetAudience: '',
-        majorName: '',
-        additionalContext: '',
         language: 'vi',
     });
+    const [editSelectedTags, setEditSelectedTags] = useState<string[]>([]);
+    const [editCustomRequirements, setEditCustomRequirements] = useState('');
 
     useEffect(() => {
         if (id) fetchData();
@@ -156,19 +158,52 @@ export function SubjectDetailPage() {
         }
     };
 
+    const toggleEditTag = (tagLabel: string) => {
+        setEditSelectedTags((prev) =>
+            prev.includes(tagLabel)
+                ? prev.filter((t) => t !== tagLabel)
+                : [...prev, tagLabel]
+        );
+    };
+
     const openEditModal = () => {
         if (subject) {
+            const fullContext = subject.additionalContext || '';
+            const matchedTags: string[] = [];
+            let remainingCustom = fullContext;
+
+            QUICK_TAG_OPTIONS.forEach((tag) => {
+                if (fullContext.includes(tag.label)) {
+                    matchedTags.push(tag.label);
+                    remainingCustom = remainingCustom.split(tag.label).join('');
+                }
+            });
+
+            // Clean up remaining custom text (remove leftover punctuation and whitespace)
+            remainingCustom = remainingCustom
+                .replace(/^[\s,.;]+|[\s,.;]+$/g, '')
+                .replace(/,\s*,/g, ', ')
+                .replace(/\.\s*\./g, '.')
+                .trim();
+
             setEditForm({
                 name: subject.name,
                 description: subject.description || '',
                 institutionType: subject.institutionType || 'Đại học',
-                expertiseArea: subject.expertiseArea || '',
-                courseName: subject.courseName || '',
+                majorArea: subject.majorName || subject.expertiseArea || '',
                 targetAudience: subject.targetAudience || '',
-                majorName: subject.majorName || '',
-                additionalContext: subject.additionalContext || '',
                 language: subject.language || 'vi',
             });
+
+            if (matchedTags.length > 0) {
+                setEditSelectedTags(matchedTags);
+            } else if (!fullContext) {
+                setEditSelectedTags(QUICK_TAG_OPTIONS.filter((t) => t.defaultActive).map((t) => t.label));
+            } else {
+                setEditSelectedTags([]);
+            }
+
+            setEditCustomRequirements(remainingCustom);
             setShowEditModal(true);
         }
     };
@@ -176,8 +211,29 @@ export function SubjectDetailPage() {
     const handleUpdateSubject = async () => {
         if (!editForm.name.trim()) return;
 
+        const contextParts: string[] = [];
+        if (editSelectedTags.length > 0) {
+            contextParts.push(editSelectedTags.join(', '));
+        }
+        if (editCustomRequirements.trim()) {
+            contextParts.push(editCustomRequirements.trim());
+        }
+        const finalAdditionalContext = contextParts.join('. ');
+
+        const payload: Partial<CreateSubjectData> = {
+            name: editForm.name.trim(),
+            courseName: editForm.name.trim(),
+            description: editForm.description.trim() || undefined,
+            institutionType: editForm.institutionType,
+            majorName: editForm.majorArea.trim() || undefined,
+            expertiseArea: editForm.majorArea.trim() || undefined,
+            targetAudience: editForm.targetAudience.trim() || undefined,
+            language: editForm.language || 'vi',
+            additionalContext: finalAdditionalContext || undefined,
+        };
+
         try {
-            await subjectsApi.update(id!, editForm);
+            await subjectsApi.update(id!, payload);
             setShowEditModal(false);
             fetchData();
         } catch (err: any) {
@@ -199,7 +255,11 @@ export function SubjectDetailPage() {
     // Generate role preview text
     const getRolePreview = () => {
         if (!subject) return '';
-        return `Giảng viên ${subject.institutionType || 'Đại học'} chuyên ${subject.expertiseArea || subject.name}, dạy môn ${subject.courseName || subject.name} cho ${subject.targetAudience || 'sinh viên'}${subject.majorName ? ` ngành ${subject.majorName}` : ''}.`;
+        const field = subject.expertiseArea || subject.majorName || subject.name;
+        const majorInfo = subject.majorName && subject.majorName !== subject.expertiseArea
+            ? ` ngành ${subject.majorName}`
+            : '';
+        return `Giảng viên ${subject.institutionType || 'Đại học'} chuyên ${field}, dạy môn ${subject.courseName || subject.name} cho ${subject.targetAudience || 'sinh viên'}${majorInfo}.`;
     };
 
     if (isLoading) {
@@ -270,6 +330,12 @@ export function SubjectDetailPage() {
                 >
                     🎬 Video
                 </button>
+                <button
+                    className={`tab-btn ${activeTab === 'video-remotion' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('video-remotion')}
+                >
+                    ✨ Video-Remotion
+                </button>
             </div>
 
             {/* Tab: Lessons */}
@@ -330,6 +396,11 @@ export function SubjectDetailPage() {
             {/* Tab: Videos */}
             {activeTab === 'videos' && (
                 <VideoListPanel subjectId={id!} lessons={lessons} />
+            )}
+
+            {/* Tab: Video-Remotion */}
+            {activeTab === 'video-remotion' && (
+                <RemotionVideoListPanel subjectId={id!} lessons={lessons} />
             )}
 
             {/* Tab: Syllabus */}
@@ -404,6 +475,7 @@ export function SubjectDetailPage() {
                                 type="text"
                                 value={editForm.name}
                                 onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                                placeholder="VD: Lập trình Python, Toán cao cấp, Kinh tế vi mô..."
                                 autoFocus
                             />
                         </div>
@@ -411,9 +483,11 @@ export function SubjectDetailPage() {
                         <div className="form-group">
                             <label>Mô tả ngắn</label>
                             <textarea
+                                className="desc-textarea"
                                 value={editForm.description}
                                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                                rows={2}
+                                placeholder="Mô tả tóm tắt về môn học..."
+                                rows={15}
                             />
                         </div>
 
@@ -435,68 +509,75 @@ export function SubjectDetailPage() {
                             </div>
 
                             <div className="form-group">
-                                <label>Ngành học</label>
+                                <label>Đối tượng học viên</label>
                                 <input
                                     type="text"
-                                    value={editForm.majorName}
-                                    onChange={(e) => setEditForm({ ...editForm, majorName: e.target.value })}
-                                    placeholder="VD: Công nghệ thông tin"
+                                    value={editForm.targetAudience}
+                                    onChange={(e) => setEditForm({ ...editForm, targetAudience: e.target.value })}
+                                    placeholder="VD: Sinh viên năm 1-2, Người đi làm..."
                                 />
                             </div>
                         </div>
 
-                        <div className="form-group">
-                            <label>🌐 Ngôn ngữ đầu ra</label>
-                            <select
-                                value={editForm.language || 'vi'}
-                                onChange={(e) => setEditForm({ ...editForm, language: e.target.value })}
-                            >
-                                {LANGUAGE_OPTIONS.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                            </select>
-                            <small className="form-hint">
-                                {LANGUAGE_OPTIONS.find(o => o.value === (editForm.language || 'vi'))?.desc}
-                            </small>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Ngành học / Lĩnh vực</label>
+                                <input
+                                    type="text"
+                                    value={editForm.majorArea}
+                                    onChange={(e) => setEditForm({ ...editForm, majorArea: e.target.value })}
+                                    placeholder="VD: Công nghệ thông tin, Trí tuệ nhân tạo..."
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>🌐 Ngôn ngữ đầu ra</label>
+                                <select
+                                    value={editForm.language || 'vi'}
+                                    onChange={(e) => setEditForm({ ...editForm, language: e.target.value })}
+                                >
+                                    {LANGUAGE_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                                <small className="form-hint">
+                                    {LANGUAGE_OPTIONS.find((o) => o.value === (editForm.language || 'vi'))?.desc}
+                                </small>
+                            </div>
+                        </div>
+
+                        <div className="form-divider">
+                            <span>Yêu cầu biên soạn AI</span>
                         </div>
 
                         <div className="form-group">
-                            <label>Lĩnh vực chuyên môn</label>
-                            <input
-                                type="text"
-                                value={editForm.expertiseArea}
-                                onChange={(e) => setEditForm({ ...editForm, expertiseArea: e.target.value })}
-                                placeholder="VD: Lập trình, AI, Data Science"
-                            />
+                            <label className="section-sublabel">Tiêu chí chất lượng mặc định (nhấp để bật/tắt):</label>
+                            <div className="quick-tags-container">
+                                {QUICK_TAG_OPTIONS.map((tag) => {
+                                    const isSelected = editSelectedTags.includes(tag.label);
+                                    return (
+                                        <button
+                                            key={tag.id}
+                                            type="button"
+                                            className={`quick-tag-chip ${isSelected ? 'active' : ''}`}
+                                            onClick={() => toggleEditTag(tag.label)}
+                                        >
+                                            <span className="tag-icon">{isSelected ? '✓' : '+'}</span>
+                                            {tag.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         <div className="form-group">
-                            <label>Tên môn học đầy đủ</label>
-                            <input
-                                type="text"
-                                value={editForm.courseName}
-                                onChange={(e) => setEditForm({ ...editForm, courseName: e.target.value })}
-                                placeholder="VD: Nhập môn lập trình với Python"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Đối tượng học viên</label>
-                            <input
-                                type="text"
-                                value={editForm.targetAudience}
-                                onChange={(e) => setEditForm({ ...editForm, targetAudience: e.target.value })}
-                                placeholder="VD: Sinh viên đại học năm 1-2"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Yêu cầu bổ sung</label>
+                            <label>Yêu cầu bổ sung khác (tùy chọn)</label>
                             <textarea
-                                value={editForm.additionalContext}
-                                onChange={(e) => setEditForm({ ...editForm, additionalContext: e.target.value })}
-                                placeholder="VD: Nội dung cần chi tiết, có nhiều ví dụ..."
-                                rows={3}
+                                className="req-textarea"
+                                value={editCustomRequirements}
+                                onChange={(e) => setEditCustomRequirements(e.target.value)}
+                                placeholder="Gõ thêm yêu cầu đặc thù khác nếu có (VD: Tập trung vào giải thuật, không dùng thư viện ngoài...)"
+                                rows={5}
                             />
                         </div>
 

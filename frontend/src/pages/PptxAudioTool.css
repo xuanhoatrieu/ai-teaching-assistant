@@ -832,15 +832,178 @@
 }
 
 .pptx-audio-tool .question-config {
-    display: flex;
-    gap: 16px;
-    align-items: flex-end;
-    flex-wrap: wrap;
-    padding: 16px;
+    display: block;
+    padding: 20px;
     background: rgba(30, 41, 59, 0.5);
     border: 1px solid rgba(148, 163, 184, 0.1);
     border-radius: 12px;
     margin-bottom: 20px;
+    box-sizing: border-box;
+}
+
+.pptx-audio-tool .question-config h3 {
+    margin: 0 0 6px 0 !important;
+    color: #f1f5f9;
+    font-size: 1.15rem;
+    text-align: left !important;
+}
+
+.pptx-audio-tool .question-config .hint {
+    color: #94a3b8;
+    font-size: 0.88rem;
+    margin: 0 0 16px 0;
+    text-align: left !important;
+}
+
+.pptx-audio-tool .question-config.english-config-container {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+}
+
+/* Review Question Config */
+.pptx-audio-tool .review-config-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+.pptx-audio-tool .review-level-inputs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(110px, 150px));
+    gap: 16px;
+    margin: 0;
+}
+
+.pptx-audio-tool .review-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* Interactive Question Config */
+.pptx-audio-tool .interactive-config-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.pptx-audio-tool .interactive-input-box {
+    width: 160px;
+    text-align: left;
+}
+
+/* Button & input styling for pptx-audio-tool questions */
+.pptx-audio-tool .btn-primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    border: none;
+    padding: 0 20px;
+    height: 48px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.pptx-audio-tool .btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+.pptx-audio-tool .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.pptx-audio-tool .btn-secondary {
+    background: rgba(51, 65, 85, 0.8);
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 0 18px;
+    height: 48px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.pptx-audio-tool .btn-secondary:hover:not(:disabled) {
+    background: rgba(71, 85, 105, 0.9);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #ffffff;
+}
+
+.pptx-audio-tool .btn-secondary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pptx-audio-tool .btn-sm {
+    height: 36px !important;
+    padding: 0 14px !important;
+    font-size: 13px !important;
+    border-radius: 6px !important;
+}
+
+.pptx-audio-tool .btn-delete {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.pptx-audio-tool .btn-delete:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.4);
+}
+
+.pptx-audio-tool .level-input input {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    padding: 0 12px;
+    height: 48px;
+    color: #e2e8f0;
+    font-size: 16px;
+    font-weight: 600;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: center;
+}
+
+.pptx-audio-tool .level-input input:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.pptx-audio-tool .level-input label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #94a3b8;
+    font-size: 13px;
+    height: 24px;
+    margin-bottom: 8px;
 }
 
 .config-row {

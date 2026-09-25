@@ -7,6 +7,7 @@ import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { FidelityValidatorService } from '../prompts/fidelity-validator.service';
 import { AiProviderService } from '../ai/ai-provider.service';
 import { SlideImageGeneratorService } from '../slide-data/slide-image-generator.service';
+import { FileStorageService } from '../file-storage/file-storage.service';
 import { Lesson } from '@prisma/client';
 
 export interface GenerateSlideResult {
@@ -28,6 +29,7 @@ export class SlidesService {
         private fidelityValidator: FidelityValidatorService,
         private aiProvider: AiProviderService,
         private slideImageGenerator: SlideImageGeneratorService,
+        private fileStorageService: FileStorageService,
     ) { }
     // Get all Slide entities from database (for Step 5)
     async getSlides(lessonId: string) {
@@ -947,6 +949,95 @@ export class SlidesService {
 
         this.logger.log(`[clearGeneratedContent] Cleared content for ${result.count} slides in lesson ${lessonId}`);
         return { cleared: result.count };
+    }
+
+    /**
+     * Update slide content (title and/or optimized bullets) manually
+     */
+    async updateSlideContent(
+        lessonId: string,
+        slideIndex: number,
+        title?: string,
+        optimizedContent?: any[],
+    ) {
+        const slide = await this.prisma.slide.findFirst({
+            where: { lessonId, slideIndex },
+        });
+
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
+        }
+
+        const updateData: any = {};
+        if (title !== undefined && title !== null) {
+            updateData.title = title.trim();
+        }
+        if (optimizedContent !== undefined && optimizedContent !== null) {
+            updateData.optimizedContentJson = JSON.stringify(optimizedContent);
+        }
+
+        const updatedSlide = await this.prisma.slide.update({
+            where: {
+                lessonId_slideIndex: { lessonId, slideIndex },
+            },
+            data: updateData,
+        });
+
+        this.logger.log(`[updateSlideContent] Slide ${slideIndex} updated for lesson ${lessonId}`);
+        return updatedSlide;
+    }
+
+    /**
+     * Upload custom image for slide and replace existing image
+     */
+    async uploadCustomSlideImage(
+        lessonId: string,
+        slideIndex: number,
+        userId: string,
+        file: Express.Multer.File,
+    ) {
+        if (!file || !file.buffer) {
+            throw new BadRequestException('Vui lòng chọn file hình ảnh');
+        }
+
+        const slide = await this.prisma.slide.findFirst({
+            where: { lessonId, slideIndex },
+        });
+
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
+        }
+
+        // Determine extension
+        let ext = 'png';
+        if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') {
+            ext = 'jpg';
+        } else if (file.mimetype === 'image/webp') {
+            ext = 'webp';
+        }
+
+        // Save image buffer using fileStorageService
+        const { publicUrl } = await this.fileStorageService.saveImageFile(
+            userId,
+            lessonId,
+            slideIndex,
+            file.buffer,
+            ext,
+        );
+
+        // Update database with imageUrl
+        const updatedSlide = await this.prisma.slide.update({
+            where: {
+                lessonId_slideIndex: { lessonId, slideIndex },
+            },
+            data: {
+                imageUrl: publicUrl,
+                status: 'image_generated',
+            },
+        });
+
+        this.logger.log(`[uploadCustomSlideImage] Custom image saved for slide ${slideIndex}: ${publicUrl}`);
+        return updatedSlide;
     }
 }
 

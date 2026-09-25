@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "private": true,
-  "version": "1.6.1",
+  "version": "1.6.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,18 +11,22 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
+    "@remotion/player": "^4.0.526",
     "@tanstack/react-query": "^5.90.19",
     "antd": "^6.2.1",
     "axios": "^1.13.2",
+    "katex": "^0.18.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.12.0",
     "remark-gfm": "^4.0.1",
+    "remotion": "^4.0.526",
     "socket.io-client": "^4.8.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/katex": "^0.16.8",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",

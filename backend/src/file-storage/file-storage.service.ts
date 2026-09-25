@@ -518,6 +518,22 @@ export class FileStorageService {
         };
     }
 
+    /**
+     * Upload buffer to static uploads/remotion directory and return public URL
+     */
+    async uploadBuffer(
+        buffer: Buffer,
+        filename: string,
+        mimeType: string = 'application/octet-stream',
+    ): Promise<{ filePath: string; url: string }> {
+        const remotionDir = path.join(process.cwd(), 'uploads', 'remotion');
+        await this.ensureDirectoryExists(remotionDir);
+        const filePath = path.join(remotionDir, filename);
+        await this.saveFile(filePath, buffer);
+        const publicUrl = `/uploads/remotion/${filename}`;
+        return { filePath, url: publicUrl };
+    }
+
     // ==================== SECURITY ====================
 
     /**

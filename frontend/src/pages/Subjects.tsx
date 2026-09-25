@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { subjectsApi, type Subject, type CreateSubjectData } from '../lib/subjects-api';
+import {
+    subjectsApi,
+    type Subject,
+    type CreateSubjectData,
+    INSTITUTION_TYPES,
+    LANGUAGE_OPTIONS,
+    QUICK_TAG_OPTIONS,
+} from '../lib/subjects-api';
 import './Subjects.css';
-
-const INSTITUTION_TYPES = ['Đại học', 'Cao đẳng', 'THPT', 'Doanh nghiệp', 'Khác'];
-const LANGUAGE_OPTIONS = [
-    { value: 'vi', label: '🇻🇳 Tiếng Việt', desc: 'Toàn bộ nội dung bằng tiếng Việt' },
-    { value: 'en', label: '🇬🇧 English', desc: 'All content in English' },
-    { value: 'vi-en', label: '🌐 Song ngữ (Bilingual)', desc: 'Slide EN, Speaker Notes VI' },
-];
 
 export function SubjectsPage() {
     const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -17,17 +17,19 @@ export function SubjectsPage() {
     const [showModal, setShowModal] = useState(false);
 
     // Form state
-    const [formData, setFormData] = useState<CreateSubjectData>({
+    const [formData, setFormData] = useState({
         name: '',
         description: '',
         institutionType: 'Đại học',
-        expertiseArea: '',
-        courseName: '',
+        majorArea: '',
         targetAudience: '',
-        majorName: '',
-        additionalContext: '',
         language: 'vi',
     });
+
+    const [selectedTags, setSelectedTags] = useState<string[]>(
+        QUICK_TAG_OPTIONS.filter((t) => t.defaultActive).map((t) => t.label)
+    );
+    const [customRequirements, setCustomRequirements] = useState('');
 
     useEffect(() => {
         fetchSubjects();
@@ -44,25 +46,53 @@ export function SubjectsPage() {
         }
     };
 
+    const toggleTag = (tagLabel: string) => {
+        setSelectedTags((prev) =>
+            prev.includes(tagLabel)
+                ? prev.filter((t) => t !== tagLabel)
+                : [...prev, tagLabel]
+        );
+    };
+
     const resetForm = () => {
         setFormData({
             name: '',
             description: '',
             institutionType: 'Đại học',
-            expertiseArea: '',
-            courseName: '',
+            majorArea: '',
             targetAudience: '',
-            majorName: '',
-            additionalContext: '',
             language: 'vi',
         });
+        setSelectedTags(QUICK_TAG_OPTIONS.filter((t) => t.defaultActive).map((t) => t.label));
+        setCustomRequirements('');
     };
 
     const handleCreate = async () => {
         if (!formData.name.trim()) return;
 
+        const contextParts: string[] = [];
+        if (selectedTags.length > 0) {
+            contextParts.push(selectedTags.join(', '));
+        }
+        if (customRequirements.trim()) {
+            contextParts.push(customRequirements.trim());
+        }
+        const additionalContext = contextParts.join('. ');
+
+        const payload: CreateSubjectData = {
+            name: formData.name.trim(),
+            courseName: formData.name.trim(),
+            description: formData.description.trim() || undefined,
+            institutionType: formData.institutionType,
+            majorName: formData.majorArea.trim() || undefined,
+            expertiseArea: formData.majorArea.trim() || undefined,
+            targetAudience: formData.targetAudience.trim() || undefined,
+            language: formData.language || 'vi',
+            additionalContext: additionalContext || undefined,
+        };
+
         try {
-            await subjectsApi.create(formData);
+            await subjectsApi.create(payload);
             setShowModal(false);
             resetForm();
             fetchSubjects();
@@ -146,7 +176,7 @@ export function SubjectsPage() {
                                 type="text"
                                 value={formData.name}
                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                placeholder="VD: Lập trình cơ bản, Toán cao cấp"
+                                placeholder="VD: Lập trình Python, Toán cao cấp, Kinh tế vi mô..."
                                 autoFocus
                             />
                         </div>
@@ -154,10 +184,11 @@ export function SubjectsPage() {
                         <div className="form-group">
                             <label>Mô tả ngắn</label>
                             <textarea
+                                className="desc-textarea"
                                 value={formData.description}
                                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                placeholder="Mô tả về môn học..."
-                                rows={2}
+                                placeholder="Mô tả tóm tắt về môn học..."
+                                rows={15}
                             />
                         </div>
 
@@ -179,68 +210,75 @@ export function SubjectsPage() {
                             </div>
 
                             <div className="form-group">
-                                <label>Ngành học</label>
+                                <label>Đối tượng học viên</label>
                                 <input
                                     type="text"
-                                    value={formData.majorName}
-                                    onChange={(e) => setFormData({ ...formData, majorName: e.target.value })}
-                                    placeholder="VD: Công nghệ thông tin"
+                                    value={formData.targetAudience}
+                                    onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
+                                    placeholder="VD: Sinh viên năm 1-2, Người đi làm..."
                                 />
                             </div>
                         </div>
 
-                        <div className="form-group">
-                            <label>🌐 Ngôn ngữ đầu ra</label>
-                            <select
-                                value={formData.language || 'vi'}
-                                onChange={(e) => setFormData({ ...formData, language: e.target.value })}
-                            >
-                                {LANGUAGE_OPTIONS.map((opt) => (
-                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                ))}
-                            </select>
-                            <small className="form-hint">
-                                {LANGUAGE_OPTIONS.find(o => o.value === (formData.language || 'vi'))?.desc}
-                            </small>
+                        <div className="form-row">
+                            <div className="form-group">
+                                <label>Ngành học / Lĩnh vực</label>
+                                <input
+                                    type="text"
+                                    value={formData.majorArea}
+                                    onChange={(e) => setFormData({ ...formData, majorArea: e.target.value })}
+                                    placeholder="VD: Công nghệ thông tin, Trí tuệ nhân tạo..."
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>🌐 Ngôn ngữ đầu ra</label>
+                                <select
+                                    value={formData.language || 'vi'}
+                                    onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                                >
+                                    {LANGUAGE_OPTIONS.map((opt) => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                                <small className="form-hint">
+                                    {LANGUAGE_OPTIONS.find((o) => o.value === (formData.language || 'vi'))?.desc}
+                                </small>
+                            </div>
+                        </div>
+
+                        <div className="form-divider">
+                            <span>Yêu cầu biên soạn AI</span>
                         </div>
 
                         <div className="form-group">
-                            <label>Lĩnh vực chuyên môn</label>
-                            <input
-                                type="text"
-                                value={formData.expertiseArea}
-                                onChange={(e) => setFormData({ ...formData, expertiseArea: e.target.value })}
-                                placeholder="VD: Lập trình, Trí tuệ nhân tạo, Khoa học dữ liệu"
-                            />
+                            <label className="section-sublabel">Tiêu chí chất lượng mặc định (nhấp để bật/tắt):</label>
+                            <div className="quick-tags-container">
+                                {QUICK_TAG_OPTIONS.map((tag) => {
+                                    const isSelected = selectedTags.includes(tag.label);
+                                    return (
+                                        <button
+                                            key={tag.id}
+                                            type="button"
+                                            className={`quick-tag-chip ${isSelected ? 'active' : ''}`}
+                                            onClick={() => toggleTag(tag.label)}
+                                        >
+                                            <span className="tag-icon">{isSelected ? '✓' : '+'}</span>
+                                            {tag.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
 
                         <div className="form-group">
-                            <label>Tên môn học đầy đủ</label>
-                            <input
-                                type="text"
-                                value={formData.courseName}
-                                onChange={(e) => setFormData({ ...formData, courseName: e.target.value })}
-                                placeholder="VD: Nhập môn lập trình với Python"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Đối tượng học viên</label>
-                            <input
-                                type="text"
-                                value={formData.targetAudience}
-                                onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
-                                placeholder="VD: Sinh viên đại học năm 1-2"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>Yêu cầu bổ sung (tùy chọn)</label>
+                            <label>Yêu cầu bổ sung khác (tùy chọn)</label>
                             <textarea
-                                value={formData.additionalContext}
-                                onChange={(e) => setFormData({ ...formData, additionalContext: e.target.value })}
-                                placeholder="VD: Nội dung cần đầy đủ, chi tiết, phổ quát và có nhiều ví dụ thực tiễn..."
-                                rows={3}
+                                className="req-textarea"
+                                value={customRequirements}
+                                onChange={(e) => setCustomRequirements(e.target.value)}
+                                placeholder="Gõ thêm yêu cầu đặc thù khác nếu có (VD: Tập trung vào giải thuật, không dùng thư viện ngoài...)"
+                                rows={5}
                             />
                         </div>
 

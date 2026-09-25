@@ -1,15 +1,210 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, API_BASE_URL } from '../lib/api';
+import { useJobPolling } from '../hooks/useJobPolling';
 import { TTSSelector } from '../components/TTSSelector';
 import { ModelSelector } from '../components/ModelSelector';
 import './PptxAudioTool.css';
+import '../components/steps/Steps.css';
 
 const getFullAudioUrl = (audioUrl: string | null): string => {
     if (!audioUrl) return '';
     if (audioUrl.startsWith('http://') || audioUrl.startsWith('https://')) return audioUrl;
     return `${API_BASE_URL}${audioUrl}`;
 };
+
+class QuestionErrorBoundary extends Component<{ children: ReactNode; fallbackText?: string }, { hasError: boolean; error: Error | null }> {
+    constructor(props: { children: ReactNode; fallbackText?: string }) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error: Error) {
+        return { hasError: true, error };
+    }
+
+    componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+        console.error('Question card render error:', error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="question-card question-error-card" style={{ padding: '12px 16px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: '8px', color: '#be123c', margin: '8px 0' }}>
+                    <p style={{ margin: 0, fontWeight: 600 }}>⚠️ {this.props.fallbackText || 'Lỗi hiển thị câu hỏi'}: {this.state.error?.message}</p>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+// Question structures matching lesson editor
+export interface ReviewQuestion {
+    id: string;
+    questionId: string;
+    question: string;
+    correctAnswer: string;
+    optionB: string;
+    optionC: string;
+    optionD: string;
+    explanation: string;
+    level: number;
+}
+
+export interface InteractiveQuestion {
+    id: string;
+    questionOrder: number;
+    questionType: string; // MC or MR
+    questionText: string;
+    answers: string[]; // Array with * prefix for correct answers
+    correctFeedback: string;
+    incorrectFeedback: string;
+    points: number;
+}
+
+export interface EnglishQuestion {
+    id: string;
+    questionOrder: number;
+    questionType: string; // MC, MR, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY
+    subDiscipline?: string;
+    difficulty?: number;
+    title?: string;
+    questionText: string;
+    dataJson: string;
+    explanation?: string;
+    points?: number;
+}
+
+const QUESTION_TYPE_OPTIONS = [
+    { id: 'MC', label: 'Multiple Choice (1 đáp án)', badge: 'MC', icon: '🔘' },
+    { id: 'MR', label: 'Multiple Response (Nhiều đáp án)', badge: 'MR', icon: '☑️' },
+    { id: 'MATCH', label: 'Matching (Nối cột / Ghép đôi)', badge: 'MATCH', icon: '🔄' },
+    { id: 'CLOZE', label: 'Cloze / Embedded (Điền khuyết)', badge: 'CLOZE', icon: '📝' },
+    { id: 'SHORTANSWER', label: 'Short Answer (Điền từ / IPA)', badge: 'SA', icon: '✍️' },
+    { id: 'TRUEFALSE', label: 'True / False (Đúng / Sai)', badge: 'TF', icon: '⚖️' },
+    { id: 'ESSAY', label: 'Essay / Analysis (Tự luận / Phân tích)', badge: 'ESSAY', icon: '📄' },
+];
+
+const SUB_DISCIPLINE_OPTIONS = [
+    { id: 'ALL', label: '🌐 Toàn diện (Ngôn ngữ Anh & Ngôn ngữ học)' },
+    { id: 'PHONETICS', label: '🗣️ Ngữ âm & Âm vị học (Phonetics & Phonology)' },
+    { id: 'MORPHOLOGY', label: '🧩 Hình thái học & Cấu tạo từ (Morphology)' },
+    { id: 'SYNTAX', label: '🌳 Cú pháp học (Syntax & Tree Diagrams)' },
+    { id: 'SEMANTICS', label: '🧠 Ngữ nghĩa & Ngữ dụng học (Semantics & Pragmatics)' },
+    { id: 'TRANSLATION', label: '🌏 Biên - Phiên dịch (Translation Studies)' },
+    { id: 'ELT', label: '🎓 Phương pháp giảng dạy tiếng Anh (ELT / TESOL)' },
+];
+
+function renderEssayRubric(data: any) {
+    const raw = data?.graderInfo || data?.rubric;
+    if (!raw) return <p className="essay-rubric">Giảng viên chấm tự luận trên LMS.</p>;
+    if (typeof raw === 'string') return <p className="essay-rubric">{raw}</p>;
+    if (typeof raw === 'object') {
+        const criteria = Array.isArray(raw.criteria) ? raw.criteria : null;
+        const totalPoints = typeof raw.totalPoints === 'object' ? JSON.stringify(raw.totalPoints) : raw.totalPoints;
+        return (
+            <div className="essay-rubric-card">
+                {totalPoints !== undefined && totalPoints !== null && (
+                    <div className="rubric-total-badge">
+                        🎯 <strong>Tổng điểm:</strong> {String(totalPoints)}đ
+                    </div>
+                )}
+                {criteria && criteria.length > 0 ? (
+                    <div className="rubric-criteria-list">
+                        {criteria.map((c: any, cIdx: number) => {
+                            const name = typeof c === 'string'
+                                ? c
+                                : (typeof c?.name === 'string' ? c.name : (typeof c?.criterion === 'string' ? c.criterion : `Tiêu chí ${cIdx + 1}`));
+                            const points = typeof c === 'object' && c?.points !== undefined
+                                ? ` (${typeof c.points === 'object' ? JSON.stringify(c.points) : c.points}đ)`
+                                : '';
+                            const descRaw = typeof c === 'object' ? (c?.description || c?.desc || '') : '';
+                            const desc = typeof descRaw === 'object' ? JSON.stringify(descRaw) : String(descRaw);
+                            return (
+                                <div key={cIdx} className="rubric-criterion-item">
+                                    • <strong>{name}</strong>{points}{desc ? `: ${desc}` : ''}
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <p className="essay-rubric">{JSON.stringify(raw)}</p>
+                )}
+            </div>
+        );
+    }
+    return <p className="essay-rubric">{String(raw)}</p>;
+}
+
+function formatClozePrompt(text: string): string {
+    if (!text) return '';
+    return text.replace(/\{(\d+):[A-Z_]+:[^}]+\}/g, '[ ______ ]');
+}
+
+function renderClozeVisual(rawText: string) {
+    if (!rawText) return null;
+    const regex = /\{(\d+):([A-Z_]+):([^}]+)\}/g;
+    const parts: Array<{ type: 'text' | 'blank'; content?: string; points?: string; qType?: string; answers?: string[] }> = [];
+
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(rawText)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push({ type: 'text', content: rawText.substring(lastIndex, match.index) });
+        }
+        const points = match[1];
+        const qType = match[2];
+        const rawAnswers = match[3];
+        const answers = rawAnswers.split('~').map(a => a.replace(/^=/, '').trim()).filter(Boolean);
+
+        parts.push({
+            type: 'blank',
+            points,
+            qType,
+            answers,
+        });
+        lastIndex = regex.lastIndex;
+    }
+
+    if (lastIndex < rawText.length) {
+        parts.push({ type: 'text', content: rawText.substring(lastIndex) });
+    }
+
+    let blankCount = 0;
+    return (
+        <div className="cloze-visual-container">
+            <div className="cloze-visual-sentence">
+                {parts.map((p, idx) => {
+                    if (p.type === 'text') {
+                        return <span key={idx}>{p.content}</span>;
+                    }
+                    blankCount++;
+                    const currentNum = blankCount;
+                    return (
+                        <span key={idx} className="cloze-interactive-blank">
+                            <span className="cloze-blank-badge">#{currentNum}</span>
+                            <span className="cloze-answers-list">
+                                {p.answers?.map((ans, aIdx) => (
+                                    <span key={aIdx} className="cloze-single-answer">
+                                        {aIdx > 0 && <span className="cloze-or-sep">hoặc</span>}
+                                        <span className="cloze-ans-text">{ans}</span>
+                                    </span>
+                                ))}
+                            </span>
+                            <span className="cloze-points-badge">{p.points}đ</span>
+                        </span>
+                    );
+                })}
+            </div>
+            <details className="cloze-code-details">
+                <summary className="cloze-code-summary">📋 Xem mã Moodle Cloze nguồn</summary>
+                <code className="cloze-raw-code">{rawText}</code>
+            </details>
+        </div>
+    );
+}
 
 interface ParsedSlide {
     index: number;
@@ -35,12 +230,13 @@ interface SessionData {
     questionsJson?: string | null;
 }
 
+// Fixed: Only 1 icon per step
 const STEPS = [
-    { key: 'upload', label: '📤 Upload', icon: '📤' },
-    { key: 'audio', label: '🎙️ Audio', icon: '🎙️' },
-    { key: 'download', label: '📥 Download', icon: '📥' },
-    { key: 'content', label: '📋 Content', icon: '📋' },
-    { key: 'questions', label: '❓ Questions', icon: '❓' },
+    { key: 'upload', label: 'Upload', icon: '📤' },
+    { key: 'audio', label: 'Audio', icon: '🎙️' },
+    { key: 'download', label: 'Download', icon: '📥' },
+    { key: 'content', label: 'Content', icon: '📋' },
+    { key: 'questions', label: 'Questions', icon: '❓' },
 ];
 
 export function PptxAudioToolPage() {
@@ -71,15 +267,210 @@ export function PptxAudioToolPage() {
     const [vittsDesignInstruct, setVittsDesignInstruct] = useState<string>('');
     const [vittsNormalize, setVittsNormalize] = useState<boolean>(false);
     const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
-    const shouldStopGenerating = useRef(false);
 
-    // Questions state
-    const [questions, setQuestions] = useState<any[]>([]);
-    const [isGeneratingQuestions, setIsGeneratingQuestions] = useState(false);
-    const [questionCounts, setQuestionCounts] = useState({ level1: 20, level2: 20, level3: 10 });
+    // ─────────────────────────────────────────────────────────────
+    // Questions 3-Tab State
+    // ─────────────────────────────────────────────────────────────
+    const [activeQuestionTab, setActiveQuestionTab] = useState<'review' | 'interactive' | 'english'>('review');
+    const [questionMessage, setQuestionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    // 1. Review Questions state
+    const [reviewQuestions, setReviewQuestions] = useState<ReviewQuestion[]>([]);
+    const [reviewCounts, setReviewCounts] = useState({ level1: 20, level2: 20, level3: 10 });
+    const [isGeneratingReview, setIsGeneratingReview] = useState(false);
+    const [isAppendingReview, setIsAppendingReview] = useState(false);
+    const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
+    const [reviewFilter, setReviewFilter] = useState<'ALL' | 1 | 2 | 3>('ALL');
+    const reviewImportInputRef = useRef<HTMLInputElement>(null);
+    const [isImportingReview, setIsImportingReview] = useState(false);
+
+    // 2. Interactive Questions state
+    const [interactiveQuestions, setInteractiveQuestions] = useState<InteractiveQuestion[]>([]);
+    const [interactiveCount, setInteractiveCount] = useState(5);
+    const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
+    const [isAppendingInteractive, setIsAppendingInteractive] = useState(false);
+    const [editingInteractiveId, setEditingInteractiveId] = useState<string | null>(null);
+
+    // 3. English Questions state
+    const [englishQuestions, setEnglishQuestions] = useState<EnglishQuestion[]>([]);
+    const [englishLevelCounts, setEnglishLevelCounts] = useState({ level1: 20, level2: 20, level3: 10 });
+    const [selectedSubDiscipline, setSelectedSubDiscipline] = useState('ALL');
+    const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([
+        'MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY'
+    ]);
+    const [isGeneratingEnglish, setIsGeneratingEnglish] = useState(false);
+    const [isAppendingEnglish, setIsAppendingEnglish] = useState(false);
+    const [editingEnglishId, setEditingEnglishId] = useState<string | null>(null);
 
     // Download state
     const [isDownloading, setIsDownloading] = useState(false);
+    const [generateAllJobId, setGenerateAllJobId] = useState<string | null>(null);
+
+    // Audio generate-all background job
+    const generateAllAudioJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingAll(false);
+            setGenerateAllJobId(null);
+            if (sessionId) await loadSession(sessionId);
+        },
+        onCancelled: async () => {
+            setIsGeneratingAll(false);
+            setGenerateAllJobId(null);
+            if (sessionId) await loadSession(sessionId);
+        },
+        onError: (msg) => {
+            setIsGeneratingAll(false);
+            setGenerateAllJobId(null);
+            alert(`Lỗi khi tạo audio: ${msg}`);
+        },
+    });
+
+    // Background jobs for Question Bank (Review, Interactive, English)
+    const reviewJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingReview(false);
+            if (sessionId) await loadAllQuestions(sessionId);
+            setQuestionMessage({ type: 'success', text: '✓ Đã tạo câu hỏi ôn tập thành công!' });
+        },
+        onError: (msg) => {
+            setIsGeneratingReview(false);
+            setQuestionMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const appendReviewJob = useJobPolling({
+        onComplete: async () => {
+            setIsAppendingReview(false);
+            if (sessionId) await loadAllQuestions(sessionId);
+            setQuestionMessage({ type: 'success', text: '✓ Đã thêm câu hỏi ôn tập thành công!' });
+        },
+        onError: (msg) => {
+            setIsAppendingReview(false);
+            setQuestionMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const interactiveJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingInteractive(false);
+            if (sessionId) await loadAllQuestions(sessionId);
+            setQuestionMessage({ type: 'success', text: '✓ Đã tạo câu hỏi tương tác thành công!' });
+        },
+        onError: (msg) => {
+            setIsGeneratingInteractive(false);
+            setQuestionMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const appendInteractiveJob = useJobPolling({
+        onComplete: async () => {
+            setIsAppendingInteractive(false);
+            if (sessionId) await loadAllQuestions(sessionId);
+            setQuestionMessage({ type: 'success', text: '✓ Đã thêm câu hỏi tương tác thành công!' });
+        },
+        onError: (msg) => {
+            setIsAppendingInteractive(false);
+            setQuestionMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const englishJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingEnglish(false);
+            if (sessionId) await loadAllQuestions(sessionId);
+            setQuestionMessage({ type: 'success', text: '✓ Đã tạo câu hỏi tiếng Anh thành công!' });
+        },
+        onError: (msg) => {
+            setIsGeneratingEnglish(false);
+            setQuestionMessage({ type: 'error', text: msg });
+        },
+    });
+
+    const appendEnglishJob = useJobPolling({
+        onComplete: async () => {
+            setIsAppendingEnglish(false);
+            if (sessionId) await loadAllQuestions(sessionId);
+            setQuestionMessage({ type: 'success', text: '✓ Đã thêm câu hỏi tiếng Anh thành công!' });
+        },
+        onError: (msg) => {
+            setIsAppendingEnglish(false);
+            setQuestionMessage({ type: 'error', text: msg });
+        },
+    });
+
+    // Refresh slides on each progress tick of generateAllAudioJob
+    useEffect(() => {
+        if (generateAllAudioJob.isRunning && sessionId) {
+            reloadSlidesOnly(sessionId);
+        }
+    }, [generateAllAudioJob.jobStatus?.progress, generateAllAudioJob.isRunning, sessionId]);
+
+    const reloadSlidesOnly = async (sid: string) => {
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sid}`);
+            if (res.data?.slides) {
+                setSlides(res.data.slides);
+            }
+        } catch (err) {
+            console.error('Error reloading slides:', err);
+        }
+    };
+
+    const checkActiveJobs = async (sid: string) => {
+        try {
+            // Audio generate-all job
+            const resAudio = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-generate-all-audio`);
+            if (resAudio.data?.id) {
+                setGenerateAllJobId(resAudio.data.id);
+                setIsGeneratingAll(true);
+                generateAllAudioJob.startPolling(resAudio.data.id);
+            }
+
+            // Review questions
+            const resRevGen = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-review-questions`);
+            if (resRevGen.data?.id) {
+                setActiveQuestionTab('review');
+                setIsGeneratingReview(true);
+                reviewJob.startPolling(resRevGen.data.id);
+            }
+            const resRevApp = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-append-review-questions`);
+            if (resRevApp.data?.id) {
+                setActiveQuestionTab('review');
+                setIsAppendingReview(true);
+                appendReviewJob.startPolling(resRevApp.data.id);
+            }
+
+            // Interactive questions
+            const resIntGen = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-interactive-questions`);
+            if (resIntGen.data?.id) {
+                setActiveQuestionTab('interactive');
+                setIsGeneratingInteractive(true);
+                interactiveJob.startPolling(resIntGen.data.id);
+            }
+            const resIntApp = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-append-interactive-questions`);
+            if (resIntApp.data?.id) {
+                setActiveQuestionTab('interactive');
+                setIsAppendingInteractive(true);
+                appendInteractiveJob.startPolling(resIntApp.data.id);
+            }
+
+            // English questions
+            const resEngGen = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-english-questions`);
+            if (resEngGen.data?.id) {
+                setActiveQuestionTab('english');
+                setIsGeneratingEnglish(true);
+                englishJob.startPolling(resEngGen.data.id);
+            }
+            const resEngApp = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-append-english-questions`);
+            if (resEngApp.data?.id) {
+                setActiveQuestionTab('english');
+                setIsAppendingEnglish(true);
+                appendEnglishJob.startPolling(resEngApp.data.id);
+            }
+        } catch (err) {
+            console.error('Error checking active jobs in PPTX tool:', err);
+        }
+    };
 
     // Session history state
     interface SessionHistoryItem {
@@ -119,15 +510,27 @@ export function PptxAudioToolPage() {
             setSlides(res.data.slides || []);
             setLanguage(res.data.language || 'vi');
             setSessionId(sid);
-            if (res.data.questionsJson) {
-                try { setQuestions(JSON.parse(res.data.questionsJson)); } catch { /* empty */ }
-            }
+            await loadAllQuestions(sid);
+            await checkActiveJobs(sid);
             // Auto-navigate to audio step if already uploaded
             if (res.data.status !== 'uploaded') {
                 setActiveStep(1);
             }
         } catch (error) {
             console.error('Error loading session:', error);
+        }
+    };
+
+    const loadAllQuestions = async (sid: string) => {
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sid}/all-questions`);
+            if (res.data) {
+                setReviewQuestions(res.data.review || []);
+                setInteractiveQuestions(res.data.interactive || []);
+                setEnglishQuestions(res.data.english || []);
+            }
+        } catch (err) {
+            console.error('Error loading questions:', err);
         }
     };
 
@@ -161,7 +564,9 @@ export function PptxAudioToolPage() {
             setSessionId(res.data.sessionId);
             setSlides(res.data.slides || []);
             setSession(res.data);
-            setQuestions([]); // Reset questions for new file
+            setReviewQuestions([]);
+            setInteractiveQuestions([]);
+            setEnglishQuestions([]);
             navigate(`/pptx-audio-tool/${res.data.sessionId}`);
             setActiveStep(1); // Auto-advance to audio step
             loadSessionHistory(); // Refresh history
@@ -251,49 +656,41 @@ export function PptxAudioToolPage() {
         }
     };
 
-    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
     const generateAllAudios = async () => {
         if (!sessionId) return;
         try {
             setIsGeneratingAll(true);
-            shouldStopGenerating.current = false;
-
-            const toGenerate = slides.filter(s =>
-                getActiveNote(s)?.trim() && s.audioStatus !== 'done'
-            );
-
-            let isFirst = true;
-            for (const slide of toGenerate) {
-                if (shouldStopGenerating.current) break;
-
-                setSlides(prev => prev.map(s =>
-                    s.index === slide.index ? { ...s, audioStatus: 'generating' } : s
-                ));
-
-                try {
-                    const res = await api.post(`/pptx-audio-tool/${sessionId}/slides/${slide.index}/generate-audio`, {
-                        multilingualMode: multilingualMode || undefined,
-                        vittsMode: vittsMode || undefined,
-                        vittsDesignInstruct: vittsDesignInstruct || undefined,
-                        vittsNormalize,
-                    });
-                    setSlides(prev => prev.map(s => s.index === slide.index ? res.data : s));
-                } catch (err: any) {
-                    setSlides(prev => prev.map(s =>
-                        s.index === slide.index ? { ...s, audioStatus: 'error', errorMessage: 'Lỗi tạo audio' } : s
-                    ));
-                }
-
-                if (isFirst) { await delay(8000); isFirst = false; } else { await delay(2500); }
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/generate-all-audio`, {
+                multilingualMode: multilingualMode || undefined,
+                vittsMode: vittsMode || undefined,
+                vittsDesignInstruct: vittsDesignInstruct || undefined,
+                vittsNormalize,
+            });
+            if (res.data?.jobId) {
+                setGenerateAllJobId(res.data.jobId);
+                generateAllAudioJob.startPolling(res.data.jobId);
             }
-        } finally {
+        } catch (error: any) {
+            console.error('Error starting audio generation for all slides:', error);
             setIsGeneratingAll(false);
-            shouldStopGenerating.current = false;
+            alert(error.response?.data?.message || 'Lỗi khi bắt đầu tạo audio. Vui lòng thử lại.');
         }
     };
 
-    const stopGenerating = () => { shouldStopGenerating.current = true; };
+    const cancelAudioJob = async () => {
+        const jobId = generateAllJobId || generateAllAudioJob.jobStatus?.id;
+        if (!jobId) return;
+        try {
+            await api.post(`/generation-jobs/${jobId}/cancel`);
+            generateAllAudioJob.stopPolling();
+            setIsGeneratingAll(false);
+            setGenerateAllJobId(null);
+            if (sessionId) await loadSession(sessionId);
+        } catch (err) {
+            console.error('Error cancelling audio job:', err);
+            setIsGeneratingAll(false);
+        }
+    };
 
     const deleteAudio = async (slideIndex: number) => {
         if (!sessionId || !confirm(`Xóa audio cho slide ${slideIndex + 1}?`)) return;
@@ -372,24 +769,430 @@ export function PptxAudioToolPage() {
     };
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 5: QUESTIONS
+    // STEP 5: QUESTIONS HANDLERS (REVIEW, INTERACTIVE, ENGLISH)
     // ═══════════════════════════════════════════════════════════════
-    const generateQuestions = async () => {
+
+    // 1. Review Questions
+    const handleGenerateReview = async () => {
+        if (!sessionId) return;
+        if (reviewQuestions.length > 0 && !confirm('⚠️ Thao tác này sẽ XÓA toàn bộ câu hỏi ôn tập cũ và tạo mới. Tiếp tục?')) return;
+        try {
+            setIsGeneratingReview(true);
+            setQuestionMessage(null);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/review-questions/generate`, {
+                level1: reviewCounts.level1,
+                level2: reviewCounts.level2,
+                level3: reviewCounts.level3,
+            });
+            if (res.data?.jobId) {
+                reviewJob.startPolling(res.data.jobId);
+            }
+        } catch (error: any) {
+            console.error('Error generating review questions:', error);
+            setIsGeneratingReview(false);
+            setQuestionMessage({ type: 'error', text: error.response?.data?.message || 'Không thể tạo câu hỏi ôn tập' });
+        }
+    };
+
+    const handleAppendReview = async () => {
         if (!sessionId) return;
         try {
-            setIsGeneratingQuestions(true);
-            const res = await api.post(`/pptx-audio-tool/${sessionId}/generate-questions`, {
-                level1Count: questionCounts.level1,
-                level2Count: questionCounts.level2,
-                level3Count: questionCounts.level3,
+            setIsAppendingReview(true);
+            setQuestionMessage(null);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/review-questions/append`, {
+                level1: reviewCounts.level1,
+                level2: reviewCounts.level2,
+                level3: reviewCounts.level3,
             });
-            setQuestions(res.data.questions || []);
+            if (res.data?.jobId) {
+                appendReviewJob.startPolling(res.data.jobId);
+            }
         } catch (error: any) {
-            console.error('Error generating questions:', error);
-            alert(`Lỗi tạo câu hỏi: ${error.response?.data?.message || error.message}`);
-        } finally {
-            setIsGeneratingQuestions(false);
+            console.error('Error appending review questions:', error);
+            setIsAppendingReview(false);
+            setQuestionMessage({ type: 'error', text: error.response?.data?.message || 'Không thể tạo thêm câu hỏi ôn tập' });
         }
+    };
+
+    const handleUpdateReview = async (q: ReviewQuestion) => {
+        if (!sessionId) return;
+        try {
+            await api.put(`/pptx-audio-tool/${sessionId}/questions/review/${q.id}`, q);
+            setEditingReviewId(null);
+            setQuestionMessage({ type: 'success', text: '✓ Đã lưu thay đổi câu hỏi!' });
+        } catch (error: any) {
+            setQuestionMessage({ type: 'error', text: 'Không thể lưu câu hỏi' });
+        }
+    };
+
+    const handleDeleteReview = async (id: string) => {
+        if (!sessionId || !confirm('Xóa câu hỏi này?')) return;
+        try {
+            await api.delete(`/pptx-audio-tool/${sessionId}/questions/review/${id}`);
+            setReviewQuestions(prev => prev.filter(q => q.id !== id));
+            setQuestionMessage({ type: 'success', text: '✓ Đã xóa câu hỏi!' });
+        } catch (error: any) {
+            setQuestionMessage({ type: 'error', text: 'Không thể xóa câu hỏi' });
+        }
+    };
+
+    const handleClearAllReview = async () => {
+        if (!sessionId || !confirm('Xóa toàn bộ câu hỏi ôn tập?')) return;
+        try {
+            await api.delete(`/pptx-audio-tool/${sessionId}/questions/review`);
+            setReviewQuestions([]);
+            setQuestionMessage({ type: 'success', text: '✓ Đã xóa toàn bộ câu hỏi ôn tập!' });
+        } catch (error: any) {
+            setQuestionMessage({ type: 'error', text: 'Không thể xóa toàn bộ câu hỏi' });
+        }
+    };
+
+    const handleExportReviewExcel = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/review-questions/export/excel`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_review_questions.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Excel' });
+        }
+    };
+
+    const handleExportReviewWord = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/review-questions/export/word`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_review_questions.docx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Word' });
+        }
+    };
+
+    const handleExportReviewMoodleXml = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/review-questions/export/moodle-xml`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/xml; charset=utf-8' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_review_moodle.xml`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Moodle XML' });
+        }
+    };
+
+    const handleDownloadReviewTemplate = async () => {
+        try {
+            const res = await api.get(`/pptx-audio-tool/dummy/review-questions/template/excel`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'mau_cau_hoi_on_tap.xlsx';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể tải file mẫu' });
+        }
+    };
+
+    const handleImportReviewExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !sessionId) return;
+        try {
+            setIsImportingReview(true);
+            setQuestionMessage(null);
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/review-questions/import/excel`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            await loadAllQuestions(sessionId);
+            setQuestionMessage({ type: 'success', text: `✓ Đã import thành công ${res.data.imported || 0} câu hỏi!` });
+        } catch (error: any) {
+            setQuestionMessage({ type: 'error', text: error.response?.data?.message || 'Import thất bại' });
+        } finally {
+            setIsImportingReview(false);
+        }
+    };
+
+    // 2. Interactive Questions Handlers
+    const handleGenerateInteractive = async () => {
+        if (!sessionId) return;
+        if (interactiveQuestions.length > 0 && !confirm('⚠️ Thao tác này sẽ XÓA toàn bộ câu hỏi tương tác cũ và tạo mới. Tiếp tục?')) return;
+        try {
+            setIsGeneratingInteractive(true);
+            setQuestionMessage(null);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/interactive-questions/generate`, { count: interactiveCount });
+            if (res.data?.jobId) {
+                interactiveJob.startPolling(res.data.jobId);
+            }
+        } catch (error: any) {
+            console.error('Error generating interactive questions:', error);
+            setIsGeneratingInteractive(false);
+            setQuestionMessage({ type: 'error', text: error.response?.data?.message || 'Không thể tạo câu hỏi tương tác' });
+        }
+    };
+
+    const handleAppendInteractive = async () => {
+        if (!sessionId) return;
+        try {
+            setIsAppendingInteractive(true);
+            setQuestionMessage(null);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/interactive-questions/append`, { count: interactiveCount });
+            if (res.data?.jobId) {
+                appendInteractiveJob.startPolling(res.data.jobId);
+            }
+        } catch (error: any) {
+            console.error('Error appending interactive questions:', error);
+            setIsAppendingInteractive(false);
+            setQuestionMessage({ type: 'error', text: error.response?.data?.message || 'Không thể tạo thêm câu hỏi tương tác' });
+        }
+    };
+
+    const handleUpdateInteractive = async (q: InteractiveQuestion) => {
+        if (!sessionId) return;
+        try {
+            await api.put(`/pptx-audio-tool/${sessionId}/questions/interactive/${q.id}`, q);
+            setEditingInteractiveId(null);
+            setQuestionMessage({ type: 'success', text: '✓ Đã lưu thay đổi câu hỏi!' });
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể lưu câu hỏi' });
+        }
+    };
+
+    const handleDeleteInteractive = async (id: string) => {
+        if (!sessionId || !confirm('Xóa câu hỏi này?')) return;
+        try {
+            await api.delete(`/pptx-audio-tool/${sessionId}/questions/interactive/${id}`);
+            setInteractiveQuestions(prev => prev.filter(q => q.id !== id));
+            setQuestionMessage({ type: 'success', text: '✓ Đã xóa câu hỏi!' });
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xóa câu hỏi' });
+        }
+    };
+
+    const handleClearAllInteractive = async () => {
+        if (!sessionId || !confirm('Xóa toàn bộ câu hỏi tương tác?')) return;
+        try {
+            await api.delete(`/pptx-audio-tool/${sessionId}/questions/interactive`);
+            setInteractiveQuestions([]);
+            setQuestionMessage({ type: 'success', text: '✓ Đã xóa toàn bộ câu hỏi tương tác!' });
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xóa câu hỏi' });
+        }
+    };
+
+    const handleExportInteractiveExcel = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/interactive-questions/export/excel`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_interactive_questions.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Excel' });
+        }
+    };
+
+    const handleExportInteractiveWord = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/interactive-questions/export/word`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_interactive_questions.docx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Word' });
+        }
+    };
+
+    // 3. English Questions Handlers
+    const handleGenerateEnglish = async () => {
+        if (!sessionId) return;
+        if (selectedQuestionTypes.length === 0) {
+            setQuestionMessage({ type: 'error', text: 'Vui lòng chọn ít nhất 1 dạng câu hỏi.' });
+            return;
+        }
+        if (englishQuestions.length > 0 && !confirm('⚠️ Thao tác này sẽ XÓA toàn bộ câu hỏi tiếng Anh cũ và tạo mới. Tiếp tục?')) return;
+        try {
+            setIsGeneratingEnglish(true);
+            setQuestionMessage(null);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/english-questions/generate`, {
+                level1: englishLevelCounts.level1,
+                level2: englishLevelCounts.level2,
+                level3: englishLevelCounts.level3,
+                questionTypes: selectedQuestionTypes,
+                subDiscipline: selectedSubDiscipline,
+            });
+            if (res.data?.jobId) {
+                englishJob.startPolling(res.data.jobId);
+            }
+        } catch (error: any) {
+            console.error('Error generating english questions:', error);
+            setIsGeneratingEnglish(false);
+            setQuestionMessage({ type: 'error', text: error.response?.data?.message || 'Không thể tạo câu hỏi tiếng Anh' });
+        }
+    };
+
+    const handleAppendEnglish = async () => {
+        if (!sessionId) return;
+        if (selectedQuestionTypes.length === 0) {
+            setQuestionMessage({ type: 'error', text: 'Vui lòng chọn ít nhất 1 dạng câu hỏi.' });
+            return;
+        }
+        try {
+            setIsAppendingEnglish(true);
+            setQuestionMessage(null);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/english-questions/append`, {
+                level1: englishLevelCounts.level1,
+                level2: englishLevelCounts.level2,
+                level3: englishLevelCounts.level3,
+                questionTypes: selectedQuestionTypes,
+                subDiscipline: selectedSubDiscipline,
+            });
+            if (res.data?.jobId) {
+                appendEnglishJob.startPolling(res.data.jobId);
+            }
+        } catch (error: any) {
+            console.error('Error appending english questions:', error);
+            setIsAppendingEnglish(false);
+            setQuestionMessage({ type: 'error', text: error.response?.data?.message || 'Không thể thêm câu hỏi tiếng Anh' });
+        }
+    };
+
+    const handleUpdateEnglish = async (q: EnglishQuestion) => {
+        if (!sessionId) return;
+        try {
+            await api.put(`/pptx-audio-tool/${sessionId}/questions/english/${q.id}`, q);
+            setEditingEnglishId(null);
+            setQuestionMessage({ type: 'success', text: '✓ Đã lưu thay đổi câu hỏi tiếng Anh!' });
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể lưu câu hỏi tiếng Anh' });
+        }
+    };
+
+    const handleDeleteEnglish = async (id: string) => {
+        if (!sessionId || !confirm('Xác nhận xóa câu hỏi này?')) return;
+        try {
+            await api.delete(`/pptx-audio-tool/${sessionId}/questions/english/${id}`);
+            setEnglishQuestions(prev => prev.filter(q => q.id !== id));
+            setQuestionMessage({ type: 'success', text: '✓ Đã xóa câu hỏi!' });
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xóa câu hỏi' });
+        }
+    };
+
+    const handleClearAllEnglish = async () => {
+        if (!sessionId || !confirm('Xóa toàn bộ câu hỏi tiếng Anh?')) return;
+        try {
+            await api.delete(`/pptx-audio-tool/${sessionId}/questions/english`);
+            setEnglishQuestions([]);
+            setQuestionMessage({ type: 'success', text: '✓ Đã xóa toàn bộ câu hỏi tiếng Anh!' });
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xóa câu hỏi' });
+        }
+    };
+
+    const handleExportEnglishMoodleXml = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/english-questions/export/moodle-xml`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/xml; charset=utf-8' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_moodle.xml`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Moodle XML' });
+        }
+    };
+
+    const handleExportEnglishExcel = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/english-questions/export/excel`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_questions.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Excel' });
+        }
+    };
+
+    const handleExportEnglishWord = async () => {
+        if (!sessionId) return;
+        try {
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/english-questions/export/word`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_questions.docx`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch {
+            setQuestionMessage({ type: 'error', text: 'Không thể xuất Word' });
+        }
+    };
+
+    const toggleQuestionType = (type: string) => {
+        setSelectedQuestionTypes(prev =>
+            prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+        );
+    };
+
+    const selectAllQuestionTypes = () => {
+        setSelectedQuestionTypes(['MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY']);
+    };
+
+    const deselectAllQuestionTypes = () => {
+        setSelectedQuestionTypes([]);
+    };
+
+    const parseAnswers = (answers: string[]) => {
+        return (answers || []).map(a => ({
+            text: a.replace(/^\*/, ''),
+            isCorrect: a.startsWith('*'),
+        }));
     };
 
     // ═══════════════════════════════════════════════════════════════
@@ -398,6 +1201,10 @@ export function PptxAudioToolPage() {
     const completedCount = slides.filter(s => s.audioStatus === 'done').length;
     const slidesWithNotes = slides.filter(s => getActiveNote(s)?.trim());
     const hasDualLanguage = slides.some(s => s.hasDual);
+    const filteredReviewQuestions = reviewQuestions.filter(q => {
+        if (reviewFilter === 'ALL') return true;
+        return q.level === reviewFilter;
+    });
 
     // ═══════════════════════════════════════════════════════════════
     // RENDER
@@ -506,7 +1313,9 @@ export function PptxAudioToolPage() {
                                                             setSessionId(null);
                                                             setSession(null);
                                                             setSlides([]);
-                                                            setQuestions([]);
+                                                            setReviewQuestions([]);
+                                                            setInteractiveQuestions([]);
+                                                            setEnglishQuestions([]);
                                                             navigate('/pptx-audio-tool');
                                                         }
                                                     } catch (err) {
@@ -534,7 +1343,7 @@ export function PptxAudioToolPage() {
                             <div className="header-left">
                                 <h2>🎙️ Notes & Audio</h2>
                                 <p className="audio-stats">
-                                    📊 <strong>{completedCount}</strong> / {slidesWithNotes.length} slides có audio
+                                    📊 <strong>{completedCount}</strong> / {slides.length} slides ({slidesWithNotes.length} có note)
                                     {hasDualLanguage && <> · 🌐 Song ngữ</>}
                                 </p>
                             </div>
@@ -564,13 +1373,18 @@ export function PptxAudioToolPage() {
                                     disabled={isGeneratingAll || slidesWithNotes.length === 0}
                                 >
                                     {isGeneratingAll ? (
-                                        <><span className="spinner"></span> Đang tạo audio...</>
+                                        <>
+                                            <span className="spinner"></span>{' '}
+                                            {generateAllAudioJob.jobStatus?.progress !== undefined
+                                                ? `Đang tạo audio (${generateAllAudioJob.jobStatus.progress}%)`
+                                                : 'Đang tạo audio...'}
+                                        </>
                                     ) : (
                                         '🎙️ Tạo Audio Tất Cả'
                                     )}
                                 </button>
                                 {isGeneratingAll && (
-                                    <button className="btn-stop" onClick={stopGenerating}>⏹️ Dừng</button>
+                                    <button className="btn-stop" onClick={cancelAudioJob}>⏹️ Dừng</button>
                                 )}
                             </div>
                         </div>
@@ -583,16 +1397,48 @@ export function PptxAudioToolPage() {
                             if (config.vittsNormalize !== undefined) setVittsNormalize(config.vittsNormalize);
                         }} />
 
+                        {/* Background Job Running Banner */}
+                        {generateAllAudioJob.isRunning && (
+                            <div style={{
+                                margin: '14px 0',
+                                padding: '12px 18px',
+                                background: '#f0f9ff',
+                                border: '1px solid #bae6fd',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '16px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span className="spinner" style={{ borderColor: '#0284c7', borderTopColor: 'transparent', width: 20, height: 20 }}></span>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.95rem' }}>
+                                            {generateAllAudioJob.jobStatus?.message || 'Đang tạo audio chạy nền...'} ({generateAllAudioJob.jobStatus?.progress || 0}%)
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                            Tác vụ đang chạy ngầm trên máy chủ. Bạn có thể chuyển tab hoặc làm việc khác mà không bị gián đoạn.
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn-stop"
+                                    onClick={cancelAudioJob}
+                                    style={{ padding: '6px 14px', fontSize: '0.85rem', flexShrink: 0 }}
+                                >
+                                    ⏹️ Hủy bỏ
+                                </button>
+                            </div>
+                        )}
+
                         {/* Slide Cards */}
                         <div className="slide-cards">
                             {slides.map((slide) => {
                                 const activeNote = getActiveNote(slide);
-                                const hasNote = activeNote?.trim();
+                                const hasNote = Boolean(activeNote?.trim());
                                 const hasAudio = slide.audioStatus === 'done' && slide.audioUrl;
                                 const isEditing = editingSlide === slide.index;
                                 const isGenerating = generatingSlides.has(slide.index) || slide.audioStatus === 'generating';
-
-                                if (!hasNote) return null; // Skip slides without notes
 
                                 return (
                                     <div key={slide.index} className={`slide-card ${slide.audioStatus}`}>
@@ -616,13 +1462,14 @@ export function PptxAudioToolPage() {
                                                             onChange={(e) => setEditedNote(e.target.value)}
                                                             rows={6}
                                                             autoFocus
+                                                            placeholder="Nhập nội dung Speaker Note tại đây..."
                                                         />
                                                         <div className="edit-buttons">
                                                             <button className="btn-save" onClick={() => saveEdit(slide.index)}>💾 Lưu</button>
                                                             <button className="btn-cancel" onClick={cancelEdit}>Hủy</button>
                                                         </div>
                                                     </div>
-                                                ) : (
+                                                ) : hasNote ? (
                                                     <div className="note-content">
                                                         <p>{activeNote}</p>
                                                         <button
@@ -631,6 +1478,17 @@ export function PptxAudioToolPage() {
                                                             title="Chỉnh sửa"
                                                         >
                                                             ✏️
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="note-content empty-note-placeholder" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px', background: 'rgba(148, 163, 184, 0.05)', borderRadius: '6px', border: '1px dashed rgba(148, 163, 184, 0.3)' }}>
+                                                        <p style={{ color: '#94a3b8', fontStyle: 'italic', margin: 0 }}>Chưa có Speaker Note cho slide này.</p>
+                                                        <button
+                                                            className="btn-secondary btn-sm"
+                                                            onClick={() => startEdit(slide.index, '')}
+                                                            style={{ fontSize: '0.82rem', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                                        >
+                                                            ✏️ Thêm Note
                                                         </button>
                                                     </div>
                                                 )}
@@ -644,6 +1502,7 @@ export function PptxAudioToolPage() {
                                                     className="btn-generate"
                                                     onClick={() => generateSingleAudio(slide.index)}
                                                     disabled={isGenerating || !hasNote}
+                                                    title={!hasNote ? 'Cần thêm Speaker Note trước khi tạo audio' : undefined}
                                                 >
                                                     {isGenerating ? (
                                                         <><span className="spinner-small"></span> Đang tạo</>
@@ -791,126 +1650,974 @@ export function PptxAudioToolPage() {
                 {/* ════════════ STEP 5: QUESTIONS ════════════ */}
                 {activeStep === 4 && sessionId && (
                     <div className="step-questions">
-                        <div className="step-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                            <h2>❓ Tạo Câu Hỏi Trắc Nghiệm</h2>
-                            {questions.length > 0 && (
-                                <button
-                                    className="btn-secondary"
-                                    onClick={async () => {
-                                        try {
-                                            const response = await api.get(`/pptx-audio-tool/${sessionId}/questions/export/excel`, {
-                                                responseType: 'blob',
-                                            });
-                                            const url = window.URL.createObjectURL(new Blob([response.data]));
-                                            const link = document.createElement('a');
-                                            link.href = url;
-                                            link.setAttribute('download', `${session?.fileName?.replace('.pptx', '') || 'pptx'}_questions.xlsx`);
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            link.remove();
-                                            window.URL.revokeObjectURL(url);
-                                        } catch (err) {
-                                            alert('Không thể xuất Excel');
-                                        }
-                                    }}
-                                >
-                                    📊 Xuất Excel
-                                </button>
-                            )}
+                        {/* Hidden input for Excel Import */}
+                        <input
+                            type="file"
+                            ref={reviewImportInputRef}
+                            accept=".xlsx,.xls"
+                            onChange={handleImportReviewExcel}
+                            style={{ display: 'none' }}
+                        />
+
+                        {/* Step Header with Tab Actions */}
+                        <div className="step-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                            <div>
+                                <h2>❓ Ngân Hàng Câu Hỏi</h2>
+                                <p style={{ color: '#94a3b8', fontSize: '0.9rem', margin: '4px 0 0' }}>
+                                    Tạo và quản lý câu hỏi ôn tập, câu hỏi tương tác H5P và câu hỏi tiếng Anh chuyên ngành từ nội dung bài giảng.
+                                </p>
+                            </div>
+                            <div className="header-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                {activeQuestionTab === 'interactive' && interactiveQuestions.length > 0 && (
+                                    <>
+                                        <button className="btn-secondary btn-sm" onClick={handleExportInteractiveExcel}>
+                                            📊 Xuất Excel
+                                        </button>
+                                        <button className="btn-secondary btn-sm" onClick={handleExportInteractiveWord}>
+                                            📝 Xuất Word
+                                        </button>
+                                        <button className="btn-delete btn-sm" onClick={handleClearAllInteractive} style={{ padding: '6px 12px' }}>
+                                            🗑️ Xóa tất cả
+                                        </button>
+                                    </>
+                                )}
+
+                                {activeQuestionTab === 'review' && (
+                                    <>
+                                        <button className="btn-secondary btn-sm" onClick={handleDownloadReviewTemplate} title="Tải template Excel chuẩn để nhập câu hỏi">
+                                            📥 Tải file mẫu
+                                        </button>
+                                        <button className="btn-secondary btn-sm" onClick={() => reviewImportInputRef.current?.click()} disabled={isImportingReview}>
+                                            {isImportingReview ? '⏳ Đang import...' : '📤 Import Excel'}
+                                        </button>
+                                        {reviewQuestions.length > 0 && (
+                                            <>
+                                                <button className="btn-secondary btn-sm" onClick={handleExportReviewExcel}>
+                                                    📊 Xuất Excel
+                                                </button>
+                                                <button className="btn-secondary btn-sm" onClick={handleExportReviewWord}>
+                                                    📝 Xuất Word
+                                                </button>
+                                                <button className="btn-primary btn-sm" onClick={handleExportReviewMoodleXml}>
+                                                    📋 Xuất Moodle XML
+                                                </button>
+                                                <button className="btn-delete btn-sm" onClick={handleClearAllReview} style={{ padding: '6px 12px' }}>
+                                                    🗑️ Xóa tất cả
+                                                </button>
+                                            </>
+                                        )}
+                                    </>
+                                )}
+
+                                {activeQuestionTab === 'english' && (
+                                    <>
+                                        {englishQuestions.length > 0 && (
+                                            <>
+                                                <button className="btn-secondary btn-sm" onClick={handleExportEnglishExcel}>
+                                                    📊 Xuất Excel
+                                                </button>
+                                                <button className="btn-secondary btn-sm" onClick={handleExportEnglishWord}>
+                                                    📝 Xuất Word
+                                                </button>
+                                                <button className="btn-primary btn-sm" onClick={handleExportEnglishMoodleXml}>
+                                                    📋 Xuất Moodle XML
+                                                </button>
+                                                <button className="btn-delete btn-sm" onClick={handleClearAllEnglish} style={{ padding: '6px 12px' }}>
+                                                    🗑️ Xóa tất cả
+                                                </button>
+                                            </>
+                                        )}
+                                    </>
+                                )}
+                            </div>
                         </div>
 
+                        {/* Model Selector */}
                         <ModelSelector taskType="QUESTIONS" compact />
 
-                        <div className="question-config">
-                            <div className="level-inputs" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
-                                <div className="level-input">
-                                    <label>
-                                        <span style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e', padding: '2px 8px', borderRadius: 4, fontSize: 12, marginRight: 6 }}>Biết</span>
-                                        Mức 1
-                                    </label>
-                                    <input type="number" min="0" max="50" value={questionCounts.level1}
-                                        onChange={(e) => setQuestionCounts(prev => ({ ...prev, level1: parseInt(e.target.value) || 0 }))}
-                                        style={{ width: 60, marginLeft: 8 }} />
-                                </div>
-                                <div className="level-input">
-                                    <label>
-                                        <span style={{ background: 'rgba(59,130,246,0.2)', color: '#3b82f6', padding: '2px 8px', borderRadius: 4, fontSize: 12, marginRight: 6 }}>Hiểu</span>
-                                        Mức 2
-                                    </label>
-                                    <input type="number" min="0" max="50" value={questionCounts.level2}
-                                        onChange={(e) => setQuestionCounts(prev => ({ ...prev, level2: parseInt(e.target.value) || 0 }))}
-                                        style={{ width: 60, marginLeft: 8 }} />
-                                </div>
-                                <div className="level-input">
-                                    <label>
-                                        <span style={{ background: 'rgba(249,115,22,0.2)', color: '#f97316', padding: '2px 8px', borderRadius: 4, fontSize: 12, marginRight: 6 }}>Vận dụng</span>
-                                        Mức 3
-                                    </label>
-                                    <input type="number" min="0" max="50" value={questionCounts.level3}
-                                        onChange={(e) => setQuestionCounts(prev => ({ ...prev, level3: parseInt(e.target.value) || 0 }))}
-                                        style={{ width: 60, marginLeft: 8 }} />
-                                </div>
-                            </div>
-                            <button className="btn-generate-questions" onClick={generateQuestions}
-                                disabled={isGeneratingQuestions || (questionCounts.level1 + questionCounts.level2 + questionCounts.level3 === 0)}>
-                                {isGeneratingQuestions ? (<><span className="spinner"></span> Đang tạo câu hỏi...</>) : questions.length > 0 ? ('🔄 Tạo Lại Câu Hỏi') : ('✨ Tạo Câu Hỏi')}
-                            </button>
-                        </div>
-
-                        {isGeneratingQuestions && (
-                            <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                                <div className="loading-spinner"></div>
-                                <p>Đang tạo câu hỏi ôn tập...</p>
-                                <p style={{ fontSize: 12, color: '#64748b' }}>Tổng số: {questionCounts.level1 + questionCounts.level2 + questionCounts.level3} câu</p>
+                        {/* Status Message */}
+                        {questionMessage && (
+                            <div className={`${questionMessage.type}-message`} style={{ margin: '14px 0', padding: '10px 16px', borderRadius: 8 }}>
+                                {questionMessage.text}
                             </div>
                         )}
 
-                        {!isGeneratingQuestions && questions.length > 0 && (
-                            <div>
-                                <p style={{ marginBottom: 12 }}>
-                                    📊 Tổng: <strong>{questions.length}</strong> câu hỏi
-                                    (L1: {questions.filter(q => q.level === 1).length},
-                                    L2: {questions.filter(q => q.level === 2).length},
-                                    L3: {questions.filter(q => q.level === 3).length})
-                                </p>
-                                <div style={{ overflowX: 'auto' }}>
-                                    <table className="questions-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                                        <thead>
-                                            <tr style={{ background: 'rgba(30,41,59,0.8)', borderBottom: '2px solid rgba(148,163,184,0.2)' }}>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', width: 50 }}>STT</th>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', width: 60 }}>Mức</th>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', minWidth: 200 }}>Câu hỏi</th>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', minWidth: 120 }}>A (Đúng)</th>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', minWidth: 120 }}>B</th>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', minWidth: 120 }}>C</th>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', minWidth: 120 }}>D</th>
-                                                <th style={{ padding: '10px 8px', textAlign: 'left', minWidth: 150 }}>Giải thích</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {questions.map((q, i) => (
-                                                <tr key={i} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
-                                                    <td style={{ padding: '8px', color: '#94a3b8' }}>{i + 1}</td>
-                                                    <td style={{ padding: '8px' }}>
-                                                        <span style={{
-                                                            padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
-                                                            background: q.level === 1 ? 'rgba(34,197,94,0.15)' : q.level === 2 ? 'rgba(59,130,246,0.15)' : 'rgba(249,115,22,0.15)',
-                                                            color: q.level === 1 ? '#22c55e' : q.level === 2 ? '#3b82f6' : '#f97316',
-                                                        }}>
-                                                            {q.level === 1 ? 'Biết' : q.level === 2 ? 'Hiểu' : 'VD'}
-                                                        </span>
-                                                    </td>
-                                                    <td style={{ padding: '8px', color: '#e2e8f0' }}>{q.question}</td>
-                                                    <td style={{ padding: '8px', color: '#22c55e', fontWeight: 500 }}>{q.correctAnswer}</td>
-                                                    <td style={{ padding: '8px', color: '#94a3b8' }}>{q.optionB}</td>
-                                                    <td style={{ padding: '8px', color: '#94a3b8' }}>{q.optionC}</td>
-                                                    <td style={{ padding: '8px', color: '#94a3b8' }}>{q.optionD}</td>
-                                                    <td style={{ padding: '8px', color: '#64748b', fontSize: 12 }}>{q.explanation || '-'}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                        {/* 3-Tab Navigation */}
+                        <div className="tabs" style={{ marginBottom: 20 }}>
+                            <button
+                                className={`tab ${activeQuestionTab === 'interactive' ? 'active' : ''}`}
+                                onClick={() => setActiveQuestionTab('interactive')}
+                            >
+                                ⚡ Câu hỏi Tương tác ({interactiveQuestions.length}) {(isGeneratingInteractive || isAppendingInteractive) && '⏳'}
+                            </button>
+                            <button
+                                className={`tab ${activeQuestionTab === 'review' ? 'active' : ''}`}
+                                onClick={() => setActiveQuestionTab('review')}
+                            >
+                                📝 Câu hỏi Ôn tập ({reviewQuestions.length}) {(isGeneratingReview || isAppendingReview) && '⏳'}
+                            </button>
+                            <button
+                                className={`tab ${activeQuestionTab === 'english' ? 'active' : ''}`}
+                                onClick={() => setActiveQuestionTab('english')}
+                            >
+                                🇬🇧 Câu hỏi Tiếng Anh ({englishQuestions.length}) {(isGeneratingEnglish || isAppendingEnglish) && '⏳'}
+                            </button>
+                        </div>
+
+                        {/* ════════════ TAB: REVIEW QUESTIONS (DEFAULT) ════════════ */}
+                        {activeQuestionTab === 'review' && (
+                            <div className="question-section">
+                                <div className="question-config">
+                                    <h3>📝 Cấu hình tạo câu hỏi ôn tập (Bloom Taxonomy)</h3>
+                                    <p className="hint">
+                                        Tạo ngân hàng câu hỏi trắc nghiệm theo 3 mức độ nhận thức Bloom (Biết, Hiểu, Vận dụng) bám sát nội dung bài giảng.
+                                    </p>
+                                    <div className="review-config-controls">
+                                        <div className="review-level-inputs">
+                                            <div className="level-input">
+                                                <label>
+                                                    <span className="level-badge level-know">Biết</span>
+                                                    Mức độ 1
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="50"
+                                                    value={reviewCounts.level1}
+                                                    onChange={(e) => setReviewCounts({ ...reviewCounts, level1: +e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="level-input">
+                                                <label>
+                                                    <span className="level-badge level-understand">Hiểu</span>
+                                                    Mức độ 2
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="50"
+                                                    value={reviewCounts.level2}
+                                                    onChange={(e) => setReviewCounts({ ...reviewCounts, level2: +e.target.value })}
+                                                />
+                                            </div>
+                                            <div className="level-input">
+                                                <label>
+                                                    <span className="level-badge level-apply">Vận dụng</span>
+                                                    Mức độ 3
+                                                </label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="50"
+                                                    value={reviewCounts.level3}
+                                                    onChange={(e) => setReviewCounts({ ...reviewCounts, level3: +e.target.value })}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="review-actions">
+                                            <button
+                                                className="btn-primary"
+                                                onClick={handleGenerateReview}
+                                                disabled={isGeneratingReview || isAppendingReview || (reviewCounts.level1 + reviewCounts.level2 + reviewCounts.level3 === 0)}
+                                            >
+                                                {isGeneratingReview ? '🔄 Đang tạo...' : '🤖 Tạo Mới (Xóa cũ)'}
+                                            </button>
+                                            {reviewQuestions.length > 0 && (
+                                                <button
+                                                    className="btn-secondary"
+                                                    onClick={handleAppendReview}
+                                                    disabled={isGeneratingReview || isAppendingReview || (reviewCounts.level1 + reviewCounts.level2 + reviewCounts.level3 === 0)}
+                                                >
+                                                    {isAppendingReview ? '🔄 Đang thêm...' : '➕ Tạo Thêm (Giữ cũ)'}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
+
+                                {(isGeneratingReview || isAppendingReview || isImportingReview) && (
+                                    <div className="generating-state" style={{ textAlign: 'center', padding: '32px 0' }}>
+                                        <div className="loading-spinner"></div>
+                                        <p style={{ marginTop: 12, fontWeight: 500 }}>
+                                            {isImportingReview
+                                                ? 'Đang import câu hỏi từ Excel...'
+                                                : isAppendingReview
+                                                    ? (appendReviewJob.jobStatus?.message || 'Đang thêm câu hỏi ôn tập chạy nền...')
+                                                    : (reviewJob.jobStatus?.message || 'Đang tạo câu hỏi ôn tập theo chuẩn Bloom chạy nền...')}
+                                        </p>
+                                        <p className="hint" style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
+                                            {reviewJob.isRunning && reviewJob.jobStatus?.progress !== undefined
+                                                ? `Tiến độ: ${reviewJob.jobStatus.progress}% (Có thể chuyển tab khác, tác vụ vẫn tiếp tục chạy ngầm)`
+                                                : appendReviewJob.isRunning && appendReviewJob.jobStatus?.progress !== undefined
+                                                    ? `Tiến độ: ${appendReviewJob.jobStatus.progress}% (Có thể chuyển tab khác, tác vụ vẫn tiếp tục chạy ngầm)`
+                                                    : `Tổng cấu hình: ${reviewCounts.level1 + reviewCounts.level2 + reviewCounts.level3} câu (Biết: ${reviewCounts.level1}, Hiểu: ${reviewCounts.level2}, Vận dụng: ${reviewCounts.level3})`}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!isGeneratingReview && !isAppendingReview && !isImportingReview && reviewQuestions.length > 0 && (
+                                    <div className="questions-preview" style={{ marginTop: 20 }}>
+                                        {/* Filter Tabs */}
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
+                                            <h3 style={{ margin: 0 }}>Danh sách câu hỏi Ôn tập ({reviewQuestions.length})</h3>
+                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                                <button
+                                                    className={`btn-sm ${reviewFilter === 'ALL' ? 'btn-primary' : 'btn-secondary'}`}
+                                                    onClick={() => setReviewFilter('ALL')}
+                                                >
+                                                    Tất cả ({reviewQuestions.length})
+                                                </button>
+                                                <button
+                                                    className={`btn-sm ${reviewFilter === 1 ? 'btn-primary' : 'btn-secondary'}`}
+                                                    onClick={() => setReviewFilter(1)}
+                                                >
+                                                    Mức 1: Biết ({reviewQuestions.filter(q => q.level === 1).length})
+                                                </button>
+                                                <button
+                                                    className={`btn-sm ${reviewFilter === 2 ? 'btn-primary' : 'btn-secondary'}`}
+                                                    onClick={() => setReviewFilter(2)}
+                                                >
+                                                    Mức 2: Hiểu ({reviewQuestions.filter(q => q.level === 2).length})
+                                                </button>
+                                                <button
+                                                    className={`btn-sm ${reviewFilter === 3 ? 'btn-primary' : 'btn-secondary'}`}
+                                                    onClick={() => setReviewFilter(3)}
+                                                >
+                                                    Mức 3: Vận dụng ({reviewQuestions.filter(q => q.level === 3).length})
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Desktop Table */}
+                                        <div className="questions-table-wrapper desktop-questions-table" style={{ overflowX: 'auto' }}>
+                                            <table className="questions-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                                                <thead>
+                                                    <tr style={{ background: 'rgba(30,41,59,0.8)', borderBottom: '2px solid rgba(148,163,184,0.2)' }}>
+                                                        <th style={{ width: '60px', padding: '10px 8px', textAlign: 'left' }}>STT</th>
+                                                        <th style={{ width: '80px', padding: '10px 8px', textAlign: 'left' }}>Mức</th>
+                                                        <th style={{ minWidth: '220px', padding: '10px 8px', textAlign: 'left' }}>Câu hỏi</th>
+                                                        <th style={{ minWidth: '120px', padding: '10px 8px', textAlign: 'left' }}>A (Đúng)</th>
+                                                        <th style={{ minWidth: '120px', padding: '10px 8px', textAlign: 'left' }}>B</th>
+                                                        <th style={{ minWidth: '120px', padding: '10px 8px', textAlign: 'left' }}>C</th>
+                                                        <th style={{ minWidth: '120px', padding: '10px 8px', textAlign: 'left' }}>D</th>
+                                                        <th style={{ minWidth: '160px', padding: '10px 8px', textAlign: 'left' }}>Giải thích</th>
+                                                        <th style={{ width: '90px', padding: '10px 8px', textAlign: 'center' }}>Thao tác</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredReviewQuestions.map((q, idx) => (
+                                                        <tr key={q.id || idx} style={{ borderBottom: '1px solid rgba(148,163,184,0.1)' }}>
+                                                            <td style={{ padding: '8px', color: '#94a3b8' }}>{idx + 1}</td>
+                                                            <td style={{ padding: '8px' }}>
+                                                                <span style={{
+                                                                    padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 600,
+                                                                    background: q.level === 1 ? 'rgba(34,197,94,0.15)' : q.level === 2 ? 'rgba(59,130,246,0.15)' : 'rgba(249,115,22,0.15)',
+                                                                    color: q.level === 1 ? '#22c55e' : q.level === 2 ? '#3b82f6' : '#f97316',
+                                                                }}>
+                                                                    {q.level === 1 ? 'Biết' : q.level === 2 ? 'Hiểu' : 'Vận dụng'}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '8px' }}>
+                                                                {editingReviewId === q.id ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={q.question}
+                                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                                            prev.map(p => p.id === q.id ? { ...p, question: e.target.value } : p)
+                                                                        )}
+                                                                        style={{ width: '100%', padding: '4px 8px', borderRadius: 4, background: '#1e293b', border: '1px solid #475569', color: '#fff' }}
+                                                                    />
+                                                                ) : <span style={{ color: '#e2e8f0' }}>{q.question}</span>}
+                                                            </td>
+                                                            <td style={{ padding: '8px' }}>
+                                                                {editingReviewId === q.id ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={q.correctAnswer}
+                                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                                            prev.map(p => p.id === q.id ? { ...p, correctAnswer: e.target.value } : p)
+                                                                        )}
+                                                                        style={{ width: '100%', padding: '4px 8px', borderRadius: 4, background: '#1e293b', border: '1px solid #475569', color: '#22c55e' }}
+                                                                    />
+                                                                ) : <span style={{ color: '#22c55e', fontWeight: 500 }}>{q.correctAnswer}</span>}
+                                                            </td>
+                                                            <td style={{ padding: '8px' }}>
+                                                                {editingReviewId === q.id ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={q.optionB}
+                                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                                            prev.map(p => p.id === q.id ? { ...p, optionB: e.target.value } : p)
+                                                                        )}
+                                                                        style={{ width: '100%', padding: '4px 8px', borderRadius: 4, background: '#1e293b', border: '1px solid #475569', color: '#94a3b8' }}
+                                                                    />
+                                                                ) : <span style={{ color: '#94a3b8' }}>{q.optionB}</span>}
+                                                            </td>
+                                                            <td style={{ padding: '8px' }}>
+                                                                {editingReviewId === q.id ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={q.optionC}
+                                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                                            prev.map(p => p.id === q.id ? { ...p, optionC: e.target.value } : p)
+                                                                        )}
+                                                                        style={{ width: '100%', padding: '4px 8px', borderRadius: 4, background: '#1e293b', border: '1px solid #475569', color: '#94a3b8' }}
+                                                                    />
+                                                                ) : <span style={{ color: '#94a3b8' }}>{q.optionC}</span>}
+                                                            </td>
+                                                            <td style={{ padding: '8px' }}>
+                                                                {editingReviewId === q.id ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={q.optionD}
+                                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                                            prev.map(p => p.id === q.id ? { ...p, optionD: e.target.value } : p)
+                                                                        )}
+                                                                        style={{ width: '100%', padding: '4px 8px', borderRadius: 4, background: '#1e293b', border: '1px solid #475569', color: '#94a3b8' }}
+                                                                    />
+                                                                ) : <span style={{ color: '#94a3b8' }}>{q.optionD}</span>}
+                                                            </td>
+                                                            <td style={{ padding: '8px' }}>
+                                                                {editingReviewId === q.id ? (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={q.explanation || ''}
+                                                                        onChange={(e) => setReviewQuestions(prev =>
+                                                                            prev.map(p => p.id === q.id ? { ...p, explanation: e.target.value } : p)
+                                                                        )}
+                                                                        style={{ width: '100%', padding: '4px 8px', borderRadius: 4, background: '#1e293b', border: '1px solid #475569', color: '#cbd5e1' }}
+                                                                    />
+                                                                ) : <span style={{ color: '#64748b', fontSize: 12 }}>{q.explanation || '-'}</span>}
+                                                            </td>
+                                                            <td style={{ padding: '8px', textAlign: 'center' }}>
+                                                                <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                                                                    {editingReviewId === q.id ? (
+                                                                        <button className="btn-save btn-sm" onClick={() => handleUpdateReview(q)} title="Lưu">💾</button>
+                                                                    ) : (
+                                                                        <button className="btn-edit btn-sm" onClick={() => setEditingReviewId(q.id)} title="Sửa">✏️</button>
+                                                                    )}
+                                                                    <button className="btn-delete btn-sm" onClick={() => handleDeleteReview(q.id)} title="Xóa">🗑️</button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Mobile Review Cards */}
+                                        <div className="mobile-review-cards">
+                                            {filteredReviewQuestions.map((q) => (
+                                                <div key={q.id} className="review-card-item">
+                                                    <div className="review-card-top">
+                                                        <span className="review-q-id">{q.questionId || q.id}</span>
+                                                        <div className="review-card-btns">
+                                                            {editingReviewId === q.id ? (
+                                                                <button className="btn-save" onClick={() => handleUpdateReview(q)}>💾 Lưu</button>
+                                                            ) : (
+                                                                <button className="btn-edit" onClick={() => setEditingReviewId(q.id)}>✏️ Sửa</button>
+                                                            )}
+                                                            <button className="btn-delete" onClick={() => handleDeleteReview(q.id)}>🗑️ Xóa</button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="review-card-question">
+                                                        {editingReviewId === q.id ? (
+                                                            <textarea
+                                                                value={q.question}
+                                                                onChange={(e) => setReviewQuestions(prev =>
+                                                                    prev.map(p => p.id === q.id ? { ...p, question: e.target.value } : p)
+                                                                )}
+                                                                className="edit-textarea"
+                                                                rows={3}
+                                                            />
+                                                        ) : (
+                                                            <div className="q-text-bold">{q.question}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="review-card-answers">
+                                                        <div className="review-ans-item correct">
+                                                            <span className="ans-tag">A (Đúng):</span>
+                                                            {editingReviewId === q.id ? (
+                                                                <input
+                                                                    type="text"
+                                                                    value={q.correctAnswer}
+                                                                    onChange={(e) => setReviewQuestions(prev =>
+                                                                        prev.map(p => p.id === q.id ? { ...p, correctAnswer: e.target.value } : p)
+                                                                    )}
+                                                                    className="edit-input"
+                                                                />
+                                                            ) : (
+                                                                <span>{q.correctAnswer}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="review-ans-item">
+                                                            <span className="ans-tag">B:</span>
+                                                            {editingReviewId === q.id ? (
+                                                                <input
+                                                                    type="text"
+                                                                    value={q.optionB}
+                                                                    onChange={(e) => setReviewQuestions(prev =>
+                                                                        prev.map(p => p.id === q.id ? { ...p, optionB: e.target.value } : p)
+                                                                    )}
+                                                                    className="edit-input"
+                                                                />
+                                                            ) : (
+                                                                <span>{q.optionB}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="review-ans-item">
+                                                            <span className="ans-tag">C:</span>
+                                                            {editingReviewId === q.id ? (
+                                                                <input
+                                                                    type="text"
+                                                                    value={q.optionC}
+                                                                    onChange={(e) => setReviewQuestions(prev =>
+                                                                        prev.map(p => p.id === q.id ? { ...p, optionC: e.target.value } : p)
+                                                                    )}
+                                                                    className="edit-input"
+                                                                />
+                                                            ) : (
+                                                                <span>{q.optionC}</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="review-ans-item">
+                                                            <span className="ans-tag">D:</span>
+                                                            {editingReviewId === q.id ? (
+                                                                <input
+                                                                    type="text"
+                                                                    value={q.optionD}
+                                                                    onChange={(e) => setReviewQuestions(prev =>
+                                                                        prev.map(p => p.id === q.id ? { ...p, optionD: e.target.value } : p)
+                                                                    )}
+                                                                    className="edit-input"
+                                                                />
+                                                            ) : (
+                                                                <span>{q.optionD}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!isGeneratingReview && !isAppendingReview && !isImportingReview && reviewQuestions.length === 0 && (
+                                    <div className="empty-state" style={{ padding: '36px 0', textAlign: 'center', color: '#94a3b8' }}>
+                                        <p style={{ fontSize: '1.05rem', margin: '0 0 10px' }}>Chưa có câu hỏi ôn tập.</p>
+                                        <p style={{ fontSize: '0.88rem', margin: 0 }}>Hãy bấm "🤖 Tạo Mới (Xóa cũ)" để sinh câu hỏi tự động hoặc "📤 Import Excel" để tải lên danh sách có sẵn.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ════════════ TAB 2: INTERACTIVE QUESTIONS ════════════ */}
+                        {activeQuestionTab === 'interactive' && (
+                            <div className="question-section">
+                                <div className="question-config">
+                                    <h3>⚡ Câu hỏi Tương tác (H5P / Video / Interactive Slide)</h3>
+                                    <p className="hint">
+                                        Tạo các câu hỏi trắc nghiệm tương tác dạng Multiple Choice / Multiple Response kèm điểm số và phản hồi Đúng/Sai.
+                                    </p>
+                                    <div className="interactive-config-controls">
+                                        <div className="level-input interactive-input-box">
+                                            <label>
+                                                <span className="level-badge level-know">Số lượng</span>
+                                                Số câu hỏi
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="1"
+                                                max="20"
+                                                value={interactiveCount}
+                                                onChange={(e) => setInteractiveCount(+e.target.value)}
+                                            />
+                                        </div>
+                                        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                            <button
+                                                className="btn-primary"
+                                                onClick={handleGenerateInteractive}
+                                                disabled={isGeneratingInteractive || isAppendingInteractive || interactiveCount <= 0}
+                                            >
+                                                {isGeneratingInteractive ? '🔄 Đang tạo...' : '🤖 Tạo Câu Hỏi Tương Tác'}
+                                            </button>
+                                            {interactiveQuestions.length > 0 && (
+                                                <button
+                                                    className="btn-secondary"
+                                                    onClick={handleAppendInteractive}
+                                                    disabled={isGeneratingInteractive || isAppendingInteractive || interactiveCount <= 0}
+                                                >
+                                                    {isAppendingInteractive ? '🔄 Đang thêm...' : `➕ Thêm ${interactiveCount} Câu Hỏi Nữa`}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {(isGeneratingInteractive || isAppendingInteractive) && (
+                                    <div className="generating-state" style={{ textAlign: 'center', padding: '32px 0' }}>
+                                        <div className="loading-spinner"></div>
+                                        <p style={{ marginTop: 12, fontWeight: 500 }}>
+                                            {isAppendingInteractive
+                                                ? (appendInteractiveJob.jobStatus?.message || 'Đang tạo thêm câu hỏi tương tác chạy nền...')
+                                                : (interactiveJob.jobStatus?.message || 'Đang tạo câu hỏi tương tác H5P chạy nền...')}
+                                        </p>
+                                        <p className="hint" style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
+                                            {interactiveJob.isRunning && interactiveJob.jobStatus?.progress !== undefined
+                                                ? `Tiến độ: ${interactiveJob.jobStatus.progress}% (Có thể chuyển tab khác, tác vụ vẫn tiếp tục chạy ngầm)`
+                                                : appendInteractiveJob.isRunning && appendInteractiveJob.jobStatus?.progress !== undefined
+                                                    ? `Tiến độ: ${appendInteractiveJob.jobStatus.progress}% (Có thể chuyển tab khác, tác vụ vẫn tiếp tục chạy ngầm)`
+                                                    : `Số lượng: ${interactiveCount} câu hỏi tương tác H5P`}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!isGeneratingInteractive && !isAppendingInteractive && interactiveQuestions.length > 0 && (
+                                    <div className="questions-preview">
+                                        <h3 style={{ marginBottom: 16 }}>Danh sách Câu hỏi Tương tác ({interactiveQuestions.length})</h3>
+                                        <div className="questions-list" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                            {interactiveQuestions.map((q) => (
+                                                <div key={q.id} className="question-card interactive-card">
+                                                    <div className="question-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                            <span className="question-type" style={{ padding: '2px 8px', borderRadius: 4, background: 'rgba(59,130,246,0.2)', color: '#3b82f6', fontWeight: 600, fontSize: 12 }}>
+                                                                {q.questionType}
+                                                            </span>
+                                                            <span className="question-points" style={{ fontSize: 12, color: '#94a3b8' }}>{q.points} điểm</span>
+                                                        </div>
+                                                        <div className="question-actions" style={{ display: 'flex', gap: 6 }}>
+                                                            {editingInteractiveId === q.id ? (
+                                                                <button className="btn-save btn-sm" onClick={() => handleUpdateInteractive(q)}>💾 Lưu</button>
+                                                            ) : (
+                                                                <button className="btn-edit btn-sm" onClick={() => setEditingInteractiveId(q.id)}>✏️ Sửa</button>
+                                                            )}
+                                                            <button className="btn-delete btn-sm" onClick={() => handleDeleteInteractive(q.id)}>🗑️ Xóa</button>
+                                                        </div>
+                                                    </div>
+                                                    {editingInteractiveId === q.id ? (
+                                                        <textarea
+                                                            value={q.questionText}
+                                                            onChange={(e) => setInteractiveQuestions(prev =>
+                                                                prev.map(p => p.id === q.id ? { ...p, questionText: e.target.value } : p)
+                                                            )}
+                                                            className="edit-textarea"
+                                                            rows={2}
+                                                            style={{ width: '100%', marginBottom: 12 }}
+                                                        />
+                                                    ) : (
+                                                        <p className="question-text" style={{ fontSize: '1rem', fontWeight: 500, margin: '0 0 12px' }}>{q.questionText}</p>
+                                                    )}
+                                                    <div className="answers-list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                                        {editingInteractiveId === q.id ? (
+                                                            (q.answers || []).map((ans, i) => (
+                                                                <div key={i} className={`answer ${ans.startsWith('*') ? 'correct' : ''}`} style={{ display: 'flex', alignItems: 'center' }}>
+                                                                    <span>{ans.startsWith('*') ? '✅' : '⬜'}</span>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={ans.replace(/^\*/, '')}
+                                                                        onChange={(e) => {
+                                                                            const prefix = ans.startsWith('*') ? '*' : '';
+                                                                            const newAnswers = [...q.answers];
+                                                                            newAnswers[i] = prefix + e.target.value;
+                                                                            setInteractiveQuestions(prev =>
+                                                                                prev.map(p => p.id === q.id ? { ...p, answers: newAnswers } : p)
+                                                                            );
+                                                                        }}
+                                                                        style={{ flex: 1, marginLeft: 8, padding: '4px 8px', borderRadius: 4, background: '#1e293b', border: '1px solid #475569', color: '#fff' }}
+                                                                    />
+                                                                </div>
+                                                            ))
+                                                        ) : (
+                                                            parseAnswers(q.answers || []).map((a, i) => (
+                                                                <div key={i} className={`answer ${a.isCorrect ? 'correct' : ''}`}>
+                                                                    {a.isCorrect ? '✅' : '⬜'} {a.text}
+                                                                </div>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                    <div className="feedback" style={{ marginTop: 12, fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                        <div className="feedback-correct" style={{ color: '#22c55e' }}>✅ Phản hồi đúng: {q.correctFeedback}</div>
+                                                        <div className="feedback-incorrect" style={{ color: '#ef4444' }}>❌ Phản hồi sai: {q.incorrectFeedback}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!isGeneratingInteractive && !isAppendingInteractive && interactiveQuestions.length === 0 && (
+                                    <div className="empty-state" style={{ padding: '36px 0', textAlign: 'center', color: '#94a3b8' }}>
+                                        <p style={{ fontSize: '1.05rem', margin: '0 0 10px' }}>Chưa có câu hỏi tương tác.</p>
+                                        <p style={{ fontSize: '0.88rem', margin: 0 }}>Hãy bấm "🤖 Tạo Câu Hỏi Tương Tác" để sinh câu hỏi phục vụ kiểm tra nhanh.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ════════════ TAB 3: ENGLISH QUESTIONS ════════════ */}
+                        {activeQuestionTab === 'english' && (
+                            <div className="question-section">
+                                <div className="question-config english-config-container">
+                                    <h3>🇬🇧 Ngân Hàng Câu Hỏi Tiếng Anh (Ngành Ngôn Ngữ Anh)</h3>
+                                    <p className="hint">
+                                        Tạo câu hỏi chuyên sâu ngành Ngôn ngữ Anh & Ngôn ngữ học, hỗ trợ đa dạng cấu trúc xuất chuẩn Moodle XML (Multiple Choice, Matching, Cloze, Short Answer, True/False, Essay).
+                                    </p>
+
+                                    <div className="english-config-top-row">
+                                        {/* Cột 1: Số lượng câu hỏi theo mức độ Bloom */}
+                                        <div className="english-config-col bloom-col">
+                                            <label className="config-section-label">📊 Số lượng câu hỏi theo mức độ Bloom:</label>
+                                            <div className="level-inputs">
+                                                <div className="level-input">
+                                                    <label>
+                                                        <span className="level-badge level-know">Biết</span>
+                                                        Mức độ 1
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="50"
+                                                        value={englishLevelCounts.level1}
+                                                        onChange={(e) => setEnglishLevelCounts({ ...englishLevelCounts, level1: +e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="level-input">
+                                                    <label>
+                                                        <span className="level-badge level-understand">Hiểu</span>
+                                                        Mức độ 2
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="50"
+                                                        value={englishLevelCounts.level2}
+                                                        onChange={(e) => setEnglishLevelCounts({ ...englishLevelCounts, level2: +e.target.value })}
+                                                    />
+                                                </div>
+                                                <div className="level-input">
+                                                    <label>
+                                                        <span className="level-badge level-apply">Vận dụng</span>
+                                                        Mức độ 3
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max="50"
+                                                        value={englishLevelCounts.level3}
+                                                        onChange={(e) => setEnglishLevelCounts({ ...englishLevelCounts, level3: +e.target.value })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Cột 2: Phân môn chuyên sâu */}
+                                        <div className="english-config-col discipline-col">
+                                            <label className="config-section-label">🎯 Phân môn chuyên sâu:</label>
+                                            <div className="discipline-input-card">
+                                                <label className="discipline-sublabel">
+                                                    <span className="level-badge level-discipline">Chuyên đề</span>
+                                                    Lĩnh vực học thuật
+                                                </label>
+                                                <select
+                                                    value={selectedSubDiscipline}
+                                                    onChange={(e) => setSelectedSubDiscipline(e.target.value)}
+                                                    className="select-subdiscipline"
+                                                >
+                                                    {SUB_DISCIPLINE_OPTIONS.map(opt => (
+                                                        <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Hàng 2: Chọn dạng câu hỏi */}
+                                    <div className="english-config-section types-selector-box">
+                                        <div className="types-header">
+                                            <label className="types-label">
+                                                Các dạng câu hỏi ({selectedQuestionTypes.length}/{QUESTION_TYPE_OPTIONS.length} đã chọn):
+                                            </label>
+                                            <div className="types-quick-actions">
+                                                <button
+                                                    type="button"
+                                                    className="btn-text-action"
+                                                    onClick={selectAllQuestionTypes}
+                                                >
+                                                    ✓ Chọn tất cả
+                                                </button>
+                                                <span className="divider">|</span>
+                                                <button
+                                                    type="button"
+                                                    className="btn-text-action"
+                                                    onClick={deselectAllQuestionTypes}
+                                                >
+                                                    ✗ Bỏ chọn
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="type-checkboxes-grid three-columns">
+                                            {QUESTION_TYPE_OPTIONS.map(type => {
+                                                const isChecked = selectedQuestionTypes.includes(type.id);
+                                                return (
+                                                    <label
+                                                        key={type.id}
+                                                        className={`type-checkbox-card ${isChecked ? 'checked' : ''}`}
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            toggleQuestionType(type.id);
+                                                        }}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() => {}}
+                                                        />
+                                                        <span className="type-icon">{type.icon}</span>
+                                                        <span className="type-label-text">{type.label}</span>
+                                                        <span className="type-badge-mini">{type.badge}</span>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="config-actions-row" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 16 }}>
+                                        <button
+                                            className="btn-primary"
+                                            onClick={handleGenerateEnglish}
+                                            disabled={isGeneratingEnglish || isAppendingEnglish || selectedQuestionTypes.length === 0 || (englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3 === 0)}
+                                        >
+                                            {isGeneratingEnglish ? '🔄 Đang tạo...' : '🤖 Tạo Mới Câu Hỏi Tiếng Anh'}
+                                        </button>
+                                        {englishQuestions.length > 0 && (
+                                            <button
+                                                className="btn-secondary"
+                                                onClick={handleAppendEnglish}
+                                                disabled={isGeneratingEnglish || isAppendingEnglish || selectedQuestionTypes.length === 0 || (englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3 === 0)}
+                                            >
+                                                {isAppendingEnglish ? '⏳ Đang thêm...' : `➕ Thêm ${englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3} Câu Hỏi Nữa`}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {(isGeneratingEnglish || isAppendingEnglish) && (
+                                    <div className="generating-state" style={{ textAlign: 'center', padding: '32px 0' }}>
+                                        <div className="loading-spinner"></div>
+                                        <p style={{ marginTop: 12, fontWeight: 500 }}>
+                                            {isAppendingEnglish
+                                                ? (appendEnglishJob.jobStatus?.message || 'Đang thêm câu hỏi tiếng Anh chuyên ngành chạy nền...')
+                                                : (englishJob.jobStatus?.message || 'Đang tạo câu hỏi tiếng Anh chuyên ngành với AI chạy nền...')}
+                                        </p>
+                                        <p className="hint" style={{ color: '#94a3b8', fontSize: '0.85rem' }}>
+                                            {englishJob.isRunning && englishJob.jobStatus?.progress !== undefined
+                                                ? `Tiến độ: ${englishJob.jobStatus.progress}% (Có thể chuyển tab khác, tác vụ vẫn tiếp tục chạy ngầm)`
+                                                : appendEnglishJob.isRunning && appendEnglishJob.jobStatus?.progress !== undefined
+                                                    ? `Tiến độ: ${appendEnglishJob.jobStatus.progress}% (Có thể chuyển tab khác, tác vụ vẫn tiếp tục chạy ngầm)`
+                                                    : `Tổng số: ${englishLevelCounts.level1 + englishLevelCounts.level2 + englishLevelCounts.level3} câu (Biết: ${englishLevelCounts.level1}, Hiểu: ${englishLevelCounts.level2}, Vận dụng: ${englishLevelCounts.level3})`}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!isGeneratingEnglish && !isAppendingEnglish && englishQuestions.length > 0 && (
+                                    <div className="questions-preview" style={{ marginTop: 20 }}>
+                                        <div className="preview-header-english" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                            <h3>Danh sách câu hỏi Tiếng Anh ({englishQuestions.length})</h3>
+                                            <div className="preview-actions" style={{ display: 'flex', gap: 8 }}>
+                                                <button className="btn-secondary btn-sm" onClick={handleExportEnglishExcel}>
+                                                    📊 Xuất Excel
+                                                </button>
+                                                <button className="btn-secondary btn-sm" onClick={handleExportEnglishWord}>
+                                                    📝 Xuất Word
+                                                </button>
+                                                <button className="btn-primary btn-sm" onClick={handleExportEnglishMoodleXml}>
+                                                    📋 Xuất Moodle XML
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="questions-list" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                            {englishQuestions.map((q) => {
+                                                const isEditing = editingEnglishId === q.id;
+                                                let parsedData: any = {};
+                                                try {
+                                                    parsedData = JSON.parse(q.dataJson);
+                                                } catch {
+                                                    parsedData = {};
+                                                }
+
+                                                return (
+                                                    <QuestionErrorBoundary key={q.id} fallbackText={`Lỗi hiển thị câu ${q.questionOrder || ''}`}>
+                                                        <div className="question-card english-card">
+                                                            <div className="question-header">
+                                                                <span className={`badge-qtype badge-${String(q.questionType).toLowerCase()}`}>
+                                                                    {q.questionType}
+                                                                </span>
+                                                                {q.subDiscipline && (
+                                                                    <span className="badge-subdiscipline">
+                                                                        {typeof q.subDiscipline === 'object' ? JSON.stringify(q.subDiscipline) : String(q.subDiscipline)}
+                                                                    </span>
+                                                                )}
+                                                                <span className="question-points">{typeof q.points === 'object' ? JSON.stringify(q.points) : (q.points || 1)} điểm</span>
+                                                                <div className="question-actions">
+                                                                    {isEditing ? (
+                                                                        <button className="btn-save" onClick={() => handleUpdateEnglish(q)}>💾 Lưu</button>
+                                                                    ) : (
+                                                                        <button className="btn-edit" onClick={() => setEditingEnglishId(q.id)}>✏️ Sửa</button>
+                                                                    )}
+                                                                    <button className="btn-delete" onClick={() => handleDeleteEnglish(q.id)}>🗑️ Xóa</button>
+                                                                </div>
+                                                            </div>
+
+                                                            {isEditing ? (
+                                                                <textarea
+                                                                    value={q.questionText}
+                                                                    onChange={(e) => setEnglishQuestions(prev =>
+                                                                        prev.map(p => p.id === q.id ? { ...p, questionText: e.target.value } : p)
+                                                                    )}
+                                                                    className="edit-textarea"
+                                                                />
+                                                            ) : (
+                                                                <p className="question-text">
+                                                                    <strong>{q.title ? `${typeof q.title === 'object' ? JSON.stringify(q.title) : q.title}: ` : ''}</strong>
+                                                                    {q.questionType === 'CLOZE'
+                                                                        ? formatClozePrompt(typeof q.questionText === 'object' ? JSON.stringify(q.questionText) : String(q.questionText ?? ''))
+                                                                        : (typeof q.questionText === 'object' ? JSON.stringify(q.questionText) : String(q.questionText ?? ''))}
+                                                                </p>
+                                                            )}
+
+                                                            {/* MC / MR Options */}
+                                                            {(q.questionType === 'MC' || q.questionType === 'MR') && Array.isArray(parsedData.options) && (
+                                                                <div className="english-options-list">
+                                                                    {parsedData.options.map((opt: any, optIdx: number) => {
+                                                                        const isCorrect = opt.fraction > 0 || opt.isCorrect;
+                                                                        const optText = typeof opt === 'object' && opt.text !== undefined
+                                                                            ? (typeof opt.text === 'object' ? JSON.stringify(opt.text) : String(opt.text))
+                                                                            : (typeof opt === 'object' ? JSON.stringify(opt) : String(opt ?? ''));
+                                                                        return (
+                                                                            <div key={optIdx} className={`english-option-item ${isCorrect ? 'correct' : ''}`}>
+                                                                                <span className="opt-letter">{String.fromCharCode(65 + optIdx)}</span>
+                                                                                <span className="opt-text">{optText}</span>
+                                                                                {isCorrect && <span className="opt-check">✓ Đáp án đúng</span>}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Matching Pairs */}
+                                                            {(q.questionType === 'MATCH' || q.questionType === 'MATCHING') && Array.isArray(parsedData.pairs) && (
+                                                                <div className="matching-preview-box">
+                                                                    <table className="matching-table">
+                                                                        <thead>
+                                                                            <tr>
+                                                                                <th>Thuật ngữ / Nội dung</th>
+                                                                                <th></th>
+                                                                                <th>Khái niệm / Ghép đôi</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {parsedData.pairs.map((pair: any, pIdx: number) => {
+                                                                                const leftVal = pair.left ?? pair.subquestion ?? pair.question ?? '';
+                                                                                const rightVal = pair.right ?? pair.answer ?? pair.match ?? '';
+                                                                                return (
+                                                                                    <tr key={pIdx}>
+                                                                                        <td className="match-sub">
+                                                                                            {typeof leftVal === 'object' ? JSON.stringify(leftVal) : String(leftVal)}
+                                                                                        </td>
+                                                                                        <td className="match-arrow">➔</td>
+                                                                                        <td className="match-ans">
+                                                                                            {typeof rightVal === 'object' ? JSON.stringify(rightVal) : String(rightVal)}
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                );
+                                                                            })}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Cloze Text */}
+                                                            {q.questionType === 'CLOZE' && (
+                                                                <div className="cloze-preview-box">
+                                                                    <div className="cloze-tag">📝 Mô phỏng câu hỏi điền khuyết (Cloze):</div>
+                                                                    {renderClozeVisual(typeof (parsedData.clozeText || q.questionText) === 'object' ? JSON.stringify(parsedData.clozeText || q.questionText) : String(parsedData.clozeText || q.questionText))}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Short Answer */}
+                                                            {q.questionType === 'SHORTANSWER' && (
+                                                                <div className="shortanswer-preview-box">
+                                                                    <span className="sa-label">🔑 Đáp án chấp nhận:</span>
+                                                                    <div className="sa-keys">
+                                                                        {(Array.isArray(parsedData.acceptableAnswers)
+                                                                            ? parsedData.acceptableAnswers
+                                                                            : (parsedData.acceptableAnswers ? [parsedData.acceptableAnswers] : (parsedData.correctAnswer ? [parsedData.correctAnswer] : []))
+                                                                        ).map((ans: any, aIdx: number) => (
+                                                                            <span key={aIdx} className="sa-key-chip">
+                                                                                {typeof ans === 'object' ? JSON.stringify(ans) : String(ans ?? '')}
+                                                                            </span>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* True/False */}
+                                                            {q.questionType === 'TRUEFALSE' && (
+                                                                <div className="truefalse-preview-box">
+                                                                    <span className="tf-label">Mệnh đề:</span>
+                                                                    <span className={`tf-badge ${String(parsedData.correctAnswer).toLowerCase() === 'true' || parsedData.correctAnswer === true ? 'true' : 'false'}`}>
+                                                                        {String(parsedData.correctAnswer).toLowerCase() === 'true' || parsedData.correctAnswer === true ? 'TRUE (ĐÚNG)' : 'FALSE (SAI)'}
+                                                                    </span>
+                                                                    {parsedData.feedbackTrue && (
+                                                                        <span className="tf-feedback" style={{ marginLeft: '10px', fontSize: '0.85rem', color: '#64748b' }}>
+                                                                            (Giải thích: {parsedData.correctAnswer ? parsedData.feedbackTrue : parsedData.feedbackFalse})
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Essay */}
+                                                            {q.questionType === 'ESSAY' && (
+                                                                <div className="essay-preview-box">
+                                                                    <span className="essay-label">📋 Hướng dẫn chấm / Barem (Grader Info):</span>
+                                                                    {renderEssayRubric(parsedData)}
+                                                                </div>
+                                                            )}
+
+                                                            {/* Explanation */}
+                                                            {(q.explanation || isEditing) && (
+                                                                <div className="review-card-exp">
+                                                                    <span className="exp-label">💡 Giải thích học thuật:</span>
+                                                                    {isEditing ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            value={typeof q.explanation === 'object' ? JSON.stringify(q.explanation) : (q.explanation || '')}
+                                                                            onChange={(e) => setEnglishQuestions(prev =>
+                                                                                prev.map(p => p.id === q.id ? { ...p, explanation: e.target.value } : p)
+                                                                            )}
+                                                                            className="edit-input"
+                                                                        />
+                                                                    ) : (
+                                                                        <span>{typeof q.explanation === 'object' ? JSON.stringify(q.explanation) : q.explanation}</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </QuestionErrorBoundary>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {!isGeneratingEnglish && !isAppendingEnglish && englishQuestions.length === 0 && (
+                                    <div className="empty-state" style={{ padding: '36px 0', textAlign: 'center', color: '#94a3b8' }}>
+                                        <p style={{ fontSize: '1.05rem', margin: '0 0 10px' }}>Chưa có câu hỏi tiếng Anh.</p>
+                                        <p style={{ fontSize: '0.88rem', margin: 0 }}>Hãy chọn các dạng câu hỏi và bấm "🤖 Tạo Mới Câu Hỏi Tiếng Anh" để bắt đầu.</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

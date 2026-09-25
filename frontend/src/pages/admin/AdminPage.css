@@ -330,7 +330,8 @@ code {
     cursor: not-allowed;
 }
 
-.form-group textarea {
+.admin-page .form-group textarea,
+.admin-modal .form-group textarea {
     resize: vertical;
     min-height: 400px;
     font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
@@ -644,7 +645,8 @@ code {
     }
 
     /* Form group textarea */
-    .form-group textarea {
+    .admin-page .form-group textarea,
+    .admin-modal .form-group textarea {
         min-height: 200px;
     }
 

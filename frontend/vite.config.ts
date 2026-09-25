@@ -6,6 +6,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true, // Listen on all local IPs
+    watch: {
+      usePolling: true,
+      interval: 1000,
+      ignored: ['**/node_modules/**', '**/.git/**', '**/dist/**', '**/.cache/**'],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3003',
@@ -29,6 +34,11 @@ export default defineConfig({
       },
       // Proxy /files to backend for serving static files (audio, images)
       '/files': {
+        target: 'http://localhost:3003',
+        changeOrigin: true,
+      },
+      // Proxy /uploads to backend for serving generated media and Remotion assets
+      '/uploads': {
         target: 'http://localhost:3003',
         changeOrigin: true,
       },

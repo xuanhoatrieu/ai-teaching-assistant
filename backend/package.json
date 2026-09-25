@@ -1,6 +1,6 @@
 {
   "name": "backend",
-  "version": "1.6.1",
+  "version": "1.6.2",
   "description": "",
   "author": "",
   "private": true,
@@ -34,6 +34,8 @@
     "@nestjs/serve-static": "^5.0.4",
     "@nestjs/websockets": "^11.1.19",
     "@prisma/adapter-pg": "^7.3.0",
+    "@remotion/bundler": "^4.0.526",
+    "@remotion/renderer": "^4.0.526",
     "@types/multer": "^2.0.0",
     "axios": "^1.13.2",
     "bcrypt": "^6.0.0",
@@ -54,6 +56,7 @@
     "pg": "^8.17.2",
     "pptxgenjs": "^4.0.1",
     "reflect-metadata": "^0.2.2",
+    "remotion": "^4.0.526",
     "rxjs": "^7.8.1",
     "socket.io": "^4.8.3",
     "xlsx": "^0.18.5"

@@ -29,6 +29,7 @@ model User {
   subjects             Subject[]
   ttsConfigs           UserTTSConfig[]
   videoGenerations     VideoGeneration[]
+  remotionVideos       RemotionVideo[]
 
   @@map("users")
 }
@@ -51,6 +52,7 @@ model Subject {
   user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   syllabus          Syllabus?
   videoGenerations  VideoGeneration[]
+  remotionVideos    RemotionVideo[]
 
   @@map("subjects")
 }
@@ -78,6 +80,7 @@ model Lesson {
   slides               Slide[]
   syllabusLesson       SyllabusLesson?
   videoGenerations     VideoGeneration[]
+  remotionVideos       RemotionVideo[]
 
   @@map("lessons")
 }
@@ -580,4 +583,41 @@ enum TaskType {
   IMAGE
   TTS
   EMBEDDING
+  VIDEO_SCRIPT
+  VIDEO_CODE
 }
+
+model RemotionVideo {
+  id              String   @id @default(uuid())
+  subjectId       String   @map("subject_id")
+  lessonId        String?  @map("lesson_id")
+  userId          String   @map("user_id")
+  title           String   @default("Video mới")
+  inputType       String   @default("slide") @map("input_type")
+  sourceSlideIdx  Int?     @map("source_slide_idx")
+  templateType    String   @default("explainer") @map("template_type")
+  aspectRatio     String   @default("9:16") @map("aspect_ratio")
+  targetDuration  Int?     @map("target_duration")
+  fps             Int      @default(30)
+  totalFrames     Int      @default(900) @map("total_frames")
+  scriptContent   String?  @map("script_content")
+  scenesJson      Json     @map("scenes_json")
+  status          String   @default("draft")
+  progress        Int      @default(0)
+  videoUrl        String?  @map("video_url")
+  thumbnailUrl    String?  @map("thumbnail_url")
+  fileSize        Int?     @map("file_size")
+  durationSeconds Float?   @map("duration_seconds")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  subject         Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  lesson          Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([subjectId])
+  @@index([lessonId])
+  @@index([userId])
+  @@map("remotion_videos")
+}
+

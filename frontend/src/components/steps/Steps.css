@@ -1911,6 +1911,280 @@
     cursor: not-allowed;
 }
 
+/* Specific Action Button Colors */
+.btn-action-edit {
+    background: rgba(59, 130, 246, 0.15) !important;
+    color: #93c5fd !important;
+    border: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+
+.btn-action-edit:hover:not(:disabled) {
+    background: rgba(59, 130, 246, 0.3) !important;
+}
+
+.btn-action-upload {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #6ee7b7 !important;
+    border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+.btn-action-upload:hover:not(:disabled) {
+    background: rgba(16, 185, 129, 0.3) !important;
+}
+
+/* Slide Card Editing State */
+.slide-card.editing {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 1px #6366f1, 0 8px 24px -4px rgba(99, 102, 241, 0.25);
+    background: rgba(30, 41, 59, 0.95);
+}
+
+.slide-title-edit-badge {
+    font-size: 12px;
+    font-weight: 600;
+    color: #818cf8;
+    background: rgba(99, 102, 241, 0.15);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+/* Slide Inline Content Edit Form */
+.slide-inline-edit-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+.inline-edit-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.inline-edit-field label,
+.inline-edit-bullets-section label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.inline-input-title {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #f8fafc;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.inline-input-title:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.inline-edit-bullets-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.inline-bullet-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    background: rgba(15, 23, 42, 0.5);
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.inline-input-emoji {
+    width: 38px;
+    height: 34px;
+    text-align: center;
+    font-size: 16px;
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    border-radius: 6px;
+    color: #f8fafc;
+    outline: none;
+    flex-shrink: 0;
+}
+
+.inline-bullet-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+}
+
+.inline-input-point {
+    background: rgba(30, 41, 59, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #e2e8f0;
+    outline: none;
+    width: 100%;
+}
+
+.inline-input-point:focus,
+.inline-input-desc:focus {
+    border-color: #6366f1;
+}
+
+.inline-input-desc {
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #cbd5e1;
+    outline: none;
+    width: 100%;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.btn-inline-delete {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.btn-inline-delete:hover {
+    background: rgba(239, 68, 68, 0.3);
+}
+
+.btn-inline-add-bullet {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px dashed rgba(99, 102, 241, 0.4);
+    color: #a5b4fc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s;
+    text-align: center;
+    width: 100%;
+}
+
+.btn-inline-add-bullet:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: #6366f1;
+}
+
+.inline-edit-bottom-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.btn-save-inline {
+    background: #4f46e5;
+    color: #ffffff;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-save-inline:hover:not(:disabled) {
+    background: #4338ca;
+}
+
+.btn-save-inline:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-cancel-inline {
+    background: rgba(148, 163, 184, 0.15);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-cancel-inline:hover:not(:disabled) {
+    background: rgba(148, 163, 184, 0.25);
+}
+
+/* Slide Image Column & Upload Overlay */
+.slide-image-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 112px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.slide-image-wrapper img {
+    width: 100%;
+    height: 112px;
+    object-fit: cover;
+    display: block;
+    border-radius: 8px;
+}
+
+.btn-image-overlay-upload {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    opacity: 0;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.slide-image-wrapper:hover .btn-image-overlay-upload {
+    opacity: 1;
+    bottom: 10px;
+}
+
+.btn-image-overlay-upload:hover {
+    background: #4f46e5;
+    border-color: #6366f1;
+}
+
 /* Error Banner */
 .error-banner {
     background: rgba(239, 68, 68, 0.1);

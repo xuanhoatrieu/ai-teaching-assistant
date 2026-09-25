@@ -9,8 +9,30 @@ import { TTSService } from '../tts/tts.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { AiProviderService } from '../ai/ai-provider.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { GenerationJobService } from '../generation-job/generation-job.service';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { Response } from 'express';
+import * as ExcelJS from 'exceljs';
+import {
+    Document,
+    Packer,
+    Paragraph,
+    TextRun,
+    HeadingLevel,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
+    AlignmentType,
+    BorderStyle,
+} from 'docx';
+import {
+    buildMoodleXml,
+    buildEnglishMoodleXml,
+    ReviewQuestionData,
+    EnglishQuestionData,
+} from '../questions/moodle-xml.helper';
 
 export interface ParsedSlide {
     index: number;
@@ -45,6 +67,7 @@ export class PptxAudioToolService {
         private readonly modelConfigService: ModelConfigService,
         private readonly aiProvider: AiProviderService,
         private readonly apiKeysService: ApiKeysService,
+        private readonly jobService: GenerationJobService,
     ) {
         this.pythonServiceUrl = process.env.PPTX_SERVICE_URL || 'http://localhost:3002';
         if (!fs.existsSync(this.uploadsDir)) {
@@ -473,6 +496,114 @@ export class PptxAudioToolService {
         return results;
     }
 
+    // ========== 6B. GENERATE ALL AUDIO (BACKGROUND JOB) ==========
+
+    async generateAllAudioBackground(jobId: string, sessionId: string, userId: string, options?: TTSOptions) {
+        const slides = await this.getSlides(sessionId);
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            select: { language: true },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+
+        const toGenerate = slides.filter(slide => {
+            const noteText = session.language === 'en' ? slide.noteEN : slide.noteVN;
+            return noteText?.trim() && slide.audioStatus !== 'done';
+        });
+
+        const total = toGenerate.length;
+        if (total === 0) {
+            await this.jobService.completeJob(jobId, { completedCount: 0, total: 0 });
+            return;
+        }
+
+        let completedCount = 0;
+        let isFirst = true;
+
+        for (const slide of toGenerate) {
+            // Check cancellation
+            if (await this.jobService.isJobCancelled(jobId)) {
+                this.logger.log(`[generateAllAudioBackground] Job ${jobId} was cancelled by user.`);
+                break;
+            }
+
+            const pct = Math.round((completedCount / total) * 100);
+            await this.jobService.updateProgress(
+                jobId,
+                pct,
+                `Đang tạo audio cho slide ${slide.index + 1} (${completedCount + 1}/${total})...`,
+            );
+
+            try {
+                await this.generateAudio(sessionId, slide.index, userId, options);
+                completedCount++;
+            } catch (error: any) {
+                this.logger.error(`Failed to generate audio for slide ${slide.index}: ${error.message}`);
+            }
+
+            // Delay between TTS requests to avoid rate limit
+            const delayMs = isFirst ? 5000 : 2000;
+            isFirst = false;
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+
+        const isCancelled = await this.jobService.isJobCancelled(jobId);
+        if (!isCancelled) {
+            await this.prisma.pptxAudioSession.update({
+                where: { id: sessionId },
+                data: { status: 'audio_done' },
+            });
+            await this.jobService.completeJob(jobId, { completedCount, total });
+        }
+    }
+
+    // ========== 6C. QUESTION BACKGROUND WORKERS ==========
+
+    async generateReviewQuestionsBackground(
+        jobId: string,
+        sessionId: string,
+        userId: string,
+        counts: { level1Count?: number; level2Count?: number; level3Count?: number },
+        isAppend = false,
+    ) {
+        await this.jobService.updateProgress(jobId, 10, 'Đang phân tích slide và chuẩn bị tạo câu hỏi ôn tập...');
+        const result = await this.generateReviewQuestions(sessionId, userId, counts, isAppend);
+        await this.jobService.completeJob(jobId, result);
+        return result;
+    }
+
+    async generateInteractiveQuestionsBackground(
+        jobId: string,
+        sessionId: string,
+        userId: string,
+        count: number,
+        isAppend = false,
+    ) {
+        await this.jobService.updateProgress(jobId, 10, 'Đang phân tích slide và chuẩn bị tạo câu hỏi tương tác...');
+        const result = await this.generateInteractiveQuestions(sessionId, userId, count, isAppend);
+        await this.jobService.completeJob(jobId, result);
+        return result;
+    }
+
+    async generateEnglishQuestionsBackground(
+        jobId: string,
+        sessionId: string,
+        userId: string,
+        options: {
+            level1?: number;
+            level2?: number;
+            level3?: number;
+            questionTypes?: string[];
+            subDiscipline?: string;
+        },
+        isAppend = false,
+    ) {
+        await this.jobService.updateProgress(jobId, 10, 'Đang phân tích slide và chuẩn bị tạo câu hỏi tiếng Anh...');
+        const result = await this.generateEnglishQuestions(sessionId, userId, options, isAppend);
+        await this.jobService.completeJob(jobId, result);
+        return result;
+    }
+
     // ========== 7. DELETE AUDIO ==========
 
     async deleteAudio(sessionId: string, slideIndex: number) {
@@ -570,58 +701,116 @@ export class PptxAudioToolService {
         return { buffer, filename };
     }
 
-    // ========== 9. GENERATE QUESTIONS ==========
+    // ========== 9. QUESTION MANAGEMENT (REVIEW, INTERACTIVE, ENGLISH) ==========
 
-    async generateQuestions(
+    async getSessionQuestions(sessionId: string): Promise<{ review: any[]; interactive: any[]; english: any[] }> {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            select: { questionsJson: true },
+        });
+        if (!session || !session.questionsJson) {
+            return { review: [], interactive: [], english: [] };
+        }
+        try {
+            const parsed = JSON.parse(session.questionsJson);
+            if (Array.isArray(parsed)) {
+                return { review: parsed, interactive: [], english: [] };
+            }
+            return {
+                review: Array.isArray(parsed.review) ? parsed.review : [],
+                interactive: Array.isArray(parsed.interactive) ? parsed.interactive : [],
+                english: Array.isArray(parsed.english) ? parsed.english : [],
+            };
+        } catch {
+            return { review: [], interactive: [], english: [] };
+        }
+    }
+
+    async saveSessionQuestions(
         sessionId: string,
-        userId: string,
-        counts: { level1Count?: number; level2Count?: number; level3Count?: number },
+        questions: { review?: any[]; interactive?: any[]; english?: any[] },
     ) {
+        const current = await this.getSessionQuestions(sessionId);
+        const updated = {
+            review: questions.review !== undefined ? questions.review : current.review,
+            interactive: questions.interactive !== undefined ? questions.interactive : current.interactive,
+            english: questions.english !== undefined ? questions.english : current.english,
+        };
+        await this.prisma.pptxAudioSession.update({
+            where: { id: sessionId },
+            data: {
+                questionsJson: JSON.stringify(updated),
+            },
+        });
+        return updated;
+    }
+
+    private async getSessionContentText(sessionId: string): Promise<string> {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
         });
         if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
 
         const content = session.contentJson ? JSON.parse(session.contentJson) : [];
-        if (content.length === 0) {
-            throw new BadRequestException('No slide content available for question generation');
+        const slides = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+
+        if (content.length > 0) {
+            return content.map((s: any, idx: number) => {
+                const slideNote = slides[idx]?.noteFull || slides[idx]?.noteVN || slides[idx]?.noteEN || '';
+                return `Slide ${s.index + 1}: ${s.title || ''}\nNội dung:\n${(s.content || []).join('\n')}${slideNote ? `\nSpeaker note:\n${slideNote}` : ''}`;
+            }).join('\n\n---\n\n');
         }
 
-        // Build content text for AI prompt
-        const contentText = content.map((s: any) =>
-            `Slide ${s.index + 1}: ${s.title}\n${(s.content || []).join('\n')}`
-        ).join('\n\n');
+        if (slides.length > 0) {
+            return slides.map((s: any) =>
+                `Slide ${s.index + 1}: ${s.title || ''}\nSpeaker note:\n${s.noteFull || s.noteVN || s.noteEN || ''}`
+            ).join('\n\n---\n\n');
+        }
 
-        // Get AI model config
+        throw new BadRequestException('Không tìm thấy nội dung bài giảng để tạo câu hỏi.');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 9A. REVIEW QUESTIONS (BLOOM TAXONOMY)
+    // ─────────────────────────────────────────────────────────────
+
+    async generateReviewQuestions(
+        sessionId: string,
+        userId: string,
+        counts: { level1Count?: number; level2Count?: number; level3Count?: number },
+        isAppend = false,
+    ) {
+        const contentText = await this.getSessionContentText(sessionId);
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
 
         const level1 = counts.level1Count ?? 20;
         const level2 = counts.level2Count ?? 20;
         const level3 = counts.level3Count ?? 10;
 
-        // Build prompt for question generation
-        const prompt = `Bạn là giảng viên đại học. Hãy tạo bộ câu hỏi trắc nghiệm từ nội dung bài giảng sau.
+        const prompt = `Bạn là giảng viên đại học. Hãy tạo bộ câu hỏi trắc nghiệm ôn tập (Bloom Taxonomy) từ nội dung bài giảng sau.
 
 NỘI DUNG BÀI GIẢNG:
 ${contentText}
 
 YÊU CẦU:
-- Tạo ${level1} câu hỏi mức 1 (Biết/Remember - Kiến thức cơ bản)
-- Tạo ${level2} câu hỏi mức 2 (Hiểu/Understand - Phân tích, so sánh)
-- Tạo ${level3} câu hỏi mức 3 (Vận dụng/Apply - Tình huống thực tế)
+- Tạo ${level1} câu hỏi mức 1 (Biết/Remember - Kiến thức cơ bản, định nghĩa)
+- Tạo ${level2} câu hỏi mức 2 (Hiểu/Understand - Phân tích, so sánh, bản chất)
+- Tạo ${level3} câu hỏi mức 3 (Vận dụng/Apply - Tình huống, ứng dụng thực tế)
 - Mỗi câu có 4 đáp án A, B, C, D
 - Đáp án A LUÔN là đáp án đúng
-- Có giải thích ngắn gọn vì sao A đúng
+- Có giải thích rõ ràng vì sao A đúng
+- Đánh số mã câu hỏi theo format: B1-1-01, B1-2-01, v.v.
 
-Trả lời dưới dạng JSON:
+Trả lời CHỈ bằng JSON hợp lệ:
 \`\`\`json
 {
   "questions": [
     {
-      "id": "Q1",
+      "id": "REV-${Date.now()}-1",
+      "questionId": "B1-1-01",
       "level": 1,
       "question": "Nội dung câu hỏi?",
-      "correctAnswer": "Đáp án đúng",
+      "correctAnswer": "Đáp án đúng A",
       "optionB": "Đáp án sai B",
       "optionC": "Đáp án sai C",
       "optionD": "Đáp án sai D",
@@ -631,87 +820,852 @@ Trả lời dưới dạng JSON:
 }
 \`\`\``;
 
-        // Use AiProviderService (CLIProxy → Gemini SDK fallback)
         const modelName = modelConfig.modelName || 'gemini-2.0-flash';
-
-        this.logger.log(`[PptxAudioTool] Generating questions with model: ${modelName}`);
+        this.logger.log(`[PptxAudioTool] Generating review questions with model: ${modelName}`);
         const aiResult = await this.aiProvider.generateText(prompt, modelName, userId, { maxTokens: 32768 });
         const responseText = aiResult.content;
-        this.logger.log(`[PptxAudioTool] Questions generated via ${aiResult.provider} (${aiResult.model})`);
 
         if (!responseText) {
-            this.logger.error(`AI returned null/empty content. Provider: ${aiResult.provider}, model: ${aiResult.model}`);
-            throw new BadRequestException('AI returned empty response. Please try again or switch model.');
+            throw new BadRequestException('AI returned empty response. Please try again.');
         }
 
-        // Parse response — clean markdown code blocks
-        let questions: any[] = [];
+        let newQuestions: any[] = [];
         try {
-            const cleanedResponse = this.cleanJsonResponse(responseText);
-            const parsed = JSON.parse(cleanedResponse);
-            questions = parsed.questions || parsed;
-        } catch (parseError) {
-            this.logger.error(`Failed to parse questions JSON: ${parseError.message}`);
-            this.logger.debug(`Raw response (first 500 chars): ${responseText?.substring(0, 500)}`);
-            throw new BadRequestException('Failed to parse generated questions. AI response was not valid JSON.');
+            const cleaned = this.cleanJsonResponse(responseText);
+            const parsed = JSON.parse(cleaned);
+            newQuestions = parsed.questions || parsed;
+        } catch (err) {
+            this.logger.error(`Failed to parse review questions JSON: ${err.message}`);
+            throw new BadRequestException('AI response was not valid JSON.');
         }
 
-        if (!Array.isArray(questions) || questions.length === 0) {
-            this.logger.error('Parsed questions is empty or not an array');
+        if (!Array.isArray(newQuestions) || newQuestions.length === 0) {
             throw new BadRequestException('AI generated 0 questions. Please try again.');
         }
 
-        // Save to session
-        await this.prisma.pptxAudioSession.update({
-            where: { id: sessionId },
-            data: {
-                questionsJson: JSON.stringify(questions),
-                status: 'completed',
-            },
-        });
+        // Normalize ids
+        const formatted = newQuestions.map((q, idx) => ({
+            id: q.id || `REV-${Date.now()}-${idx + 1}`,
+            questionId: q.questionId || `B1-${q.level || 1}-${String(idx + 1).padStart(2, '0')}`,
+            level: Number(q.level) || 1,
+            question: q.question || '',
+            correctAnswer: q.correctAnswer || '',
+            optionB: q.optionB || '',
+            optionC: q.optionC || '',
+            optionD: q.optionD || '',
+            explanation: q.explanation || '',
+        }));
+
+        const current = await this.getSessionQuestions(sessionId);
+        const finalReview = isAppend ? [...current.review, ...formatted] : formatted;
+        await this.saveSessionQuestions(sessionId, { review: finalReview });
 
         return {
-            questions,
-            totalCount: questions.length,
+            questions: finalReview,
+            addedCount: formatted.length,
+            totalCount: finalReview.length,
             counts: {
-                level1: questions.filter((q: any) => q.level === 1).length,
-                level2: questions.filter((q: any) => q.level === 2).length,
-                level3: questions.filter((q: any) => q.level === 3).length,
+                level1: finalReview.filter((q: any) => q.level === 1).length,
+                level2: finalReview.filter((q: any) => q.level === 2).length,
+                level3: finalReview.filter((q: any) => q.level === 3).length,
             },
         };
     }
 
-    // ========== 10. GET QUESTIONS (for export) ==========
+    async exportReviewQuestionsExcel(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).review;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Câu hỏi ôn tập');
+
+        worksheet.columns = [
+            { header: 'STT', key: 'stt', width: 6 },
+            { header: 'Mã câu', key: 'questionId', width: 14 },
+            { header: 'Mức độ', key: 'level', width: 12 },
+            { header: 'Câu hỏi', key: 'question', width: 50 },
+            { header: 'A (Đáp án đúng)', key: 'correctAnswer', width: 30 },
+            { header: 'Phương án B', key: 'optionB', width: 30 },
+            { header: 'Phương án C', key: 'optionC', width: 30 },
+            { header: 'Phương án D', key: 'optionD', width: 30 },
+            { header: 'Giải thích chi tiết', key: 'explanation', width: 45 },
+        ];
+
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF4472C4' },
+        };
+
+        questions.forEach((q: any, i: number) => {
+            worksheet.addRow({
+                stt: i + 1,
+                questionId: q.questionId || `Q${i + 1}`,
+                level: q.level === 1 ? 'Mức 1 (Biết)' : q.level === 2 ? 'Mức 2 (Hiểu)' : 'Mức 3 (Vận dụng)',
+                question: q.question,
+                correctAnswer: q.correctAnswer,
+                optionB: q.optionB,
+                optionC: q.optionC,
+                optionD: q.optionD,
+                explanation: q.explanation || '',
+            });
+        });
+
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_review_questions.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        await workbook.xlsx.write(res);
+        res.end();
+    }
+
+    async exportReviewQuestionsWord(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).review;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+        const docTitle = `NGÂN HÀNG CÂU HỎI ÔN TẬP - ${session?.fileName?.replace('.pptx', '') || 'BÀI GIẢNG'}`;
+
+        const docChildren: (Paragraph | Table)[] = [];
+
+        // Title
+        docChildren.push(
+            new Paragraph({
+                text: docTitle,
+                heading: HeadingLevel.HEADING_1,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 200 },
+            }),
+            new Paragraph({
+                children: [
+                    new TextRun({ text: `Tổng số câu hỏi: ${questions.length} câu`, bold: true }),
+                    new TextRun(` (Biết: ${questions.filter(q => q.level === 1).length}, Hiểu: ${questions.filter(q => q.level === 2).length}, Vận dụng: ${questions.filter(q => q.level === 3).length})`),
+                ],
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 },
+            }),
+            new Paragraph({
+                text: 'I. NỘI DUNG ĐỀ THI / CÂU HỎI',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 200, after: 200 },
+            }),
+        );
+
+        // Questions block
+        questions.forEach((q: any, i: number) => {
+            const levelLabel = q.level === 1 ? 'Mức 1 - Biết' : q.level === 2 ? 'Mức 2 - Hiểu' : 'Mức 3 - Vận dụng';
+            docChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({ text: `Câu ${i + 1} (${q.questionId || 'ID'}` }),
+                        new TextRun({ text: ` - ${levelLabel}): `, italics: true }),
+                        new TextRun({ text: q.question, bold: true }),
+                    ],
+                    spacing: { before: 150, after: 100 },
+                }),
+                new Paragraph({ children: [new TextRun({ text: `A. ${q.correctAnswer}` })], spacing: { after: 50 }, indent: { left: 400 } }),
+                new Paragraph({ children: [new TextRun({ text: `B. ${q.optionB}` })], spacing: { after: 50 }, indent: { left: 400 } }),
+                new Paragraph({ children: [new TextRun({ text: `C. ${q.optionC}` })], spacing: { after: 50 }, indent: { left: 400 } }),
+                new Paragraph({ children: [new TextRun({ text: `D. ${q.optionD}` })], spacing: { after: 150 }, indent: { left: 400 } }),
+            );
+        });
+
+        // Answer Key & Explanation Table
+        docChildren.push(
+            new Paragraph({
+                text: 'II. BẢNG ĐÁP ÁN VÀ HƯỚNG DẪN GIẢI CHI TIẾT',
+                heading: HeadingLevel.HEADING_2,
+                spacing: { before: 400, after: 200 },
+            }),
+        );
+
+        const tableRows: TableRow[] = [
+            new TableRow({
+                children: [
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Câu', bold: true })], alignment: AlignmentType.CENTER })], width: { size: 10, type: WidthType.PERCENTAGE } }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Mức độ', bold: true })], alignment: AlignmentType.CENTER })], width: { size: 18, type: WidthType.PERCENTAGE } }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Đáp án đúng', bold: true })] })], width: { size: 27, type: WidthType.PERCENTAGE } }),
+                    new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Giải thích chi tiết', bold: true })] })], width: { size: 45, type: WidthType.PERCENTAGE } }),
+                ],
+            }),
+            ...questions.map((q: any, i: number) =>
+                new TableRow({
+                    children: [
+                        new TableCell({ children: [new Paragraph({ text: `${i + 1}`, alignment: AlignmentType.CENTER })] }),
+                        new TableCell({ children: [new Paragraph({ text: q.level === 1 ? 'Biết' : q.level === 2 ? 'Hiểu' : 'Vận dụng' })] }),
+                        new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `A. ${q.correctAnswer}`, bold: true })] })] }),
+                        new TableCell({ children: [new Paragraph({ text: q.explanation || '-' })] }),
+                    ],
+                }),
+            ),
+        ];
+
+        docChildren.push(
+            new Table({
+                width: { size: 100, type: WidthType.PERCENTAGE },
+                rows: tableRows,
+            }),
+        );
+
+        const doc = new Document({
+            sections: [{ properties: {}, children: docChildren }],
+        });
+
+        const buffer = await Packer.toBuffer(doc);
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_review_questions.docx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.send(buffer);
+    }
+
+    async exportReviewQuestionsMoodleXml(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).review;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+
+        const mapped: ReviewQuestionData[] = questions.map((q: any, i: number) => ({
+            questionId: q.questionId || `Q${i + 1}`,
+            level: Number(q.level) || 1,
+            question: q.question,
+            correctAnswer: q.correctAnswer,
+            optionB: q.optionB,
+            optionC: q.optionC,
+            optionD: q.optionD,
+            explanation: q.explanation || null,
+        }));
+
+        const xml = buildMoodleXml(mapped, session?.fileName?.replace('.pptx', '') || 'pptx_lesson');
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_review_moodle.xml`;
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.send(xml);
+    }
+
+    async downloadReviewTemplate(res: Response) {
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Câu hỏi ôn tập');
+
+        worksheet.columns = [
+            { header: 'Level', key: 'level', width: 10 },
+            { header: 'Question', key: 'question', width: 50 },
+            { header: 'Correct Answer (A)', key: 'correctAnswer', width: 30 },
+            { header: 'Option B', key: 'optionB', width: 30 },
+            { header: 'Option C', key: 'optionC', width: 30 },
+            { header: 'Option D', key: 'optionD', width: 30 },
+            { header: 'Explanation', key: 'explanation', width: 40 },
+        ];
+
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF4472C4' },
+        };
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+        worksheet.addRow({
+            level: 1,
+            question: 'Thủ đô của Việt Nam là thành phố nào?',
+            correctAnswer: 'Hà Nội',
+            optionB: 'TP. Hồ Chí Minh',
+            optionC: 'Đà Nẵng',
+            optionD: 'Hải Phòng',
+            explanation: 'Hà Nội là thủ đô của Việt Nam.',
+        });
+        worksheet.addRow({
+            level: 2,
+            question: 'Vì sao nước biển có vị mặn?',
+            correctAnswer: 'Do hòa tan muối khoáng từ đất đá',
+            optionB: 'Do cá thải ra muối',
+            optionC: 'Do ánh nắng mặt trời',
+            optionD: 'Do gió biển',
+            explanation: 'Nước mưa bào mòn đất đá cuốn muối khoáng ra biển.',
+        });
+
+        const guide = workbook.addWorksheet('Hướng dẫn');
+        guide.columns = [{ width: 90 }];
+        const guideLines = [
+            'HƯỚNG DẪN ĐIỀN FILE CÂU HỎI ÔN TẬP',
+            '',
+            '1. Điền câu hỏi ở sheet "Câu hỏi ôn tập".',
+            '2. Cột Level: 1 = Biết, 2 = Hiểu, 3 = Vận dụng.',
+            '3. Cột "Correct Answer (A)" LUÔN là đáp án đúng.',
+            '4. Các cột Option B, C, D là các phương án gây nhiễu.',
+            '5. Cột Explanation là giải thích vì sao A đúng.',
+        ];
+        guideLines.forEach(l => guide.addRow([l]));
+        guide.getRow(1).font = { bold: true, size: 14 };
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent('mau_cau_hoi_on_tap.xlsx')}"`);
+        await workbook.xlsx.write(res);
+        res.end();
+    }
+
+    async importReviewQuestionsExcel(sessionId: string, file: Express.Multer.File) {
+        if (!file) throw new BadRequestException('Vui lòng chọn file Excel.');
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(file.buffer as any);
+        const worksheet = workbook.worksheets[0];
+        if (!worksheet) throw new BadRequestException('File Excel không có sheet dữ liệu.');
+
+        const imported: any[] = [];
+        for (let r = 2; r <= worksheet.rowCount; r++) {
+            const row = worksheet.getRow(r);
+            const levelVal = parseInt(String(row.getCell(1).value || '1')) || 1;
+            const question = String(row.getCell(2).value || '').trim();
+            const correctAnswer = String(row.getCell(3).value || '').trim();
+            const optionB = String(row.getCell(4).value || '').trim();
+            const optionC = String(row.getCell(5).value || '').trim();
+            const optionD = String(row.getCell(6).value || '').trim();
+            const explanation = String(row.getCell(7).value || '').trim();
+
+            if (!question || !correctAnswer || !optionB) continue;
+
+            imported.push({
+                id: `REV-${Date.now()}-${r}`,
+                questionId: `B1-${levelVal}-${String(imported.length + 1).padStart(2, '0')}`,
+                level: levelVal,
+                question,
+                correctAnswer,
+                optionB,
+                optionC: optionC || '-',
+                optionD: optionD || '-',
+                explanation,
+            });
+        }
+
+        const current = await this.getSessionQuestions(sessionId);
+        const merged = [...current.review, ...imported];
+        await this.saveSessionQuestions(sessionId, { review: merged });
+
+        return {
+            imported: imported.length,
+            total: merged.length,
+        };
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 9B. INTERACTIVE QUESTIONS (MC / MR)
+    // ─────────────────────────────────────────────────────────────
+
+    async generateInteractiveQuestions(
+        sessionId: string,
+        userId: string,
+        count = 5,
+        isAppend = false,
+    ) {
+        const contentText = await this.getSessionContentText(sessionId);
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
+
+        const prompt = `Bạn là chuyên gia thiết kế câu hỏi tương tác kiểm tra độ tập trung của người học (E-Learning Interactive Questions).
+Hãy tạo ${count} câu hỏi tương tác từ nội dung bài giảng sau:
+
+NỘI DUNG BÀI GIẢNG:
+${contentText}
+
+YÊU CẦU:
+- Gồm câu hỏi Multiple Choice (MC: 1 đáp án đúng) và Multiple Response (MR: nhiều đáp án đúng)
+- Phương án đúng PHẢI có dấu hoa thị (*) ở đầu (ví dụ: "*Đáp án đúng", "Đáp án sai")
+- Có phản hồi khi trả lời đúng (correctFeedback) và phản hồi khi trả lời sai (incorrectFeedback)
+- Điểm mặc định mỗi câu: 1
+
+Trả lời CHỈ bằng JSON hợp lệ:
+\`\`\`json
+{
+  "questions": [
+    {
+      "id": "INT-${Date.now()}-1",
+      "questionOrder": 1,
+      "questionType": "MC",
+      "questionText": "Câu hỏi tương tác?",
+      "answers": ["*Đáp án đúng 1", "Đáp án sai 2", "Đáp án sai 3", "Đáp án sai 4"],
+      "correctFeedback": "Chính xác! Bạn đã nắm vững nội dung.",
+      "incorrectFeedback": "Chưa chính xác. Vui lòng xem lại slide trước.",
+      "points": 1
+    }
+  ]
+}
+\`\`\``;
+
+        const modelName = modelConfig.modelName || 'gemini-2.0-flash';
+        this.logger.log(`[PptxAudioTool] Generating interactive questions with model: ${modelName}`);
+        const aiResult = await this.aiProvider.generateText(prompt, modelName, userId, { maxTokens: 16384 });
+        const responseText = aiResult.content;
+
+        if (!responseText) throw new BadRequestException('AI returned empty response.');
+
+        let newQuestions: any[] = [];
+        try {
+            const cleaned = this.cleanJsonResponse(responseText);
+            const parsed = JSON.parse(cleaned);
+            newQuestions = parsed.questions || parsed;
+        } catch (err) {
+            throw new BadRequestException('AI response was not valid JSON.');
+        }
+
+        const formatted = newQuestions.map((q, idx) => ({
+            id: q.id || `INT-${Date.now()}-${idx + 1}`,
+            questionOrder: idx + 1,
+            questionType: q.questionType || 'MC',
+            questionText: q.questionText || '',
+            answers: Array.isArray(q.answers) ? q.answers : [],
+            correctFeedback: q.correctFeedback || 'Chính xác!',
+            incorrectFeedback: q.incorrectFeedback || 'Chưa đúng, hãy xem lại.',
+            points: Number(q.points) || 1,
+        }));
+
+        const current = await this.getSessionQuestions(sessionId);
+        const finalInteractive = isAppend ? [...current.interactive, ...formatted] : formatted;
+        await this.saveSessionQuestions(sessionId, { interactive: finalInteractive });
+
+        return {
+            questions: finalInteractive,
+            addedCount: formatted.length,
+            totalCount: finalInteractive.length,
+        };
+    }
+
+    async exportInteractiveQuestionsExcel(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).interactive;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Câu hỏi tương tác');
+
+        worksheet.columns = [
+            { header: 'STT', key: 'stt', width: 6 },
+            { header: 'Loại câu', key: 'questionType', width: 12 },
+            { header: 'Nội dung câu hỏi', key: 'questionText', width: 50 },
+            { header: 'Đáp án 1', key: 'ans1', width: 25 },
+            { header: 'Đáp án 2', key: 'ans2', width: 25 },
+            { header: 'Đáp án 3', key: 'ans3', width: 25 },
+            { header: 'Đáp án 4', key: 'ans4', width: 25 },
+            { header: 'Phản hồi đúng', key: 'correctFeedback', width: 35 },
+            { header: 'Phản hồi sai', key: 'incorrectFeedback', width: 35 },
+            { header: 'Điểm', key: 'points', width: 8 },
+        ];
+
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF70AD47' },
+        };
+
+        questions.forEach((q: any, i: number) => {
+            const ans = q.answers || [];
+            worksheet.addRow({
+                stt: i + 1,
+                questionType: q.questionType,
+                questionText: q.questionText,
+                ans1: ans[0] || '',
+                ans2: ans[1] || '',
+                ans3: ans[2] || '',
+                ans4: ans[3] || '',
+                correctFeedback: q.correctFeedback,
+                incorrectFeedback: q.incorrectFeedback,
+                points: q.points || 1,
+            });
+        });
+
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_interactive_questions.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        await workbook.xlsx.write(res);
+        res.end();
+    }
+
+    async exportInteractiveQuestionsWord(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).interactive;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+        const docTitle = `BỘ CÂU HỎI TƯƠNG TÁC (INTERACTIVE) - ${session?.fileName?.replace('.pptx', '') || 'BÀI GIẢNG'}`;
+
+        const docChildren: (Paragraph | Table)[] = [
+            new Paragraph({
+                text: docTitle,
+                heading: HeadingLevel.HEADING_1,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 200 },
+            }),
+            new Paragraph({
+                children: [new TextRun({ text: `Tổng số: ${questions.length} câu hỏi tương tác`, bold: true })],
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 },
+            }),
+        ];
+
+        questions.forEach((q: any, i: number) => {
+            docChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({ text: `Câu ${i + 1} [${q.questionType} - ${q.points}đ]: `, bold: true, color: '2E7D32' }),
+                        new TextRun({ text: q.questionText, bold: true }),
+                    ],
+                    spacing: { before: 150, after: 100 },
+                }),
+            );
+
+            (q.answers || []).forEach((ans: string) => {
+                const isCorrect = ans.startsWith('*');
+                const cleanText = ans.replace(/^\*/, '');
+                docChildren.push(
+                    new Paragraph({
+                        children: [
+                            new TextRun({ text: isCorrect ? '☑ ' : '☐ ', bold: isCorrect, color: isCorrect ? '2E7D32' : '000000' }),
+                            new TextRun({ text: cleanText, bold: isCorrect }),
+                            isCorrect ? new TextRun({ text: ' (Đáp án đúng)', italics: true, color: '2E7D32' }) : new TextRun(''),
+                        ],
+                        indent: { left: 400 },
+                        spacing: { after: 40 },
+                    }),
+                );
+            });
+
+            docChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({ text: `✓ Phản hồi đúng: `, bold: true }),
+                        new TextRun(q.correctFeedback || '-'),
+                        new TextRun({ text: ` | ✗ Phản hồi sai: `, bold: true }),
+                        new TextRun(q.incorrectFeedback || '-'),
+                    ],
+                    indent: { left: 400 },
+                    spacing: { before: 60, after: 150 },
+                }),
+            );
+        });
+
+        const doc = new Document({ sections: [{ properties: {}, children: docChildren }] });
+        const buffer = await Packer.toBuffer(doc);
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_interactive_questions.docx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.send(buffer);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 9C. ENGLISH QUESTIONS (7 SPECIALIZED TYPES)
+    // ─────────────────────────────────────────────────────────────
+
+    async generateEnglishQuestions(
+        sessionId: string,
+        userId: string,
+        dto: {
+            level1?: number;
+            level2?: number;
+            level3?: number;
+            questionTypes?: string[];
+            subDiscipline?: string;
+        },
+        isAppend = false,
+    ) {
+        const contentText = await this.getSessionContentText(sessionId);
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
+
+        const level1 = dto.level1 ?? 20;
+        const level2 = dto.level2 ?? 20;
+        const level3 = dto.level3 ?? 10;
+        const total = level1 + level2 + level3;
+        const types = dto.questionTypes && dto.questionTypes.length > 0
+            ? dto.questionTypes.join(', ')
+            : 'MC, MR, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY';
+        const subDiscipline = dto.subDiscipline || 'ALL';
+
+        const prompt = `You are a Professor of English Linguistics and Higher Education Assessment.
+Generate ${total} specialized English questions based on the lesson slides below.
+
+LESSON CONTENT:
+${contentText}
+
+SPECIFICATIONS:
+- Sub-Discipline: ${subDiscipline}
+- Allowed Question Types: ${types}
+- Bloom Distribution: Level 1 (Remember/Biết): ${level1}, Level 2 (Understand/Hiểu): ${level2}, Level 3 (Apply/Vận dụng): ${level3}
+
+SUPPORTED TYPES & dataJson STRUCTURE:
+1. "MC" (Multiple Choice - 1 correct):
+   dataJson: {"options": [{"text": "Option A", "isCorrect": true}, {"text": "Option B", "isCorrect": false}, ...]}
+2. "MR" (Multiple Response - multiple correct):
+   dataJson: {"options": [{"text": "Option A", "isCorrect": true}, {"text": "Option B", "isCorrect": true}, ...]}
+3. "MATCH" (Matching pairs):
+   dataJson: {"pairs": [{"left": "Term 1", "right": "Definition 1"}, {"left": "Term 2", "right": "Definition 2"}]}
+4. "CLOZE" (Moodle Embedded Cloze sentence):
+   questionText: "Sentence with embedded Moodle Cloze like {1:SHORTANSWER:=word} or {1:MULTICHOICE:=correct~wrong}"
+   dataJson: {"rawCloze": "..."}
+5. "SHORTANSWER" (Fill-in word / IPA / phonetic form):
+   dataJson: {"acceptedAnswers": ["word1", "word2"]}
+6. "TRUEFALSE" (True/False):
+   dataJson: {"isTrue": true}
+7. "ESSAY" (Essay/Analytical question with rubric):
+   dataJson: {"rubric": {"totalPoints": 10, "criteria": [{"criterion": "Accuracy", "points": 5}, {"criterion": "Depth", "points": 5}]}}
+
+Return ONLY valid JSON format:
+\`\`\`json
+{
+  "questions": [
+    {
+      "id": "ENG-${Date.now()}-1",
+      "questionOrder": 1,
+      "questionType": "MC",
+      "subDiscipline": "${subDiscipline}",
+      "difficulty": 1,
+      "title": "ENG-01",
+      "questionText": "Question text here?",
+      "dataJson": "{\\"options\\": [{...}]}",
+      "explanation": "Why this is correct",
+      "points": 1
+    }
+  ]
+}
+\`\`\``;
+
+        const modelName = modelConfig.modelName || 'gemini-2.0-flash';
+        this.logger.log(`[PptxAudioTool] Generating English questions with model: ${modelName}`);
+        const aiResult = await this.aiProvider.generateText(prompt, modelName, userId, { maxTokens: 32768 });
+        const responseText = aiResult.content;
+
+        if (!responseText) throw new BadRequestException('AI returned empty response.');
+
+        let newQuestions: any[] = [];
+        try {
+            const cleaned = this.cleanJsonResponse(responseText);
+            const parsed = JSON.parse(cleaned);
+            newQuestions = parsed.questions || parsed;
+        } catch (err) {
+            throw new BadRequestException('AI response was not valid JSON.');
+        }
+
+        const formatted = newQuestions.map((q, idx) => ({
+            id: q.id || `ENG-${Date.now()}-${idx + 1}`,
+            questionOrder: idx + 1,
+            questionType: (q.questionType || 'MC').toUpperCase(),
+            subDiscipline: q.subDiscipline || subDiscipline,
+            difficulty: Number(q.difficulty) || 1,
+            title: q.title || `ENG-${String(idx + 1).padStart(2, '0')}`,
+            questionText: q.questionText || '',
+            dataJson: typeof q.dataJson === 'string' ? q.dataJson : JSON.stringify(q.dataJson || {}),
+            explanation: q.explanation || '',
+            points: Number(q.points) || 1,
+        }));
+
+        const current = await this.getSessionQuestions(sessionId);
+        const finalEnglish = isAppend ? [...current.english, ...formatted] : formatted;
+        await this.saveSessionQuestions(sessionId, { english: finalEnglish });
+
+        return {
+            questions: finalEnglish,
+            addedCount: formatted.length,
+            totalCount: finalEnglish.length,
+        };
+    }
+
+    async exportEnglishQuestionsMoodleXml(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).english;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+
+        const mapped: EnglishQuestionData[] = questions.map((q: any, i: number) => ({
+            id: q.id || `ENG-${i + 1}`,
+            questionOrder: i + 1,
+            questionType: (q.questionType || 'MC').toUpperCase(),
+            subDiscipline: q.subDiscipline || 'ALL',
+            difficulty: Number(q.difficulty) || 1,
+            title: q.title || `ENG-${i + 1}`,
+            questionText: q.questionText,
+            dataJson: q.dataJson,
+            explanation: q.explanation || null,
+            points: q.points || 1,
+        }));
+
+        const xml = buildEnglishMoodleXml(mapped, session?.fileName?.replace('.pptx', '') || 'pptx_english');
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_moodle.xml`;
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.send(xml);
+    }
+
+    async exportEnglishQuestionsExcel(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).english;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('English Questions');
+
+        worksheet.columns = [
+            { header: 'Order', key: 'order', width: 6 },
+            { header: 'Type', key: 'type', width: 12 },
+            { header: 'Discipline', key: 'discipline', width: 18 },
+            { header: 'Level', key: 'level', width: 8 },
+            { header: 'Question Text', key: 'questionText', width: 50 },
+            { header: 'Structure (JSON)', key: 'dataJson', width: 40 },
+            { header: 'Explanation', key: 'explanation', width: 35 },
+            { header: 'Points', key: 'points', width: 8 },
+        ];
+
+        worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        worksheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF800080' },
+        };
+
+        questions.forEach((q: any, i: number) => {
+            worksheet.addRow({
+                order: i + 1,
+                type: q.questionType,
+                discipline: q.subDiscipline,
+                level: q.difficulty,
+                questionText: q.questionText,
+                dataJson: q.dataJson,
+                explanation: q.explanation || '',
+                points: q.points || 1,
+            });
+        });
+
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_questions.xlsx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        await workbook.xlsx.write(res);
+        res.end();
+    }
+
+    async exportEnglishQuestionsWord(sessionId: string, res: Response) {
+        const questions = (await this.getSessionQuestions(sessionId)).english;
+        const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
+        const docTitle = `BỘ CÂU HỎI TIẾNG ANH CHUYÊN NGÀNH - ${session?.fileName?.replace('.pptx', '') || 'BÀI GIẢNG'}`;
+
+        const docChildren: (Paragraph | Table)[] = [
+            new Paragraph({
+                text: docTitle,
+                heading: HeadingLevel.HEADING_1,
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 200 },
+            }),
+            new Paragraph({
+                children: [new TextRun({ text: `Tổng số: ${questions.length} câu hỏi`, bold: true })],
+                alignment: AlignmentType.CENTER,
+                spacing: { after: 400 },
+            }),
+        ];
+
+        questions.forEach((q: any, i: number) => {
+            docChildren.push(
+                new Paragraph({
+                    children: [
+                        new TextRun({ text: `Item ${i + 1} [${q.questionType} - Level ${q.difficulty}]: `, bold: true, color: '6A1B9A' }),
+                        new TextRun({ text: q.questionText, bold: true }),
+                    ],
+                    spacing: { before: 150, after: 100 },
+                }),
+            );
+
+            // Display details according to dataJson
+            try {
+                const data = typeof q.dataJson === 'string' ? JSON.parse(q.dataJson) : q.dataJson;
+                if (data.options && Array.isArray(data.options)) {
+                    data.options.forEach((opt: any, optIdx: number) => {
+                        const letter = String.fromCharCode(65 + optIdx);
+                        docChildren.push(
+                            new Paragraph({
+                                children: [
+                                    new TextRun({ text: `${letter}. ${opt.text || opt}` }),
+                                    opt.isCorrect ? new TextRun({ text: ' (Correct)', italics: true, color: '2E7D32' }) : new TextRun(''),
+                                ],
+                                indent: { left: 400 },
+                                spacing: { after: 40 },
+                            }),
+                        );
+                    });
+                } else if (data.pairs && Array.isArray(data.pairs)) {
+                    data.pairs.forEach((p: any) => {
+                        docChildren.push(
+                            new Paragraph({
+                                text: `• [${p.left}] ➔ [${p.right}]`,
+                                indent: { left: 400 },
+                                spacing: { after: 40 },
+                            }),
+                        );
+                    });
+                } else if (data.acceptedAnswers && Array.isArray(data.acceptedAnswers)) {
+                    docChildren.push(
+                        new Paragraph({
+                            children: [new TextRun({ text: `Accepted: ${data.acceptedAnswers.join(', ')}`, italics: true })],
+                            indent: { left: 400 },
+                        }),
+                    );
+                }
+            } catch {
+                // Ignore parse errors in word preview
+            }
+
+            if (q.explanation) {
+                docChildren.push(
+                    new Paragraph({
+                        children: [new TextRun({ text: `💡 Explanation: `, bold: true }), new TextRun(q.explanation)],
+                        indent: { left: 400 },
+                        spacing: { before: 60, after: 150 },
+                    }),
+                );
+            }
+        });
+
+        const doc = new Document({ sections: [{ properties: {}, children: docChildren }] });
+        const buffer = await Packer.toBuffer(doc);
+        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_questions.docx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.send(buffer);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 9D. COMMON QUESTION CRUD METHODS
+    // ─────────────────────────────────────────────────────────────
+
+    async updateQuestion(sessionId: string, type: 'review' | 'interactive' | 'english', id: string, data: any) {
+        const current = await this.getSessionQuestions(sessionId);
+        const list = current[type] || [];
+        const updatedList = list.map((item: any) => (item.id === id ? { ...item, ...data } : item));
+        await this.saveSessionQuestions(sessionId, { [type]: updatedList });
+        return { success: true, updatedList };
+    }
+
+    async deleteQuestion(sessionId: string, type: 'review' | 'interactive' | 'english', id: string) {
+        const current = await this.getSessionQuestions(sessionId);
+        const list = current[type] || [];
+        const filtered = list.filter((item: any) => item.id !== id);
+        await this.saveSessionQuestions(sessionId, { [type]: filtered });
+        return { success: true, remainingCount: filtered.length };
+    }
+
+    async deleteAllQuestions(sessionId: string, type: 'review' | 'interactive' | 'english') {
+        await this.saveSessionQuestions(sessionId, { [type]: [] });
+        return { success: true };
+    }
+
+    async updateQuestionsList(sessionId: string, type: 'review' | 'interactive' | 'english', list: any[]) {
+        await this.saveSessionQuestions(sessionId, { [type]: list });
+        return { success: true, count: list.length };
+    }
+
+    // Backward-compatible wrappers for old endpoints
+    async generateQuestions(sessionId: string, userId: string, counts: any) {
+        const res = await this.generateReviewQuestions(sessionId, userId, counts, false);
+        return { questions: res.questions, totalCount: res.totalCount, counts: res.counts };
+    }
 
     async getQuestions(sessionId: string): Promise<any[]> {
-        const session = await this.prisma.pptxAudioSession.findUnique({
-            where: { id: sessionId },
-        });
-        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
-        if (!session.questionsJson) return [];
-        try {
-            return JSON.parse(session.questionsJson);
-        } catch {
-            return [];
-        }
+        const all = await this.getSessionQuestions(sessionId);
+        return all.review;
     }
 
     // ========== JSON PARSING UTILITIES ==========
 
     private cleanJsonResponse(response: string): string {
         let cleaned = response.trim();
-
-        // Remove markdown code block wrapper
         if (cleaned.startsWith('```json')) {
             cleaned = cleaned.slice(7);
         } else if (cleaned.startsWith('```')) {
             cleaned = cleaned.slice(3);
         }
-
         if (cleaned.endsWith('```')) {
             cleaned = cleaned.slice(0, -3);
         }
-
         return cleaned.trim();
     }
 
@@ -747,3 +1701,4 @@ Trả lời dưới dạng JSON:
         return Buffer.concat([header, pcmData]);
     }
 }
+

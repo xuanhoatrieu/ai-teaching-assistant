@@ -9,17 +9,34 @@ import {
     UseGuards,
     Request,
     Logger,
+    UseInterceptors,
+    UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { SlidesService } from './slides.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GenerationJobService } from '../generation-job/generation-job.service';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
 
 // DTOs
 class UpdateSlideScriptDto {
     @IsString()
     @IsNotEmpty()
     slideScript: string;
+}
+
+class UpdateSlideContentDto {
+    @IsOptional()
+    @IsString()
+    title?: string;
+
+    @IsOptional()
+    @IsArray()
+    optimizedContent?: Array<{
+        emoji?: string;
+        point: string;
+        description?: string;
+    }>;
 }
 
 @Controller('lessons/:lessonId/slides')
@@ -106,6 +123,37 @@ export class SlidesController {
             lessonId,
             parseInt(slideIndex, 10),
             req.user.id,
+        );
+    }
+    // PUT /lessons/:lessonId/slides/:slideIndex/content - Update slide content manually
+    @Put(':slideIndex/content')
+    async updateContent(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+        @Body() body: UpdateSlideContentDto,
+    ) {
+        return this.slidesService.updateSlideContent(
+            lessonId,
+            parseInt(slideIndex, 10),
+            body.title,
+            body.optimizedContent,
+        );
+    }
+
+    // POST /lessons/:lessonId/slides/:slideIndex/custom-image - Upload custom image for slide
+    @Post(':slideIndex/custom-image')
+    @UseInterceptors(FileInterceptor('image'))
+    async uploadCustomImage(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+        @UploadedFile() file: Express.Multer.File,
+        @Request() req,
+    ) {
+        return this.slidesService.uploadCustomSlideImage(
+            lessonId,
+            parseInt(slideIndex, 10),
+            req.user.id,
+            file,
         );
     }
 

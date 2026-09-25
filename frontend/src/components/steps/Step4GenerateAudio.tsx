@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api, API_BASE_URL } from '../../lib/api';
+import { remotionApi } from '../../lib/remotionApi';
 import { useJobPolling } from '../../hooks/useJobPolling';
 import { TTSSelector } from '../TTSSelector';
 import { ModelSelector } from '../ModelSelector';
@@ -41,7 +43,26 @@ interface SlideContent {
 }
 
 export function Step4GenerateAudio() {
+    const navigate = useNavigate();
     const { lessonId, lessonData, refreshLessonData } = useLessonEditor();
+
+    const handleCreateRemotionVideo = async (slideIndex: number, slideTitle: string) => {
+        if (!lessonData?.subjectId || !lessonId) return;
+        try {
+            const res = await remotionApi.create(lessonData.subjectId, {
+                title: slideTitle || `Slide ${slideIndex}`,
+                lessonId: lessonId,
+                inputType: 'slide',
+                sourceSlideIdx: slideIndex,
+                templateType: 'explainer',
+                aspectRatio: '9:16',
+            });
+            navigate(`/subjects/${lessonData.subjectId}/remotion/${res.data.id}`);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể tạo Video-Remotion từ slide này');
+        }
+    };
+
     const [slideAudios, setSlideAudios] = useState<SlideAudio[]>([]);
     const [slideContents, setSlideContents] = useState<SlideContent[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -1001,6 +1022,24 @@ export function Step4GenerateAudio() {
                                 <span className="slide-badge">{slide.slideIndex}</span>
                                 <h3 className="slide-title">{slide.title}</h3>
                                 <span className="slide-type-badge">{slide.slideType}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleCreateRemotionVideo(slide.slideIndex, slide.title)}
+                                    style={{
+                                        marginLeft: 'auto',
+                                        padding: '3px 8px',
+                                        fontSize: '11px',
+                                        borderRadius: '6px',
+                                        border: '1px solid rgba(99, 102, 241, 0.4)',
+                                        background: 'rgba(99, 102, 241, 0.15)',
+                                        color: '#a5b4fc',
+                                        cursor: 'pointer',
+                                        fontWeight: 600,
+                                    }}
+                                    title="Tạo video ngắn Remotion từ slide này"
+                                >
+                                    🎬 Video-Remotion
+                                </button>
                             </div>
 
                             {/* Mobile Card Segmented Tab */}

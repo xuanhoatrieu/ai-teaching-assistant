@@ -177,7 +177,7 @@ export class UserApiKeysController {
         if (dto.service === ('VITTS' as any)) {
             try {
                 let apiKey = dto.key;
-                let baseUrl = 'http://117.0.36.6:8888';
+                let baseUrl = 'http://10.64.11.16:8888';
                 try {
                     const parsed = JSON.parse(dto.key);
                     apiKey = parsed.apiKey || dto.key;

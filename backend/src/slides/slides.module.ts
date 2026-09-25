@@ -8,9 +8,19 @@ import { SlideDataModule } from '../slide-data/slide-data.module';
 import { PromptsModule } from '../prompts/prompts.module';
 import { AIModule } from '../ai/ai.module';
 import { GenerationJobModule } from '../generation-job/generation-job.module';
+import { FileStorageModule } from '../file-storage/file-storage.module';
 
 @Module({
-    imports: [PrismaModule, ApiKeysModule, ModelConfigModule, SlideDataModule, PromptsModule, AIModule, GenerationJobModule],
+    imports: [
+        PrismaModule,
+        ApiKeysModule,
+        ModelConfigModule,
+        SlideDataModule,
+        PromptsModule,
+        AIModule,
+        GenerationJobModule,
+        FileStorageModule,
+    ],
     controllers: [SlidesController],
     providers: [SlidesService],
     exports: [SlidesService],

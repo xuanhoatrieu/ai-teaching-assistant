@@ -9,6 +9,14 @@ interface UserApiKey {
     service: 'GEMINI' | 'GOOGLE_CLOUD_TTS' | 'IMAGEN' | 'VBEE' | 'VITTS' | 'OPENAI';
     hasKey: boolean;
     createdAt: string;
+    rawKey?: string;
+    metadata?: {
+        apiKey?: string;
+        baseUrl?: string;
+        appId?: string;
+        token?: string;
+        voiceCodes?: string;
+    };
 }
 
 type APIService = 'GEMINI' | 'GOOGLE_CLOUD_TTS' | 'IMAGEN' | 'VBEE' | 'VITTS' | 'OPENAI';
@@ -662,6 +670,10 @@ export function UserSettingsPage() {
     const [editingKey, setEditingKey] = useState<UserApiKey | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+    const [vittsServerChoice, setVittsServerChoice] = useState<'server1' | 'server2' | 'custom'>('server1');
+    const [customVittsUrl, setCustomVittsUrl] = useState('');
+    const [showKeyPassword, setShowKeyPassword] = useState(false);
+
     const [formData, setFormData] = useState<{
         name: string;
         service: APIService;
@@ -685,6 +697,49 @@ export function UserSettingsPage() {
         openaiApiKey: '',
         openaiBaseUrl: 'https://api.openai.com/v1',
     });
+
+    const normalizeUrl = (url: string): string => {
+        let trimmed = url.trim();
+        if (!trimmed) return '';
+        if (!/^https?:\/\//i.test(trimmed)) {
+            trimmed = `http://${trimmed}`;
+        }
+        return trimmed.replace(/\/+$/, '');
+    };
+
+    const handleSelectVittsServer = (choice: 'server1' | 'server2' | 'custom') => {
+        setVittsServerChoice(choice);
+        if (choice === 'server1') {
+            const url = 'http://10.64.11.16:8888';
+            setFormData(prev => ({
+                ...prev,
+                vittsBaseUrl: url,
+                name: (!editingKey && (!prev.name || prev.name.startsWith('ViTTS Local'))) ? 'ViTTS Local (10.64.11.16)' : prev.name
+            }));
+        } else if (choice === 'server2') {
+            const url = 'http://10.64.220.241:8889';
+            setFormData(prev => ({
+                ...prev,
+                vittsBaseUrl: url,
+                name: (!editingKey && (!prev.name || prev.name.startsWith('ViTTS Local'))) ? 'ViTTS Local (10.64.220.241)' : prev.name
+            }));
+        } else {
+            // Custom URL
+            setFormData(prev => ({
+                ...prev,
+                vittsBaseUrl: customVittsUrl,
+                name: (!editingKey && (!prev.name || prev.name.startsWith('ViTTS Local'))) ? 'ViTTS Local (Tùy biến)' : prev.name
+            }));
+        }
+    };
+
+    const handleCustomVittsUrlChange = (val: string) => {
+        setCustomVittsUrl(val);
+        setFormData(prev => ({
+            ...prev,
+            vittsBaseUrl: val,
+        }));
+    };
 
     const fetchData = async () => {
         try {
@@ -713,23 +768,70 @@ export function UserSettingsPage() {
 
     const handleOpenModal = (key?: UserApiKey) => {
         setTestResult(null);
+        setShowKeyPassword(false);
         if (key) {
             setEditingKey(key);
-            const meta = (key as any).metadata || {};
+            const meta = key.metadata || {};
+            const rawKey = key.rawKey || '';
+
+            let vittsKey = meta.apiKey || '';
+            let openaiKey = meta.apiKey || '';
+            let vbeeToken = meta.token || '';
+            let vbeeAppId = meta.appId || '';
+            let vbeeVoiceCodes = meta.voiceCodes || '';
+            let genericKey = rawKey;
+
+            if (rawKey && rawKey.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(rawKey);
+                    if (parsed.apiKey) {
+                        vittsKey = vittsKey || parsed.apiKey;
+                        openaiKey = openaiKey || parsed.apiKey;
+                    }
+                    if (parsed.token) vbeeToken = vbeeToken || parsed.token;
+                    if (parsed.appId) vbeeAppId = vbeeAppId || parsed.appId;
+                    if (parsed.voiceCodes) vbeeVoiceCodes = vbeeVoiceCodes || parsed.voiceCodes;
+                } catch {}
+            } else if (rawKey) {
+                vittsKey = vittsKey || rawKey;
+                openaiKey = openaiKey || rawKey;
+            }
+
+            if (genericKey && genericKey.startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(genericKey);
+                    genericKey = parsed.apiKey || '';
+                } catch {}
+            }
+
+            const savedVittsUrl = meta.baseUrl || 'http://10.64.11.16:8888';
+            if (savedVittsUrl.includes('10.64.11.16:8888')) {
+                setVittsServerChoice('server1');
+                setCustomVittsUrl('');
+            } else if (savedVittsUrl.includes('10.64.220.241:8889')) {
+                setVittsServerChoice('server2');
+                setCustomVittsUrl('');
+            } else {
+                setVittsServerChoice('custom');
+                setCustomVittsUrl(savedVittsUrl);
+            }
+
             setFormData({
                 name: key.name,
                 service: key.service,
-                key: '',
-                vbeeToken: '',
-                vbeeAppId: meta.appId || '',
-                vbeeVoiceCodes: meta.voiceCodes || '',
-                vittsApiKey: '',
-                vittsBaseUrl: meta.baseUrl || 'http://117.0.36.6:8888',
-                openaiApiKey: '',
+                key: genericKey,
+                vbeeToken: vbeeToken,
+                vbeeAppId: vbeeAppId,
+                vbeeVoiceCodes: vbeeVoiceCodes,
+                vittsApiKey: vittsKey,
+                vittsBaseUrl: savedVittsUrl,
+                openaiApiKey: openaiKey,
                 openaiBaseUrl: meta.baseUrl || 'https://api.openai.com/v1',
             });
         } else {
             setEditingKey(null);
+            setVittsServerChoice('server1');
+            setCustomVittsUrl('');
             setFormData({
                 name: '',
                 service: 'GEMINI',
@@ -738,7 +840,7 @@ export function UserSettingsPage() {
                 vbeeAppId: '',
                 vbeeVoiceCodes: '',
                 vittsApiKey: '',
-                vittsBaseUrl: 'http://117.0.36.6:8888',
+                vittsBaseUrl: 'http://10.64.11.16:8888',
                 openaiApiKey: '',
                 openaiBaseUrl: 'https://api.openai.com/v1',
             });
@@ -750,6 +852,7 @@ export function UserSettingsPage() {
         setShowModal(false);
         setEditingKey(null);
         setTestResult(null);
+        setShowKeyPassword(false);
     };
 
     useEffect(() => {
@@ -794,9 +897,21 @@ export function UserSettingsPage() {
                 setIsTesting(false);
                 return;
             }
+            const activeUrl = vittsServerChoice === 'server1'
+                ? 'http://10.64.11.16:8888'
+                : vittsServerChoice === 'server2'
+                    ? 'http://10.64.220.241:8889'
+                    : normalizeUrl(customVittsUrl);
+
+            if (!activeUrl) {
+                setTestResult({ success: false, message: 'Vui lòng chọn hoặc nhập địa chỉ máy chủ ViTTS trước khi test.' });
+                setIsTesting(false);
+                return;
+            }
+
             keyToSubmit = JSON.stringify({
                 apiKey: formData.vittsApiKey,
-                baseUrl: formData.vittsBaseUrl || 'http://117.0.36.6:8888'
+                baseUrl: activeUrl
             });
         }
         
@@ -843,9 +958,20 @@ export function UserSettingsPage() {
                 setError('Vui lòng nhập ViTTS API Key');
                 return;
             }
+            const activeUrl = vittsServerChoice === 'server1'
+                ? 'http://10.64.11.16:8888'
+                : vittsServerChoice === 'server2'
+                    ? 'http://10.64.220.241:8889'
+                    : normalizeUrl(customVittsUrl);
+
+            if (!activeUrl) {
+                setError('Vui lòng chọn hoặc nhập địa chỉ máy chủ ViTTS');
+                return;
+            }
+
             keyToSubmit = JSON.stringify({
                 apiKey: formData.vittsApiKey,
-                baseUrl: formData.vittsBaseUrl || 'http://117.0.36.6:8888'
+                baseUrl: activeUrl
             });
         } else if (formData.service === 'OPENAI') {
             if (!formData.openaiApiKey && !editingKey) {
@@ -1107,9 +1233,20 @@ export function UserSettingsPage() {
                             {formData.service === 'VBEE' ? (
                                 <>
                                     <div className="form-group">
-                                        <label>Vbee Token {editingKey && '(để trống nếu không đổi)'}</label>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                            <label style={{ margin: 0 }}>
+                                                Vbee Token {editingKey && <span style={{ color: '#10b981', fontSize: '11px', fontWeight: 'normal' }}>✓ Đã có sẵn</span>}
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowKeyPassword(!showKeyPassword)}
+                                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px' }}
+                                            >
+                                                {showKeyPassword ? '🙈 Ẩn' : '👁️ Xem'}
+                                            </button>
+                                        </div>
                                         <input
-                                            type="password"
+                                            type={showKeyPassword ? 'text' : 'password'}
                                             value={formData.vbeeToken}
                                             onChange={e => setFormData({ ...formData, vbeeToken: e.target.value })}
                                             placeholder="Nhập Vbee Bearer Token"
@@ -1117,7 +1254,7 @@ export function UserSettingsPage() {
                                         />
                                     </div>
                                     <div className="form-group">
-                                        <label>Vbee App ID {editingKey && '(để trống nếu không đổi)'}</label>
+                                        <label>Vbee App ID {editingKey && <span style={{ color: '#10b981', fontSize: '11px', fontWeight: 'normal' }}>✓ Đã có sẵn</span>}</label>
                                         <input
                                             type="text"
                                             value={formData.vbeeAppId}
@@ -1155,31 +1292,134 @@ export function UserSettingsPage() {
                             ) : formData.service === 'VITTS' ? (
                                 <>
                                     <div className="form-group">
-                                        <label>ViTTS API Key {editingKey && '(để trống nếu không đổi)'}</label>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                            <label style={{ margin: 0 }}>
+                                                ViTTS API Key {editingKey && <span style={{ color: '#10b981', fontSize: '11px', fontWeight: 'normal' }}>✓ Đã có sẵn</span>}
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowKeyPassword(!showKeyPassword)}
+                                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px' }}
+                                            >
+                                                {showKeyPassword ? '🙈 Ẩn' : '👁️ Xem'}
+                                            </button>
+                                        </div>
                                         <input
-                                            type="password"
+                                            type={showKeyPassword ? 'text' : 'password'}
                                             value={formData.vittsApiKey}
                                             onChange={e => setFormData({ ...formData, vittsApiKey: e.target.value })}
                                             placeholder="vitts_xxxxxxxxxxxx"
                                             required={!editingKey}
                                         />
+                                        <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                                            Khóa xác thực dịch vụ ViTTS Local của bạn.
+                                        </small>
                                     </div>
+
                                     <div className="form-group">
-                                        <label>ViTTS Base URL</label>
-                                        <input
-                                            type="text"
-                                            value={formData.vittsBaseUrl}
-                                            onChange={e => setFormData({ ...formData, vittsBaseUrl: e.target.value })}
-                                            placeholder="http://117.0.36.6:8000"
-                                        />
+                                        <label style={{ marginBottom: '8px', display: 'block' }}>
+                                            Chọn máy chủ ViTTS Local
+                                        </label>
+                                        <div className="vitts-servers-grid">
+                                            {/* Máy chủ 1 */}
+                                            <div
+                                                className={`vitts-server-card ${vittsServerChoice === 'server1' ? 'active' : ''}`}
+                                                onClick={() => handleSelectVittsServer('server1')}
+                                            >
+                                                <div className="vitts-card-radio">
+                                                    <span className={`custom-radio-dot ${vittsServerChoice === 'server1' ? 'checked' : ''}`} />
+                                                </div>
+                                                <div className="vitts-card-info">
+                                                    <div className="vitts-card-title-row">
+                                                        <span className="vitts-server-name">🖥️ Máy chủ 1</span>
+                                                        <span className="vitts-badge vitts-badge-recommend">Mặc định</span>
+                                                    </div>
+                                                    <div className="vitts-server-address">10.64.11.16:8888</div>
+                                                    <div className="vitts-server-desc">Máy chủ TTS mạng nội bộ tốc độ cao</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Máy chủ 2 */}
+                                            <div
+                                                className={`vitts-server-card ${vittsServerChoice === 'server2' ? 'active' : ''}`}
+                                                onClick={() => handleSelectVittsServer('server2')}
+                                            >
+                                                <div className="vitts-card-radio">
+                                                    <span className={`custom-radio-dot ${vittsServerChoice === 'server2' ? 'checked' : ''}`} />
+                                                </div>
+                                                <div className="vitts-card-info">
+                                                    <div className="vitts-card-title-row">
+                                                        <span className="vitts-server-name">🖥️ Máy chủ 2</span>
+                                                        <span className="vitts-badge vitts-badge-backup">Dự phòng</span>
+                                                    </div>
+                                                    <div className="vitts-server-address">10.64.220.241:8889</div>
+                                                    <div className="vitts-server-desc">Máy chủ TTS dự phòng thứ hai</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Thêm mới */}
+                                            <div
+                                                className={`vitts-server-card ${vittsServerChoice === 'custom' ? 'active' : ''}`}
+                                                onClick={() => handleSelectVittsServer('custom')}
+                                            >
+                                                <div className="vitts-card-radio">
+                                                    <span className={`custom-radio-dot ${vittsServerChoice === 'custom' ? 'checked' : ''}`} />
+                                                </div>
+                                                <div className="vitts-card-info">
+                                                    <div className="vitts-card-title-row">
+                                                        <span className="vitts-server-name">➕ Thêm mới</span>
+                                                        <span className="vitts-badge vitts-badge-custom">Tùy biến</span>
+                                                    </div>
+                                                    <div className="vitts-server-address">Tự nhập địa chỉ IP / Port khác</div>
+                                                    <div className="vitts-server-desc">Dành cho máy chủ ViTTS riêng biệt</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {vittsServerChoice === 'custom' && (
+                                            <div className="vitts-custom-url-box">
+                                                <label style={{ fontSize: '13px', color: '#93c5fd', marginBottom: '6px', display: 'block' }}>
+                                                    Nhập địa chỉ máy chủ ViTTS Local mới:
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={customVittsUrl}
+                                                    onChange={e => handleCustomVittsUrlChange(e.target.value)}
+                                                    placeholder="VD: 192.168.1.100:8888 hoặc http://tts.local:8888"
+                                                    style={{
+                                                        background: 'rgba(15, 23, 42, 0.9)',
+                                                        border: '1px solid #6366f1',
+                                                        borderRadius: '8px',
+                                                        padding: '10px 12px',
+                                                        color: '#e2e8f0',
+                                                        width: '100%',
+                                                        boxSizing: 'border-box'
+                                                    }}
+                                                />
+                                                <small style={{ color: '#94a3b8', fontSize: '12px', marginTop: '6px', display: 'block' }}>
+                                                    💡 Tự động thêm tiền tố <code>http://</code> nếu bạn chỉ nhập địa chỉ IP và Port.
+                                                </small>
+                                            </div>
+                                        )}
                                     </div>
                                 </>
                             ) : formData.service === 'OPENAI' ? (
                                 <>
                                     <div className="form-group">
-                                        <label>OpenAI API Key {editingKey && '(để trống nếu không đổi)'}</label>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                            <label style={{ margin: 0 }}>
+                                                OpenAI API Key {editingKey && <span style={{ color: '#10b981', fontSize: '11px', fontWeight: 'normal' }}>✓ Đã có sẵn</span>}
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowKeyPassword(!showKeyPassword)}
+                                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px' }}
+                                            >
+                                                {showKeyPassword ? '🙈 Ẩn' : '👁️ Xem'}
+                                            </button>
+                                        </div>
                                         <input
-                                            type="password"
+                                            type={showKeyPassword ? 'text' : 'password'}
                                             value={formData.openaiApiKey}
                                             onChange={e => setFormData({ ...formData, openaiApiKey: e.target.value })}
                                             placeholder="sk-xxxxxxxxxxxx"
@@ -1198,12 +1438,23 @@ export function UserSettingsPage() {
                                 </>
                             ) : (
                                 <div className="form-group">
-                                    <label>API Key {editingKey && '(để trống nếu không đổi)'}</label>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                        <label style={{ margin: 0 }}>
+                                            API Key {editingKey && <span style={{ color: '#10b981', fontSize: '11px', fontWeight: 'normal' }}>✓ Đã có sẵn</span>}
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowKeyPassword(!showKeyPassword)}
+                                            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '12px' }}
+                                        >
+                                            {showKeyPassword ? '🙈 Ẩn' : '👁️ Xem'}
+                                        </button>
+                                    </div>
                                     <input
-                                        type="password"
+                                        type={showKeyPassword ? 'text' : 'password'}
                                         value={formData.key}
                                         onChange={e => setFormData({ ...formData, key: e.target.value })}
-                                        placeholder={editingKey ? '••••••••' : 'Nhập API Key'}
+                                        placeholder="Nhập API Key"
                                         required={!editingKey}
                                     />
                                 </div>
@@ -1217,7 +1468,7 @@ export function UserSettingsPage() {
                             )}
 
                             <div className="modal-actions">
-                                {(formData.service === 'GEMINI' || formData.service === 'OPENAI') && (
+                                {['GEMINI', 'OPENAI', 'VITTS', 'VBEE'].includes(formData.service) && (
                                     <button
                                         type="button"
                                         className="btn-test-connection"

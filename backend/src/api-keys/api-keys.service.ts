@@ -68,21 +68,28 @@ export class ApiKeysService {
 
         return Promise.all(keys.map(async (key) => {
             let metadata: any = undefined;
-            if (key.keyEncrypted && (key.service === 'VITTS' || key.service === 'OPENAI' || key.service === 'VBEE')) {
+            let rawKey: string | null = null;
+            if (key.keyEncrypted) {
                 try {
                     const decrypted = await this.crypto.decrypt(key.keyEncrypted);
-                    const parsed = JSON.parse(decrypted);
-                    if (typeof parsed === 'object' && parsed !== null) {
-                        metadata = {
-                            baseUrl: parsed.baseUrl,
-                            appId: parsed.appId,
-                            voiceCodes: parsed.voiceCodes,
-                        };
+                    rawKey = decrypted;
+                    if (key.service === 'VITTS' || key.service === 'OPENAI' || key.service === 'VBEE') {
+                        const parsed = JSON.parse(decrypted);
+                        if (typeof parsed === 'object' && parsed !== null) {
+                            metadata = {
+                                apiKey: parsed.apiKey || '',
+                                baseUrl: parsed.baseUrl || '',
+                                appId: parsed.appId || '',
+                                token: parsed.token || '',
+                                voiceCodes: parsed.voiceCodes || '',
+                            };
+                        }
                     }
                 } catch {}
             }
             return {
                 ...key,
+                rawKey,
                 keyEncrypted: key.keyEncrypted ? '••••••••' : null,
                 hasKey: !!key.keyEncrypted,
                 metadata,

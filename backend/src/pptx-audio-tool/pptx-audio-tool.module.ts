@@ -6,9 +6,10 @@ import { TTSModule } from '../tts/tts.module';
 import { ModelConfigModule } from '../model-config/model-config.module';
 import { AIModule } from '../ai/ai.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
+import { GenerationJobModule } from '../generation-job/generation-job.module';
 
 @Module({
-    imports: [PrismaModule, TTSModule, ModelConfigModule, AIModule, ApiKeysModule],
+    imports: [PrismaModule, TTSModule, ModelConfigModule, AIModule, ApiKeysModule, GenerationJobModule],
     controllers: [PptxAudioToolController],
     providers: [PptxAudioToolService],
 })

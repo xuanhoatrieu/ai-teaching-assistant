@@ -33,6 +33,7 @@ import { PptxAudioToolModule } from './pptx-audio-tool/pptx-audio-tool.module';
 import { SyllabusModule } from './syllabus/syllabus.module';
 import { GenerationJobModule } from './generation-job/generation-job.module';
 import { UsefulLinksModule } from './useful-links/useful-links.module';
+import { RemotionModule } from './remotion/remotion.module';
 
 @Module({
   imports: [
@@ -86,6 +87,7 @@ import { UsefulLinksModule } from './useful-links/useful-links.module';
     SyllabusModule,
     GenerationJobModule,
     UsefulLinksModule,
+    RemotionModule,
   ],
   controllers: [AppController],
   providers: [AppService],

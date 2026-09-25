@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api } from '../../lib/api';
+import { remotionApi } from '../../lib/remotionApi';
 import { ModelSelector } from '../ModelSelector';
 import './Steps.css';
 
@@ -103,6 +105,7 @@ function SlideScriptPreview({ script }: { script: ParsedSlideScript }) {
 }
 
 export function Step3DesignSlides() {
+    const navigate = useNavigate();
     const { lessonId, lessonData, updateSlideScript, refreshLessonData } = useLessonEditor();
 
     const [isGenerating, setIsGenerating] = useState(false);
@@ -113,6 +116,23 @@ export function Step3DesignSlides() {
     const [slides, setSlides] = useState<Slide[]>([]);
     const [viewMode, setViewMode] = useState<'table' | 'cards' | 'preview'>('table');
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const handleCreateRemotionVideo = async (slide: Slide) => {
+        if (!lessonData?.subjectId || !lessonId) return;
+        try {
+            const res = await remotionApi.create(lessonData.subjectId, {
+                title: slide.title || `Slide ${slide.slideIndex}`,
+                lessonId: lessonId,
+                inputType: 'slide',
+                sourceSlideIdx: slide.slideIndex,
+                templateType: 'explainer',
+                aspectRatio: '9:16',
+            });
+            navigate(`/subjects/${lessonData.subjectId}/remotion/${res.data.id}`);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể tạo Video-Remotion từ slide này');
+        }
+    };
 
     // Parse slide JSON for preview
     const parsedScript = useMemo(() => {
@@ -411,10 +431,27 @@ export function Step3DesignSlides() {
                                         </div>
                                     )}
 
-                                    <div className="slide-status">
+                                    <div className="slide-status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span className={`status-badge status-${slide.status}`}>
                                             {slide.status}
                                         </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCreateRemotionVideo(slide)}
+                                            style={{
+                                                padding: '4px 8px',
+                                                fontSize: '11px',
+                                                borderRadius: '6px',
+                                                border: '1px solid rgba(99, 102, 241, 0.4)',
+                                                background: 'rgba(99, 102, 241, 0.15)',
+                                                color: '#a5b4fc',
+                                                cursor: 'pointer',
+                                                fontWeight: 600,
+                                            }}
+                                            title="Tạo video ngắn Remotion từ slide này"
+                                        >
+                                            🎬 Video-Remotion
+                                        </button>
                                     </div>
                                 </div>
                             ))}

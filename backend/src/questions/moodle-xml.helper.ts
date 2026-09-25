@@ -9,7 +9,7 @@
  *   - muc_3_van_dung (Apply)
  */
 
-interface ReviewQuestionData {
+export interface ReviewQuestionData {
     questionId: string;
     level: number;
     question: string;

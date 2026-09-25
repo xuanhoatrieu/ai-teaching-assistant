@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import './ModelSelector.css';
 
-type TaskType = 'OUTLINE' | 'SLIDES' | 'SPEAKER_NOTES' | 'QUESTIONS' | 'IMAGE' | 'TTS' | 'EMBEDDING';
+type TaskType = 'OUTLINE' | 'SLIDES' | 'SPEAKER_NOTES' | 'QUESTIONS' | 'IMAGE' | 'TTS' | 'EMBEDDING' | 'VIDEO_SCRIPT' | 'VIDEO_CODE';
 
 interface AvailableModel {
     name: string;
@@ -32,6 +32,8 @@ const TASK_LABELS: Record<TaskType, string> = {
     IMAGE: '🖼️ Model tạo Hình ảnh',
     TTS: '🔊 Model Text-to-Speech',
     EMBEDDING: '🔎 Model Embedding (RAG)',
+    VIDEO_SCRIPT: '🎬 Model Kịch bản Video',
+    VIDEO_CODE: '💻 Model Visual Code Video',
 };
 
 export function ModelSelector({ taskType, label, onChange, compact = false }: ModelSelectorProps) {

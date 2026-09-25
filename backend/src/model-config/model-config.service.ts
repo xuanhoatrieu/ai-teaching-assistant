@@ -7,7 +7,7 @@ import { CustomOpenAIProvider } from '../ai/custom-openai.provider';
 import { CryptoUtil } from '../common/crypto.util';
 
 // Task types for model configuration - must match Prisma TaskType enum
-export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'IMAGE', 'TTS', 'EMBEDDING'] as const;
+export const TASK_TYPES = ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'IMAGE', 'TTS', 'EMBEDDING', 'VIDEO_SCRIPT', 'VIDEO_CODE'] as const;
 export type TaskTypeValue = typeof TASK_TYPES[number];
 
 // Last-resort ViTTS base URL (production public IP). Only used when neither the
@@ -42,6 +42,8 @@ const DEFAULT_MODELS: Record<TaskTypeValue, { provider: string; modelName: strin
     IMAGE: { provider: 'CLIPROXY', modelName: 'gpt-image-2' },
     TTS: { provider: 'VITTS', modelName: 'vitts:design' },
     EMBEDDING: { provider: 'GEMINI', modelName: 'text-embedding-004' },
+    VIDEO_SCRIPT: { provider: 'CLIPROXY', modelName: 'gpt-5.5' },
+    VIDEO_CODE: { provider: 'CLIPROXY', modelName: 'gpt-5.5' },
 };
 
 @Injectable()
@@ -144,7 +146,7 @@ export class ModelConfigService {
                 if (isEnabled) {
                     const cliproxyConfig = await this.cliproxy.getConfig();
 
-                    if (taskType === 'OUTLINE' || taskType === 'SLIDES' || taskType === 'SPEAKER_NOTES' || taskType === 'QUESTIONS') {
+                    if (taskType === 'OUTLINE' || taskType === 'SLIDES' || taskType === 'SPEAKER_NOTES' || taskType === 'QUESTIONS' || taskType === 'VIDEO_SCRIPT' || taskType === 'VIDEO_CODE') {
                         if (cliproxyConfig.defaultTextModel) {
                             return { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTextModel };
                         }
@@ -241,7 +243,7 @@ export class ModelConfigService {
         if (id.includes('embedding')) return ['EMBEDDING'];
         if (id.includes('aqa') || id.includes('retrieval')) return []; // skip non-generative
         // Default: text generation tasks
-        return ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS'];
+        return ['OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'VIDEO_SCRIPT', 'VIDEO_CODE'];
     }
 
     /**
@@ -475,7 +477,7 @@ export class ModelConfigService {
 
         // If not specifically image/tts, or if it's a general-purpose model, assign text tasks
         if (tasks.length === 0) {
-            tasks.push('OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS');
+            tasks.push('OUTLINE', 'SLIDES', 'SPEAKER_NOTES', 'QUESTIONS', 'VIDEO_SCRIPT', 'VIDEO_CODE');
         }
 
         return tasks;
@@ -1310,6 +1312,8 @@ export class ModelConfigService {
                         defaults.SLIDES = { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTextModel };
                         defaults.SPEAKER_NOTES = { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTextModel };
                         defaults.QUESTIONS = { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTextModel };
+                        defaults.VIDEO_SCRIPT = { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTextModel };
+                        defaults.VIDEO_CODE = { provider: 'CLIPROXY', modelName: cliproxyConfig.defaultTextModel };
                     }
 
                     // Override image model default

@@ -3,6 +3,7 @@ import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { ModelSelector } from '../ModelSelector';
 import { api } from '../../lib/api';
 import { useJobPolling } from '../../hooks/useJobPolling';
+import { ImageCropModal } from '../ImageCropModal';
 import './Steps.css';
 
 type GenerationStatus = 'idle' | 'generating_content' | 'generating_images' | 'generating_pptx' | 'completed' | 'error';
@@ -53,6 +54,20 @@ export function Step5GeneratePPTX() {
     const [tempFileSizeNoAudio, setTempFileSizeNoAudio] = useState<number | null>(null);
     const [downloadingAudio, setDownloadingAudio] = useState(false);
     const [downloadingNoAudio, setDownloadingNoAudio] = useState(false);
+
+    // Slide content inline editing state
+    const [editingSlideIndex, setEditingSlideIndex] = useState<number | null>(null);
+    const [editTitle, setEditTitle] = useState('');
+    const [editBullets, setEditBullets] = useState<OptimizedBullet[]>([]);
+    const [isSavingContent, setIsSavingContent] = useState(false);
+
+    // Slide custom image upload state
+    const [cropModalOpen, setCropModalOpen] = useState(false);
+    const [cropImageSrc, setCropImageSrc] = useState<string>('');
+    const [cropSlideIndex, setCropSlideIndex] = useState<number | null>(null);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [targetUploadSlideIndex, setTargetUploadSlideIndex] = useState<number | null>(null);
 
     const tempFileKeyRef = useRef<string | null>(null);
     const tempFileKeyNoAudioRef = useRef<string | null>(null);
@@ -510,7 +525,7 @@ export function Step5GeneratePPTX() {
                     ...s,
                     isRegenerating: false,
                     phase: 'complete',
-                    imageUrl: updatedSlide.imageUrl,
+                    imageUrl: `${updatedSlide.imageUrl}?t=${Date.now()}`,
                 } : s
             ));
         } catch (err: any) {
@@ -518,6 +533,129 @@ export function Step5GeneratePPTX() {
                 s.slideIndex === slideIndex ? { ...s, isRegenerating: false, phase: 'error' } : s
             ));
             setError(`Không thể tạo lại hình ảnh slide ${slideIndex}`);
+        }
+    };
+
+    // Slide Content Inline Editing Handlers
+    const handleStartEditContent = (slide: SlideProgress) => {
+        setEditingSlideIndex(slide.slideIndex);
+        setEditTitle(slide.title || '');
+        if (slide.optimizedContent && slide.optimizedContent.length > 0) {
+            setEditBullets(JSON.parse(JSON.stringify(slide.optimizedContent)));
+        } else {
+            setEditBullets([{ emoji: '📌', point: '', description: '' }]);
+        }
+    };
+
+    const handleCancelEditContent = () => {
+        setEditingSlideIndex(null);
+        setEditTitle('');
+        setEditBullets([]);
+    };
+
+    const handleSaveEditContent = async (slideIndex: number) => {
+        setIsSavingContent(true);
+        try {
+            const validBullets = editBullets.filter(b => b.point.trim() !== '' || b.description.trim() !== '');
+            const response = await api.put(`/lessons/${lessonId}/slides/${slideIndex}/content`, {
+                title: editTitle,
+                optimizedContent: validBullets,
+            });
+            const updated = response.data;
+            setSlideProgress(prev => prev.map(s => s.slideIndex === slideIndex ? {
+                ...s,
+                title: updated.title,
+                optimizedContent: typeof updated.optimizedContentJson === 'string'
+                    ? JSON.parse(updated.optimizedContentJson)
+                    : updated.optimizedContentJson,
+            } : s));
+            setEditingSlideIndex(null);
+        } catch (err: any) {
+            console.error('Failed to save slide content:', err);
+            setError(`Lỗi khi lưu nội dung slide ${slideIndex}: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsSavingContent(false);
+        }
+    };
+
+    const handleAddBullet = () => {
+        setEditBullets(prev => [...prev, { emoji: '📌', point: '', description: '' }]);
+    };
+
+    const handleRemoveBullet = (index: number) => {
+        setEditBullets(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleBulletChange = (index: number, field: keyof OptimizedBullet, value: string) => {
+        setEditBullets(prev => prev.map((bullet, i) => i === index ? { ...bullet, [field]: value } : bullet));
+    };
+
+    // Custom Image Upload & Cropping Handlers
+    const handleTriggerUpload = (slideIndex: number) => {
+        setTargetUploadSlideIndex(slideIndex);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+            fileInputRef.current.click();
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || targetUploadSlideIndex === null) return;
+
+        if (!file.type.startsWith('image/')) {
+            setError('Vui lòng chọn file hình ảnh hợp lệ (PNG, JPG, WEBP)');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            if (event.target?.result) {
+                setCropImageSrc(event.target.result as string);
+                setCropSlideIndex(targetUploadSlideIndex);
+                setCropModalOpen(true);
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleCropComplete = async (croppedBlob: Blob) => {
+        if (cropSlideIndex === null) return;
+        setIsUploadingImage(true);
+
+        try {
+            const formData = new FormData();
+            formData.append('image', croppedBlob, `slide_${cropSlideIndex}_custom.png`);
+
+            const response = await api.post(
+                `/lessons/${lessonId}/slides/${cropSlideIndex}/custom-image`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+
+            const updatedSlide = response.data;
+            const newImageUrl = `${updatedSlide.imageUrl}?t=${Date.now()}`;
+
+            setSlideProgress(prev => prev.map(s =>
+                s.slideIndex === cropSlideIndex ? {
+                    ...s,
+                    imageUrl: newImageUrl,
+                    phase: 'complete',
+                } : s
+            ));
+
+            setCropModalOpen(false);
+            setCropImageSrc('');
+            setCropSlideIndex(null);
+        } catch (err: any) {
+            console.error('Failed to upload slide custom image:', err);
+            setError(`Không thể tải lên ảnh cho slide ${cropSlideIndex}: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsUploadingImage(false);
         }
     };
 
@@ -726,74 +864,225 @@ export function Step5GeneratePPTX() {
                 <div className="slide-preview-section">
                     <h4>📋 Nội dung slides ({slideProgress.length})</h4>
                     <div className="slide-preview-grid">
-                        {slideProgress.map((slide) => (
-                            <div key={slide.slideIndex} className={`slide-card ${slide.phase} ${slide.isRegenerating ? 'regenerating' : ''}`}>
-                                <div className="slide-card-header">
-                                    <span className="slide-number">Slide {slide.slideIndex}</span>
-                                    <span className="slide-title">{slide.title}</span>
-                                    <span className="slide-status">
-                                        {slide.phase === 'pending' && '⏳'}
-                                        {slide.phase === 'optimizing_content' && '📝'}
-                                        {slide.phase === 'generating_image' && '🖼️'}
-                                        {slide.phase === 'complete' && '✅'}
-                                        {slide.phase === 'error' && '❌'}
-                                    </span>
-                                </div>
+                        {slideProgress.map((slide) => {
+                            const isEditingThisSlide = editingSlideIndex === slide.slideIndex;
+                            const fullImageUrl = slide.imageUrl
+                                ? (slide.imageUrl.startsWith('http') ? slide.imageUrl : `${API_BASE}${slide.imageUrl}`)
+                                : undefined;
 
-                                <div className="slide-card-body">
-                                    {/* Content side */}
-                                    <div className="slide-content-col">
-                                        {slide.optimizedContent && slide.optimizedContent.length > 0 ? (
-                                            <ul className="bullet-list">
-                                                {slide.optimizedContent.map((b, idx) => (
-                                                    <li key={idx}>
-                                                        <span className="emoji">{b.emoji}</span>
-                                                        <strong>{b.point}</strong>
-                                                        {b.description && (
-                                                            <span className="description"> - {b.description}</span>
-                                                        )}
-                                                    </li>
-                                                ))}
-                                            </ul>
+                            return (
+                                <div
+                                    key={slide.slideIndex}
+                                    className={`slide-card ${slide.phase} ${slide.isRegenerating ? 'regenerating' : ''} ${isEditingThisSlide ? 'editing' : ''}`}
+                                >
+                                    <div className="slide-card-header">
+                                        <span className="slide-number">Slide {slide.slideIndex}</span>
+                                        {isEditingThisSlide ? (
+                                            <span className="slide-title-edit-badge">✏️ Đang chỉnh sửa nội dung</span>
                                         ) : (
-                                            <p className="placeholder">Chưa có nội dung</p>
+                                            <span className="slide-title">{slide.title}</span>
                                         )}
+                                        <span className="slide-status">
+                                            {slide.phase === 'pending' && '⏳'}
+                                            {slide.phase === 'optimizing_content' && '📝'}
+                                            {slide.phase === 'generating_image' && '🖼️'}
+                                            {slide.phase === 'complete' && '✅'}
+                                            {slide.phase === 'error' && '❌'}
+                                        </span>
                                     </div>
 
-                                    {/* Image side */}
-                                    <div className="slide-image-col">
-                                        {slide.imageUrl ? (
-                                            <img src={slide.imageUrl} alt={`Slide ${slide.slideIndex}`} />
-                                        ) : (
-                                            <div className="image-placeholder">🖼️</div>
-                                        )}
+                                    <div className="slide-card-body">
+                                        {/* Content side */}
+                                        <div className="slide-content-col">
+                                            {isEditingThisSlide ? (
+                                                <div className="slide-inline-edit-container">
+                                                    <div className="inline-edit-field">
+                                                        <label>📌 Tiêu đề Slide:</label>
+                                                        <input
+                                                            type="text"
+                                                            className="inline-input-title"
+                                                            value={editTitle}
+                                                            onChange={(e) => setEditTitle(e.target.value)}
+                                                            placeholder="Nhập tiêu đề slide..."
+                                                        />
+                                                    </div>
+
+                                                    <div className="inline-edit-bullets-section">
+                                                        <label>📝 Các ý chính trong slide:</label>
+                                                        {editBullets.map((b, idx) => (
+                                                            <div key={idx} className="inline-bullet-row">
+                                                                <input
+                                                                    type="text"
+                                                                    className="inline-input-emoji"
+                                                                    value={b.emoji}
+                                                                    onChange={(e) => handleBulletChange(idx, 'emoji', e.target.value)}
+                                                                    title="Icon / Emoji"
+                                                                    maxLength={4}
+                                                                />
+                                                                <div className="inline-bullet-fields">
+                                                                    <input
+                                                                        type="text"
+                                                                        className="inline-input-point"
+                                                                        value={b.point}
+                                                                        onChange={(e) => handleBulletChange(idx, 'point', e.target.value)}
+                                                                        placeholder="Ý chính..."
+                                                                    />
+                                                                    <textarea
+                                                                        rows={2}
+                                                                        className="inline-input-desc"
+                                                                        value={b.description}
+                                                                        onChange={(e) => handleBulletChange(idx, 'description', e.target.value)}
+                                                                        placeholder="Mô tả / giải thích chi tiết..."
+                                                                    />
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-inline-delete"
+                                                                    onClick={() => handleRemoveBullet(idx)}
+                                                                    title="Xóa ý này"
+                                                                >
+                                                                    🗑️
+                                                                </button>
+                                                            </div>
+                                                        ))}
+
+                                                        <button
+                                                            type="button"
+                                                            className="btn-inline-add-bullet"
+                                                            onClick={handleAddBullet}
+                                                        >
+                                                            ➕ Thêm ý mới
+                                                        </button>
+                                                    </div>
+
+                                                    <div className="inline-edit-bottom-actions">
+                                                        <button
+                                                            type="button"
+                                                            className="btn-save-inline"
+                                                            onClick={() => handleSaveEditContent(slide.slideIndex)}
+                                                            disabled={isSavingContent}
+                                                        >
+                                                            {isSavingContent ? '⏳ Đang lưu...' : '💾 Lưu nội dung'}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-cancel-inline"
+                                                            onClick={handleCancelEditContent}
+                                                            disabled={isSavingContent}
+                                                        >
+                                                            ❌ Hủy
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                slide.optimizedContent && slide.optimizedContent.length > 0 ? (
+                                                    <ul className="bullet-list">
+                                                        {slide.optimizedContent.map((b, idx) => (
+                                                            <li key={idx}>
+                                                                <span className="emoji">{b.emoji}</span>
+                                                                <strong>{b.point}</strong>
+                                                                {b.description && (
+                                                                    <span className="description"> - {b.description}</span>
+                                                                )}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="placeholder">Chưa có nội dung</p>
+                                                )
+                                            )}
+                                        </div>
+
+                                        {/* Image side */}
+                                        <div className="slide-image-col">
+                                            <div className="slide-image-wrapper">
+                                                {fullImageUrl ? (
+                                                    <img src={fullImageUrl} alt={`Slide ${slide.slideIndex}`} />
+                                                ) : (
+                                                    <div className="image-placeholder">🖼️</div>
+                                                )}
+
+                                                {/* Overlay button on image hover */}
+                                                {!isJobRunning && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn-image-overlay-upload"
+                                                        onClick={() => handleTriggerUpload(slide.slideIndex)}
+                                                        title="Tải ảnh mới từ máy tính (tự động căn chỉnh & resize 1:1)"
+                                                    >
+                                                        📤 Đổi ảnh
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    {/* Action buttons */}
+                                    {!isEditingThisSlide && !isJobRunning && (
+                                        <div className="slide-card-actions">
+                                            <button
+                                                className="btn-small btn-action-edit"
+                                                onClick={() => handleStartEditContent(slide)}
+                                                disabled={slide.isRegenerating}
+                                                title="Chỉnh sửa trực tiếp tiêu đề và các ý trong slide"
+                                            >
+                                                ✏️ Sửa nội dung
+                                            </button>
+                                            <button
+                                                className="btn-small btn-action-upload"
+                                                onClick={() => handleTriggerUpload(slide.slideIndex)}
+                                                disabled={slide.isRegenerating}
+                                                title="Tải ảnh từ máy tính (tự động căn chỉnh & resize 1:1)"
+                                            >
+                                                📤 Đổi ảnh
+                                            </button>
+                                            <button
+                                                className="btn-small"
+                                                onClick={() => handleRegenerateContent(slide.slideIndex)}
+                                                disabled={slide.isRegenerating}
+                                                title="Dùng AI viết lại nội dung slide này"
+                                            >
+                                                🔄 Tạo lại nội dung
+                                            </button>
+                                            <button
+                                                className="btn-small"
+                                                onClick={() => handleRegenerateImage(slide.slideIndex)}
+                                                disabled={slide.isRegenerating}
+                                                title="Dùng AI tạo lại hình ảnh slide này"
+                                            >
+                                                🖼️ Tạo lại ảnh
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Regenerate buttons */}
-                                {status === 'completed' && (
-                                    <div className="slide-card-actions">
-                                        <button
-                                            className="btn-small"
-                                            onClick={() => handleRegenerateContent(slide.slideIndex)}
-                                            disabled={slide.isRegenerating}
-                                        >
-                                            🔄 Tạo lại nội dung
-                                        </button>
-                                        <button
-                                            className="btn-small"
-                                            onClick={() => handleRegenerateImage(slide.slideIndex)}
-                                            disabled={slide.isRegenerating}
-                                        >
-                                            🖼️ Tạo lại ảnh
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}
+
+            {/* Hidden file input for custom image upload */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="image/*"
+                onChange={handleFileSelect}
+            />
+
+            {/* Image Crop & Resize Modal */}
+            <ImageCropModal
+                isOpen={cropModalOpen}
+                imageSrc={cropImageSrc}
+                slideIndex={cropSlideIndex || 1}
+                onClose={() => {
+                    setCropModalOpen(false);
+                    setCropImageSrc('');
+                    setCropSlideIndex(null);
+                }}
+                onCropComplete={handleCropComplete}
+                isUploading={isUploadingImage}
+            />
         </div>
     );
 }

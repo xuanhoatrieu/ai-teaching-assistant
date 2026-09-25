@@ -2,6 +2,29 @@ import { api } from './api';
 
 // API functions for subjects and lessons
 
+export const INSTITUTION_TYPES = ['Đại học', 'Cao đẳng', 'THPT', 'Doanh nghiệp', 'Khác'];
+
+export const LANGUAGE_OPTIONS = [
+    { value: 'vi', label: '🇻🇳 Tiếng Việt', desc: 'Toàn bộ nội dung bằng tiếng Việt' },
+    { value: 'en', label: '🇬🇧 English', desc: 'All content in English' },
+    { value: 'vi-en', label: '🌐 Song ngữ (Bilingual)', desc: 'Slide EN, Speaker Notes VI' },
+];
+
+export interface QuickTagOption {
+    id: string;
+    label: string;
+    defaultActive: boolean;
+}
+
+export const QUICK_TAG_OPTIONS: QuickTagOption[] = [
+    { id: 'detailed', label: 'Chi tiết & Đầy đủ', defaultActive: true },
+    { id: 'examples', label: 'Nhiều ví dụ thực tế', defaultActive: true },
+    { id: 'visual', label: 'Trực quan, dễ hiểu', defaultActive: true },
+    { id: 'exercises', label: 'Kèm bài tập tình huống', defaultActive: false },
+    { id: 'modern', label: 'Chuẩn kiến thức mới nhất', defaultActive: false },
+    { id: 'socratic', label: 'Văn phong gợi mở (Socratic)', defaultActive: false },
+];
+
 export interface Subject {
     id: string;
     name: string;

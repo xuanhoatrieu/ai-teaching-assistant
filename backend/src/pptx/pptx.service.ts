@@ -803,20 +803,23 @@ export class PptxService {
     private getLocalPath(publicUrl: string): string {
         if (!publicUrl) return '';
 
+        // Strip query parameters if any (e.g. ?t=123)
+        const cleanUrl = publicUrl.split('?')[0];
+
         // Handle /uploads/... path (for user-uploaded templates)
-        if (publicUrl.startsWith('/uploads')) {
-            return path.join(process.cwd(), publicUrl);
+        if (cleanUrl.startsWith('/uploads')) {
+            return path.join(process.cwd(), cleanUrl);
         }
 
         // Handle /templates/... path (for system templates like /templates/tuaf/1.png)
         // Maps to: {cwd}/public/templates/... (served by NestJS static assets)
-        if (publicUrl.startsWith('/templates')) {
-            return path.join(process.cwd(), 'public', publicUrl);
+        if (cleanUrl.startsWith('/templates')) {
+            return path.join(process.cwd(), 'public', cleanUrl);
         }
 
         // Handle /files/public/system/templates/{uuid}/{filename}
         // -> datauser/system/templates/{uuid}/{filename} (system template backgrounds)
-        const systemTemplateMatch = publicUrl.match(/^\/files\/public\/system\/templates\/([^/]+)\/(.+)$/);
+        const systemTemplateMatch = cleanUrl.match(/^\/files\/public\/system\/templates\/([^/]+)\/(.+)$/);
         if (systemTemplateMatch) {
             const [, templateUuid, filename] = systemTemplateMatch;
             return path.join(process.cwd(), 'datauser', 'system', 'templates', templateUuid, filename);
@@ -824,7 +827,7 @@ export class PptxService {
 
         // Handle /files/public/{userId}/templates/{uuid}/{filename}
         // -> datauser/{userId}/templates/{uuid}/{filename} (user template backgrounds)
-        const userTemplateMatch = publicUrl.match(/^\/files\/public\/([^/]+)\/templates\/([^/]+)\/(.+)$/);
+        const userTemplateMatch = cleanUrl.match(/^\/files\/public\/([^/]+)\/templates\/([^/]+)\/(.+)$/);
         if (userTemplateMatch) {
             const [, userId, templateUuid, filename] = userTemplateMatch;
             return path.join(process.cwd(), 'datauser', userId, 'templates', templateUuid, filename);
@@ -832,7 +835,7 @@ export class PptxService {
 
         // Handle /files/public/{userId}/{lessonId}/images/{filename}
         // -> datauser/{userId}/lessons/{lessonId}/images/{filename}
-        const publicMatch = publicUrl.match(/^\/files\/public\/([^/]+)\/([^/]+)\/images\/(.+)$/);
+        const publicMatch = cleanUrl.match(/^\/files\/public\/([^/]+)\/([^/]+)\/images\/(.+)$/);
         if (publicMatch) {
             const [, userId, lessonId, filename] = publicMatch;
             return path.join(process.cwd(), 'datauser', userId, 'lessons', lessonId, 'images', filename);
@@ -841,19 +844,19 @@ export class PptxService {
 
         // Handle /files/{userId}/{lessonId}/audio/{filename}
         // -> datauser/{userId}/lessons/{lessonId}/audio/{filename}
-        const authMatch = publicUrl.match(/^\/files\/([^/]+)\/([^/]+)\/audio\/(.+)$/);
+        const authMatch = cleanUrl.match(/^\/files\/([^/]+)\/([^/]+)\/audio\/(.+)$/);
         if (authMatch) {
             const [, userId, lessonId, filename] = authMatch;
             return path.join(process.cwd(), 'datauser', userId, 'lessons', lessonId, 'audio', filename);
         }
 
         // Fallback: if already an absolute path, return as-is
-        if (path.isAbsolute(publicUrl)) {
-            return publicUrl;
+        if (path.isAbsolute(cleanUrl)) {
+            return cleanUrl;
         }
 
         this.logger.warn(`[PPTX] Unknown URL format: ${publicUrl}`);
-        return publicUrl;
+        return cleanUrl;
     }
 
 
