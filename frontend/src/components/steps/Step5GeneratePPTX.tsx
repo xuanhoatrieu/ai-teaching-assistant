@@ -68,6 +68,7 @@ export function Step5GeneratePPTX() {
     const [isUploadingImage, setIsUploadingImage] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [targetUploadSlideIndex, setTargetUploadSlideIndex] = useState<number | null>(null);
+    const targetUploadSlideIndexRef = useRef<number | null>(null);
 
     const tempFileKeyRef = useRef<string | null>(null);
     const tempFileKeyNoAudioRef = useRef<string | null>(null);
@@ -592,6 +593,7 @@ export function Step5GeneratePPTX() {
 
     // Custom Image Upload & Cropping Handlers
     const handleTriggerUpload = (slideIndex: number) => {
+        targetUploadSlideIndexRef.current = slideIndex;
         setTargetUploadSlideIndex(slideIndex);
         if (fileInputRef.current) {
             fileInputRef.current.value = '';
@@ -601,7 +603,8 @@ export function Step5GeneratePPTX() {
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || targetUploadSlideIndex === null) return;
+        const activeIdx = targetUploadSlideIndexRef.current ?? targetUploadSlideIndex;
+        if (!file || activeIdx === null) return;
 
         if (!file.type.startsWith('image/')) {
             setError('Vui lòng chọn file hình ảnh hợp lệ (PNG, JPG, WEBP)');
@@ -612,7 +615,7 @@ export function Step5GeneratePPTX() {
         reader.onload = (event) => {
             if (event.target?.result) {
                 setCropImageSrc(event.target.result as string);
-                setCropSlideIndex(targetUploadSlideIndex);
+                setCropSlideIndex(activeIdx);
                 setCropModalOpen(true);
             }
         };

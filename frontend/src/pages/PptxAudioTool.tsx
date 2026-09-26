@@ -268,6 +268,20 @@ export function PptxAudioToolPage() {
     const [vittsNormalize, setVittsNormalize] = useState<boolean>(false);
     const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
 
+    // Speaker notes AI state
+    const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
+    const [isOptimizingNotes, setIsOptimizingNotes] = useState(false);
+    const [showNotesOptionsModal, setShowNotesOptionsModal] = useState(false);
+    const [notesJobId, setNotesJobId] = useState<string | null>(null);
+    const [optimizeJobId, setOptimizeJobId] = useState<string | null>(null);
+
+    // Speaker notes Import state
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [importFileName, setImportFileName] = useState('');
+    const [parsedImportNotes, setParsedImportNotes] = useState<Array<{ slideIndex: number; speakerNote: string }>>([]);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
     // ─────────────────────────────────────────────────────────────
     // Questions 3-Tab State
     // ─────────────────────────────────────────────────────────────
@@ -322,6 +336,47 @@ export function PptxAudioToolPage() {
             setIsGeneratingAll(false);
             setGenerateAllJobId(null);
             alert(`Lỗi khi tạo audio: ${msg}`);
+        },
+    });
+
+    // Background jobs for Speaker Notes Generation & Optimization
+    const notesJob = useJobPolling({
+        onComplete: async () => {
+            setIsGeneratingNotes(false);
+            setNotesJobId(null);
+            if (sessionId) {
+                await loadSession(sessionId);
+            }
+        },
+        onCancelled: async () => {
+            setIsGeneratingNotes(false);
+            setNotesJobId(null);
+            if (sessionId) await loadSession(sessionId);
+        },
+        onError: (msg) => {
+            setIsGeneratingNotes(false);
+            setNotesJobId(null);
+            alert(`Lỗi khi tạo lời giảng: ${msg}`);
+        },
+    });
+
+    const optimizeJob = useJobPolling({
+        onComplete: async () => {
+            setIsOptimizingNotes(false);
+            setOptimizeJobId(null);
+            if (sessionId) {
+                await loadSession(sessionId);
+            }
+        },
+        onCancelled: async () => {
+            setIsOptimizingNotes(false);
+            setOptimizeJobId(null);
+            if (sessionId) await loadSession(sessionId);
+        },
+        onError: (msg) => {
+            setIsOptimizingNotes(false);
+            setOptimizeJobId(null);
+            alert(`Lỗi khi tối ưu lời giảng: ${msg}`);
         },
     });
 
@@ -398,12 +453,20 @@ export function PptxAudioToolPage() {
         },
     });
 
-    // Refresh slides on each progress tick of generateAllAudioJob
+    // Refresh slides on each progress tick of background jobs
     useEffect(() => {
-        if (generateAllAudioJob.isRunning && sessionId) {
+        if ((generateAllAudioJob.isRunning || notesJob.isRunning || optimizeJob.isRunning) && sessionId) {
             reloadSlidesOnly(sessionId);
         }
-    }, [generateAllAudioJob.jobStatus?.progress, generateAllAudioJob.isRunning, sessionId]);
+    }, [
+        generateAllAudioJob.jobStatus?.progress,
+        generateAllAudioJob.isRunning,
+        notesJob.jobStatus?.progress,
+        notesJob.isRunning,
+        optimizeJob.jobStatus?.progress,
+        optimizeJob.isRunning,
+        sessionId,
+    ]);
 
     const reloadSlidesOnly = async (sid: string) => {
         try {
@@ -418,6 +481,22 @@ export function PptxAudioToolPage() {
 
     const checkActiveJobs = async (sid: string) => {
         try {
+            // Speaker notes job
+            const resNotes = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-speaker-notes`);
+            if (resNotes.data?.id) {
+                setNotesJobId(resNotes.data.id);
+                setIsGeneratingNotes(true);
+                notesJob.startPolling(resNotes.data.id);
+            }
+
+            // Optimize notes job
+            const resOpt = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-optimize-notes`);
+            if (resOpt.data?.id) {
+                setOptimizeJobId(resOpt.data.id);
+                setIsOptimizingNotes(true);
+                optimizeJob.startPolling(resOpt.data.id);
+            }
+
             // Audio generate-all job
             const resAudio = await api.get(`/generation-jobs/active?lessonId=${sid}&type=pptx-tool-generate-all-audio`);
             if (resAudio.data?.id) {
@@ -626,6 +705,188 @@ export function PptxAudioToolPage() {
             setEditedNote('');
         } catch (error) {
             console.error('Error updating note:', error);
+        }
+    };
+
+    const startGenerateNotes = async (mode: 'all' | 'missing') => {
+        if (!sessionId) return;
+        try {
+            setIsGeneratingNotes(true);
+            setShowNotesOptionsModal(false);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/speaker-notes/generate`, { mode });
+            if (res.data?.jobId) {
+                setNotesJobId(res.data.jobId);
+                notesJob.startPolling(res.data.jobId);
+            }
+        } catch (err: any) {
+            setIsGeneratingNotes(false);
+            alert(err.response?.data?.message || 'Lỗi khi bắt đầu tạo lời giảng');
+        }
+    };
+
+    const cancelNotesJob = async () => {
+        const jid = notesJobId || notesJob.jobStatus?.id;
+        if (!jid) return;
+        try {
+            await api.post(`/generation-jobs/${jid}/cancel`);
+            setIsGeneratingNotes(false);
+            setNotesJobId(null);
+            if (sessionId) await loadSession(sessionId);
+        } catch (err) {
+            console.error('Error cancelling notes job:', err);
+        }
+    };
+
+    const startOptimizeNotes = async () => {
+        if (!sessionId) return;
+        try {
+            setIsOptimizingNotes(true);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/speaker-notes/optimize`);
+            if (res.data?.jobId) {
+                setOptimizeJobId(res.data.jobId);
+                optimizeJob.startPolling(res.data.jobId);
+            }
+        } catch (err: any) {
+            setIsOptimizingNotes(false);
+            alert(err.response?.data?.message || 'Lỗi khi bắt đầu tối ưu lời giảng');
+        }
+    };
+
+    const cancelOptimizeJob = async () => {
+        const jid = optimizeJobId || optimizeJob.jobStatus?.id;
+        if (!jid) return;
+        try {
+            await api.post(`/generation-jobs/${jid}/cancel`);
+            setIsOptimizingNotes(false);
+            setOptimizeJobId(null);
+            if (sessionId) await loadSession(sessionId);
+        } catch (err) {
+            console.error('Error cancelling optimize job:', err);
+        }
+    };
+
+    const exportNotesTxt = () => {
+        if (!slides || slides.length === 0) return;
+        const lines: string[] = [];
+        slides.forEach(slide => {
+            const note = getActiveNote(slide) || '';
+            lines.push(`=== SLIDE ${slide.index + 1}: ${slide.title || `Slide ${slide.index + 1}`} ===`);
+            lines.push(note.trim() ? note.trim() : '(Chưa có lời giảng)');
+            lines.push('');
+        });
+
+        const textContent = lines.join('\n');
+        const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        const cleanTitle = (session?.fileName || 'BaiGiang').replace(/\.pptx$/i, '').replace(/[^a-zA-Z0-9_\-\u00C0-\u024F\u1EA0-\u1EF9]/g, '_');
+        link.download = `${cleanTitle}_LoiGiang.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const parseSpeakerNotesFromTxt = (text: string): Array<{ slideIndex: number; speakerNote: string }> => {
+        const lines = text.split(/\r?\n/);
+        const result: Array<{ slideIndex: number; speakerNote: string }> = [];
+        let currentSlideIndex: number | null = null;
+        let currentLines: string[] = [];
+
+        const headerRegex = /^(?:={3,}\s*|---\s*|\[\s*)?slide\s*(\d+)[\s:\-\]|=]*(.*)$/i;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+            const match = trimmed.match(headerRegex);
+
+            const isDelimiter = match && (
+                trimmed.startsWith('===') ||
+                trimmed.startsWith('---') ||
+                trimmed.startsWith('[') ||
+                trimmed.endsWith('===') ||
+                trimmed.endsWith('---') ||
+                trimmed.endsWith(']') ||
+                /^\s*slide\s*\d+\s*[:\-]?\s*$/i.test(trimmed)
+            );
+
+            if (isDelimiter && match) {
+                if (currentSlideIndex !== null) {
+                    result.push({
+                        slideIndex: currentSlideIndex,
+                        speakerNote: currentLines.join('\n').trim(),
+                    });
+                    currentLines = [];
+                }
+                currentSlideIndex = parseInt(match[1], 10);
+            } else if (currentSlideIndex !== null) {
+                currentLines.push(line);
+            }
+        }
+
+        if (currentSlideIndex !== null) {
+            result.push({
+                slideIndex: currentSlideIndex,
+                speakerNote: currentLines.join('\n').trim(),
+            });
+        }
+
+        return result;
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setImportFileName(file.name);
+        setImportMessage(null);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const content = event.target?.result as string;
+            if (content) {
+                const parsed = parseSpeakerNotesFromTxt(content);
+                setParsedImportNotes(parsed);
+                if (parsed.length === 0) {
+                    setImportMessage({
+                        type: 'error',
+                        text: 'Không nhận diện được slide nào theo định dạng hợp lệ. Định dạng mẫu: "=== SLIDE 1: Tiêu đề ===" theo sau là lời giảng.',
+                    });
+                } else {
+                    setImportMessage({
+                        type: 'success',
+                        text: `Đã nhận diện được ${parsed.length} slide từ file!`,
+                    });
+                }
+            }
+        };
+        reader.readAsText(file, 'utf-8');
+    };
+
+    const handleConfirmImport = async () => {
+        if (!sessionId || parsedImportNotes.length === 0) return;
+        try {
+            setIsImporting(true);
+            const response = await api.post(`/pptx-audio-tool/${sessionId}/speaker-notes/import`, {
+                notes: parsedImportNotes,
+            });
+
+            if (response.data?.success) {
+                if (response.data.slides) {
+                    setSlides(response.data.slides);
+                } else {
+                    await loadSession(sessionId);
+                }
+                alert(`✅ Đã nhập thành công lời giảng cho ${response.data.importedCount} slide!`);
+                setIsImportModalOpen(false);
+                setParsedImportNotes([]);
+                setImportFileName('');
+                setImportMessage(null);
+            }
+        } catch (err: any) {
+            console.error('Error importing speaker notes:', err);
+            alert('Lỗi khi nhập lời giảng: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setIsImporting(false);
         }
     };
 
@@ -1347,7 +1608,7 @@ export function PptxAudioToolPage() {
                                     {hasDualLanguage && <> · 🌐 Song ngữ</>}
                                 </p>
                             </div>
-                            <div className="header-actions">
+                            <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                 {/* Language Toggle */}
                                 {hasDualLanguage && (
                                     <div className="language-toggle">
@@ -1366,11 +1627,82 @@ export function PptxAudioToolPage() {
                                     </div>
                                 )}
 
+                                {/* Generate Speaker Notes */}
+                                <button
+                                    className="btn-generate-notes"
+                                    onClick={() => setShowNotesOptionsModal(true)}
+                                    disabled={isGeneratingNotes || isOptimizingNotes}
+                                    title="Dùng AI soạn lời giảng từ nội dung slide"
+                                >
+                                    {isGeneratingNotes ? (
+                                        <>
+                                            <span className="spinner"></span>{' '}
+                                            {notesJob.jobStatus?.progress !== undefined
+                                                ? `Đang soạn (${notesJob.jobStatus.progress}%)`
+                                                : 'Đang soạn...'}
+                                        </>
+                                    ) : slidesWithNotes.length > 0 ? (
+                                        '🔄 Tạo lại Lời Giảng'
+                                    ) : (
+                                        '✨ Tạo Lời Giảng'
+                                    )}
+                                </button>
+                                {isGeneratingNotes && (
+                                    <button className="btn-stop" onClick={cancelNotesJob} title="Hủy tạo lời giảng">⏹️ Dừng</button>
+                                )}
+
+                                {/* Optimize Speaker Notes */}
+                                <button
+                                    className="btn-optimize-notes"
+                                    onClick={startOptimizeNotes}
+                                    disabled={isOptimizingNotes || isGeneratingNotes || slidesWithNotes.length === 0}
+                                    title={slidesWithNotes.length === 0 ? 'Cần có lời giảng trước khi tối ưu' : 'Chuẩn hóa nhịp điệu đọc & dấu câu cho TTS'}
+                                >
+                                    {isOptimizingNotes ? (
+                                        <>
+                                            <span className="spinner"></span>{' '}
+                                            {optimizeJob.jobStatus?.progress !== undefined
+                                                ? `Đang tối ưu (${optimizeJob.jobStatus.progress}%)`
+                                                : 'Đang tối ưu...'}
+                                        </>
+                                    ) : (
+                                        '✅ Tối Ưu & Kiểm Duyệt'
+                                    )}
+                                </button>
+                                {isOptimizingNotes && (
+                                    <button className="btn-stop" onClick={cancelOptimizeJob} title="Hủy tối ưu">⏹️ Dừng</button>
+                                )}
+
+                                {/* Export Notes */}
+                                <button
+                                    className="btn-export-notes"
+                                    onClick={exportNotesTxt}
+                                    disabled={slidesWithNotes.length === 0}
+                                    title="Tải về file TXT lời giảng các slide"
+                                >
+                                    📤 Xuất Lời Giảng
+                                </button>
+
+                                {/* Import Notes */}
+                                <button
+                                    className="btn-import-notes"
+                                    onClick={() => {
+                                        setImportFileName('');
+                                        setParsedImportNotes([]);
+                                        setImportMessage(null);
+                                        setIsImportModalOpen(true);
+                                    }}
+                                    disabled={!slides || slides.length === 0}
+                                    title="Nhập lời giảng từ file văn bản TXT"
+                                >
+                                    📥 Nhập Lời Giảng
+                                </button>
+
                                 {/* Generate All */}
                                 <button
                                     className="btn-generate-all"
                                     onClick={generateAllAudios}
-                                    disabled={isGeneratingAll || slidesWithNotes.length === 0}
+                                    disabled={isGeneratingAll || slidesWithNotes.length === 0 || isGeneratingNotes || isOptimizingNotes}
                                 >
                                     {isGeneratingAll ? (
                                         <>
@@ -1389,15 +1721,86 @@ export function PptxAudioToolPage() {
                             </div>
                         </div>
 
-                        {/* TTS Config */}
-                        <TTSSelector onChange={(config) => {
-                            if (config.multilingualMode !== undefined) setMultilingualMode(config.multilingualMode || '');
-                            if (config.vittsMode !== undefined) setVittsMode(config.vittsMode || '');
-                            if (config.vittsDesignInstruct !== undefined) setVittsDesignInstruct(config.vittsDesignInstruct || '');
-                            if (config.vittsNormalize !== undefined) setVittsNormalize(config.vittsNormalize);
-                        }} />
+                        {/* Model & TTS Config */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, margin: '14px 0' }}>
+                            <ModelSelector taskType="SPEAKER_NOTES" compact />
+                            <TTSSelector onChange={(config) => {
+                                if (config.multilingualMode !== undefined) setMultilingualMode(config.multilingualMode || '');
+                                if (config.vittsMode !== undefined) setVittsMode(config.vittsMode || '');
+                                if (config.vittsDesignInstruct !== undefined) setVittsDesignInstruct(config.vittsDesignInstruct || '');
+                                if (config.vittsNormalize !== undefined) setVittsNormalize(config.vittsNormalize);
+                            }} />
+                        </div>
 
-                        {/* Background Job Running Banner */}
+                        {/* Background Job Running Banner for Speaker Notes */}
+                        {notesJob.isRunning && (
+                            <div style={{
+                                margin: '14px 0',
+                                padding: '12px 18px',
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '16px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span className="spinner" style={{ borderColor: '#16a34a', borderTopColor: 'transparent', width: 20, height: 20 }}></span>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: '#15803d', fontSize: '0.95rem' }}>
+                                            {notesJob.jobStatus?.message || 'Đang tạo lời giảng bằng AI...'} ({notesJob.jobStatus?.progress || 0}%)
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                            Tác vụ đang chạy ngầm trên máy chủ. Bạn có thể chuyển tab hoặc làm việc khác mà không bị gián đoạn.
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn-stop"
+                                    onClick={cancelNotesJob}
+                                    style={{ padding: '6px 14px', fontSize: '0.85rem', flexShrink: 0 }}
+                                >
+                                    ⏹️ Hủy bỏ
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Background Job Running Banner for Optimize Notes */}
+                        {optimizeJob.isRunning && (
+                            <div style={{
+                                margin: '14px 0',
+                                padding: '12px 18px',
+                                background: '#faf5ff',
+                                border: '1px solid #e9d5ff',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '16px'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <span className="spinner" style={{ borderColor: '#9333ea', borderTopColor: 'transparent', width: 20, height: 20 }}></span>
+                                    <div>
+                                        <div style={{ fontWeight: 600, color: '#7e22ce', fontSize: '0.95rem' }}>
+                                            {optimizeJob.jobStatus?.message || 'Đang tối ưu lời giảng cho TTS...'} ({optimizeJob.jobStatus?.progress || 0}%)
+                                        </div>
+                                        <div style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                                            Chuẩn hóa nhịp điệu đọc, ngắt nghỉ dấu câu để giọng đọc nhân tạo hay nhất.
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    className="btn-stop"
+                                    onClick={cancelOptimizeJob}
+                                    style={{ padding: '6px 14px', fontSize: '0.85rem', flexShrink: 0 }}
+                                >
+                                    ⏹️ Hủy bỏ
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Background Job Running Banner for Audio */}
                         {generateAllAudioJob.isRunning && (
                             <div style={{
                                 margin: '14px 0',
@@ -1549,12 +1952,211 @@ export function PptxAudioToolPage() {
                             })}
                         </div>
 
-                        {/* No notes warning */}
+                        {/* No notes warning / Callout */}
                         {slidesWithNotes.length === 0 && (
-                            <div className="empty-state">
-                                <span className="empty-icon">📝</span>
-                                <h3>Không có Speaker Notes</h3>
-                                <p>File PPTX này không có speaker notes. Cần có notes để tạo audio.</p>
+                            <div className="empty-state" style={{ margin: '24px 0', padding: '32px 20px', background: 'rgba(30, 41, 59, 0.4)', border: '1px dashed rgba(148, 163, 184, 0.3)', borderRadius: 12 }}>
+                                <span className="empty-icon" style={{ fontSize: '2.5rem' }}>✨</span>
+                                <h3 style={{ marginTop: 12 }}>File PPTX chưa có Speaker Notes</h3>
+                                <p style={{ maxWidth: 520, margin: '8px auto 16px', color: '#94a3b8' }}>
+                                    Hệ thống cần lời giảng để tạo âm thanh cho bài giảng. Hãy nhấn <strong>"Tạo Lời Giảng"</strong> để AI đọc nội dung slide và tự động soạn kịch bản sư phạm cho bạn!
+                                </p>
+                                <button
+                                    className="btn-generate-notes"
+                                    onClick={() => setShowNotesOptionsModal(true)}
+                                    disabled={isGeneratingNotes}
+                                    style={{ margin: '0 auto' }}
+                                >
+                                    ✨ Tạo Lời Giảng Với AI Ngay
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Speaker Notes Options Modal */}
+                        {showNotesOptionsModal && (
+                            <div className="modal-backdrop" onClick={() => setShowNotesOptionsModal(false)} style={{
+                                position: 'fixed',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                background: 'rgba(0, 0, 0, 0.65)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                zIndex: 1000,
+                                backdropFilter: 'blur(4px)'
+                            }}>
+                                <div className="modal-content" onClick={e => e.stopPropagation()} style={{
+                                    background: '#1e293b',
+                                    borderRadius: 14,
+                                    padding: '24px 28px',
+                                    maxWidth: 520,
+                                    width: '90%',
+                                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                                    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)'
+                                }}>
+                                    <h3 style={{ margin: '0 0 8px 0', color: '#f8fafc', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span>✨</span> Tùy Chọn Tạo Lời Giảng Bằng AI
+                                    </h3>
+                                    <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: '0 0 20px 0' }}>
+                                        Chọn phương thức tạo lời giảng phù hợp với bài thuyết trình của bạn:
+                                    </p>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        {/* Option 1: All slides */}
+                                        <div
+                                            onClick={() => startGenerateNotes('all')}
+                                            style={{
+                                                padding: '16px 18px',
+                                                border: '2px solid rgba(148, 163, 184, 0.2)',
+                                                borderRadius: 10,
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s',
+                                                background: 'rgba(15, 23, 42, 0.6)',
+                                            }}
+                                            onMouseEnter={e => (e.currentTarget.style.borderColor = '#0284c7')}
+                                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)')}
+                                        >
+                                            <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span>🎯 Tạo lại cho TẤT CẢ các slide ({slides.length} slide)</span>
+                                                {slidesWithNotes.length > 0 && (
+                                                    <span style={{ fontSize: '0.72rem', background: 'rgba(2, 132, 199, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: 999 }}>
+                                                        Khuyên dùng
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div style={{ color: '#94a3b8', fontSize: '0.84rem', marginTop: 6, lineHeight: 1.45 }}>
+                                                AI sẽ đọc đồng thời cả <strong>nội dung trên slide</strong> VÀ <strong>ghi chú hiện có (nếu có)</strong> để mở rộng, viết lại thành lời giảng chuẩn mực sư phạm (180 – 220 từ).
+                                            </div>
+                                        </div>
+
+                                        {/* Option 2: Missing slides */}
+                                        <div
+                                            onClick={() => {
+                                                if (slides.length - slidesWithNotes.length > 0) {
+                                                    startGenerateNotes('missing');
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '16px 18px',
+                                                border: '2px solid rgba(148, 163, 184, 0.2)',
+                                                borderRadius: 10,
+                                                cursor: slides.length - slidesWithNotes.length === 0 ? 'not-allowed' : 'pointer',
+                                                opacity: slides.length - slidesWithNotes.length === 0 ? 0.5 : 1,
+                                                transition: 'all 0.2s',
+                                                background: 'rgba(15, 23, 42, 0.6)',
+                                            }}
+                                            onMouseEnter={e => {
+                                                if (slides.length - slidesWithNotes.length > 0) {
+                                                    e.currentTarget.style.borderColor = '#10b981';
+                                                }
+                                            }}
+                                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)')}
+                                        >
+                                            <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                <span>➕ Chỉ tạo cho các slide THIẾU ({slides.length - slidesWithNotes.length} slide)</span>
+                                            </div>
+                                            <div style={{ color: '#94a3b8', fontSize: '0.84rem', marginTop: 6, lineHeight: 1.45 }}>
+                                                Chỉ soạn bài giảng cho các slide chưa có ghi chú. Giữ nguyên 100% nội dung của {slidesWithNotes.length} slide đã có.
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 22 }}>
+                                        <button
+                                            className="btn-cancel"
+                                            onClick={() => setShowNotesOptionsModal(false)}
+                                            style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(148, 163, 184, 0.2)', background: 'transparent', color: '#94a3b8', cursor: 'pointer' }}
+                                        >
+                                            Đóng
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Import Speaker Notes Modal */}
+                        {isImportModalOpen && (
+                            <div className="import-modal-backdrop" onClick={() => !isImporting && setIsImportModalOpen(false)}>
+                                <div className="import-modal-container" onClick={(e) => e.stopPropagation()}>
+                                    <div className="import-modal-header">
+                                        <h3>📥 Nhập Lời Giảng từ File TXT</h3>
+                                        <button
+                                            className="btn-close-modal"
+                                            onClick={() => !isImporting && setIsImportModalOpen(false)}
+                                            disabled={isImporting}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                    <div className="import-modal-body">
+                                        <div className="import-section">
+                                            <label className="modal-label">📁 Chọn file văn bản (.txt):</label>
+                                            <div className="file-upload-box">
+                                                <input
+                                                    type="file"
+                                                    id="pptxTxtFileInput"
+                                                    accept=".txt"
+                                                    onChange={handleFileChange}
+                                                    disabled={isImporting}
+                                                    style={{ display: 'none' }}
+                                                />
+                                                <label htmlFor="pptxTxtFileInput" className="btn-select-file">
+                                                    📂 Duyệt file từ máy tính
+                                                </label>
+                                                {importFileName ? (
+                                                    <span className="selected-filename">📄 {importFileName}</span>
+                                                ) : (
+                                                    <span className="file-placeholder">Chưa chọn file</span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="import-format-tip">
+                                            💡 <strong>Định dạng file hỗ trợ:</strong> Mỗi slide bắt đầu bằng <code>=== SLIDE 1: Tiêu đề ===</code> hoặc <code>[Slide 1]</code> hoặc <code>--- Slide 1 ---</code>, theo sau là nội dung lời giảng.
+                                        </div>
+
+                                        {importMessage && (
+                                            <div className={`import-alert ${importMessage.type}`}>
+                                                {importMessage.text}
+                                            </div>
+                                        )}
+
+                                        {parsedImportNotes.length > 0 && (
+                                            <div className="import-preview-box">
+                                                <div className="preview-header">
+                                                    📋 Xem trước ({parsedImportNotes.length} slide đã nhận diện):
+                                                </div>
+                                                <div className="preview-items-list">
+                                                    {parsedImportNotes.map((item) => (
+                                                        <div key={item.slideIndex} className="preview-row">
+                                                            <span className="preview-badge">Slide {item.slideIndex}</span>
+                                                            <span className="preview-text">
+                                                                {item.speakerNote || <em style={{ color: '#94a3b8' }}>(trống)</em>}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="import-modal-footer">
+                                        <button
+                                            className="btn-modal-cancel"
+                                            onClick={() => setIsImportModalOpen(false)}
+                                            disabled={isImporting}
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            className="btn-modal-confirm"
+                                            onClick={handleConfirmImport}
+                                            disabled={isImporting || parsedImportNotes.length === 0}
+                                        >
+                                            {isImporting ? 'Đang cập nhật...' : `💾 Cập nhật (${parsedImportNotes.length} slide)`}
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>

@@ -7,6 +7,7 @@ import { MermaidService } from './mermaid.service';
 import { FileStorageService } from '../file-storage/file-storage.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { ReferenceRagService } from './reference-rag.service';
+import { fixUtf8Filename } from '../common/string.util';
 
 /** Default 10 blocks matching TUAF 2026 syllabus template */
 const DEFAULT_BLOCKS = [
@@ -668,7 +669,8 @@ export class SyllabusService {
         const dir = join(process.cwd(), 'uploads', 'syllabus-refs', syllabusId);
         await mkdir(dir, { recursive: true });
 
-        const safeName = `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const originalName = fixUtf8Filename(file.originalname);
+        const safeName = `${Date.now()}-${originalName.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
         const filePath = join(dir, safeName);
         await writeFile(filePath, file.buffer);
         const fileUrl = `/uploads/syllabus-refs/${syllabusId}/${safeName}`;
@@ -677,7 +679,7 @@ export class SyllabusService {
         const ref = await this.prisma.syllabusReference.create({
             data: {
                 syllabusId,
-                fileName: file.originalname,
+                fileName: originalName,
                 fileUrl,
                 fileSize: file.size,
                 status: 'processing',

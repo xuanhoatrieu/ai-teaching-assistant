@@ -33,6 +33,7 @@ import {
     ReviewQuestionData,
     EnglishQuestionData,
 } from '../questions/moodle-xml.helper';
+import { fixUtf8Filename } from '../common/string.util';
 
 export interface ParsedSlide {
     index: number;
@@ -104,7 +105,7 @@ export class PptxAudioToolService {
             }
             return {
                 id: s.id,
-                fileName: s.fileName,
+                fileName: fixUtf8Filename(s.fileName),
                 status: s.status,
                 language: s.language,
                 createdAt: s.createdAt,
@@ -153,13 +154,14 @@ export class PptxAudioToolService {
     // ========== 1. UPLOAD & PARSE ==========
 
     async uploadAndParse(file: Express.Multer.File, userId: string) {
-        this.logger.log(`Uploading PPTX: ${file.originalname} (${file.size} bytes)`);
+        const fileName = fixUtf8Filename(file.originalname);
+        this.logger.log(`Uploading PPTX: ${fileName} (${file.size} bytes)`);
 
         // Create session first to get ID
         const session = await this.prisma.pptxAudioSession.create({
             data: {
                 userId,
-                fileName: file.originalname,
+                fileName,
                 filePath: '', // Will update after moving file
                 status: 'uploaded',
             },
@@ -229,7 +231,7 @@ export class PptxAudioToolService {
 
             return {
                 sessionId: session.id,
-                fileName: file.originalname,
+                fileName,
                 totalSlides: slides.length,
                 slides,
                 status: 'notes_extracted',
@@ -254,6 +256,7 @@ export class PptxAudioToolService {
         const slides = session.slidesJson ? JSON.parse(session.slidesJson) : [];
         return {
             ...session,
+            fileName: fixUtf8Filename(session.fileName),
             slides,
             totalSlides: slides.length,
         };
@@ -318,6 +321,440 @@ export class PptxAudioToolService {
         });
 
         return slide;
+    }
+
+    // ========== 4B. GENERATE & OPTIMIZE SPEAKER NOTES (AI BACKGROUND JOBS) ==========
+
+    async generateSpeakerNotesBackground(
+        jobId: string,
+        sessionId: string,
+        userId: string,
+        mode: 'all' | 'missing' = 'all',
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) {
+            throw new NotFoundException(`Session ${sessionId} not found`);
+        }
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        if (slides.length === 0) {
+            throw new BadRequestException('No slides found in session');
+        }
+
+        const language = session.language || 'vi';
+
+        // Filter target slides
+        const targetSlides = mode === 'missing'
+            ? slides.filter(s => {
+                const note = language === 'en' ? s.noteEN : s.noteVN;
+                return !note?.trim();
+            })
+            : slides;
+
+        if (targetSlides.length === 0) {
+            await this.jobService.updateProgress(jobId, 100, 'Tất cả các slide đã có lời giảng!');
+            await this.jobService.completeJob(jobId);
+            return;
+        }
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
+        const modelName = modelConfig.modelName || 'gemini-2.5-flash';
+        const BATCH_SIZE = 3;
+        let previousSlideBridge = '';
+
+        this.logger.log(`[PptxAudioTool] Generating speaker notes for ${targetSlides.length} slides (${mode}) using ${modelName}`);
+
+        for (let i = 0; i < targetSlides.length; i += BATCH_SIZE) {
+            if (await this.jobService.isJobCancelled(jobId)) {
+                this.logger.log(`[generateSpeakerNotesBackground] Job ${jobId} was cancelled by user.`);
+                return;
+            }
+
+            const batch = targetSlides.slice(i, i + BATCH_SIZE);
+            const batchStart = i + 1;
+            const batchEnd = Math.min(i + BATCH_SIZE, targetSlides.length);
+            const percent = Math.round((i / targetSlides.length) * 90);
+
+            await this.jobService.updateProgress(
+                jobId,
+                percent,
+                `Đang soạn lời giảng (Slide ${batchStart} - ${batchEnd} / ${targetSlides.length})...`,
+            );
+
+            // Build slides content text
+            const slidesContent = batch.map(s => {
+                const existingNote = (language === 'en' ? s.noteEN : s.noteVN)?.trim() || s.noteFull?.trim();
+                const contentLines = Array.isArray(s.content) ? s.content.join('\n  • ') : (s.content || '');
+                let sText = `--- Slide ${s.index + 1} ---\nIndex: ${s.index}\nTiêu đề: ${s.title}\nNội dung chính:\n  • ${contentLines}`;
+                if (existingNote) {
+                    sText += `\nLời giảng / Ghi chú có sẵn của giảng viên:\n"${existingNote}"\n(Hướng dẫn: Hãy kết hợp ý tưởng của giảng viên với nội dung trên slide để hoàn thiện thành bài giảng chỉn chu, sâu sắc)`;
+                }
+                return sText;
+            }).join('\n\n');
+
+            const promptContent = previousSlideBridge
+                ? `[Chủ đề vừa giải thích ở phần trước để nối mạch tự nhiên: "${previousSlideBridge}"]\n(Lưu ý: Tuyệt đối KHÔNG dùng từ "slide trước" hay "slide", hãy nối mạch kiến thức tự nhiên)\n\n${slidesContent}`
+                : slidesContent;
+
+            const langInstruction = language === 'en'
+                ? 'Generate natural, academic, spoken English speaker notes for university lectures.'
+                : 'Soạn lời giảng bằng tiếng Việt chuẩn mực, khẩu ngữ sư phạm tự nhiên như giảng viên đại học đang giảng trực tiếp.';
+
+            const prompt = `**Nhiệm vụ: Soạn Lời Giảng Sư Phạm Cho Từng Slide Thuyết Trình (Academic Lecture Transcript)**
+
+Bạn là một giảng viên đại học giàu kinh nghiệm, uyên bác và truyền cảm hứng.
+Hãy chuyển đổi nội dung tóm tắt trên slide thành lời giảng nói trực tiếp trong lớp học cho từng slide dưới đây.
+
+${langInstruction}
+
+**Thông tin bài giảng:**
+- Tên tệp: ${session.fileName}
+- Ngôn ngữ: ${language === 'en' ? 'English' : 'Tiếng Việt'}
+
+**Nội dung các slide cần soạn:**
+${promptContent}
+
+---
+
+## ⏱️ QUY CHUẨN ĐỘ DÀI & THỜI LƯỢNG (RẤT QUAN TRỌNG):
+- **Slide nội dung kiến thức:** **180 – 220 từ** (Tương đương 1.5 – 2.0 phút nói ở tốc độ giảng bài chuẩn).
+- **Slide Tiêu đề / Mục tiêu / Tổng kết / Cảm ơn:** **60 – 100 từ** (30 – 45 giây).
+- ⚠️ Không viết quá ngắn sơ sài dưới 120 từ, cũng không viết lan man quá 230 từ.
+
+## 🎓 CẤU TRÚC 1 LỜI GIẢNG CHUẨN:
+1. Mở đầu tự nhiên, gắn kết thực tế hoặc đặt vấn đề trọng tâm (1–2 câu). Đa dạng hóa câu mở đầu giữa các slide, tránh rập khuôn.
+2. Diễn giải sâu sắc nguyên lý cốt lõi, cơ chế và ví dụ minh họa sinh động (3–4 câu).
+3. Nhấn mạnh lưu ý thực tiễn hoặc sai lầm thường gặp (1–2 câu).
+4. Đúc kết và chuyển tiếp mạch lạc sang ý tiếp theo (1 câu).
+
+## 🚫 QUY TẮC CẤM NGHIÊM NGẶT (ANTI-AI & SƯ PHẠM):
+- ❌ **TUYỆT ĐỐI KHÔNG dùng từ "slide":** KHÔNG nói "trên slide", "ở slide này", "slide trước", "slide tiếp theo", "nhìn vào slide", "bản trình chiếu". Hãy dùng: "Ở đây chúng ta thấy...", "Xem xét sơ đồ này...", "Tiếp theo, chúng ta sẽ khảo sát...".
+- ❌ **HẠN CHẾ từ "các bạn":** Không mở đầu câu nào cũng "Các bạn...". Dùng "chúng ta", câu chủ động hoặc câu mệnh lệnh học thuật ("Hãy chú ý...", "Cần lưu ý rằng...").
+- ❌ **KHÔNG dùng khẩu khí AI sáo rỗng:** "khám phá", "chìa khóa vàng", "vũ khí đắc lực", "bức tranh toàn cảnh", "không chỉ dừng lại ở đó", "vô cùng tuyệt vời".
+
+---
+
+## ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ JSON DUY NHẤT):
+\`\`\`json
+{
+  "speakerNotes": [
+    {
+      "slideIndex": 0,
+      "speakerNote": "Lời giảng học thuật tự nhiên 180 - 220 từ cho slide..."
+    }
+  ]
+}
+\`\`\`
+Return JSON only.`;
+
+            try {
+                const aiResult = await this.aiProvider.generateText(prompt, modelName, userId, { maxTokens: 16384 });
+                const notesList = this.parseBatchNotesJson(aiResult.content);
+
+                if (notesList.length > 0) {
+                    for (const item of notesList) {
+                        const sIdx = Number(item.slideIndex);
+                        const target = slides.find(s => s.index === sIdx) || batch.find(s => s.index === sIdx) || batch[0];
+                        if (target && item.speakerNote) {
+                            const cleanedText = this.cleanAntiAIPhrases(item.speakerNote);
+                            if (language === 'en') {
+                                target.noteEN = cleanedText;
+                            } else {
+                                target.noteVN = cleanedText;
+                            }
+                            target.noteFull = cleanedText;
+                            if (target.audioStatus === 'done' || target.audioStatus === 'error') {
+                                target.audioStatus = 'pending';
+                            }
+                        }
+                    }
+
+                    const lastItem = notesList[notesList.length - 1];
+                    if (lastItem?.speakerNote) {
+                        previousSlideBridge = lastItem.speakerNote.substring(0, 140);
+                    }
+
+                    await this.prisma.pptxAudioSession.update({
+                        where: { id: sessionId },
+                        data: { slidesJson: JSON.stringify(slides) },
+                    });
+                }
+            } catch (err: any) {
+                this.logger.warn(`[generateSpeakerNotesBackground] Error generating batch ${batchStart}-${batchEnd}: ${err.message}`);
+            }
+        }
+
+        await this.prisma.pptxAudioSession.update({
+            where: { id: sessionId },
+            data: {
+                slidesJson: JSON.stringify(slides),
+                status: 'notes_ready',
+            },
+        });
+
+        await this.jobService.updateProgress(jobId, 100, `Hoàn tất tạo lời giảng cho ${targetSlides.length} slide!`);
+        await this.jobService.completeJob(jobId);
+    }
+
+    async optimizeSpeakerNotesBackground(
+        jobId: string,
+        sessionId: string,
+        userId: string,
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) {
+            throw new NotFoundException(`Session ${sessionId} not found`);
+        }
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const language = session.language || 'vi';
+
+        const slidesWithNotes = slides.filter(s => {
+            const note = language === 'en' ? s.noteEN : s.noteVN;
+            return note?.trim();
+        });
+
+        if (slidesWithNotes.length === 0) {
+            throw new BadRequestException('Không có slide nào có lời giảng để tối ưu');
+        }
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
+        const modelName = modelConfig.modelName || 'gemini-2.5-flash';
+        const BATCH_SIZE = 3;
+
+        this.logger.log(`[PptxAudioTool] Optimizing speaker notes for ${slidesWithNotes.length} slides using ${modelName}`);
+
+        for (let i = 0; i < slidesWithNotes.length; i += BATCH_SIZE) {
+            if (await this.jobService.isJobCancelled(jobId)) {
+                this.logger.log(`[optimizeSpeakerNotesBackground] Job ${jobId} was cancelled by user.`);
+                return;
+            }
+
+            const batch = slidesWithNotes.slice(i, i + BATCH_SIZE);
+            const batchStart = i + 1;
+            const batchEnd = Math.min(i + BATCH_SIZE, slidesWithNotes.length);
+            const percent = Math.round((i / slidesWithNotes.length) * 90);
+
+            await this.jobService.updateProgress(
+                jobId,
+                percent,
+                `Đang tối ưu & kiểm duyệt nhịp điệu đọc TTS (Slide ${batchStart} - ${batchEnd} / ${slidesWithNotes.length})...`,
+            );
+
+            const slidesContent = batch.map(s => {
+                const currentNote = (language === 'en' ? s.noteEN : s.noteVN)?.trim() || s.noteFull?.trim();
+                const contentLines = Array.isArray(s.content) ? s.content.join(', ') : (s.content || '');
+                return `--- Slide ${s.index + 1} (Index: ${s.index}) ---\nTiêu đề: ${s.title}\nNội dung slide: ${contentLines}\nLời giảng hiện tại cần tối ưu:\n"${currentNote}"`;
+            }).join('\n\n');
+
+            const prompt = `**Tối Ưu & Kiểm Duyệt Lời Giảng Cho Giọng Đọc AI (TTS Polish & Duration Control)**
+
+Bạn là Đạo diễn Giọng đọc và Chuyên gia Sư phạm. Hãy trau chuốt các đoạn lời giảng dưới đây để sẵn sàng tạo audio với công cụ Text-To-Speech (ViTTS / AI voice):
+1. **Ngắt nhịp tự nhiên:** Thêm dấu phẩy (,), dấu chấm (.) hợp lý để khi máy đọc có nhịp thở tự nhiên, êm tai, không bị dồn dập hay ngắt quãng vụng về.
+2. **Chuẩn hóa phát âm:** Các từ viết tắt, số liệu, công thức, ký hiệu chuyên môn cần được viết dạng dễ phát âm chính xác nhất cho TTS.
+3. **Độ dài chuẩn xác:** Giữ thời lượng 180 – 220 từ/slide nội dung (khoảng 1.5 – 2.0 phút). KHÔNG bổ sung ý lan man làm kéo dài thời gian quá mức.
+4. **Lọc sạch từ ngữ AI sáo rỗng & cấm từ "slide".**
+
+**Nội dung các slide cần tối ưu:**
+${slidesContent}
+
+---
+
+## ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ JSON DUY NHẤT):
+\`\`\`json
+{
+  "speakerNotes": [
+    {
+      "slideIndex": 0,
+      "speakerNote": "Lời giảng đã tối ưu nhịp thở và dấu câu cho TTS..."
+    }
+  ]
+}
+\`\`\`
+Return JSON only.`;
+
+            try {
+                const aiResult = await this.aiProvider.generateText(prompt, modelName, userId, { maxTokens: 16384 });
+                const notesList = this.parseBatchNotesJson(aiResult.content);
+
+                if (notesList.length > 0) {
+                    for (const item of notesList) {
+                        const sIdx = Number(item.slideIndex);
+                        const target = slides.find(s => s.index === sIdx) || batch.find(s => s.index === sIdx);
+                        if (target && item.speakerNote) {
+                            const cleanedText = this.cleanAntiAIPhrases(item.speakerNote);
+                            if (language === 'en') {
+                                target.noteEN = cleanedText;
+                            } else {
+                                target.noteVN = cleanedText;
+                            }
+                            target.noteFull = cleanedText;
+                        }
+                    }
+
+                    await this.prisma.pptxAudioSession.update({
+                        where: { id: sessionId },
+                        data: { slidesJson: JSON.stringify(slides) },
+                    });
+                }
+            } catch (err: any) {
+                this.logger.warn(`[optimizeSpeakerNotesBackground] Error optimizing batch ${batchStart}-${batchEnd}: ${err.message}`);
+            }
+        }
+
+        await this.prisma.pptxAudioSession.update({
+            where: { id: sessionId },
+            data: { slidesJson: JSON.stringify(slides) },
+        });
+
+        await this.jobService.updateProgress(jobId, 100, `Hoàn tất tối ưu lời giảng cho ${slidesWithNotes.length} slide!`);
+        await this.jobService.completeJob(jobId);
+    }
+
+    async importSpeakerNotes(
+        sessionId: string,
+        notes: Array<{ slideIndex: number; speakerNote: string }>,
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) {
+            throw new NotFoundException(`Session ${sessionId} not found`);
+        }
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const language = session.language || 'vi';
+        let updatedCount = 0;
+
+        for (const item of notes) {
+            // Match slide by 1-based index (item.slideIndex matches slide.index + 1) or 0-based index
+            const target = slides.find(s => (s.index + 1) === item.slideIndex) || slides.find(s => s.index === item.slideIndex);
+            if (target && item.speakerNote && typeof item.speakerNote === 'string' && item.speakerNote.trim()) {
+                const note = this.cleanAntiAIPhrases(item.speakerNote.trim());
+                if (language === 'en') {
+                    target.noteEN = note;
+                } else {
+                    target.noteVN = note;
+                }
+                target.noteFull = note;
+                // If slide had audio, reset to pending so it can be re-generated
+                if (target.audioStatus === 'done' || target.audioStatus === 'error') {
+                    target.audioStatus = 'pending';
+                }
+                updatedCount++;
+            }
+        }
+
+        await this.prisma.pptxAudioSession.update({
+            where: { id: sessionId },
+            data: {
+                slidesJson: JSON.stringify(slides),
+                status: 'notes_ready',
+            },
+        });
+
+        this.logger.log(`[importSpeakerNotes] Successfully imported ${updatedCount} speaker notes for session ${sessionId}`);
+
+        return {
+            success: true,
+            importedCount: updatedCount,
+            slides,
+        };
+    }
+
+    private parseBatchNotesJson(responseText: string): Array<{ slideIndex: number; speakerNote: string }> {
+        const cleaned = this.cleanJsonResponse(responseText);
+        let parsedData: any = null;
+        try {
+            parsedData = JSON.parse(cleaned);
+        } catch {
+            const firstBrace = cleaned.indexOf('{');
+            const lastBrace = cleaned.lastIndexOf('}');
+            if (firstBrace !== -1 && lastBrace > firstBrace) {
+                try {
+                    parsedData = JSON.parse(cleaned.substring(firstBrace, lastBrace + 1));
+                } catch {
+                    const firstBracket = cleaned.indexOf('[');
+                    const lastBracket = cleaned.lastIndexOf(']');
+                    if (firstBracket !== -1 && lastBracket > firstBracket) {
+                        try {
+                            parsedData = JSON.parse(cleaned.substring(firstBracket, lastBracket + 1));
+                        } catch { /* empty */ }
+                    }
+                }
+            }
+        }
+
+        if (!parsedData) return [];
+        const list = Array.isArray(parsedData)
+            ? parsedData
+            : (parsedData.speakerNotes || parsedData.slides || parsedData.notes || []);
+        if (!Array.isArray(list)) return [];
+        return list.map((item: any, idx: number) => ({
+            slideIndex: item.slideIndex !== undefined ? Number(item.slideIndex) : idx,
+            speakerNote: item.speakerNote || item.note || item.content || '',
+        })).filter(n => n.speakerNote && typeof n.speakerNote === 'string' && n.speakerNote.trim().length > 0);
+    }
+
+    private cleanAntiAIPhrases(text: string): string {
+        if (!text) return '';
+        let cleaned = text;
+
+        const replacements: Array<[RegExp, string]> = [
+            [/\b(?:ở|tại|trong|trên|quan sát|hãy nhìn vào)\s+(?:bản trình chiếu|trang chiếu|slide)\s*(?:này|ở đây)?\b/gi, 'ở đây'],
+            [/\b(?:infographic|lưu\s+đồ|hình\s+ảnh)\s+trên\s+slide\b/gi, 'sơ đồ minh họa'],
+            [/\b(?:quan\s+sát\s+)?infographic\s+(?:ở\s+đây|này)?\b/gi, 'sơ đồ này'],
+            [/\btrên\s+slide\b/gi, 'ở đây'],
+            [/\bslide\s+này\b/gi, 'phần này'],
+            [/\bslide\s+tiếp\s+theo\b/gi, 'bước tiếp theo'],
+            [/\bslide\s+trước\b/gi, 'phần trước'],
+            [/\bcác\s+bạn\s+hãy\s+quan\s+sát\b/gi, 'quan sát'],
+            [/\bcác\s+bạn\s+hãy\s+nhìn\s+vào\b/gi, 'nhìn vào'],
+            [/\bcác\s+bạn\s+hãy\s+chú\s+ý\b/gi, 'hãy chú ý'],
+            [/\bcác\s+bạn\s+hãy\b/gi, 'hãy'],
+            [/\b(?:hãy\s+cùng\s+(?:tôi|chúng\s+ta)\s+khám\s+phá|bước\s+vào\s+hành\s+trình\s+khám\s+phá)\b/gi, 'bây giờ chúng ta sẽ tìm hiểu'],
+            [/\b(?:cung\s+cấp\s+(?:một\s+)?cái\s+nhìn\s+sâu\s+sắc|mang\s+lại\s+cái\s+nhìn\s+toàn\s+diện)\b/gi, 'giúp chúng ta hiểu rõ'],
+            [/\b(?:chiếc\s+)?chìa\s+khóa\s+vàng\b/gi, 'yếu tố then chốt'],
+            [/\b(?:vũ\s+khí\s+đắc\s+lực|công\s+cụ\s+vạn\s+năng)\b/gi, 'công cụ hiệu quả'],
+            [/\b(?:bức\s+tranh\s+toàn\s+cảnh|bức\s+tranh\s+tổng\s+thể)\b/gi, 'tổng quan toàn bộ'],
+            [/\b(?:đóng\s+vai\s+trò\s+(?:vô\s+cùng|hết\s+sức|cực\s+kỳ)\s+(?:quan\s+trọng|then\s+chốt|quan\s+yếu))\b/gi, 'rất quan trọng'],
+            [/\b(?:không\s+chỉ\s+dừng\s+lại\s+ở\s+đó|chưa\s+dừng\s+lại\s+ở\s+đó)[,\s]*/gi, 'Bên cạnh đó, '],
+            [/\b(?:mở\s+ra\s+(?:một\s+)?cánh\s+cửa|mở\s+ra\s+chân\s+trời\s+mới)\b/gi, 'tạo điều kiện'],
+            [/\b(?:vô\s+cùng\s+thú\s+vị|hết\s+sức\s+tuyệt\s+vời|đầy\s+hứa\s+hẹn)\b/gi, 'đáng chú ý'],
+            [/\b(?:như\s+chúng\s+ta\s+đã\s+biết|như\s+ai\s+cũng\s+biết)[,\s]*/gi, ''],
+            [/\b(?:trải\s+nghiệm\s+tuyệt\s+vời|sức\s+mạnh\s+kỳ\s+diệu)\b/gi, 'hiệu quả thực tế'],
+            [/\b(?:kinh\s+điển)\b/gi, 'thường gặp'],
+            [/\b(?:chí\s+mạng)\b/gi, 'lớn'],
+            [/\b(?:vô\s+cùng|hết\s+sức|cực\s+kỳ)\s+/gi, ''],
+        ];
+
+        for (const [pattern, replacement] of replacements) {
+            cleaned = cleaned.replace(pattern, replacement);
+        }
+
+        cleaned = this.deduplicatePronouns(cleaned);
+        cleaned = cleaned
+            .replace(/[*#_~`]/g, '')
+            .replace(/\[\s*slide\s*\d+\s*\]/gi, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+
+        return cleaned;
+    }
+
+    private deduplicatePronouns(text: string): string {
+        if (!text) return '';
+        let count = 0;
+        return text.replace(/\b([Cc]ác\s+bạn)\b/g, (match) => {
+            count++;
+            if (count === 1) return match;
+            const isCapital = match[0] === 'C';
+            return isCapital ? 'Chúng ta' : 'chúng ta';
+        });
     }
 
     // ========== 5. GENERATE AUDIO ==========

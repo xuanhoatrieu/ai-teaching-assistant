@@ -12,6 +12,7 @@ import {
     UploadedFile,
     UseInterceptors,
     Logger,
+    BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,6 +23,7 @@ import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as ExcelJS from 'exceljs';
+import { fixUtf8Filename } from '../common/string.util';
 
 // Configure multer for PPTX uploads
 const pptxStorage = diskStorage({
@@ -63,6 +65,9 @@ export class PptxAudioToolController {
         @Req() req: Request,
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
+        if (file?.originalname) {
+            file.originalname = fixUtf8Filename(file.originalname);
+        }
         this.logger.log(`Upload PPTX: ${file.originalname} by user ${userId}`);
         return this.service.uploadAndParse(file, userId);
     }
@@ -96,6 +101,83 @@ export class PptxAudioToolController {
         @Body('note') note: string,
     ) {
         return this.service.updateNote(sessionId, parseInt(index), note);
+    }
+
+    // 5A. Generate speaker notes with AI (Background Job)
+    @Post(':sessionId/speaker-notes/generate')
+    async generateSpeakerNotes(
+        @Param('sessionId') sessionId: string,
+        @Req() req: Request,
+        @Body() body: { mode?: 'all' | 'missing' },
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+
+        const activeJob = await this.jobService.getActiveJob(sessionId, 'pptx-tool-speaker-notes');
+        if (activeJob) {
+            this.logger.log(`Active speaker notes job ${activeJob.id} already exists for session ${sessionId}. Re-attaching.`);
+            return { jobId: activeJob.id, status: 'processing' };
+        }
+
+        const job = await this.jobService.createJob({
+            type: 'pptx-tool-speaker-notes',
+            lessonId: sessionId,
+            userId,
+        });
+
+        setImmediate(async () => {
+            try {
+                await this.service.generateSpeakerNotesBackground(job.id, sessionId, userId, body?.mode || 'all');
+            } catch (err: any) {
+                this.logger.error(`[generateSpeakerNotes] Job ${job.id} failed: ${err.message}`);
+                await this.jobService.failJob(job.id, err.message);
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
+    }
+
+    // 5B. Optimize speaker notes for TTS with AI (Background Job)
+    @Post(':sessionId/speaker-notes/optimize')
+    async optimizeSpeakerNotes(
+        @Param('sessionId') sessionId: string,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+
+        const activeJob = await this.jobService.getActiveJob(sessionId, 'pptx-tool-optimize-notes');
+        if (activeJob) {
+            this.logger.log(`Active optimize notes job ${activeJob.id} already exists for session ${sessionId}. Re-attaching.`);
+            return { jobId: activeJob.id, status: 'processing' };
+        }
+
+        const job = await this.jobService.createJob({
+            type: 'pptx-tool-optimize-notes',
+            lessonId: sessionId,
+            userId,
+        });
+
+        setImmediate(async () => {
+            try {
+                await this.service.optimizeSpeakerNotesBackground(job.id, sessionId, userId);
+            } catch (err: any) {
+                this.logger.error(`[optimizeSpeakerNotes] Job ${job.id} failed: ${err.message}`);
+                await this.jobService.failJob(job.id, err.message);
+            }
+        });
+
+        return { jobId: job.id, status: 'pending' };
+    }
+
+    // 5C. Import speaker notes from parsed TXT array
+    @Post(':sessionId/speaker-notes/import')
+    async importSpeakerNotes(
+        @Param('sessionId') sessionId: string,
+        @Body() body: { notes: Array<{ slideIndex: number; speakerNote: string }> },
+    ) {
+        if (!body.notes || !Array.isArray(body.notes) || body.notes.length === 0) {
+            throw new BadRequestException('Danh sách lời giảng không hợp lệ');
+        }
+        return this.service.importSpeakerNotes(sessionId, body.notes);
     }
 
     // 6. Generate audio for single slide
