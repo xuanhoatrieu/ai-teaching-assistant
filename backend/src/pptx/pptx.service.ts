@@ -21,6 +21,7 @@ interface SlideContent {
     bullets?: OptimizedBullet[];  // Structured bullets from AI
     imagePath?: string;
     audioPath?: string;
+    extraAudioPath?: string;
     speakerNote?: string;
     slideType?: string;
 }
@@ -545,6 +546,7 @@ export class PptxService {
                 bullets,
                 imagePath,
                 audioPath,
+                extraAudioPath: (slide as any).extraAudioUrl ? this.getLocalPath((slide as any).extraAudioUrl) : undefined,
                 speakerNote: slideAudioForNotes?.speakerNote || slide.speakerNote || '',
                 slideType: slide.slideType || 'content',
             };

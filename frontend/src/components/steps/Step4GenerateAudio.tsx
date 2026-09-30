@@ -70,6 +70,7 @@ export function Step4GenerateAudio() {
     const [isOptimizingNotes, setIsOptimizingNotes] = useState(false);
     const [isGeneratingAll, setIsGeneratingAll] = useState(false);
     const [generatingSlides, setGeneratingSlides] = useState<Set<number>>(new Set());
+    const [generatingNoteSlides, setGeneratingNoteSlides] = useState<Set<number>>(new Set());
     const [editingSlide, setEditingSlide] = useState<number | null>(null);
     const [editedNote, setEditedNote] = useState('');
     const [currentlyPlaying, setCurrentlyPlaying] = useState<number | null>(null);
@@ -334,6 +335,39 @@ export function Step4GenerateAudio() {
             console.error('Error starting speaker notes optimization:', error);
             setIsOptimizingNotes(false);
             alert('Lỗi khi bắt đầu tối ưu lời giảng. Vui lòng thử lại.');
+        }
+    };
+
+    // Generate speaker note for a SINGLE slide using AI
+    const generateSingleSpeakerNote = async (slideIndex: number) => {
+        setGeneratingNoteSlides(prev => new Set(prev).add(slideIndex));
+        try {
+            const response = await api.post(`/lessons/${lessonId}/slide-audios/${slideIndex}/generate-speaker-note`);
+            const { speakerNote, slideAudio } = response.data;
+
+            if (slideAudio) {
+                const normalizedData = { ...slideAudio, status: normalizeStatus(slideAudio.status) };
+                setSlideAudios(prev => prev.map(sa =>
+                    sa.slideIndex === slideIndex ? normalizedData : sa
+                ));
+            } else {
+                setSlideAudios(prev => prev.map(sa =>
+                    sa.slideIndex === slideIndex ? { ...sa, speakerNote } : sa
+                ));
+            }
+
+            setSlideContents(prev => prev.map(sc =>
+                sc.slideIndex === slideIndex ? { ...sc, speakerNote } : sc
+            ));
+        } catch (err: any) {
+            console.error('Error generating single speaker note:', err);
+            alert(`Lỗi khi tạo lời giảng cho slide ${slideIndex}: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setGeneratingNoteSlides(prev => {
+                const next = new Set(prev);
+                next.delete(slideIndex);
+                return next;
+            });
         }
     };
 
@@ -1094,19 +1128,35 @@ export function Step4GenerateAudio() {
                                             <p>{rawNote}</p>
                                         </div>
                                     ) : (
-                                        <p className="empty-note">Chưa có. Nhấn "✨ Tạo Lời Giảng".</p>
+                                        <div className="empty-note-box">
+                                            <p className="empty-note">Chưa có lời giảng.</p>
+                                            <button
+                                                type="button"
+                                                className="btn-create-note-single"
+                                                onClick={() => generateSingleSpeakerNote(slide.slideIndex)}
+                                                disabled={generatingNoteSlides.has(slide.slideIndex) || isGeneratingNotes}
+                                                title="Dùng AI viết lời giảng riêng cho slide này"
+                                            >
+                                                {generatingNoteSlides.has(slide.slideIndex) ? (
+                                                    <><span className="spinner-small"></span> Đang tạo...</>
+                                                ) : (
+                                                    '✨ AI tạo lời giảng'
+                                                )}
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
 
                                 {/* Col 3: Optimized Speaker Note (Button 2) */}
                                 <div className={`card-note-col card-note-optimized ${activeCardTab === 'opt' ? 'mobile-col-visible' : 'mobile-col-hidden'}`}>
-                                    <div className="col-label">✅ Lời Giảng (Tối Ưu)</div>
+                                    <div className="col-label">✅ Lời Giảng (Tối Ưu / Sinh giọng)</div>
                                     {isEditing ? (
                                         <div className="edit-mode">
                                             <textarea
                                                 value={editedNote}
                                                 onChange={(e) => setEditedNote(e.target.value)}
                                                 rows={6}
+                                                placeholder="Nhập lời giảng cho slide này..."
                                                 autoFocus
                                             />
                                             <div className="edit-buttons">
@@ -1117,12 +1167,47 @@ export function Step4GenerateAudio() {
                                     ) : optimizedNote ? (
                                         <div className="note-content">
                                             <p>{optimizedNote}</p>
-                                            <button className="btn-edit-inline" onClick={() => startEdit(slide.slideIndex, optimizedNote)} title="Chỉnh sửa">
-                                                ✏️
-                                            </button>
+                                            <div className="note-action-btns">
+                                                <button className="btn-edit-inline" onClick={() => startEdit(slide.slideIndex, optimizedNote)} title="Chỉnh sửa nội dung lời giảng">
+                                                    ✏️ Sửa
+                                                </button>
+                                                <button
+                                                    className="btn-regen-inline"
+                                                    onClick={() => generateSingleSpeakerNote(slide.slideIndex)}
+                                                    disabled={generatingNoteSlides.has(slide.slideIndex) || isGeneratingNotes}
+                                                    title="Dùng AI viết lại lời giảng cho slide này"
+                                                >
+                                                    {generatingNoteSlides.has(slide.slideIndex) ? '⏳' : '✨ Viết lại'}
+                                                </button>
+                                            </div>
                                         </div>
                                     ) : (
-                                        <p className="empty-note">Chưa tối ưu. Nhấn "✅ Tối Ưu & Kiểm Duyệt".</p>
+                                        <div className="empty-note-box">
+                                            <p className="empty-note">Chưa có lời giảng cho slide này.</p>
+                                            <div className="empty-note-actions">
+                                                <button
+                                                    type="button"
+                                                    className="btn-create-note-single"
+                                                    onClick={() => generateSingleSpeakerNote(slide.slideIndex)}
+                                                    disabled={generatingNoteSlides.has(slide.slideIndex) || isGeneratingNotes}
+                                                    title="Dùng AI viết lời giảng thuyết minh cho slide này"
+                                                >
+                                                    {generatingNoteSlides.has(slide.slideIndex) ? (
+                                                        <><span className="spinner-small"></span> Đang tạo lời giảng...</>
+                                                    ) : (
+                                                        '✨ AI tạo lời giảng'
+                                                    )}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn-edit-note-single"
+                                                    onClick={() => startEdit(slide.slideIndex, '')}
+                                                    title="Tự nhập lời giảng bằng tay cho slide này"
+                                                >
+                                                    ✏️ Tự viết lời giảng
+                                                </button>
+                                            </div>
+                                        </div>
                                     )}
                                 </div>
                             </div>

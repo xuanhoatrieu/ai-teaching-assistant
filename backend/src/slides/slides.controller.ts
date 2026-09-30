@@ -16,7 +16,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { SlidesService } from './slides.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GenerationJobService } from '../generation-job/generation-job.service';
-import { IsString, IsNotEmpty, IsOptional, IsArray } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray, IsNumber } from 'class-validator';
 
 // DTOs
 class UpdateSlideScriptDto {
@@ -31,12 +31,43 @@ class UpdateSlideContentDto {
     title?: string;
 
     @IsOptional()
+    @IsString()
+    content?: string;
+
+    @IsOptional()
+    @IsString()
+    speakerNote?: string;
+
+    @IsOptional()
     @IsArray()
     optimizedContent?: Array<{
         emoji?: string;
         point: string;
         description?: string;
     }>;
+}
+
+class CreateSlideDto {
+    @IsOptional()
+    @IsString()
+    title?: string;
+
+    @IsOptional()
+    @IsString()
+    content?: string;
+
+    @IsOptional()
+    @IsString()
+    speakerNote?: string;
+
+    @IsOptional()
+    @IsNumber()
+    insertAfterIndex?: number;
+}
+
+class MoveSlideDto {
+    @IsString()
+    direction: 'up' | 'down';
 }
 
 @Controller('lessons/:lessonId/slides')
@@ -53,6 +84,15 @@ export class SlidesController {
     @Get()
     async getSlides(@Param('lessonId') lessonId: string) {
         return this.slidesService.getSlides(lessonId);
+    }
+
+    // POST /lessons/:lessonId/slides - Add a new slide
+    @Post()
+    async createSlide(
+        @Param('lessonId') lessonId: string,
+        @Body() body: CreateSlideDto,
+    ) {
+        return this.slidesService.createSlide(lessonId, body);
     }
 
     // GET /lessons/:lessonId/slides/script-data - Get slide script metadata (for Step 3)
@@ -137,6 +177,8 @@ export class SlidesController {
             parseInt(slideIndex, 10),
             body.title,
             body.optimizedContent,
+            body.content,
+            body.speakerNote,
         );
     }
 
@@ -155,6 +197,45 @@ export class SlidesController {
             req.user.id,
             file,
         );
+    }
+
+    // POST /lessons/:lessonId/slides/:slideIndex/move - Move slide up or down
+    @Post(':slideIndex/move')
+    async moveSlide(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+        @Body() body: MoveSlideDto,
+    ) {
+        return this.slidesService.moveSlide(lessonId, parseInt(slideIndex, 10), body.direction);
+    }
+
+    // POST /lessons/:lessonId/slides/:slideIndex/extra-audio - Upload extra sample/media audio
+    @Post(':slideIndex/extra-audio')
+    @UseInterceptors(FileInterceptor('audio'))
+    async uploadExtraAudio(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+        @UploadedFile() file: Express.Multer.File,
+    ) {
+        return this.slidesService.uploadExtraAudio(lessonId, parseInt(slideIndex, 10), file);
+    }
+
+    // DELETE /lessons/:lessonId/slides/:slideIndex/extra-audio - Delete extra audio
+    @Delete(':slideIndex/extra-audio')
+    async deleteExtraAudio(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+    ) {
+        return this.slidesService.deleteExtraAudio(lessonId, parseInt(slideIndex, 10));
+    }
+
+    // DELETE /lessons/:lessonId/slides/:slideIndex - Delete slide
+    @Delete(':slideIndex')
+    async deleteSlide(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+    ) {
+        return this.slidesService.deleteSlide(lessonId, parseInt(slideIndex, 10));
     }
 
     // DELETE /lessons/:lessonId/slides/generated-content

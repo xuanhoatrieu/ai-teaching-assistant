@@ -29,14 +29,19 @@ interface SlideProgress {
     imageUrl?: string;
     optimizedContent?: OptimizedBullet[];
     title?: string;
+    content?: string;
+    speakerNote?: string;
     isRegenerating?: boolean;
+    extraAudioUrl?: string | null;
+    extraAudioName?: string | null;
+    extraAudioDuration?: number | null;
 }
 
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export function Step5GeneratePPTX() {
-    const { lessonId, lessonData, stepMountCounter } = useLessonEditor();
+    const { lessonId, lessonData, stepMountCounter, refreshLessonData } = useLessonEditor();
     const [status, setStatus] = useState<GenerationStatus>('idle');
     const [progress, setProgress] = useState(0);
     const [error, setError] = useState<string | null>(null);
@@ -58,6 +63,7 @@ export function Step5GeneratePPTX() {
     // Slide content inline editing state
     const [editingSlideIndex, setEditingSlideIndex] = useState<number | null>(null);
     const [editTitle, setEditTitle] = useState('');
+    const [editRawContent, setEditRawContent] = useState('');
     const [editBullets, setEditBullets] = useState<OptimizedBullet[]>([]);
     const [isSavingContent, setIsSavingContent] = useState(false);
 
@@ -69,6 +75,24 @@ export function Step5GeneratePPTX() {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [targetUploadSlideIndex, setTargetUploadSlideIndex] = useState<number | null>(null);
     const targetUploadSlideIndexRef = useRef<number | null>(null);
+
+    // Add Slide Modal state
+    const [isAddSlideModalOpen, setIsAddSlideModalOpen] = useState(false);
+    const [newSlideTitle, setNewSlideTitle] = useState('');
+    const [newSlideContent, setNewSlideContent] = useState('');
+    const [newSlideInsertAfter, setNewSlideInsertAfter] = useState<number>(-1);
+    const [autoGenerateAI, setAutoGenerateAI] = useState(true);
+    const [isCreatingSlide, setIsCreatingSlide] = useState(false);
+
+    // Slide reordering and deleting states
+    const [isMovingSlide, setIsMovingSlide] = useState(false);
+    const [isDeletingSlide, setIsDeletingSlide] = useState(false);
+
+    // Extra audio upload state
+    const [isUploadingExtraAudio, setIsUploadingExtraAudio] = useState(false);
+    const extraAudioInputRef = useRef<HTMLInputElement | null>(null);
+    const [targetExtraAudioSlideIndex, setTargetExtraAudioSlideIndex] = useState<number | null>(null);
+    const targetExtraAudioSlideIndexRef = useRef<number | null>(null);
 
     const tempFileKeyRef = useRef<string | null>(null);
     const tempFileKeyNoAudioRef = useRef<string | null>(null);
@@ -136,7 +160,11 @@ export function Step5GeneratePPTX() {
             console.log('[Step5] API response slides:', slides.length, 'slides');
 
             if (slides.length === 0) {
-                console.log('[Step5] No slides found, returning');
+                console.log('[Step5] No slides found, clearing progress');
+                setSlideProgress([]);
+                setTotalSlides(0);
+                setContentGenerated(false);
+                setPendingCount(0);
                 return;
             }
 
@@ -158,43 +186,48 @@ export function Step5GeneratePPTX() {
             const remaining = slides.length - completedSlides.length;
             console.log('[Step5] completedSlides:', completedSlides.length, '/', slides.length, 'pending:', remaining);
 
+            const loadedSlideProgress: SlideProgress[] = slides.map((s: any) => {
+                const hasImage = !!s.imageUrl;
+                const hasOptContent = !!s.optimizedContentJson;
+                const isTitleSlide = !s.content || s.content.trim() === '';
+                const isComplete = hasImage && (hasOptContent || isTitleSlide);
+                
+                let phase: 'pending' | 'optimizing_content' | 'generating_image' | 'complete' | 'error' | 'skipped' = 'pending';
+                if (isComplete) {
+                    phase = 'complete';
+                } else if (isJobActive) {
+                    phase = hasOptContent ? 'generating_image' : 'optimizing_content';
+                } else if (hasOptContent || hasImage) {
+                    phase = 'error';
+                } else {
+                    phase = 'pending';
+                }
+
+                return {
+                    slideIndex: s.slideIndex,
+                    phase,
+                    imageUrl: s.imageUrl,
+                    optimizedContent: s.optimizedContentJson
+                        ? (typeof s.optimizedContentJson === 'string'
+                            ? JSON.parse(s.optimizedContentJson)
+                            : s.optimizedContentJson)
+                        : undefined,
+                    title: s.title,
+                    content: s.content,
+                    speakerNote: s.speakerNote,
+                    extraAudioUrl: s.extraAudioUrl,
+                    extraAudioName: s.extraAudioName,
+                    extraAudioDuration: s.extraAudioDuration,
+                };
+            });
+
+            setSlideProgress(loadedSlideProgress);
+            setTotalSlides(slides.length);
+            setContentGenerated(hasAnyContent);
+            setPendingCount(remaining);
+            setProgress(slides.length > 0 ? (completedSlides.length / slides.length) * 100 : 0);
+
             if (hasAnyContent) {
-                const loadedSlideProgress: SlideProgress[] = slides.map((s: any) => {
-                    const hasImage = !!s.imageUrl;
-                    const hasOptContent = !!s.optimizedContentJson;
-                    const isTitleSlide = !s.content || s.content.trim() === '';
-                    const isComplete = hasImage && (hasOptContent || isTitleSlide);
-                    
-                    let phase: 'pending' | 'optimizing_content' | 'generating_image' | 'complete' | 'error' | 'skipped' = 'pending';
-                    if (isComplete) {
-                        phase = 'complete';
-                    } else if (isJobActive) {
-                        phase = hasOptContent ? 'generating_image' : 'optimizing_content';
-                    } else if (hasOptContent || hasImage) {
-                        phase = 'error';
-                    } else {
-                        phase = 'pending';
-                    }
-
-                    return {
-                        slideIndex: s.slideIndex,
-                        phase,
-                        imageUrl: s.imageUrl,
-                        optimizedContent: s.optimizedContentJson
-                            ? (typeof s.optimizedContentJson === 'string'
-                                ? JSON.parse(s.optimizedContentJson)
-                                : s.optimizedContentJson)
-                            : undefined,
-                        title: s.title,
-                    };
-                });
-
-                setSlideProgress(loadedSlideProgress);
-                setTotalSlides(slides.length);
-                setContentGenerated(true);
-                setPendingCount(remaining);
-                setProgress((completedSlides.length / slides.length) * 100);
-
                 if (remaining === 0) {
                     if (!isJobActive) setStatus('completed');
                     setProgress(100);
@@ -202,8 +235,6 @@ export function Step5GeneratePPTX() {
                     // Partial progress — show completed state so buttons appear (unless job is active)
                     if (!isJobActive) setStatus('completed');
                 }
-            } else {
-                console.log('[Step5] No content found in slides');
             }
         } catch (err) {
             console.error('[Step5] Failed to load saved content:', err);
@@ -541,6 +572,7 @@ export function Step5GeneratePPTX() {
     const handleStartEditContent = (slide: SlideProgress) => {
         setEditingSlideIndex(slide.slideIndex);
         setEditTitle(slide.title || '');
+        setEditRawContent(slide.content || '');
         if (slide.optimizedContent && slide.optimizedContent.length > 0) {
             setEditBullets(JSON.parse(JSON.stringify(slide.optimizedContent)));
         } else {
@@ -551,26 +583,36 @@ export function Step5GeneratePPTX() {
     const handleCancelEditContent = () => {
         setEditingSlideIndex(null);
         setEditTitle('');
+        setEditRawContent('');
         setEditBullets([]);
     };
 
-    const handleSaveEditContent = async (slideIndex: number) => {
+    const handleSaveEditContent = async (slideIndex: number, andGenerateAI = false) => {
         setIsSavingContent(true);
         try {
             const validBullets = editBullets.filter(b => b.point.trim() !== '' || b.description.trim() !== '');
+            const currentSlide = slideProgress.find(s => s.slideIndex === slideIndex);
             const response = await api.put(`/lessons/${lessonId}/slides/${slideIndex}/content`, {
                 title: editTitle,
+                content: editRawContent,
+                speakerNote: currentSlide?.speakerNote,
                 optimizedContent: validBullets,
             });
             const updated = response.data;
             setSlideProgress(prev => prev.map(s => s.slideIndex === slideIndex ? {
                 ...s,
                 title: updated.title,
+                content: updated.content,
+                speakerNote: updated.speakerNote,
                 optimizedContent: typeof updated.optimizedContentJson === 'string'
                     ? JSON.parse(updated.optimizedContentJson)
                     : updated.optimizedContentJson,
             } : s));
             setEditingSlideIndex(null);
+
+            if (andGenerateAI) {
+                await handleRegenerateContent(slideIndex);
+            }
         } catch (err: any) {
             console.error('Failed to save slide content:', err);
             setError(`Lỗi khi lưu nội dung slide ${slideIndex}: ${err.response?.data?.message || err.message}`);
@@ -659,6 +701,227 @@ export function Step5GeneratePPTX() {
             setError(`Không thể tải lên ảnh cho slide ${cropSlideIndex}: ${err.response?.data?.message || err.message}`);
         } finally {
             setIsUploadingImage(false);
+        }
+    };
+
+    // Slide Move handler
+    const handleMoveSlide = async (slideIndex: number, direction: 'up' | 'down') => {
+        setIsMovingSlide(true);
+        setError(null);
+        try {
+            if (tempFileKey) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKey}`).catch(() => {});
+                setTempFileKey(null);
+                setTempFileSize(null);
+            }
+            if (tempFileKeyNoAudio) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyNoAudio}`).catch(() => {});
+                setTempFileKeyNoAudio(null);
+                setTempFileSizeNoAudio(null);
+            }
+
+            await api.post(`/lessons/${lessonId}/slides/${slideIndex}/move`, { direction });
+            await loadSavedContent(false);
+            await refreshLessonData();
+        } catch (err: any) {
+            console.error('Failed to move slide:', err);
+            setError(`Không thể di chuyển slide: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsMovingSlide(false);
+        }
+    };
+
+    // Slide Delete handler
+    const handleDeleteSlide = async (slideIndex: number) => {
+        if (slideProgress.length <= 1) {
+            setError('Không thể xóa slide duy nhất trong bài giảng');
+            return;
+        }
+
+        if (!window.confirm(`Bạn có chắc chắn muốn xóa Slide ${slideIndex}? Thao tác này sẽ xóa nội dung, audio bài giảng, audio mẫu và hình ảnh của slide.`)) {
+            return;
+        }
+
+        setIsDeletingSlide(true);
+        setError(null);
+        try {
+            if (tempFileKey) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKey}`).catch(() => {});
+                setTempFileKey(null);
+                setTempFileSize(null);
+            }
+            if (tempFileKeyNoAudio) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyNoAudio}`).catch(() => {});
+                setTempFileKeyNoAudio(null);
+                setTempFileSizeNoAudio(null);
+            }
+
+            await api.delete(`/lessons/${lessonId}/slides/${slideIndex}`);
+            await loadSavedContent(false);
+            await refreshLessonData();
+        } catch (err: any) {
+            console.error('Failed to delete slide:', err);
+            setError(`Không thể xóa slide: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsDeletingSlide(false);
+        }
+    };
+
+    // Open Add Slide Modal
+    const openAddSlideModal = (insertAfter: number = -1) => {
+        const nextNum = insertAfter >= 0 ? insertAfter + 1 : slideProgress.length + 1;
+        setNewSlideTitle(`Slide ${nextNum}`);
+        setNewSlideContent('');
+        setNewSlideInsertAfter(insertAfter);
+        setAutoGenerateAI(true);
+        setIsAddSlideModalOpen(true);
+    };
+
+    // Add Slide Submit handler
+    const handleAddSlideSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
+        if (!newSlideTitle.trim()) {
+            setError('Vui lòng nhập tiêu đề slide');
+            return;
+        }
+
+        setIsCreatingSlide(true);
+        setError(null);
+        try {
+            if (tempFileKey) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKey}`).catch(() => {});
+                setTempFileKey(null);
+                setTempFileSize(null);
+            }
+            if (tempFileKeyNoAudio) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyNoAudio}`).catch(() => {});
+                setTempFileKeyNoAudio(null);
+                setTempFileSizeNoAudio(null);
+            }
+
+            const createRes = await api.post(`/lessons/${lessonId}/slides`, {
+                title: newSlideTitle.trim(),
+                content: newSlideContent.trim(),
+                insertAfterIndex: newSlideInsertAfter >= 0 ? newSlideInsertAfter : undefined,
+            });
+
+            const createdSlide = createRes.data;
+            const newIndex = createdSlide?.slideIndex;
+
+            setIsAddSlideModalOpen(false);
+            setNewSlideTitle('');
+            setNewSlideContent('');
+            await loadSavedContent(false);
+            await refreshLessonData();
+
+            // If user checked auto-generate AI content
+            if (autoGenerateAI && newIndex) {
+                handleRegenerateContent(newIndex).catch((err) => {
+                    console.warn('Auto AI content gen error:', err);
+                });
+            }
+        } catch (err: any) {
+            console.error('Failed to create slide:', err);
+            setError(`Không thể thêm slide mới: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsCreatingSlide(false);
+        }
+    };
+
+    // Extra Audio Upload Handlers
+    const handleTriggerExtraAudioUpload = (slideIndex: number) => {
+        targetExtraAudioSlideIndexRef.current = slideIndex;
+        setTargetExtraAudioSlideIndex(slideIndex);
+        if (extraAudioInputRef.current) {
+            extraAudioInputRef.current.value = '';
+            extraAudioInputRef.current.click();
+        }
+    };
+
+    const handleExtraAudioFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        const activeIdx = targetExtraAudioSlideIndexRef.current ?? targetExtraAudioSlideIndex;
+        if (!file || activeIdx === null) return;
+
+        if (!file.type.startsWith('audio/') && !file.name.match(/\.(mp3|wav|ogg|m4a|aac)$/i)) {
+            setError('Vui lòng chọn file âm thanh hợp lệ (MP3, WAV, M4A, OGG)');
+            return;
+        }
+
+        setIsUploadingExtraAudio(true);
+        setError(null);
+        try {
+            const formData = new FormData();
+            formData.append('audio', file);
+
+            const response = await api.post(
+                `/lessons/${lessonId}/slides/${activeIdx}/extra-audio`,
+                formData,
+                {
+                    headers: {
+                        'Content-Type': 'multipart/form-data',
+                    },
+                }
+            );
+
+            const updatedSlide = response.data;
+            setSlideProgress(prev => prev.map(s =>
+                s.slideIndex === activeIdx ? {
+                    ...s,
+                    extraAudioUrl: updatedSlide.extraAudioUrl,
+                    extraAudioName: updatedSlide.extraAudioName,
+                    extraAudioDuration: updatedSlide.extraAudioDuration,
+                } : s
+            ));
+
+            if (tempFileKey) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKey}`).catch(() => {});
+                setTempFileKey(null);
+                setTempFileSize(null);
+            }
+            if (tempFileKeyNoAudio) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyNoAudio}`).catch(() => {});
+                setTempFileKeyNoAudio(null);
+                setTempFileSizeNoAudio(null);
+            }
+        } catch (err: any) {
+            console.error('Failed to upload extra audio:', err);
+            setError(`Không thể tải lên audio mẫu cho slide ${activeIdx}: ${err.response?.data?.message || err.message}`);
+        } finally {
+            setIsUploadingExtraAudio(false);
+        }
+    };
+
+    const handleDeleteExtraAudio = async (slideIndex: number) => {
+        if (!window.confirm(`Xóa file audio mẫu của Slide ${slideIndex}?`)) {
+            return;
+        }
+
+        setError(null);
+        try {
+            await api.delete(`/lessons/${lessonId}/slides/${slideIndex}/extra-audio`);
+            setSlideProgress(prev => prev.map(s =>
+                s.slideIndex === slideIndex ? {
+                    ...s,
+                    extraAudioUrl: null,
+                    extraAudioName: null,
+                    extraAudioDuration: null,
+                } : s
+            ));
+
+            if (tempFileKey) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKey}`).catch(() => {});
+                setTempFileKey(null);
+                setTempFileSize(null);
+            }
+            if (tempFileKeyNoAudio) {
+                api.delete(`/lessons/${lessonId}/pptx/cleanup-temp?fileKey=${tempFileKeyNoAudio}`).catch(() => {});
+                setTempFileKeyNoAudio(null);
+                setTempFileSizeNoAudio(null);
+            }
+        } catch (err: any) {
+            console.error('Failed to delete extra audio:', err);
+            setError(`Không thể xóa audio mẫu của slide ${slideIndex}: ${err.response?.data?.message || err.message}`);
         }
     };
 
@@ -863,204 +1126,400 @@ export function Step5GeneratePPTX() {
             )}
 
             {/* Slide Preview List */}
-            {slideProgress.length > 0 && (
+            {(hasSlideScript || slideProgress.length > 0) && (
                 <div className="slide-preview-section">
-                    <h4>📋 Nội dung slides ({slideProgress.length})</h4>
-                    <div className="slide-preview-grid">
-                        {slideProgress.map((slide) => {
-                            const isEditingThisSlide = editingSlideIndex === slide.slideIndex;
-                            const fullImageUrl = slide.imageUrl
-                                ? (slide.imageUrl.startsWith('http') ? slide.imageUrl : `${API_BASE}${slide.imageUrl}`)
-                                : undefined;
+                    <div className="slide-preview-header">
+                        <h4>📋 Nội dung slides ({slideProgress.length})</h4>
+                        <button
+                            type="button"
+                            className="btn-add-slide-main"
+                            onClick={() => openAddSlideModal(-1)}
+                            disabled={isJobRunning}
+                            title="Thêm slide mới vào bài giảng"
+                        >
+                            ➕ Thêm slide mới
+                        </button>
+                    </div>
 
-                            return (
-                                <div
-                                    key={slide.slideIndex}
-                                    className={`slide-card ${slide.phase} ${slide.isRegenerating ? 'regenerating' : ''} ${isEditingThisSlide ? 'editing' : ''}`}
-                                >
-                                    <div className="slide-card-header">
-                                        <span className="slide-number">Slide {slide.slideIndex}</span>
-                                        {isEditingThisSlide ? (
-                                            <span className="slide-title-edit-badge">✏️ Đang chỉnh sửa nội dung</span>
-                                        ) : (
-                                            <span className="slide-title">{slide.title}</span>
-                                        )}
-                                        <span className="slide-status">
-                                            {slide.phase === 'pending' && '⏳'}
-                                            {slide.phase === 'optimizing_content' && '📝'}
-                                            {slide.phase === 'generating_image' && '🖼️'}
-                                            {slide.phase === 'complete' && '✅'}
-                                            {slide.phase === 'error' && '❌'}
-                                        </span>
-                                    </div>
+                    {slideProgress.length === 0 ? (
+                        <div className="placeholder" style={{ padding: '24px', textAlign: 'center', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '12px' }}>
+                            Chưa có slide nào. Nhấn <strong>"➕ Thêm slide mới"</strong> hoặc hoàn thành kịch bản ở Bước 3.
+                        </div>
+                    ) : (
+                        <div className="slide-preview-grid">
+                            {/* Insert divider before Slide 1 */}
+                            <div
+                                className="slide-insert-divider top"
+                                onClick={() => openAddSlideModal(0)}
+                                title="Chèn slide mới vào vị trí đầu tiên (Trước Slide 1)"
+                            >
+                                <button type="button" className="btn-slide-insert-divider">
+                                    ➕ Chèn slide vào đầu bài giảng
+                                </button>
+                            </div>
 
-                                    <div className="slide-card-body">
-                                        {/* Content side */}
-                                        <div className="slide-content-col">
-                                            {isEditingThisSlide ? (
-                                                <div className="slide-inline-edit-container">
-                                                    <div className="inline-edit-field">
-                                                        <label>📌 Tiêu đề Slide:</label>
-                                                        <input
-                                                            type="text"
-                                                            className="inline-input-title"
-                                                            value={editTitle}
-                                                            onChange={(e) => setEditTitle(e.target.value)}
-                                                            placeholder="Nhập tiêu đề slide..."
-                                                        />
-                                                    </div>
+                            {slideProgress.map((slide) => {
+                                const isEditingThisSlide = editingSlideIndex === slide.slideIndex;
+                                const fullImageUrl = slide.imageUrl
+                                    ? (slide.imageUrl.startsWith('http') ? slide.imageUrl : `${API_BASE}${slide.imageUrl}`)
+                                    : undefined;
+                                const fullExtraAudioUrl = slide.extraAudioUrl
+                                    ? (slide.extraAudioUrl.startsWith('http') ? slide.extraAudioUrl : `${API_BASE}${slide.extraAudioUrl}`)
+                                    : undefined;
 
-                                                    <div className="inline-edit-bullets-section">
-                                                        <label>📝 Các ý chính trong slide:</label>
-                                                        {editBullets.map((b, idx) => (
-                                                            <div key={idx} className="inline-bullet-row">
+                                return (
+                                    <div key={slide.slideIndex} className="slide-item-wrapper">
+                                        <div
+                                            className={`slide-card ${slide.phase} ${slide.isRegenerating ? 'regenerating' : ''} ${isEditingThisSlide ? 'editing' : ''}`}
+                                        >
+                                            <div className="slide-card-header">
+                                                <div className="slide-header-left">
+                                                    <span className="slide-number">Slide {slide.slideIndex}</span>
+                                                    {isEditingThisSlide ? (
+                                                        <span className="slide-title-edit-badge">✏️ Đang chỉnh sửa nội dung</span>
+                                                    ) : (
+                                                        <span className="slide-title" title={slide.title}>{slide.title || '(Chưa có tiêu đề)'}</span>
+                                                    )}
+                                                </div>
+                                                <div className="slide-header-actions">
+                                                    <button
+                                                        type="button"
+                                                        className="btn-header-action btn-header-move"
+                                                        onClick={() => handleMoveSlide(slide.slideIndex, 'up')}
+                                                        disabled={slide.slideIndex === 1 || isJobRunning || isMovingSlide}
+                                                        title={slide.slideIndex === 1 ? 'Đã ở vị trí đầu tiên' : 'Di chuyển slide lên trên'}
+                                                    >
+                                                        ⬆️
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-header-action btn-header-move"
+                                                        onClick={() => handleMoveSlide(slide.slideIndex, 'down')}
+                                                        disabled={slide.slideIndex === slideProgress.length || isJobRunning || isMovingSlide}
+                                                        title={slide.slideIndex === slideProgress.length ? 'Đã ở vị trí cuối cùng' : 'Di chuyển slide xuống dưới'}
+                                                    >
+                                                        ⬇️
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-header-action btn-header-delete"
+                                                        onClick={() => handleDeleteSlide(slide.slideIndex)}
+                                                        disabled={slideProgress.length <= 1 || isJobRunning || isDeletingSlide}
+                                                        title={slideProgress.length <= 1 ? 'Không thể xóa slide duy nhất' : 'Xóa slide này'}
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                    <span className="slide-status">
+                                                        {slide.phase === 'pending' && '⏳'}
+                                                        {slide.phase === 'optimizing_content' && '📝'}
+                                                        {slide.phase === 'generating_image' && '🖼️'}
+                                                        {slide.phase === 'complete' && '✅'}
+                                                        {slide.phase === 'error' && '❌'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="slide-card-body">
+                                                {/* Content side */}
+                                                <div className="slide-content-col">
+                                                    {isEditingThisSlide ? (
+                                                        <div className="slide-inline-edit-container">
+                                                            <div className="inline-edit-field">
+                                                                <label>📌 Tiêu đề Slide:</label>
                                                                 <input
                                                                     type="text"
-                                                                    className="inline-input-emoji"
-                                                                    value={b.emoji}
-                                                                    onChange={(e) => handleBulletChange(idx, 'emoji', e.target.value)}
-                                                                    title="Icon / Emoji"
-                                                                    maxLength={4}
+                                                                    className="inline-input-title"
+                                                                    value={editTitle}
+                                                                    onChange={(e) => setEditTitle(e.target.value)}
+                                                                    placeholder="Nhập tiêu đề slide..."
                                                                 />
-                                                                <div className="inline-bullet-fields">
-                                                                    <input
-                                                                        type="text"
-                                                                        className="inline-input-point"
-                                                                        value={b.point}
-                                                                        onChange={(e) => handleBulletChange(idx, 'point', e.target.value)}
-                                                                        placeholder="Ý chính..."
-                                                                    />
-                                                                    <textarea
-                                                                        rows={2}
-                                                                        className="inline-input-desc"
-                                                                        value={b.description}
-                                                                        onChange={(e) => handleBulletChange(idx, 'description', e.target.value)}
-                                                                        placeholder="Mô tả / giải thích chi tiết..."
-                                                                    />
-                                                                </div>
+                                                            </div>
+
+                                                            <div className="inline-edit-field">
+                                                                <label>📝 Ý chính / Ghi chú nội dung (AI sẽ dựa vào đây để tạo slide):</label>
+                                                                <textarea
+                                                                    rows={3}
+                                                                    className="inline-input-desc"
+                                                                    value={editRawContent}
+                                                                    onChange={(e) => setEditRawContent(e.target.value)}
+                                                                    placeholder="Nhập các ý chính hoặc nội dung thô (có thể để trống để AI tự biên soạn theo tiêu đề)..."
+                                                                />
+                                                            </div>
+
+                                                            <div className="inline-edit-bullets-section">
+                                                                <label>📋 Các ý hiển thị trên slide (bullet points):</label>
+                                                                {editBullets.map((b, idx) => (
+                                                                    <div key={idx} className="inline-bullet-row">
+                                                                        <input
+                                                                            type="text"
+                                                                            className="inline-input-emoji"
+                                                                            value={b.emoji}
+                                                                            onChange={(e) => handleBulletChange(idx, 'emoji', e.target.value)}
+                                                                            title="Icon / Emoji"
+                                                                            maxLength={4}
+                                                                        />
+                                                                        <div className="inline-bullet-fields">
+                                                                            <input
+                                                                                type="text"
+                                                                                className="inline-input-point"
+                                                                                value={b.point}
+                                                                                onChange={(e) => handleBulletChange(idx, 'point', e.target.value)}
+                                                                                placeholder="Ý chính..."
+                                                                            />
+                                                                            <textarea
+                                                                                rows={2}
+                                                                                className="inline-input-desc"
+                                                                                value={b.description}
+                                                                                onChange={(e) => handleBulletChange(idx, 'description', e.target.value)}
+                                                                                placeholder="Mô tả / giải thích chi tiết..."
+                                                                            />
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn-inline-delete"
+                                                                            onClick={() => handleRemoveBullet(idx)}
+                                                                            title="Xóa ý này"
+                                                                        >
+                                                                            🗑️
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+
                                                                 <button
                                                                     type="button"
-                                                                    className="btn-inline-delete"
-                                                                    onClick={() => handleRemoveBullet(idx)}
-                                                                    title="Xóa ý này"
+                                                                    className="btn-inline-add-bullet"
+                                                                    onClick={handleAddBullet}
                                                                 >
-                                                                    🗑️
+                                                                    ➕ Thêm ý mới
                                                                 </button>
                                                             </div>
-                                                        ))}
 
-                                                        <button
-                                                            type="button"
-                                                            className="btn-inline-add-bullet"
-                                                            onClick={handleAddBullet}
-                                                        >
-                                                            ➕ Thêm ý mới
-                                                        </button>
+                                                            <div className="inline-edit-bottom-actions">
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-save-inline"
+                                                                    onClick={() => handleSaveEditContent(slide.slideIndex, false)}
+                                                                    disabled={isSavingContent}
+                                                                >
+                                                                    {isSavingContent ? '⏳ Đang lưu...' : '💾 Lưu'}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-save-inline btn-highlight-ai"
+                                                                    onClick={() => handleSaveEditContent(slide.slideIndex, true)}
+                                                                    disabled={isSavingContent}
+                                                                    title="Lưu ý chính và tự động dùng AI tạo lại bullet points tối ưu"
+                                                                >
+                                                                    ✨ Lưu & AI tạo nội dung
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn-cancel-inline"
+                                                                    onClick={handleCancelEditContent}
+                                                                    disabled={isSavingContent}
+                                                                >
+                                                                    ❌ Hủy
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        slide.optimizedContent && slide.optimizedContent.length > 0 ? (
+                                                            <div className="optimized-content-wrapper">
+                                                                <ul className="bullet-list">
+                                                                    {slide.optimizedContent.map((b, idx) => (
+                                                                        <li key={idx}>
+                                                                            <span className="emoji">{b.emoji}</span>
+                                                                            <strong>{b.point}</strong>
+                                                                            {b.description && (
+                                                                                <span className="description"> - {b.description}</span>
+                                                                            )}
+                                                                        </li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        ) : slide.content ? (
+                                                            <div className="slide-raw-content-box">
+                                                                <div className="raw-content-header">
+                                                                    <span className="raw-content-label">📝 Ý chính từ giáo viên:</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn-quick-ai"
+                                                                        onClick={() => handleRegenerateContent(slide.slideIndex)}
+                                                                        disabled={slide.isRegenerating || isJobRunning}
+                                                                        title="Dùng AI phân tích ý chính và tạo danh sách bullet points đẹp mắt"
+                                                                    >
+                                                                        ✨ AI tạo nội dung slide
+                                                                    </button>
+                                                                </div>
+                                                                <p className="raw-content-text">{slide.content}</p>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="placeholder-content-box">
+                                                                <p className="placeholder">Slide này chưa có nội dung chi tiết.</p>
+                                                                <div className="placeholder-actions">
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn-small btn-action-edit"
+                                                                        onClick={() => handleStartEditContent(slide)}
+                                                                        title="Nhập các ý chính cho slide"
+                                                                    >
+                                                                        ✏️ Bổ sung ý chính
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        className="btn-small btn-highlight-ai"
+                                                                        onClick={() => handleRegenerateContent(slide.slideIndex)}
+                                                                        disabled={slide.isRegenerating || isJobRunning}
+                                                                        title="Dùng AI tự biên soạn nội dung dựa theo tiêu đề slide"
+                                                                    >
+                                                                        ✨ AI tạo theo tiêu đề
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    )}
+                                                </div>
+
+                                                {/* Image side */}
+                                                <div className="slide-image-col">
+                                                    <div className="slide-image-wrapper">
+                                                        {fullImageUrl ? (
+                                                            <img src={fullImageUrl} alt={`Slide ${slide.slideIndex}`} />
+                                                        ) : (
+                                                            <div className="image-placeholder">🖼️</div>
+                                                        )}
+
+                                                        {/* Overlay button on image hover */}
+                                                        {!isJobRunning && (
+                                                            <button
+                                                                type="button"
+                                                                className="btn-image-overlay-upload"
+                                                                onClick={() => handleTriggerUpload(slide.slideIndex)}
+                                                                title="Tải ảnh mới từ máy tính (tự động căn chỉnh & resize 1:1)"
+                                                            >
+                                                                📤 Đổi ảnh
+                                                            </button>
+                                                        )}
                                                     </div>
+                                                </div>
+                                            </div>
 
-                                                    <div className="inline-edit-bottom-actions">
+                                            {/* Extra Audio Bar if slide has sample audio */}
+                                            {slide.extraAudioUrl && fullExtraAudioUrl && (
+                                                <div className="slide-extra-audio-bar">
+                                                    <div className="extra-audio-info">
+                                                        <span className="extra-audio-icon">🎧</span>
+                                                        <span className="extra-audio-label">Audio mẫu:</span>
+                                                        <span className="extra-audio-name" title={slide.extraAudioName || 'Audio mẫu'}>
+                                                            {slide.extraAudioName || 'Audio mẫu'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="extra-audio-controls">
+                                                        <audio
+                                                            controls
+                                                            src={fullExtraAudioUrl}
+                                                            className="extra-audio-player"
+                                                            preload="none"
+                                                        />
                                                         <button
                                                             type="button"
-                                                            className="btn-save-inline"
-                                                            onClick={() => handleSaveEditContent(slide.slideIndex)}
-                                                            disabled={isSavingContent}
+                                                            className="btn-extra-audio-change"
+                                                            onClick={() => handleTriggerExtraAudioUpload(slide.slideIndex)}
+                                                            disabled={isJobRunning || isUploadingExtraAudio}
+                                                            title="Thay thế bằng file audio mẫu khác"
                                                         >
-                                                            {isSavingContent ? '⏳ Đang lưu...' : '💾 Lưu nội dung'}
+                                                            🔄 Đổi file
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            className="btn-cancel-inline"
-                                                            onClick={handleCancelEditContent}
-                                                            disabled={isSavingContent}
+                                                            className="btn-extra-audio-delete"
+                                                            onClick={() => handleDeleteExtraAudio(slide.slideIndex)}
+                                                            disabled={isJobRunning || isUploadingExtraAudio}
+                                                            title="Xóa file audio mẫu"
                                                         >
-                                                            ❌ Hủy
+                                                            🗑️ Xóa
                                                         </button>
                                                     </div>
                                                 </div>
-                                            ) : (
-                                                slide.optimizedContent && slide.optimizedContent.length > 0 ? (
-                                                    <ul className="bullet-list">
-                                                        {slide.optimizedContent.map((b, idx) => (
-                                                            <li key={idx}>
-                                                                <span className="emoji">{b.emoji}</span>
-                                                                <strong>{b.point}</strong>
-                                                                {b.description && (
-                                                                    <span className="description"> - {b.description}</span>
-                                                                )}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    <p className="placeholder">Chưa có nội dung</p>
-                                                )
                                             )}
-                                        </div>
 
-                                        {/* Image side */}
-                                        <div className="slide-image-col">
-                                            <div className="slide-image-wrapper">
-                                                {fullImageUrl ? (
-                                                    <img src={fullImageUrl} alt={`Slide ${slide.slideIndex}`} />
-                                                ) : (
-                                                    <div className="image-placeholder">🖼️</div>
-                                                )}
-
-                                                {/* Overlay button on image hover */}
-                                                {!isJobRunning && (
+                                            {/* Action buttons */}
+                                            {!isEditingThisSlide && !isJobRunning && (
+                                                <div className="slide-card-actions">
                                                     <button
-                                                        type="button"
-                                                        className="btn-image-overlay-upload"
+                                                        className="btn-small btn-action-edit"
+                                                        onClick={() => handleStartEditContent(slide)}
+                                                        disabled={slide.isRegenerating}
+                                                        title="Chỉnh sửa trực tiếp tiêu đề, ý chính và các ý trong slide"
+                                                    >
+                                                        ✏️ Sửa nội dung
+                                                    </button>
+                                                    <button
+                                                        className="btn-small btn-action-upload"
                                                         onClick={() => handleTriggerUpload(slide.slideIndex)}
-                                                        title="Tải ảnh mới từ máy tính (tự động căn chỉnh & resize 1:1)"
+                                                        disabled={slide.isRegenerating}
+                                                        title="Tải ảnh từ máy tính (tự động căn chỉnh & resize 1:1)"
                                                     >
                                                         📤 Đổi ảnh
                                                     </button>
-                                                )}
-                                            </div>
+                                                    {!slide.extraAudioUrl && (
+                                                        <button
+                                                            className="btn-small btn-action-audio"
+                                                            onClick={() => handleTriggerExtraAudioUpload(slide.slideIndex)}
+                                                            disabled={slide.isRegenerating || isUploadingExtraAudio}
+                                                            title="Tải audio mẫu bài giảng (độc lập với audio thuyết minh, ví dụ bài nghe tiếng Anh, bài tập)"
+                                                        >
+                                                            🎧 Tải audio mẫu
+                                                        </button>
+                                                    )}
+                                                    <button
+                                                        className={`btn-small ${!slide.optimizedContent || slide.optimizedContent.length === 0 ? 'btn-highlight-ai' : ''}`}
+                                                        onClick={() => handleRegenerateContent(slide.slideIndex)}
+                                                        disabled={slide.isRegenerating}
+                                                        title="Dùng AI phân tích ý chính hoặc tiêu đề để tạo/viết lại nội dung slide"
+                                                    >
+                                                        {!slide.optimizedContent || slide.optimizedContent.length === 0 ? '✨ AI tạo nội dung' : '🔄 Tạo lại nội dung'}
+                                                    </button>
+                                                    <button
+                                                        className="btn-small"
+                                                        onClick={() => handleRegenerateImage(slide.slideIndex)}
+                                                        disabled={slide.isRegenerating}
+                                                        title="Dùng AI tạo lại hình ảnh slide này"
+                                                    >
+                                                        🖼️ Tạo lại ảnh
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Insert divider after this slide */}
+                                        <div
+                                            className="slide-insert-divider"
+                                            onClick={() => openAddSlideModal(slide.slideIndex)}
+                                            title={`Chèn slide mới vào sau Slide ${slide.slideIndex}`}
+                                        >
+                                            <button type="button" className="btn-slide-insert-divider">
+                                                ➕ Chèn slide vào đây
+                                            </button>
                                         </div>
                                     </div>
+                                );
+                            })}
+                        </div>
+                    )}
 
-                                    {/* Action buttons */}
-                                    {!isEditingThisSlide && !isJobRunning && (
-                                        <div className="slide-card-actions">
-                                            <button
-                                                className="btn-small btn-action-edit"
-                                                onClick={() => handleStartEditContent(slide)}
-                                                disabled={slide.isRegenerating}
-                                                title="Chỉnh sửa trực tiếp tiêu đề và các ý trong slide"
-                                            >
-                                                ✏️ Sửa nội dung
-                                            </button>
-                                            <button
-                                                className="btn-small btn-action-upload"
-                                                onClick={() => handleTriggerUpload(slide.slideIndex)}
-                                                disabled={slide.isRegenerating}
-                                                title="Tải ảnh từ máy tính (tự động căn chỉnh & resize 1:1)"
-                                            >
-                                                📤 Đổi ảnh
-                                            </button>
-                                            <button
-                                                className="btn-small"
-                                                onClick={() => handleRegenerateContent(slide.slideIndex)}
-                                                disabled={slide.isRegenerating}
-                                                title="Dùng AI viết lại nội dung slide này"
-                                            >
-                                                🔄 Tạo lại nội dung
-                                            </button>
-                                            <button
-                                                className="btn-small"
-                                                onClick={() => handleRegenerateImage(slide.slideIndex)}
-                                                disabled={slide.isRegenerating}
-                                                title="Dùng AI tạo lại hình ảnh slide này"
-                                            >
-                                                🖼️ Tạo lại ảnh
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                    {slideProgress.length > 0 && (
+                        <div className="add-slide-bottom-bar">
+                            <button
+                                type="button"
+                                className="btn-add-slide-bottom"
+                                onClick={() => openAddSlideModal(-1)}
+                                disabled={isJobRunning}
+                            >
+                                ➕ Thêm slide mới vào cuối bài giảng
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -1071,6 +1530,15 @@ export function Step5GeneratePPTX() {
                 style={{ display: 'none' }}
                 accept="image/*"
                 onChange={handleFileSelect}
+            />
+
+            {/* Hidden file input for extra audio upload */}
+            <input
+                type="file"
+                ref={extraAudioInputRef}
+                style={{ display: 'none' }}
+                accept="audio/*"
+                onChange={handleExtraAudioFileSelect}
             />
 
             {/* Image Crop & Resize Modal */}
@@ -1086,6 +1554,93 @@ export function Step5GeneratePPTX() {
                 onCropComplete={handleCropComplete}
                 isUploading={isUploadingImage}
             />
+
+            {/* Add Slide Modal */}
+            {isAddSlideModalOpen && (
+                <div className="add-slide-modal-overlay" onClick={() => setIsAddSlideModalOpen(false)}>
+                    <div className="add-slide-modal" onClick={(e) => e.stopPropagation()}>
+                        <div className="add-slide-modal-header">
+                            <h3>➕ Thêm slide mới</h3>
+                            <button
+                                type="button"
+                                className="add-slide-modal-close"
+                                onClick={() => setIsAddSlideModalOpen(false)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <form onSubmit={handleAddSlideSubmit}>
+                            <div className="add-slide-modal-body">
+                                <div className="add-slide-form-group">
+                                    <label>📌 Tiêu đề Slide <span style={{ color: '#ef4444' }}>*</span></label>
+                                    <input
+                                        type="text"
+                                        className="add-slide-input"
+                                        value={newSlideTitle}
+                                        onChange={(e) => setNewSlideTitle(e.target.value)}
+                                        placeholder="Nhập tiêu đề slide..."
+                                        autoFocus
+                                        required
+                                    />
+                                </div>
+                                <div className="add-slide-form-group">
+                                    <label>📍 Vị trí chèn slide</label>
+                                    <select
+                                        className="add-slide-select"
+                                        value={newSlideInsertAfter}
+                                        onChange={(e) => setNewSlideInsertAfter(parseInt(e.target.value, 10))}
+                                    >
+                                        <option value={-1}>Thêm vào cuối cùng (Slide {slideProgress.length + 1})</option>
+                                        <option value={0}>Chèn vào đầu tiên (Trước Slide 1)</option>
+                                        {slideProgress.map((s) => (
+                                            <option key={s.slideIndex} value={s.slideIndex}>
+                                                Sau Slide {s.slideIndex}: {s.title || `Slide ${s.slideIndex}`}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="add-slide-form-group">
+                                    <label>📝 Tóm tắt nội dung slide (tùy chọn)</label>
+                                    <textarea
+                                        rows={3}
+                                        className="add-slide-textarea"
+                                        value={newSlideContent}
+                                        onChange={(e) => setNewSlideContent(e.target.value)}
+                                        placeholder="Nhập các ý chính hoặc nội dung thô (AI có thể phân tích để viết slide)..."
+                                    />
+                                </div>
+                                <div className="add-slide-form-group">
+                                    <label className="add-slide-checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={autoGenerateAI}
+                                            onChange={(e) => setAutoGenerateAI(e.target.checked)}
+                                        />
+                                        <span>✨ Tự động dùng AI tạo nội dung tối ưu ngay sau khi thêm</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="add-slide-modal-footer">
+                                <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    onClick={() => setIsAddSlideModalOpen(false)}
+                                    disabled={isCreatingSlide}
+                                >
+                                    Hủy
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-primary"
+                                    disabled={isCreatingSlide || !newSlideTitle.trim()}
+                                >
+                                    {isCreatingSlide ? '⏳ Đang tạo...' : '➕ Tạo slide'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

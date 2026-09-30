@@ -22,11 +22,10 @@ interface Slide {
 // Types for parsed slide JSON
 interface ParsedSlide {
     slideIndex: number;
-    slideType: string;
+    slideType?: string;
     title: string;
-    content?: string[];
+    content?: string[] | string;
     visualIdea?: string | null;
-
 }
 
 interface ParsedSlideScript {
@@ -74,20 +73,30 @@ function SlideScriptPreview({ script }: { script: ParsedSlideScript }) {
             )}
 
             {script.slides?.map((slide, idx) => (
-                <div key={idx} className={`slide-preview-card slide-type-${slide.slideType}`}>
+                <div key={idx} className={`slide-preview-card slide-type-${slide.slideType || 'content'}`}>
                     <div className="slide-preview-header">
                         <span className="slide-number">Slide {slide.slideIndex}</span>
-                        <span className={`slide-type-badge ${slide.slideType}`}>{slide.slideType}</span>
+                        <span className={`slide-type-badge ${slide.slideType || 'content'}`}>{slide.slideType || 'content'}</span>
                     </div>
 
                     <h4 className="slide-preview-title">{slide.title}</h4>
 
-                    {slide.content && slide.content.length > 0 && (
-                        <ul className="slide-preview-content">
-                            {slide.content.map((item, i) => (
-                                <li key={i}>{item}</li>
-                            ))}
-                        </ul>
+                    {slide.content && (
+                        Array.isArray(slide.content) ? (
+                            slide.content.length > 0 && (
+                                <ul className="slide-preview-content">
+                                    {slide.content.map((item, i) => (
+                                        <li key={i}>{item}</li>
+                                    ))}
+                                </ul>
+                            )
+                        ) : typeof slide.content === 'string' && slide.content.trim() ? (
+                            <ul className="slide-preview-content">
+                                {slide.content.split('\n').map(l => l.replace(/^[-*•]\s*/, '').trim()).filter(Boolean).map((item, i) => (
+                                    <li key={i}>{item}</li>
+                                ))}
+                            </ul>
+                        ) : null
                     )}
 
                     {slide.visualIdea && (

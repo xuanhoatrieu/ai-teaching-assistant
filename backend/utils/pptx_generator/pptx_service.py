@@ -121,6 +121,11 @@ class PPTXGeneratorService:
             audio_path = slide_data.get('audioPath')
             if audio_path and os.path.exists(audio_path):
                 self._add_audio_with_autoplay(slide, audio_path)
+            
+            # Add extra / sample audio (clickable)
+            extra_audio_path = slide_data.get('extraAudioPath')
+            if extra_audio_path and os.path.exists(extra_audio_path):
+                self._add_clickable_audio(slide, extra_audio_path)
         
         # Save to temp file
         output_path = tempfile.mktemp(suffix='.pptx')
@@ -194,6 +199,10 @@ class PPTXGeneratorService:
             audio_path = slide_data.get('audioPath')
             if audio_path and os.path.exists(audio_path):
                 self._add_audio_with_autoplay(slide, audio_path)
+
+            extra_audio_path = slide_data.get('extraAudioPath')
+            if extra_audio_path and os.path.exists(extra_audio_path):
+                self._add_clickable_audio(slide, extra_audio_path)
 
             time.sleep(0.04)
 
@@ -385,6 +394,11 @@ class PPTXGeneratorService:
         # Add audio with auto-play
         if audio_path and os.path.exists(audio_path):
             self._add_audio_with_autoplay(slide, audio_path)
+
+        # Add extra / sample audio (clickable)
+        extra_audio_path = slide_data.get('extraAudioPath')
+        if extra_audio_path and os.path.exists(extra_audio_path):
+            self._add_clickable_audio(slide, extra_audio_path)
     
     def _add_agenda_slide(self, slide, slide_data: Dict[str, Any], bg_path: Optional[str] = None):
         """
@@ -973,6 +987,137 @@ class PPTXGeneratorService:
             
         except Exception as e:
             print(f"Warning: Could not set auto-play for audio: {e}")
+
+    def _add_clickable_audio(self, slide, audio_path: str):
+        """
+        Add extra / sample media audio to slide (e.g. English listening dialogue).
+        Placed visibly as a clickable speaker icon button (no auto-play on slide transition).
+        Clicking the icon during presentation plays/pauses the audio.
+        """
+        try:
+            from pptx.opc.package import Part
+            from pptx.opc.packuri import PackURI
+            
+            ext = os.path.splitext(audio_path)[1].lower()
+            mime_map = {
+                '.wav': 'audio/wav',
+                '.mp3': 'audio/mpeg',
+                '.m4a': 'audio/mp4',
+                '.ogg': 'audio/ogg',
+                '.wma': 'audio/x-ms-wma',
+            }
+            if ext not in mime_map:
+                print(f"Warning: Unsupported audio format: {ext}")
+                return
+            
+            content_type = mime_map[ext]
+            with open(audio_path, 'rb') as f:
+                audio_data = f.read()
+            
+            slide_part = slide.part
+            slide_partname = str(slide_part.partname)
+            import re
+            match = re.search(r'slide(\d+)', slide_partname)
+            slide_idx = int(match.group(1)) - 1 if match else 0
+            
+            existing_media = set()
+            try:
+                for part in slide_part.package.iter_parts():
+                    existing_media.add(str(part.partname))
+            except Exception:
+                for rel in slide_part.rels.values():
+                    if hasattr(rel, 'target_partname') and rel.target_partname:
+                        existing_media.add(str(rel.target_partname))
+            
+            media_idx = 1
+            while True:
+                partname = f"/ppt/media/extra_audio_s{slide_idx}_{media_idx}{ext}"
+                if partname not in existing_media:
+                    break
+                media_idx += 1
+            
+            audio_part = Part(
+                PackURI(partname),
+                content_type,
+                slide_part.package,
+                audio_data,
+            )
+            
+            rId_audio = slide_part.relate_to(audio_part, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio')
+            rId_media = slide_part.relate_to(audio_part, 'http://schemas.microsoft.com/office/2007/relationships/media')
+            
+            max_id = 0
+            for shape in slide.shapes:
+                if shape.shape_id > max_id:
+                    max_id = shape.shape_id
+            shape_id = max_id + 1
+            
+            # Position: visible near top right
+            left_emu = int(12.0 * 914400)
+            top_emu = int(0.6 * 914400)
+            width_emu = int(0.6 * 914400)
+            height_emu = int(0.6 * 914400)
+            
+            icon_path = os.path.join(os.path.dirname(__file__), 'speaker_icon.png')
+            if os.path.exists(icon_path):
+                with open(icon_path, 'rb') as f:
+                    icon_data = f.read()
+                icon_partname = f"/ppt/media/extra_speaker_s{slide_idx}{media_idx}.png"
+                icon_part = Part(
+                    PackURI(icon_partname),
+                    'image/png',
+                    slide_part.package,
+                    icon_data,
+                )
+                rId_icon = slide_part.relate_to(icon_part, 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image')
+            else:
+                rId_icon = ""
+            
+            audio_xml = f'''
+            <p:pic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                   xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+                   xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                   xmlns:p14="http://schemas.microsoft.com/office/powerpoint/2010/main">
+                <p:nvPicPr>
+                    <p:cNvPr id="{shape_id}" name="ExtraAudio {shape_id}">
+                        <a:hlinkClick r:id="" action="ppaction://media"/>
+                    </p:cNvPr>
+                    <p:cNvPicPr>
+                        <a:picLocks noChangeAspect="1"/>
+                    </p:cNvPicPr>
+                    <p:nvPr>
+                        <a:audioFile r:link="{rId_audio}"/>
+                        <p:extLst>
+                            <p:ext uri="{{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}}">
+                                <p14:media r:embed="{rId_media}"/>
+                            </p:ext>
+                        </p:extLst>
+                    </p:nvPr>
+                </p:nvPicPr>
+                <p:blipFill>
+                    <a:blip r:embed="{rId_icon}"/>
+                    <a:stretch>
+                        <a:fillRect/>
+                    </a:stretch>
+                </p:blipFill>
+                <p:spPr>
+                    <a:xfrm>
+                        <a:off x="{left_emu}" y="{top_emu}"/>
+                        <a:ext cx="{width_emu}" cy="{height_emu}"/>
+                    </a:xfrm>
+                    <a:prstGeom prst="rect">
+                        <a:avLst/>
+                    </a:prstGeom>
+                </p:spPr>
+            </p:pic>
+            '''
+            audio_elem = etree.fromstring(audio_xml.strip().encode('utf-8'))
+            slide._element.find(qn('p:cSld')).find(qn('p:spTree')).append(audio_elem)
+            print(f"[PPTX] Clickable extra audio injected (XML): slide {slide_idx} <- {audio_path}")
+        except Exception as e:
+            import traceback
+            print(f"Warning: Could not add extra audio: {e}")
+            traceback.print_exc()
 
 
 # Standalone test

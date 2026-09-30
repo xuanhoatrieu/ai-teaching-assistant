@@ -1,4 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { ModelConfigService } from '../model-config/model-config.service';
@@ -744,6 +746,133 @@ export class SlidesService {
     }
 
     /**
+     * Generate speaker note for a single slide using AI
+     */
+    async generateSingleSlideSpeakerNote(lessonId: string, slideIndex: number, userId: string) {
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+            include: { subject: true },
+        });
+
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        const slide = await this.prisma.slide.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found in lesson ${lessonId}`);
+        }
+
+        // Check if there is a previous slide for bridge context
+        let previousBridge = '';
+        if (slideIndex > 1) {
+            const prevAudio = await this.prisma.slideAudio.findUnique({
+                where: { lessonId_slideIndex: { lessonId, slideIndex: slideIndex - 1 } },
+            });
+            if (prevAudio?.speakerNote) {
+                previousBridge = prevAudio.speakerNote.substring(0, 140);
+            }
+        }
+
+        let content = '';
+        if (slide.optimizedContentJson) {
+            try {
+                const parsed = JSON.parse(slide.optimizedContentJson);
+                if (Array.isArray(parsed)) {
+                    content = parsed.map((p: any) => `${p.emoji || '•'} ${p.point}: ${p.description || ''}`).join('\n');
+                }
+            } catch {
+                content = slide.content || '';
+            }
+        } else {
+            content = slide.content || '';
+        }
+
+        const slidePromptText = `--- Slide ${slide.slideIndex} (${slide.slideType || 'content'}) ---\nTitle: ${slide.title}\nContent: ${content || slide.title}${slide.visualIdea ? `\nVisual Idea: ${slide.visualIdea}` : ''}`;
+        const promptContent = previousBridge
+            ? `[Chủ đề vừa giải thích ở phần trước để nối mạch tự nhiên: "${previousBridge}"]\n(Lưu ý: Tuyệt đối KHÔNG dùng từ "slide trước" hay "slide", hãy nối mạch kiến thức tự nhiên)\n\n${slidePromptText}`
+            : slidePromptText;
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SPEAKER_NOTES');
+        const prompt = await this.promptComposer.buildFullPrompt(
+            lesson.subjectId,
+            'slides.speaker-notes',
+            {
+                title: lesson.title,
+                slides_content: promptContent,
+            },
+        );
+
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
+        const parsedNotes = this.parseSpeakerNotesJSON(aiResult.content, [slide]);
+        const generatedNote = parsedNotes.length > 0 && parsedNotes[0].speakerNote
+            ? parsedNotes[0].speakerNote
+            : this.cleanAntiAIPhrases(aiResult.content.trim());
+
+        // Save to Slide.speakerNote (raw note)
+        await this.prisma.slide.update({
+            where: { id: slide.id },
+            data: { speakerNote: generatedNote },
+        });
+
+        // Save/upsert SlideAudio record (active note ready for TTS)
+        const updatedAudio = await this.prisma.slideAudio.upsert({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+            update: {
+                speakerNote: generatedNote,
+                slideTitle: slide.title,
+                status: 'pending',
+            },
+            create: {
+                lessonId,
+                slideIndex,
+                slideTitle: slide.title,
+                speakerNote: generatedNote,
+                status: 'pending',
+            },
+        });
+
+        // Also sync into slideScript JSON
+        if (lesson.slideScript) {
+            try {
+                let jsonStr = lesson.slideScript;
+                const jsonStartTag = lesson.slideScript.indexOf('```json');
+                if (jsonStartTag !== -1) {
+                    const contentStart = jsonStartTag + '```json'.length;
+                    const lastBackticks = lesson.slideScript.lastIndexOf('```');
+                    if (lastBackticks > contentStart) {
+                        jsonStr = lesson.slideScript.substring(contentStart, lastBackticks);
+                    }
+                }
+                const scriptData = JSON.parse(jsonStr.trim());
+                if (scriptData.slides && Array.isArray(scriptData.slides)) {
+                    const s = scriptData.slides.find((item: any) => item.slideIndex === slideIndex);
+                    if (s) {
+                        s.speakerNote = generatedNote;
+                        await this.prisma.lesson.update({
+                            where: { id: lessonId },
+                            data: { slideScript: JSON.stringify(scriptData, null, 2) },
+                        });
+                    }
+                }
+            } catch (e: any) {
+                this.logger.warn(`Could not sync single speaker note to slideScript: ${e.message}`);
+            }
+        }
+
+        this.logger.log(`[generateSingleSlideSpeakerNote] Successfully generated note for slide ${slideIndex} in lesson ${lessonId}`);
+
+        return {
+            slideIndex,
+            speakerNote: generatedNote,
+            slideAudio: updatedAudio,
+        };
+    }
+
+    /**
      * Regenerate optimized content for a single slide
      */
     async regenerateSlideContent(lessonId: string, slideIndex: number, userId: string) {
@@ -959,6 +1088,8 @@ export class SlidesService {
         slideIndex: number,
         title?: string,
         optimizedContent?: any[],
+        content?: string,
+        speakerNote?: string,
     ) {
         const slide = await this.prisma.slide.findFirst({
             where: { lessonId, slideIndex },
@@ -975,6 +1106,12 @@ export class SlidesService {
         if (optimizedContent !== undefined && optimizedContent !== null) {
             updateData.optimizedContentJson = JSON.stringify(optimizedContent);
         }
+        if (content !== undefined && content !== null) {
+            updateData.content = content.trim();
+        }
+        if (speakerNote !== undefined && speakerNote !== null) {
+            updateData.speakerNote = speakerNote.trim();
+        }
 
         const updatedSlide = await this.prisma.slide.update({
             where: {
@@ -982,6 +1119,18 @@ export class SlidesService {
             },
             data: updateData,
         });
+
+        if (speakerNote !== undefined && speakerNote !== null) {
+            const existingAudio = await this.prisma.slideAudio.findUnique({
+                where: { lessonId_slideIndex: { lessonId, slideIndex } },
+            });
+            if (existingAudio) {
+                await this.prisma.slideAudio.update({
+                    where: { id: existingAudio.id },
+                    data: { speakerNote: speakerNote.trim() },
+                });
+            }
+        }
 
         this.logger.log(`[updateSlideContent] Slide ${slideIndex} updated for lesson ${lessonId}`);
         return updatedSlide;
@@ -1037,6 +1186,356 @@ export class SlidesService {
         });
 
         this.logger.log(`[uploadCustomSlideImage] Custom image saved for slide ${slideIndex}: ${publicUrl}`);
+        return updatedSlide;
+    }
+
+    /**
+     * Re-serializes the current Slide list in database back to lesson.slideScript.
+     * Keeps Step 3 (Slide Script) and other consumers in sync when slides are added,
+     * deleted, or reordered.
+     */
+    async syncSlidesToSlideScript(lessonId: string): Promise<void> {
+        try {
+            const lesson = await this.prisma.lesson.findUnique({
+                where: { id: lessonId },
+                select: { title: true, slideScript: true },
+            });
+            if (!lesson) return;
+
+            const slides = await this.prisma.slide.findMany({
+                where: { lessonId },
+                orderBy: { slideIndex: 'asc' },
+            });
+
+            const slideAudios = await this.prisma.slideAudio.findMany({
+                where: { lessonId },
+                orderBy: { slideIndex: 'asc' },
+            });
+            const audioMap = new Map(slideAudios.map(a => [a.slideIndex, a]));
+
+            const scriptSlides = slides.map(s => {
+                const audio = audioMap.get(s.slideIndex);
+                let contentArray: string[] = [];
+                if (Array.isArray(s.content)) {
+                    contentArray = s.content;
+                } else if (typeof s.content === 'string' && s.content.trim()) {
+                    contentArray = s.content.split('\n').map(l => l.replace(/^[-*•]\s*/, '').trim()).filter(Boolean);
+                }
+                return {
+                    slideIndex: s.slideIndex,
+                    slideNumber: s.slideIndex,
+                    slideType: s.slideType || 'content',
+                    title: s.title,
+                    content: contentArray,
+                    visualIdea: s.visualIdea || '',
+                    speakerNote: audio?.speakerNote || s.speakerNote || '',
+                };
+            });
+
+            const scriptData = {
+                lessonTitle: lesson.title,
+                slides: scriptSlides,
+            };
+
+            await this.prisma.lesson.update({
+                where: { id: lessonId },
+                data: { slideScript: JSON.stringify(scriptData, null, 2) },
+            });
+            this.logger.log(`[syncSlidesToSlideScript] Synced ${scriptSlides.length} slides to slideScript for lesson ${lessonId}`);
+        } catch (e: any) {
+            this.logger.warn(`[syncSlidesToSlideScript] Failed: ${e.message}`);
+        }
+    }
+
+    /**
+     * Add a new slide to the lesson.
+     * If insertAfterIndex is provided, inserts right after that slide and shifts all
+     * subsequent slides up by 1. Otherwise appends at the end.
+     */
+    async createSlide(
+        lessonId: string,
+        dto: { title?: string; content?: string; speakerNote?: string; insertAfterIndex?: number; }
+    ): Promise<any> {
+        const existingSlides = await this.prisma.slide.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        const total = existingSlides.length;
+        let targetIndex = total + 1;
+
+        if (
+            dto.insertAfterIndex !== undefined &&
+            dto.insertAfterIndex >= 0 &&
+            dto.insertAfterIndex <= total
+        ) {
+            targetIndex = dto.insertAfterIndex + 1;
+        }
+
+        // Shift existing slides from targetIndex up to total by +1 (in reverse order to avoid unique collisions)
+        if (targetIndex <= total) {
+            for (let i = total; i >= targetIndex; i--) {
+                await this.prisma.slide.update({
+                    where: { lessonId_slideIndex: { lessonId, slideIndex: i } },
+                    data: { slideIndex: i + 1 },
+                });
+
+                const sa = await this.prisma.slideAudio.findUnique({
+                    where: { lessonId_slideIndex: { lessonId, slideIndex: i } },
+                });
+                if (sa) {
+                    await this.prisma.slideAudio.update({
+                        where: { id: sa.id },
+                        data: { slideIndex: i + 1 },
+                    });
+                }
+            }
+        }
+
+        const title = dto.title?.trim() || `Slide ${targetIndex}`;
+        const newSlide = await this.prisma.slide.create({
+            data: {
+                lessonId,
+                slideIndex: targetIndex,
+                title,
+                content: dto.content || '',
+                speakerNote: dto.speakerNote || '',
+                slideType: 'content',
+                status: 'draft',
+            },
+        });
+
+        // Also create matching SlideAudio slot
+        await this.prisma.slideAudio.create({
+            data: {
+                lessonId,
+                slideIndex: targetIndex,
+                slideTitle: title,
+                speakerNote: dto.speakerNote || '',
+                status: 'pending',
+            },
+        });
+
+        await this.syncSlidesToSlideScript(lessonId);
+        return newSlide;
+    }
+
+    /**
+     * Delete slide at slideIndex and renumber remaining slides.
+     */
+    async deleteSlide(lessonId: string, slideIndex: number): Promise<{ success: boolean; totalSlides: number }> {
+        const slide = await this.prisma.slide.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found in lesson ${lessonId}`);
+        }
+
+        const total = await this.prisma.slide.count({ where: { lessonId } });
+        if (total <= 1) {
+            throw new BadRequestException('Không thể xóa slide duy nhất trong bài giảng');
+        }
+
+        // Cleanup any extra audio file
+        if ((slide as any).extraAudioUrl) {
+            try {
+                const localPath = path.join(process.cwd(), (slide as any).extraAudioUrl.replace(/^\//, ''));
+                if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+            } catch (err: any) {
+                this.logger.warn(`Could not delete extra audio file: ${err.message}`);
+            }
+        }
+
+        // Delete SlideAudio
+        await this.prisma.slideAudio.deleteMany({
+            where: { lessonId, slideIndex },
+        });
+
+        // Delete Slide
+        await this.prisma.slide.delete({
+            where: { id: slide.id },
+        });
+
+        // Shift subsequent slides down by 1 (ascending order)
+        for (let i = slideIndex + 1; i <= total; i++) {
+            await this.prisma.slide.update({
+                where: { lessonId_slideIndex: { lessonId, slideIndex: i } },
+                data: { slideIndex: i - 1 },
+            });
+
+            const sa = await this.prisma.slideAudio.findUnique({
+                where: { lessonId_slideIndex: { lessonId, slideIndex: i } },
+            });
+            if (sa) {
+                await this.prisma.slideAudio.update({
+                    where: { id: sa.id },
+                    data: { slideIndex: i - 1 },
+                });
+            }
+        }
+
+        await this.syncSlidesToSlideScript(lessonId);
+        return { success: true, totalSlides: total - 1 };
+    }
+
+    /**
+     * Move slide up or down by swapping with adjacent slide.
+     */
+    async moveSlide(lessonId: string, slideIndex: number, direction: 'up' | 'down'): Promise<any[]> {
+        const total = await this.prisma.slide.count({ where: { lessonId } });
+        if (direction === 'up' && slideIndex <= 1) {
+            throw new BadRequestException('Slide đầu tiên không thể di chuyển lên');
+        }
+        if (direction === 'down' && slideIndex >= total) {
+            throw new BadRequestException('Slide cuối cùng không thể di chuyển xuống');
+        }
+
+        const targetIndex = direction === 'up' ? slideIndex - 1 : slideIndex + 1;
+
+        const slideA = await this.prisma.slide.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+        const slideB = await this.prisma.slide.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex: targetIndex } },
+        });
+
+        if (!slideA || !slideB) {
+            throw new NotFoundException('Slide not found for swap');
+        }
+
+        const audioA = await this.prisma.slideAudio.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+        const audioB = await this.prisma.slideAudio.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex: targetIndex } },
+        });
+
+        // 3-step swap using temp index -999 to prevent unique constraint conflict
+        await this.prisma.$transaction(async (tx) => {
+            // Slide swap
+            await tx.slide.update({
+                where: { id: slideA.id },
+                data: { slideIndex: -999 },
+            });
+            await tx.slide.update({
+                where: { id: slideB.id },
+                data: { slideIndex: slideIndex },
+            });
+            await tx.slide.update({
+                where: { id: slideA.id },
+                data: { slideIndex: targetIndex },
+            });
+
+            // SlideAudio swap
+            if (audioA) {
+                await tx.slideAudio.update({
+                    where: { id: audioA.id },
+                    data: { slideIndex: -999 },
+                });
+            }
+            if (audioB) {
+                await tx.slideAudio.update({
+                    where: { id: audioB.id },
+                    data: { slideIndex: slideIndex },
+                });
+            }
+            if (audioA) {
+                await tx.slideAudio.update({
+                    where: { id: audioA.id },
+                    data: { slideIndex: targetIndex },
+                });
+            }
+        });
+
+        await this.syncSlidesToSlideScript(lessonId);
+        return this.getSlides(lessonId);
+    }
+
+    /**
+     * Upload an extra sample/media audio file for a slide.
+     * Saved in /uploads/lessons/:lessonId/audio/ (same place as lecture narration audio).
+     */
+    async uploadExtraAudio(
+        lessonId: string,
+        slideIndex: number,
+        file: Express.Multer.File
+    ): Promise<any> {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn file âm thanh');
+        }
+
+        const slide = await this.prisma.slide.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found for lesson ${lessonId}`);
+        }
+
+        // Audio storage folder: uploads/lessons/:lessonId/audio
+        const audioDir = path.join(process.cwd(), 'uploads', 'lessons', lessonId, 'audio');
+        if (!fs.existsSync(audioDir)) {
+            fs.mkdirSync(audioDir, { recursive: true });
+        }
+
+        // Delete previous extra audio if exists
+        if ((slide as any).extraAudioUrl) {
+            try {
+                const oldPath = path.join(process.cwd(), (slide as any).extraAudioUrl.replace(/^\//, ''));
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            } catch (err: any) {
+                this.logger.warn(`Could not remove old extra audio: ${err.message}`);
+            }
+        }
+
+        const ext = path.extname(file.originalname).replace('.', '') || 'mp3';
+        const fileName = `slide_${String(slideIndex).padStart(2, '0')}_extra_${Date.now()}.${ext}`;
+        const filePath = path.join(audioDir, fileName);
+
+        fs.writeFileSync(filePath, file.buffer);
+        const publicUrl = `/uploads/lessons/${lessonId}/audio/${fileName}`;
+
+        const updatedSlide = await this.prisma.slide.update({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+            data: {
+                extraAudioUrl: publicUrl,
+                extraAudioName: file.originalname || fileName,
+            } as any,
+        });
+
+        this.logger.log(`[uploadExtraAudio] Extra audio saved for slide ${slideIndex}: ${publicUrl}`);
+        return updatedSlide;
+    }
+
+    /**
+     * Delete extra audio from slide.
+     */
+    async deleteExtraAudio(lessonId: string, slideIndex: number): Promise<any> {
+        const slide = await this.prisma.slide.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found`);
+        }
+
+        if ((slide as any).extraAudioUrl) {
+            try {
+                const localPath = path.join(process.cwd(), (slide as any).extraAudioUrl.replace(/^\//, ''));
+                if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+            } catch (err: any) {
+                this.logger.warn(`Could not delete extra audio file: ${err.message}`);
+            }
+        }
+
+        const updatedSlide = await this.prisma.slide.update({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+            data: {
+                extraAudioUrl: null,
+                extraAudioName: null,
+                extraAudioDuration: null,
+            } as any,
+        });
+
         return updatedSlide;
     }
 }

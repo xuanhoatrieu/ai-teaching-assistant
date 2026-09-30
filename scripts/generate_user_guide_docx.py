@@ -208,51 +208,42 @@ def build_user_guide():
         sec.left_margin = Inches(1.0)
         sec.right_margin = Inches(1.0)
         
-        # Header setup
-        header = sec.header
-        hp = header.paragraphs[0]
-        hp.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        hr = hp.add_run("AI Teaching Assistant • Tài liệu Hướng dẫn Giảng viên")
-        hr.font.name = 'Arial'
-        hr.font.size = Pt(8.5)
-        hr.font.italic = True
-        hr.font.color.rgb = COLOR_MUTED
-        
-        # Footer setup
+        # Add Header & Footer
         footer = sec.footer
-        fp = footer.paragraphs[0]
-        fp.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        fr = fp.add_run("Trang bị công nghệ AI cho Giáo dục đại học & Cá nhân hóa bài giảng số")
-        fr.font.name = 'Arial'
-        fr.font.size = Pt(8.5)
-        fr.font.color.rgb = COLOR_MUTED
+        p_ft = footer.paragraphs[0]
+        p_ft.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        r_ft = p_ft.add_run("AI Teaching Assistant v2.7 — Cẩm nang Cá nhân hóa & Giọng Clone ViTTS")
+        r_ft.font.name = 'Arial'
+        r_ft.font.size = Pt(8.5)
+        r_ft.font.color.rgb = COLOR_MUTED
 
     # =========================================================================
-    # TRANG BÌA (COVER PAGE)
+    # COVER PAGE
     # =========================================================================
-    cover_box = doc.add_table(rows=1, cols=1)
-    cover_box.alignment = WD_TABLE_ALIGNMENT.CENTER
-    c_cell = cover_box.cell(0, 0)
-    c_cell.width = Inches(6.5)
-    set_cell_background(c_cell, "1E3A8A")
-    set_cell_margins(c_cell, top=360, bottom=360, left=300, right=300)
+    cover_table = doc.add_table(rows=1, cols=1)
+    cover_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    cell = cover_table.cell(0, 0)
+    cell.width = Inches(6.5)
+    set_cell_background(cell, "1E3A8A") # Navy
+    set_cell_margins(cell, top=360, bottom=360, left=260, right=260)
     
-    cp = c_cell.paragraphs[0]
-    cp.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    cp.paragraph_format.space_after = Pt(8)
-    r1 = cp.add_run("HỆ THỐNG TRỢ LÝ GIẢNG DẠY THÔNG MINH\nAI TEACHING ASSISTANT\n\n")
+    cp = cell.paragraphs[0]
+    cp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    cp.paragraph_format.line_spacing = 1.3
+    
+    r1 = cp.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO — HỆ THỐNG TRỢ LÝ GIẢNG DẠY SỐ\n\n")
     r1.font.name = 'Arial'
-    r1.font.size = Pt(13)
+    r1.font.size = Pt(10.5)
     r1.font.bold = True
-    r1.font.color.rgb = RGBColor(191, 219, 254) # Light Blue
+    r1.font.color.rgb = RGBColor(191, 219, 254)
     
-    r2 = cp.add_run("HƯỚNG DẪN SỬ DỤNG DÀNH CHO GIẢNG VIÊN\n")
+    r2 = cp.add_run("HƯỚNG DẪN SỬ DỤNG VÀ THAO TÁC CÁ NHÂN HÓA\nNỀN TẢNG AI TEACHING ASSISTANT\n\n")
     r2.font.name = 'Arial'
     r2.font.size = Pt(21)
     r2.font.bold = True
     r2.font.color.rgb = COLOR_WHITE
     
-    r3 = cp.add_run("Quy trình khởi tạo bài giảng trực tiếp, thiết kế Slide & Audio tự động,\ntinh chỉnh cá nhân hóa mọi bước và xuất ngân hàng câu hỏi Moodle XML chuẩn quốc tế\n")
+    r3 = cp.add_run("Quy trình khởi tạo bài giảng trực tiếp, thiết kế Slide & Audio tự động,\ntự tạo giọng clone & lấy API Key trên OmniVoice Studio, tinh chỉnh cá nhân hóa mọi bước\nvà xuất ngân hàng câu hỏi Moodle XML chuẩn quốc tế\n")
     r3.font.name = 'Arial'
     r3.font.size = Pt(11)
     r3.font.italic = True
@@ -267,7 +258,7 @@ def build_user_guide():
     add_body_p(doc, "Nền tảng Trí tuệ Nhân tạo", "  - Môn học: ", space_after=2)
     add_body_p(doc, "Bài 02: Xây dựng Mô hình Học máy Cơ bản với Scikit-Learn", "  - Bài giảng thực hành: ", space_after=2)
     add_body_p(doc, "Giảng viên các trường Đại học, Học viện, Cao đẳng và Cơ sở Giáo dục chuyên nghiệp", "  - Đối tượng sử dụng: ", space_after=2)
-    add_body_p(doc, "2.6 (Cá nhân hóa Dàn ý, Kịch bản, Giọng clone ViTTS, Sửa slide PPTX, Crop 1:1 & Moodle XML)", "  - Phiên bản ứng dụng: ", space_after=2)
+    add_body_p(doc, "2.7 (Tự tạo Giọng Clone ViTTS & Caching trên OmniVoice Studio, Lấy API Key, Cá nhân hóa Dàn ý, Kịch bản, Sửa slide PPTX, Crop 1:1, Moodle XML & Tích hợp PPTX Audio Tool)", "  - Phiên bản ứng dụng: ", space_after=2)
     add_body_p(doc, "Tháng 09/2026", "  - Thời gian ban hành: ", space_after=20)
     
     add_callout(doc, "Phương pháp tiếp cận trực quan với vòng tròn đỏ",
@@ -283,7 +274,8 @@ def build_user_guide():
     
     add_body_p(doc, "Hệ thống AI Teaching Assistant được thiết kế chuyên biệt nhằm giải phóng giảng viên khỏi những công việc thủ công tốn hàng chục giờ đồng hồ, "
                     "đồng thời vẫn đảm bảo GIẢNG VIÊN HOÀN TOÀN LÀM CHỦ VÀ CÁ NHÂN HÓA NỘI DUNG Ở MỌI BƯỚC: "
-                    "từ dàn ý bài học, phong cách câu từ trong kịch bản slide, ngữ điệu giọng đọc của chính giảng viên (Clone Voice), cách bố trí hình ảnh 1:1, đến ngân hàng câu hỏi kiểm tra đánh giá theo thang đo tư duy Bloom.")
+                    "từ dàn ý bài học, phong cách câu từ trong kịch bản slide, ngữ điệu giọng đọc của chính giảng viên (Clone Voice được huấn luyện từ giọng thật trên OmniVoice Studio), "
+                    "cách bố trí hình ảnh 1:1, đến ngân hàng câu hỏi kiểm tra đánh giá theo thang đo tư duy Bloom.")
 
     # Summary Table
     wf_table = doc.add_table(rows=5, cols=3)
@@ -304,9 +296,9 @@ def build_user_guide():
         r.font.color.rgb = COLOR_WHITE
         
     rows_data = [
-        ("Giai đoạn 1: Đăng ký & Cấu hình", "Đăng ký tài khoản giảng viên, chờ Admin phê duyệt, cấu hình API Key và máy chủ ViTTS Local.", "Cấu hình máy chủ GPU nội bộ, kiểm tra kết nối thời gian thực."),
+        ("Giai đoạn 1: Đăng ký & Cấu hình API", "Đăng ký tài khoản giảng viên, chờ Admin phê duyệt, tự tạo và lấy API Key trên OmniVoice Studio (tts.hoclieu.id.vn), cấu hình máy chủ ViTTS Local.", "Tự cấp mã khóa xác thực API cá nhân, cấu hình máy chủ GPU nội bộ, kiểm tra kết nối thời gian thực."),
         ("Giai đoạn 2: Khởi tạo môn & bài", "Tạo môn học 'Nền tảng Trí tuệ Nhân tạo', BỎ QUA bước sinh đề cương, tạo bài giảng trực tiếp.", "Giảng viên đi thẳng vào bài học mà không bị AI thay đổi khung chương trình."),
-        ("Giai đoạn 3: Studio 6 bước soạn bài", "Bước 1 (Outline thô) ➔ Bước 2 (Dàn ý AI & Sửa JSON) ➔ Bước 3 (Kịch bản & Sửa JSON) ➔ Bước 4 (Giọng Clone & Sửa Lời giảng) ➔ Bước 5 (Sửa slide PPTX, Đổi ảnh & Crop 1:1).", "Cá nhân hóa mọi thành phần: sửa trực tiếp dàn bài, sửa văn phong kịch bản, dùng giọng clone của chính mình, tải ảnh riêng."),
+        ("Giai đoạn 3: Studio 6 bước soạn bài", "Bước 1 (Outline thô) ➔ Bước 2 (Dàn ý AI & Sửa JSON) ➔ Bước 3 (Kịch bản & Sửa JSON) ➔ Bước 4 (Tự tạo Giọng Clone trên OmniVoice Studio & Sửa Lời giảng) ➔ Bước 5 (Sửa slide PPTX, Đổi ảnh & Crop 1:1).", "Cá nhân hóa mọi thành phần: sửa trực tiếp dàn bài, sửa văn phong kịch bản, tự thu âm/upload tạo giọng clone của chính mình, tối ưu VRAM với Prompt Caching, tải ảnh riêng."),
         ("Giai đoạn 4: Đánh giá & Xuất LMS", "Bước 6: Sinh câu hỏi Bloom 3 cấp độ, sửa trực tiếp từng câu/đáp án, xuất Moodle XML & Excel.", "Tùy biến câu hỏi theo thực tế lớp học, nạp vào LMS trường trong 3 giây."),
     ]
     
@@ -363,22 +355,46 @@ def build_user_guide():
     add_badge_step(doc, "2", "Bấm nút 'Phê duyệt'", 
                    "Quản trị viên nhấp vào nút 'Phê duyệt' ứng với tài khoản của giảng viên. Ngay lập tức tài khoản chuyển sang trạng thái APPROVED (Đã duyệt), giảng viên có thể sử dụng đầy đủ mọi tính năng.")
 
-    add_heading_2(doc, "4. Cài đặt API Key & Chọn máy chủ ViTTS Local (/settings)")
-    add_body_p(doc, "Hệ thống hỗ trợ giảng viên sử dụng API Key cá nhân để được ưu tiên tài nguyên. Đặc biệt, hệ thống tích hợp công nghệ giọng đọc tiếng Việt ViTTS Local đặt trực tiếp trong mạng nội bộ trường, mang lại tốc độ tổng hợp âm thanh cực nhanh và bảo mật tuyệt đối.")
+    # -------------------------------------------------------------------------
+    # MỤC 4 MỚI: LẤY API KEY TRÊN OMNIVOICE STUDIO
+    # -------------------------------------------------------------------------
+    add_heading_2(doc, "4. Hướng dẫn Khởi tạo & Lấy ViTTS API Key trên Cổng OmniVoice Studio (tts.hoclieu.id.vn)")
+    add_body_p(doc, "Hệ thống AI Teaching Assistant liên kết trực tiếp với cụm máy chủ tổng hợp giọng nói tiếng Việt cao cấp ViTTS (OmniVoice Studio) tại địa chỉ https://tts.hoclieu.id.vn. "
+                    "Để sử dụng hạ tầng này và đồng bộ các giọng clone cá nhân của Thầy/Cô, giảng viên truy cập Cổng OmniVoice Studio bằng tài khoản được cấp (mặc định: admin / 123456 hoặc tài khoản cá nhân), chọn mục '🔑 API Keys' để tạo mã khóa xác thực.")
     
-    add_screenshot_figure(doc, "04_cai_dat_api_key.png", "Hình 4: Thiết lập API Key và lựa chọn Máy chủ ViTTS Local qua thẻ trực quan")
+    add_screenshot_figure(doc, "tts_01_api_keys.png", "Hình 4: Giao diện Quản lý và Khởi tạo API Key mới trên Cổng OmniVoice Studio")
+    
+    add_badge_step(doc, "1", "Nhập Tên gợi nhớ cho Key", 
+                   "Tại ô nhập 'Tên gợi nhớ (VD: My Project)', giảng viên đặt một tên mô tả để dễ quản lý (ví dụ: 'AI_Teaching_Assistant' hoặc tên môn học 'AI_Course').")
+    add_badge_step(doc, "2", "Bấm nút 'Tạo Key'", 
+                   "Nhấp vào nút tím 'Tạo Key' bên cạnh ô nhập liệu. Hệ thống sẽ ngay lập tức sinh ra một chuỗi mã xác thực định danh mới.")
+    add_badge_step(doc, "3", "Bấm 'Copy' để sao chép API Key", 
+                   "Tại bảng 'API Keys đã tạo', tìm đến dòng mã khóa vừa sinh và bấm vào nút '📋 Copy' để sao chép chuỗi ký tự API Key (bắt đầu bằng tiền tố 'vneu_...'). Chuỗi này sẽ được dán vào phần Cài đặt của AI Teaching Assistant ở bước tiếp theo.")
+
+    add_callout(doc, "Bảo mật mã khóa API Key cá nhân",
+                "Mỗi API Key đại diện cho quyền truy cập và hạn ngạch tài nguyên GPU xử lý giọng nói của giảng viên trên máy chủ trường. "
+                "Quý Thầy/Cô hãy bảo mật mã khóa này, không gửi cho người khác để đảm bảo tốc độ sinh bài giảng luôn nhanh nhất.", "warning")
+
+    # -------------------------------------------------------------------------
+    # MỤC 5: CÀI ĐẶT API KEY TRÊN SETTINGS
+    # -------------------------------------------------------------------------
+    add_heading_2(doc, "5. Cài đặt API Key & Chọn máy chủ ViTTS Local (/settings)")
+    add_body_p(doc, "Sau khi đã sao chép API Key từ OmniVoice Studio, giảng viên mở AI Teaching Assistant, vào mục Cài đặt (/settings) để hoàn tất liên kết hạ tầng. "
+                    "Hệ thống tích hợp công nghệ giọng đọc tiếng Việt ViTTS Local đặt trực tiếp trong mạng nội bộ trường, mang lại tốc độ tổng hợp âm thanh cực nhanh và bảo mật tuyệt đối.")
+    
+    add_screenshot_figure(doc, "04_cai_dat_api_key.png", "Hình 5: Thiết lập API Key và lựa chọn Máy chủ ViTTS Local qua thẻ trực quan")
     
     add_badge_step(doc, "1", "Dán ViTTS API Key & Nút 👁️ Xem/Ẩn", 
-                   "Dán mã khóa xác thực ViTTS vào ô nhập liệu. Giảng viên có thể nhấp vào biểu tượng con mắt 👁️ ('Xem' / 'Ẩn') bên góc phải để kiểm tra chính xác từng ký tự khóa.")
+                   "Dán chuỗi mã khóa xác thực ViTTS (dạng 'vneu_...') vừa sao chép từ OmniVoice Studio vào ô nhập liệu. Giảng viên có thể nhấp vào biểu tượng con mắt 👁️ ('Xem' / 'Ẩn') bên góc phải để kiểm tra chính xác từng ký tự khóa.")
     add_badge_step(doc, "2", "Chọn Máy chủ ViTTS Local qua Thẻ Radio", 
-                   "Hệ thống đã cấu hình sẵn 2 máy chủ tốc độ cao trong mạng nội bộ để giảng viên lựa chọn bằng 1 chạm:\n"
+                   "Hệ thống đã cấu hình sẵn các máy chủ tốc độ cao trong mạng nội bộ để giảng viên lựa chọn bằng 1 chạm:\n"
                    "  • Máy chủ 1 (Mặc định): 10.64.11.16:8888 — Cụm máy chủ GPU tốc độ cao ưu tiên.\n"
                    "  • Máy chủ 2 (Dự phòng): 10.64.220.241:8889 — Máy chủ dự phòng khi tải cao.\n"
-                   "  • Thêm mới: Dành cho giảng viên muốn kết nối đến máy chủ ViTTS riêng.")
+                   "  • Cổng trực tiếp: https://tts.hoclieu.id.vn — Dành cho giảng viên muốn kết nối trực tiếp qua Internet.")
     add_badge_step(doc, "3", "Nhấn nút '⚡ Kiểm tra kết nối'", 
-                   "Kiểm tra tức thời xem máy chủ ViTTS được chọn có phản hồi hay không.")
+                   "Kiểm tra tức thời xem máy chủ ViTTS được chọn có phản hồi ổn định hay không (hiển thị thông báo màu xanh 'Kết nối thành công!').")
     add_badge_step(doc, "4", "Nhấn nút 'Thêm' (hoặc 'Lưu')", 
-                   "Xác nhận lưu lại cấu hình API Key vào hồ sơ giảng viên.")
+                   "Xác nhận lưu lại cấu hình API Key vào hồ sơ tài khoản giảng viên.")
 
     doc.add_page_break()
 
@@ -390,7 +406,7 @@ def build_user_guide():
     add_heading_2(doc, "1. Tạo môn học mới (/subjects)")
     add_body_p(doc, "Mỗi môn học đại diện cho một học phần giảng dạy trong học kỳ (ví dụ: Nền tảng Trí tuệ Nhân tạo, Học máy, Lập trình Python...).")
     
-    add_screenshot_figure(doc, "05_danh_sach_mon_hoc.png", "Hình 5: Trang tổng quan danh sách môn giảng dạy của Giảng viên")
+    add_screenshot_figure(doc, "05_danh_sach_mon_hoc.png", "Hình 6: Trang tổng quan danh sách môn giảng dạy của Giảng viên")
     
     add_badge_step(doc, "1", "Bấm '+ Tạo môn học'", 
                    "Nhấp vào nút xanh nổi bật '+ Tạo môn học' ở góc trên bên phải màn hình danh sách.")
@@ -398,7 +414,7 @@ def build_user_guide():
                    "Khu vực hiển thị danh mục các môn học đã được tạo trước đó cùng số lượng bài giảng hiện có.")
 
     add_body_p(doc, "Khi cửa sổ tạo môn học hiện lên, Thầy/Cô tiến hành thiết lập các thông số cơ bản cho môn học:")
-    add_screenshot_figure(doc, "06_modal_tao_mon_hoc.png", "Hình 6: Hộp thoại nhập thông tin chi tiết môn học mới")
+    add_screenshot_figure(doc, "06_modal_tao_mon_hoc.png", "Hình 7: Hộp thoại nhập thông tin chi tiết môn học mới")
     
     add_badge_step(doc, "1", "Nhập Tên môn học", 
                    "Nhập tên đầy đủ của học phần: 'Nền tảng Trí tuệ Nhân tạo'.")
@@ -414,7 +430,7 @@ def build_user_guide():
                 "👉 CÂU TRẢ LỜI LÀ: HOÀN TOÀN KHÔNG CẦN THIẾT! Thầy/Cô hãy BỎ QUA bước sinh đề cương môn học và bấm trực tiếp vào nút '+ Tạo bài giảng'. "
                 "Cách làm này giúp Thầy/Cô đi thẳng vào việc tạo slide cho bài học cụ thể mà không bị AI can thiệp vào khung chương trình môn học đã được Nhà trường phê duyệt!", "warning")
 
-    add_screenshot_figure(doc, "07_chi_tiet_mon_hoc_bo_qua_de_cuong.png", "Hình 7: Giảng viên bỏ qua bước tạo đề cương môn học và bấm tạo bài giảng ngay")
+    add_screenshot_figure(doc, "07_chi_tiet_mon_hoc_bo_qua_de_cuong.png", "Hình 8: Giảng viên bỏ qua bước tạo đề cương môn học và bấm tạo bài giảng ngay")
     
     add_badge_step(doc, "1", "BỎ QUA bước sinh đề cương môn học", 
                    "Không cần nhấn vào bất kỳ nút sinh đề cương nào tại đây. Hãy chuyển qua tab 'Bài giảng'.")
@@ -422,7 +438,7 @@ def build_user_guide():
                    "Bấm thẳng vào nút xanh '+ Tạo bài giảng' ở góc phải để mở cửa sổ khởi tạo bài học mới.")
 
     add_body_p(doc, "Cửa sổ đặt tên bài giảng sẽ hiển thị ngay sau đó:")
-    add_screenshot_figure(doc, "08_modal_tao_bai_giang.png", "Hình 8: Hộp thoại đặt tên bài học cụ thể trong môn học")
+    add_screenshot_figure(doc, "08_modal_tao_bai_giang.png", "Hình 9: Hộp thoại đặt tên bài học cụ thể trong môn học")
     
     add_badge_step(doc, "1", "Nhập Tên bài giảng", 
                    "Nhập tiêu đề chuyên đề bài giảng cụ thể: 'Bài 02: Xây dựng Mô hình Học máy Cơ bản với Scikit-Learn'.")
@@ -445,7 +461,7 @@ def build_user_guide():
     add_heading_2(doc, "Chương 5: Bước 1 — Nhập Outline thô / Nội dung giáo trình")
     add_body_p(doc, "Tại bước này, giảng viên không cần phải định dạng cầu kỳ. Hãy sao chép (Copy) nội dung từ file Word, PDF giáo trình, giáo án hiện có hoặc các gạch đầu dòng ghi chú của Thầy/Cô và dán (Paste) vào khung nhập liệu.")
     
-    add_screenshot_figure(doc, "09_buoc1_nhap_outline_tho.png", "Hình 9: Bước 1 — Dán nội dung outline thô hoặc ghi chú bài giảng Scikit-Learn")
+    add_screenshot_figure(doc, "09_buoc1_nhap_outline_tho.png", "Hình 10: Bước 1 — Dán nội dung outline thô hoặc ghi chú bài giảng Scikit-Learn")
     
     add_badge_step(doc, "1", "Chỉ báo Stepper Bước 1: Nhập Outline", 
                    "Thanh Stepper hiển thị trạng thái hiện tại đang ở Bước 1.")
@@ -466,7 +482,7 @@ def build_user_guide():
     add_body_p(doc, "Ở bước này, quy trình cá nhân hóa diễn ra theo 2 giai đoạn rõ ràng: "
                     "Đầu tiên nhấn nút AI để sinh dàn bài chi tiết chuẩn; sau đó nhấp vào nút sửa để điều chỉnh theo đúng giáo án riêng của giảng viên.")
     
-    add_screenshot_figure(doc, "10_buoc2_tao_outline_ai.png", "Hình 10: Bước 2 — Màn hình khởi tạo với nút '🤖 Tạo với AI' và chọn Model AI")
+    add_screenshot_figure(doc, "10_buoc2_tao_outline_ai.png", "Hình 11: Bước 2 — Màn hình khởi tạo với nút '🤖 Tạo với AI' và chọn Model AI")
     
     add_badge_step(doc, "1", "Chỉ báo Stepper Bước 2: Tạo Outline Chi Tiết", 
                    "Đang ở giai đoạn cấu trúc đề cương chi tiết của bài giảng.")
@@ -476,7 +492,7 @@ def build_user_guide():
                    "Giảng viên có thể linh hoạt chọn giữa các model AI tốc độ cao (Gemini Flash) hoặc model lý luận chuyên sâu (GPT-5.6 / Gemini Pro).")
 
     add_body_p(doc, "Sau khi AI sinh xong dàn bài, giảng viên tiến hành cá nhân hóa nội dung để phù hợp nhất với lớp học:")
-    add_screenshot_figure(doc, "11_buoc2_sua_dan_y.png", "Hình 11: Bước 2 — Chế độ '⚙️ Sửa JSON' cho phép giảng viên tùy biến toàn bộ dàn bài")
+    add_screenshot_figure(doc, "11_buoc2_sua_dan_y.png", "Hình 12: Bước 2 — Chế độ '⚙️ Sửa JSON' cho phép giảng viên tùy biến toàn bộ dàn bài")
     
     add_badge_step(doc, "1", "Nút '⚙️ Sửa JSON' mở chế độ chỉnh sửa", 
                    "Nhấp vào nút '⚙️ Sửa JSON' trên thanh tiêu đề để chuyển giao diện sang khung soạn thảo nội dung trực tiếp.")
@@ -492,7 +508,7 @@ def build_user_guide():
     add_body_p(doc, "Tại bước này, hệ thống tập trung phân bổ nội dung thành từng trang slide và soạn thảo Lời giảng chi tiết của giảng viên (Speaker Notes). "
                     "Lưu ý: Bước tạo và thay thế hình ảnh được thực hiện tập trung tại Bước 5 (Tạo PPTX). Tại Bước 3, giảng viên hoàn toàn làm chủ kịch bản chữ và lời thoại.")
     
-    add_screenshot_figure(doc, "12_buoc3_tao_kich_ban.png", "Hình 12: Bước 3 — Khởi tạo kịch bản slide và lời giảng với nút '🤖 Tạo Kịch Bản'")
+    add_screenshot_figure(doc, "12_buoc3_tao_kich_ban.png", "Hình 13: Bước 3 — Khởi tạo kịch bản slide và lời giảng với nút '🤖 Tạo Kịch Bản'")
     
     add_badge_step(doc, "1", "Chỉ báo Stepper Bước 3: Thiết Kế Slide", 
                    "Đang ở giai đoạn thiết kế kịch bản trình chiếu.")
@@ -502,7 +518,7 @@ def build_user_guide():
                    "Tùy chọn mô hình AI chuyên trách soạn thảo giáo án sư phạm.")
 
     add_body_p(doc, "Sau khi AI tạo xong các slide, giảng viên mở chế độ chỉnh sửa để cá nhân hóa lời giảng theo giọng điệu sư phạm của riêng mình:")
-    add_screenshot_figure(doc, "13_buoc3_sua_kich_ban.png", "Hình 13: Bước 3 — Nút '⚙️ Sửa JSON' để tinh chỉnh tiêu đề, nội dung và lời giảng từng slide")
+    add_screenshot_figure(doc, "13_buoc3_sua_kich_ban.png", "Hình 14: Bước 3 — Nút '⚙️ Sửa JSON' để tinh chỉnh tiêu đề, nội dung và lời giảng từng slide")
     
     add_badge_step(doc, "1", "Nút '⚙️ Sửa JSON' kịch bản", 
                    "Nhấp vào nút để mở khung chỉnh sửa toàn diện kịch bản bài học.")
@@ -512,24 +528,63 @@ def build_user_guide():
                    "Xác nhận lưu kịch bản đã được cá nhân hóa thành công.")
 
     # -------------------------------------------------------------------------
-    # BƯỚC 4: TẠO AUDIO & CHỌN GIỌNG CLONE CÁ NHÂN HÓA
+    # BƯỚC 4: TỰ TẠO GIỌNG CLONE & TINH CHỈNH AUDIO
     # -------------------------------------------------------------------------
     add_heading_2(doc, "Chương 8: Bước 4 — Lựa chọn Giọng Clone Giảng viên & Tinh chỉnh Lời giảng Audio")
     add_body_p(doc, "Đây là điểm đột phá lớn nhất của hệ thống: Thay vì dùng các giọng đọc máy móc phổ thông, "
-                    "hệ thống cho phép giảng viên chọn GIỌNG CLONE (Clone Voice) được huấn luyện từ chính giọng nói của Thầy/Cô. "
+                    "hệ thống cho phép giảng viên chọn GIỌNG CLONE (Clone Voice) được huấn luyện từ chính giọng nói thật của Thầy/Cô. "
                     "Bài giảng xuất ra sẽ vang lên chính xác bằng chất giọng truyền cảm quen thuộc của giảng viên!")
+
+    # Subsection A: Tạo giọng clone trên OmniVoice Studio
+    add_heading_2(doc, "A. Hướng dẫn Tự tạo Giọng Clone của Giảng viên trên Cổng OmniVoice Studio (tts.hoclieu.id.vn)")
+    add_body_p(doc, "Để sở hữu một mẫu giọng clone mang bản sắc cá nhân, giảng viên truy cập Cổng OmniVoice Studio (https://tts.hoclieu.id.vn) và thực hiện theo hướng dẫn trực quan dưới đây. Giọng đọc sau khi khởi tạo sẽ lập tức đồng bộ sang phòng làm việc của AI Teaching Assistant.")
+
+    add_body_p(doc, "1. Quản lý Thư viện giọng & Nút ⚡ Cache nạp bộ đệm âm sắc:", bold_prefix="👉 ")
+    add_screenshot_figure(doc, "tts_02_voice_library.png", "Hình 15: Thư viện giọng mẫu & Nút ⚡ Cache nạp bộ đệm âm sắc trên OmniVoice Studio")
     
-    add_screenshot_figure(doc, "14_buoc4_chon_giong_clone.png", "Hình 14: Bước 4 — Chọn Nhà cung cấp ViTTS và chế độ 'Giọng clone' cá nhân hóa giọng nói")
+    add_badge_step(doc, "1", "Nút '🎙️ Ghi âm' (Record)", 
+                   "Nhấp vào nút 'Ghi âm' ở góc trên bên phải để mở cửa sổ thu âm giọng nói trực tiếp qua micro của máy tính mà không cần cài thêm bất kỳ phần mềm nào.")
+    add_badge_step(doc, "2", "Nút '+ Tải file' (Upload)", 
+                   "Nhấp vào nút 'Tải file' nếu Thầy/Cô đã có sẵn tệp ghi âm giọng nói chất lượng cao trên máy tính (.wav, .mp3, .ogg).")
+    add_badge_step(doc, "3", "Nút '⚡ Cache' (Prompt Caching GPU)", 
+                   "Tính năng tăng tốc then chốt! Nhấp vào nút 'Cache' bên cạnh tên giọng đọc để hệ thống nạp trước đặc trưng âm học vào bộ đệm VRAM của GPU. Nhờ đó, thời gian tổng hợp giọng nói cho từng slide bài giảng sẽ giảm xuống dưới 1 giây, sinh toàn bộ audio bài giảng cực nhanh.")
+
+    add_body_p(doc, "2. Phương pháp 1: Ghi âm trực tiếp qua Micro với câu văn mẫu chuẩn (Khuyên dùng):", bold_prefix="👉 ")
+    add_screenshot_figure(doc, "tts_03_record_voice.png", "Hình 16: Cửa sổ Ghi âm trực tiếp với câu văn mẫu tiếng Việt chuẩn ngữ điệu")
+    
+    add_badge_step(doc, "1", "Chọn câu văn mẫu tiếng Việt để đọc", 
+                   "Hệ thống gợi ý sẵn các đoạn văn tiếng Việt có độ phong phú âm vị cao (ví dụ: 'Hà Nội là thủ đô ngàn năm văn hiến...', 'Việt Nam sở hữu đường bờ biển dài...'). Thầy/Cô có thể chọn các câu mẫu có sẵn hoặc gõ nội dung tùy ý.")
+    add_badge_step(doc, "2", "Bấm Micro để Bắt đầu/Dừng ghi âm", 
+                   "Nhấp vào biểu tượng Micro tròn màu tím để bắt đầu thu âm. Giảng viên đọc với tốc độ vừa phải, ngữ điệu tự nhiên trong khoảng 10 - 20 giây. Đọc xong, nhấp lại vào nút Micro để dừng thu, nghe lại thử và bấm 'Lưu Giọng Đọc'.")
+
+    add_body_p(doc, "3. Phương pháp 2: Tải lên tệp âm thanh có sẵn kèm Transcript (Dành cho studio/phòng thu):", bold_prefix="👉 ")
+    add_screenshot_figure(doc, "tts_04_upload_voice.png", "Hình 17: Cửa sổ Tải lên file âm thanh mẫu và nhập Transcript khớp lời nói")
+    
+    add_badge_step(doc, "1", "Kéo thả file âm thanh mẫu (.wav, .mp3, .ogg)", 
+                   "Kéo thả hoặc bấm chọn tệp âm thanh giọng đọc của Thầy/Cô từ máy tính (dung lượng dưới 10MB, thời lượng lý tưởng từ 10 đến 30 giây, âm thanh sạch không có tiếng ồn hay nhạc nền).")
+    add_badge_step(doc, "2", "Đặt tên giọng đọc cá nhân", 
+                   "Nhập tên định danh gợi nhớ cho giọng clone (ví dụ: 'GiangVien_XuanHoa' hoặc 'CoLan_Toan').")
+    add_badge_step(doc, "3", "Nhập nội dung câu nói (Transcript)", 
+                   "Nhập chính xác 100% từng từ trong câu nói xuất hiện trong file âm thanh. Việc có transcript chuẩn xác giúp mô hình căn chỉnh âm vị (phoneme alignment) đạt độ tự nhiên và trung thực cao nhất.")
+    add_badge_step(doc, "4", "Bấm 'Upload' hoàn tất nạp giọng", 
+                   "Nhấp vào nút tím 'Upload' ở góc phải để hệ thống xử lý và lưu giọng mẫu vào kho giọng đọc của Thầy/Cô.")
+
+    # Subsection B: Chọn giọng clone trong AI Teaching Assistant
+    add_heading_2(doc, "B. Kích hoạt & Sử dụng Giọng Clone trên AI Teaching Assistant")
+    add_body_p(doc, "Sau khi đã tạo giọng trên OmniVoice Studio, Thầy/Cô quay lại phòng Studio soạn bài của AI Teaching Assistant tại Bước 4 để kích hoạt:")
+    add_screenshot_figure(doc, "14_buoc4_chon_giong_clone.png", "Hình 18: Bước 4 — Chọn Nhà cung cấp ViTTS và chế độ 'Giọng clone' cá nhân hóa giọng nói")
     
     add_badge_step(doc, "1", "Chọn Nhà cung cấp '🎙️ ViTTS'", 
                    "Bấm vào nút chọn ViTTS để sử dụng động cơ chuyển văn bản thành giọng nói tiếng Việt chất lượng cao.")
     add_badge_step(doc, "2", "Chọn Chế độ '🎤 Giọng clone'", 
                    "Nhấp vào nút '🎤 Giọng clone' để kích hoạt thư viện giọng đọc mẫu cá nhân của giảng viên.")
     add_badge_step(doc, "3", "Chọn Giọng clone mẫu từ danh sách", 
-                   "Mở danh sách thả xuống và chọn đúng tên mẫu giọng của Thầy/Cô (ví dụ: giọng mẫu 'thuong' thời lượng 11.8s). Toàn bộ bài giảng sau đó sẽ được tổng hợp âm thanh bằng đúng chất giọng này!")
+                   "Mở danh sách thả xuống: tên mẫu giọng vừa tạo trên OmniVoice Studio (ví dụ: 'thuong', 'GiangVien_XuanHoa') sẽ xuất hiện ngay lập tức tại đây! Toàn bộ bài giảng sau đó sẽ được tổng hợp âm thanh bằng đúng chất giọng này.")
 
+    # Subsection C: Kiểm duyệt & Tinh chỉnh lời giảng
+    add_heading_2(doc, "C. Kiểm duyệt, Tinh chỉnh Lời giảng Từng Slide & Tạo Audio Hàng loạt")
     add_body_p(doc, "Bên cạnh việc chọn giọng clone, giảng viên có thể xem xét đối chiếu 3 cột và sửa riêng lẻ lời giảng của từng trang slide:")
-    add_screenshot_figure(doc, "15_buoc4_kiem_duyet_tao_audio.png", "Hình 15: Bước 4 — Chỉnh sửa lời giảng từng slide bằng nút ✏️, Tối ưu hóa và Tạo Audio hàng loạt")
+    add_screenshot_figure(doc, "15_buoc4_kiem_duyet_tao_audio.png", "Hình 19: Bước 4 — Chỉnh sửa lời giảng từng slide bằng nút ✏️, Tối ưu hóa và Tạo Audio hàng loạt")
     
     add_badge_step(doc, "1", "Chỉnh sửa lời giảng riêng từng slide & Lưu", 
                    "Tại cột 'Lời Giảng (Tối Ưu)', nhấp vào biểu tượng chiếc bút chì ✏️ để sửa nhanh câu chữ của slide đó, sau đó bấm '💾 Lưu'.")
@@ -538,6 +593,11 @@ def build_user_guide():
     add_badge_step(doc, "3", "Nhấn '🎙️ Tạo Audio Tất Cả'", 
                    "Khởi chạy tiến trình sinh file âm thanh .mp3 cho tất cả các slide trong bài giảng.")
 
+    add_callout(doc, "Tích hợp hoàn hảo với Công cụ Ghép Audio PowerPoint (PPTX Audio Tool)",
+                "Giọng clone Thầy/Cô tạo trên OmniVoice Studio cũng tự động hiển thị trong công cụ độc lập 'PPTX Audio Tool' (/pptx-audio). "
+                "Nếu Thầy/Cô đã có sẵn bài giảng PowerPoint làm từ trước, chỉ cần tải file .pptx lên, dùng tính năng 'Tạo lời giảng với AI' "
+                "cho toàn bộ slide hoặc slide còn thiếu, chọn giọng clone của mình và xuất file PowerPoint kèm âm thanh hoàn chỉnh mà không cần soạn lại bài!", "tip")
+
     # -------------------------------------------------------------------------
     # BƯỚC 5: TẠO PPTX, SỬA NỘI DUNG SLIDE & CẮT ẢNH 1:1
     # -------------------------------------------------------------------------
@@ -545,7 +605,7 @@ def build_user_guide():
     add_body_p(doc, "Tại Bước 5, hệ thống hiển thị trực quan toàn bộ các slide hoàn chỉnh kèm hình ảnh. "
                     "Giảng viên có toàn quyền: sửa trực tiếp tiêu đề/nội dung từng slide bằng nút '✏️ Sửa nội dung', yêu cầu AI vẽ lại ảnh, hoặc tự tải ảnh từ máy tính cá nhân lên.")
     
-    add_screenshot_figure(doc, "16_buoc5_tao_pptx_va_sua_slide.png", "Hình 16: Bước 5 — Tùy biến nội dung slide trực tiếp, đổi ảnh minh họa và xuất file PPTX")
+    add_screenshot_figure(doc, "16_buoc5_tao_pptx_va_sua_slide.png", "Hình 20: Bước 5 — Tùy biến nội dung slide trực tiếp, đổi ảnh minh họa và xuất file PPTX")
     
     add_badge_step(doc, "1", "Sửa trực tiếp tiêu đề, ý chính & Lưu nội dung", 
                    "Bấm nút '✏️ Sửa nội dung' trên slide: khung biên tập trực quan mở ra cho phép sửa Tiêu đề, từng gạch đầu dòng ý chính, icon emoji, thêm ý mới và nhấn '💾 Lưu nội dung'.")
@@ -555,7 +615,7 @@ def build_user_guide():
                    "Chọn Mẫu giao diện yêu thích và nhấn '📦 Tạo PPTX (có Audio)' để tải bài giảng hoàn chỉnh về máy tính.")
 
     add_body_p(doc, "Khi giảng viên tải ảnh từ máy tính lên, công cụ Cắt & Căn chỉnh ảnh tỷ lệ 1:1 độc quyền sẽ tự động xuất hiện:")
-    add_screenshot_figure(doc, "17_buoc5_crop_resize_anh.png", "Hình 17: Công cụ Căn chỉnh & Tự động Resize ảnh tỷ lệ chuẩn 1:1 chuyên nghiệp")
+    add_screenshot_figure(doc, "17_buoc5_crop_resize_anh.png", "Hình 21: Công cụ Căn chỉnh & Tự động Resize ảnh tỷ lệ chuẩn 1:1 chuyên nghiệp")
     
     add_badge_step(doc, "1", "Khung Cắt & Thu phóng ảnh chuẩn 1:1", 
                    "Khung hình vuông với lưới tỷ lệ vàng. Giảng viên kéo rê bức ảnh để chọn góc hiển thị đẹp nhất.")
@@ -576,7 +636,7 @@ def build_user_guide():
                     "Hệ thống hỗ trợ tạo câu hỏi trắc nghiệm theo 3 cấp độ nhận thức của Thang đo Bloom (Biết, Hiểu, Vận dụng), "
                     "cho phép giảng viên chỉnh sửa trực tiếp từng câu hỏi/đáp án/giải thích và xuất file Moodle XML nạp thẳng vào LMS trường.")
     
-    add_screenshot_figure(doc, "18_buoc6_tao_cau_hoi.png", "Hình 18: Bước 6 — Thiết lập số lượng câu hỏi ôn tập theo 3 cấp độ Thang đo Bloom")
+    add_screenshot_figure(doc, "18_buoc6_tao_cau_hoi.png", "Hình 22: Bước 6 — Thiết lập số lượng câu hỏi ôn tập theo 3 cấp độ Thang đo Bloom")
     
     add_badge_step(doc, "1", "Tab '📝 Câu hỏi Ôn tập (Bloom Taxonomy)'", 
                    "Chuyển sang tab ngân hàng câu hỏi ôn tập tổng hợp.")
@@ -589,7 +649,7 @@ def build_user_guide():
                    "Bấm nút để AI tự động đối chiếu nội dung bài giảng và sinh bộ câu hỏi trắc nghiệm tương ứng.")
 
     add_body_p(doc, "Sau khi có danh sách câu hỏi, giảng viên có thể sửa trực tiếp từng câu và tải về định dạng Moodle XML chuẩn:")
-    add_screenshot_figure(doc, "19_buoc6_sua_va_xuat_moodle.png", "Hình 19: Bước 6 — Chỉnh sửa câu hỏi trực tiếp bằng nút ✏️ và xuất Moodle XML / Excel")
+    add_screenshot_figure(doc, "19_buoc6_sua_va_xuat_moodle.png", "Hình 23: Bước 6 — Chỉnh sửa câu hỏi trực tiếp bằng nút ✏️ và xuất Moodle XML / Excel")
     
     add_badge_step(doc, "1", "Sửa câu hỏi & đáp án", 
                    "Nhấp vào nút ✏️ tại hàng câu hỏi để sửa trực tiếp Nội dung câu hỏi, Đáp án đúng (A), các phương án gây nhiễu (B, C, D) và Lời giải thích chi tiết, sau đó nhấn 💾 Lưu.")
@@ -607,7 +667,7 @@ def build_user_guide():
     # =========================================================================
     add_heading_1(doc, "PHẦN V: BẢNG TỔNG HỢP CÁC BƯỚC CÁ NHÂN HÓA DÀNH CHO GIẢNG VIÊN")
     
-    pers_table = doc.add_table(rows=6, cols=3)
+    pers_table = doc.add_table(rows=7, cols=3)
     pers_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     set_table_borders(pers_table)
     
@@ -625,9 +685,10 @@ def build_user_guide():
         r.font.color.rgb = COLOR_WHITE
         
     p_rows = [
+        ("Khóa xác thực API & Cấu hình", "OmniVoice Studio ➔ '🔑 API Keys'", "Tự khởi tạo API Key cá nhân (vneu_...), bảo mật hạn ngạch GPU máy chủ trường."),
+        ("Giọng nói cá nhân (Clone Voice)", "OmniVoice Studio ➔ 'Voice Library'", "Thu âm trực tiếp qua micro hoặc tải file âm thanh kèm transcript, kích hoạt ⚡ Cache nạp GPU VRAM."),
         ("Dàn ý bài giảng (Outline)", "Bước 2 ➔ Nút '⚙️ Sửa JSON'", "Tự do chỉnh sửa mục tiêu, thêm bớt bài tập, thay đổi thời lượng từng phần."),
         ("Kịch bản Slide (Script)", "Bước 3 ➔ Nút '⚙️ Sửa JSON'", "Tùy biến tiêu đề slide, câu chữ bullet points và lời thoại sư phạm của giảng viên."),
-        ("Giọng đọc thuyết minh (Voice)", "Bước 4 ➔ Chế độ 'Giọng clone'", "Sử dụng giọng nói thật của chính giảng viên để thuyết minh bài giảng."),
         ("Lời giảng âm thanh (Notes)", "Bước 4 ➔ Nút '✏️' trên từng slide", "Sửa riêng lẻ câu thoại cho từng slide mà không làm ảnh hưởng các slide khác."),
         ("Nội dung & Ảnh slide PPTX", "Bước 5 ➔ Nút '✏️ Sửa nội dung' & '📤 Đổi ảnh'", "Sửa chữ trực tiếp trên slide, tải ảnh từ máy tính, cắt ảnh tỷ lệ 1:1 chuẩn xác."),
     ]

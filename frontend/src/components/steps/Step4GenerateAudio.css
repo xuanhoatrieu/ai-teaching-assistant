@@ -347,6 +347,103 @@
     margin: 0;
 }
 
+.empty-note-box {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px dashed rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+}
+
+.empty-note-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.btn-create-note-single {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.btn-create-note-single:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+}
+
+.btn-create-note-single:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn-edit-note-single {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    background: rgba(148, 163, 184, 0.12);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-edit-note-single:hover {
+    background: rgba(148, 163, 184, 0.2);
+    color: #ffffff;
+    border-color: rgba(148, 163, 184, 0.4);
+}
+
+.note-action-btns {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.btn-regen-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-regen-inline:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.3);
+    color: #ffffff;
+    border-color: #6366f1;
+}
+
+.btn-regen-inline:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 /* Edit Mode */
 .edit-mode textarea {
     width: 100%;

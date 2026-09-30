@@ -327,6 +327,20 @@ export class SlideAudioController {
         );
     }
 
+    // Generate speaker note for a single slide using AI
+    @Post(':index/generate-speaker-note')
+    async generateSingleSpeakerNote(
+        @Param('lessonId') lessonId: string,
+        @Param('index') index: string,
+        @Request() req,
+    ) {
+        return this.slidesService.generateSingleSlideSpeakerNote(
+            lessonId,
+            parseInt(index, 10),
+            req.user.id,
+        );
+    }
+
     // Update speaker note for a slide
     @Put(':index/speaker-note')
     async updateSpeakerNote(
