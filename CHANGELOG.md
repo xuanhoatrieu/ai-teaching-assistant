@@ -1,5 +1,51 @@
 # Changelog
 
+## [v1.6.5] - 2026-10-01 - Interactive Slides, Matching Questions & Bilingual Speaker Notes
+
+### Added
+- **Interactive Slides in PPTX Generation (Step 5)**:
+  - Added dedicated action buttons: "➕ Thêm slide lý thuyết" and "🎮 Thêm slide tương tác".
+  - Full support for interactive question types: Multiple Choice (Single/Multi), True/False, Short Answer, Fill-in-the-blank, and **Matching questions** (`matching` type with term-definition pairs).
+  - Flexible creation modes:
+    - AI-generated from source audio, extracted text/images, or slide range (`fromSlideIndex` - `toSlideIndex`) with full-width expanded input area.
+    - Direct extraction from user-provided existing question texts/images.
+  - Flexible slide transition policy (`allowPassWithoutPassing`): Allows students to advance to subsequent slides even if the minimum score is not met (ideal for discussion/opinion questions).
+  - Standalone interactive slide design layout: Clean presentation focusing purely on questions and choices without redundant slide images.
+- **Bilingual Speaker Notes Generation in PPTX Audio Tool**:
+  - Added language selection modal for AI speaker notes generation: Vietnamese (Default) and English.
+  - Built dedicated 100% academic English prompts for both generation and TTS voice polish, translating all Vietnamese slide terminology into standard lecture English.
+  - Added persistent bilingual language toggle `[🇻🇳 VN | 🇬🇧 EN]` on the Notes & Audio header with instant tab switching.
+  - Automatic dual-language state management (`noteVN`, `noteEN`, `hasDual: true`, `language: 'en' | 'vi'`) in PostgreSQL sessions.
+
+## [v1.6.4] - 2026-09-30 - Slide Management, Audio Embedding & Voice Clone Guide
+
+### Added
+- **Slide CRUD & Reordering (Step 5: Generate PPTX)**:
+  - Added ability to create slides at the top, bottom, and between any two adjacent slides using interactive hover dividers (`➕ Chèn slide vào đây`).
+  - Added slide movement buttons (`⬆️ Lên`, `⬇️ Xuống`) and deletion button (`🗑️ Xóa`) with confirmation dialog.
+  - Implemented automatic sequential renumbering (`1..N`) across `Slide` and `SlideAudio` records ensuring consecutive slide indices in Steps 3, 4, and 5.
+- **Independent Sample Audio Upload & Management (Step 5)**:
+  - Added `🎧 Tải audio mẫu` button to upload separate audio samples (e.g. English pronunciation/listening exercises, authentic audio clips) stored alongside the slide.
+  - In-place audio preview with playback controls, filename, duration display, and delete capability.
+  - Updated Python PPTX generator (`pptx_service.py`) and NestJS service to embed extra audio samples directly into PowerPoint slides with a clickable speaker icon.
+- **Single-Slide Speaker Notes AI Generation & Editing (Step 4)**:
+  - Added endpoint `POST :index/generate-speaker-note` for targeted AI speaker note generation on newly added or edited individual slides.
+  - Added `✨ AI tạo lời giảng` and `✨ Viết lại` buttons per slide card.
+  - Added manual speaker note creation and editing (`✏️ Tự viết lời giảng` / `✏️ Sửa`).
+- **Comprehensive ViTTS Voice Cloning & API Guide**:
+  - Authored a step-by-step guide with 13 real-world screenshots covering API Key management, Voice Library, Recording Studio, and Voice Upload for custom voice cloning on the ViTTS platform.
+  - Integrated into the official user documentation docx.
+
+### Fixed
+- **Step 3 Slide Script Preview Robustness**:
+  - Defensively handled `slide.content` as either `string[]` or `string` to eliminate `TypeError: slide.content.map is not a function`.
+- **ValidationPipe Compatibility**:
+  - Whitelisted `speakerNote` and `insertAfterIndex` in `CreateSlideDto` and `UpdateSlideContentDto` to prevent NestJS 400 Bad Request errors.
+
+### Changed
+- **Separation of Concerns**:
+  - Removed speaker note display and editing from Step 5 to keep Step 5 strictly focused on visual slide layout, styling, and media assets.
+
 ## [v1.6.1] - 2026-09-18 - Fix Active Job Resume for English & Review Questions
 
 ### Fixed

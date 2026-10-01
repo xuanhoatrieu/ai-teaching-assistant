@@ -24,6 +24,9 @@ interface SlideContent {
     extraAudioPath?: string;
     speakerNote?: string;
     slideType?: string;
+    layoutType?: string;
+    isInteractive?: boolean;
+    interactiveData?: any;
 }
 
 interface OptimizedBullet {
@@ -549,6 +552,9 @@ export class PptxService {
                 extraAudioPath: (slide as any).extraAudioUrl ? this.getLocalPath((slide as any).extraAudioUrl) : undefined,
                 speakerNote: slideAudioForNotes?.speakerNote || slide.speakerNote || '',
                 slideType: slide.slideType || 'content',
+                layoutType: (slide as any).layoutType || 'split_standard',
+                isInteractive: !!slide.interactiveData || slide.slideType === 'interactive' || (slide as any).layoutType === 'checkpoint_gate',
+                interactiveData: slide.interactiveData ? (typeof slide.interactiveData === 'string' ? JSON.parse(slide.interactiveData) : slide.interactiveData) : null,
             };
         });
 

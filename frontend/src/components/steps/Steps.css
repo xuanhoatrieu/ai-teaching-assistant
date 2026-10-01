@@ -2509,6 +2509,10 @@
 .add-slide-input,
 .add-slide-select,
 .add-slide-textarea {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(148, 163, 184, 0.25);
     border-radius: 8px;
@@ -3727,4 +3731,1477 @@
     color: #94a3b8;
     overflow-x: auto;
     margin: 0;
+}
+
+/* ==========================================================================
+   Interactive Learning & Slide Type Badges (Step 5 - Moodle / H5P Ready)
+   ========================================================================== */
+
+.slide-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 6px;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+}
+
+.badge-content {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.badge-audio-interactive {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.35);
+    box-shadow: 0 0 10px rgba(168, 85, 247, 0.15);
+}
+
+.badge-quiz-interactive {
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.15);
+}
+
+/* Slide Interactive Activity Box */
+.slide-interactive-preview-box {
+    margin-top: 14px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.75) 0%, rgba(15, 23, 42, 0.9) 100%);
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.slide-interactive-preview-box:hover {
+    border-color: rgba(168, 85, 247, 0.5);
+    box-shadow: 0 6px 20px rgba(168, 85, 247, 0.12);
+}
+
+.interactive-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+    margin-bottom: 10px;
+}
+
+.interactive-header-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: #f1f5f9;
+}
+
+.interactive-count-pill {
+    background: rgba(168, 85, 247, 0.2);
+    color: #e9d5ff;
+    padding: 1px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.btn-text-danger {
+    background: transparent;
+    border: none;
+    color: #f87171;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.15s, color 0.15s;
+}
+
+.btn-text-danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.interactive-instruction {
+    font-size: 12.5px;
+    color: #94a3b8;
+    margin: 0 0 10px 0;
+    line-height: 1.45;
+}
+
+.interactive-questions-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.interactive-q-item {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.1);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.interactive-q-title {
+    font-size: 13px;
+    color: #e2e8f0;
+    margin-bottom: 8px;
+    line-height: 1.45;
+}
+
+.interactive-q-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.interactive-opt {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+    border-radius: 6px;
+    font-size: 12px;
+    color: #cbd5e1;
+}
+
+.interactive-opt.opt-correct {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-weight: 500;
+}
+
+.opt-marker {
+    font-size: 12px;
+}
+
+.interactive-q-explanation {
+    font-size: 11.5px;
+    color: #a78bfa;
+    background: rgba(139, 92, 246, 0.08);
+    padding: 6px 10px;
+    border-radius: 5px;
+    border-left: 3px solid #a855f7;
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+/* Button interactive styles */
+.btn-action-interactive {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(99, 102, 241, 0.25) 100%) !important;
+    border: 1px solid rgba(168, 85, 247, 0.45) !important;
+    color: #e9d5ff !important;
+    font-weight: 600 !important;
+}
+
+.btn-action-interactive:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.35) 0%, rgba(99, 102, 241, 0.4) 100%) !important;
+    border-color: rgba(168, 85, 247, 0.7) !important;
+    box-shadow: 0 0 12px rgba(168, 85, 247, 0.3) !important;
+    color: #ffffff !important;
+}
+
+.btn-action-interactive-active {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(13, 148, 136, 0.25) 100%) !important;
+    border: 1px solid rgba(16, 185, 129, 0.45) !important;
+    color: #a7f3d0 !important;
+    font-weight: 600 !important;
+}
+
+.btn-action-interactive-active:hover:not(:disabled) {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.35) 0%, rgba(13, 148, 136, 0.4) 100%) !important;
+    border-color: rgba(16, 185, 129, 0.7) !important;
+    color: #ffffff !important;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MOODLE LMS & E-LEARNING EXPORT BUTTONS & WORKFLOW GUIDES
+   ═══════════════════════════════════════════════════════════ */
+.btn-moodle-export {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    padding: 8px 14px !important;
+    border-radius: 8px !important;
+    transition: all 0.2s ease !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+}
+
+.btn-scorm {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #10b981 !important;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.25) !important;
+}
+.btn-scorm:hover:not(:disabled) {
+    background: linear-gradient(135deg, #047857 0%, #059669 100%) !important;
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4) !important;
+    transform: translateY(-1px);
+}
+
+.btn-h5p {
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #a855f7 !important;
+    box-shadow: 0 2px 8px rgba(168, 85, 247, 0.25) !important;
+}
+.btn-h5p:hover:not(:disabled) {
+    background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%) !important;
+    box-shadow: 0 4px 14px rgba(168, 85, 247, 0.4) !important;
+    transform: translateY(-1px);
+}
+
+.btn-xml {
+    background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%) !important;
+    color: #ffffff !important;
+    border: 1px solid #f59e0b !important;
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25) !important;
+}
+.btn-xml:hover:not(:disabled) {
+    background: linear-gradient(135deg, #b45309 0%, #d97706 100%) !important;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4) !important;
+    transform: translateY(-1px);
+}
+
+.btn-moodle-guide-trigger {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px dashed rgba(255, 255, 255, 0.25) !important;
+    color: #cbd5e1 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 8px 12px !important;
+    border-radius: 8px !important;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.btn-moodle-guide-trigger:hover {
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-color: #60a5fa !important;
+    color: #93c5fd !important;
+}
+
+/* Slide Card Workflow Guide Alert */
+.slide-workflow-guide-alert {
+    margin: 10px 18px 0 18px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.slide-workflow-guide-alert.guide-audio {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px dashed rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+}
+
+.slide-workflow-guide-alert.guide-quiz {
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px dashed rgba(245, 158, 11, 0.4);
+    color: #fcd34d;
+}
+
+.guide-alert-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+}
+
+.guide-alert-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 20px;
+    color: #e2e8f0;
+}
+
+/* Modal type tip */
+.add-slide-type-tip {
+    margin-top: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    font-size: 12px;
+    color: #c7d2fe;
+    line-height: 1.4;
+}
+
+/* Moodle Guide Modal */
+.moodle-guide-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.moodle-guide-modal {
+    background: #1e293b;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    width: 100%;
+    max-width: 780px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+}
+
+.moodle-guide-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.guide-title-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.moodle-icon {
+    font-size: 28px;
+}
+
+.moodle-guide-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.guide-subtitle {
+    margin: 2px 0 0 0;
+    font-size: 12.5px;
+    color: #94a3b8;
+}
+
+.moodle-guide-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.guide-option-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+}
+
+.option-badge {
+    position: absolute;
+    top: 14px;
+    right: 16px;
+    background: rgba(16, 185, 129, 0.2);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+}
+.option-badge-h5p {
+    background: rgba(168, 85, 247, 0.2);
+    color: #e9d5ff;
+    border-color: rgba(168, 85, 247, 0.4);
+}
+.option-badge-xml {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fde68a;
+    border-color: rgba(245, 158, 11, 0.4);
+}
+
+.guide-option-card h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.option-desc {
+    margin: 0;
+    font-size: 13px;
+    color: #94a3b8;
+    line-height: 1.45;
+}
+
+.guide-steps-list {
+    margin: 6px 0 0 18px;
+    padding: 0;
+    font-size: 13px;
+    color: #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    line-height: 1.45;
+}
+
+.guide-steps-list code {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.moodle-guide-footer {
+    padding: 16px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ==========================================================================
+   MULTI-LAYOUT SELECTOR & MASTERY GATE CONFIG (STEP 5)
+   ========================================================================== */
+
+.slide-layout-selector-wrapper {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+}
+
+.slide-layout-select {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #e2e8f0;
+    font-size: 11.5px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.slide-layout-select:hover {
+    border-color: #818cf8;
+    background: rgba(30, 41, 59, 0.95);
+}
+
+.slide-layout-select:focus {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+/* Mastery Gate Configuration Panel */
+.gate-config-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(15, 23, 42, 0.8) 100%);
+    border: 1px dashed rgba(99, 102, 241, 0.45);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+}
+
+.gate-config-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12.5px;
+    color: #a5b4fc;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.gate-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.gate-config-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gate-config-item label {
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.gate-config-input, .gate-config-select {
+    background: rgba(15, 23, 42, 0.8);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: #f1f5f9;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.gate-config-input:focus, .gate-config-select:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Multi-Layout Dynamic Modifiers */
+.slide-card-body.layout-split-reversed {
+    flex-direction: row-reverse;
+}
+
+.slide-card-body.layout-hero-infographic {
+    flex-direction: column-reverse;
+}
+
+.slide-card-body.layout-hero-infographic .slide-image-col {
+    max-width: 100%;
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.slide-bullets-comparison-3col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width: 100%;
+}
+
+@media (max-width: 900px) {
+    .slide-bullets-comparison-3col {
+        grid-template-columns: 1fr;
+    }
+}
+
+.slide-bullets-process-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: relative;
+    padding-left: 8px;
+}
+
+.slide-step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #6366f1;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+
+/* ==========================================================================
+   Separate Slide Actions & Standalone Interactive Slides
+   ========================================================================== */
+.add-slide-btn-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.btn-add-slide-theory {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #ffffff;
+    border: 1px solid rgba(59, 130, 246, 0.5);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.2);
+}
+
+.btn-add-slide-theory:hover:not(:disabled) {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+}
+
+.btn-add-slide-interactive {
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    color: #ffffff;
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.25);
+}
+
+.btn-add-slide-interactive:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4);
+}
+
+/* Slide Insert Dividers Pair Buttons */
+.slide-insert-btn-pair {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-slide-insert-mini {
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px dashed;
+    transition: all 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-slide-insert-mini.theory {
+    background: rgba(37, 99, 235, 0.12);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.45);
+}
+
+.btn-slide-insert-mini.theory:hover:not(:disabled) {
+    background: rgba(37, 99, 235, 0.25);
+    border-color: #60a5fa;
+    color: #ffffff;
+}
+
+.btn-slide-insert-mini.interactive {
+    background: rgba(124, 58, 237, 0.12);
+    color: #c4b5fd;
+    border-color: rgba(139, 92, 246, 0.45);
+}
+
+.btn-slide-insert-mini.interactive:hover:not(:disabled) {
+    background: rgba(124, 58, 237, 0.25);
+    border-color: #a78bfa;
+    color: #ffffff;
+}
+
+/* Standalone Interactive Slide Workspace (Full-Width, No Image Placeholder) */
+.slide-interactive-standalone-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.slide-interactive-empty-state {
+    padding: 32px 24px;
+    text-align: center;
+    background: rgba(30, 41, 59, 0.4);
+    border: 2px dashed rgba(139, 92, 246, 0.35);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin: 8px 0;
+}
+
+.empty-interactive-icon {
+    font-size: 38px;
+    line-height: 1;
+    filter: drop-shadow(0 4px 10px rgba(139, 92, 246, 0.35));
+}
+
+.empty-interactive-text h5 {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0;
+}
+
+.empty-interactive-text p {
+    font-size: 13px;
+    color: #94a3b8;
+    margin: 6px auto 0;
+    max-width: 580px;
+    line-height: 1.5;
+}
+
+.empty-interactive-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 4px;
+}
+
+.btn-empty-interactive-ai {
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(139, 92, 246, 0.5);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-empty-interactive-ai:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
+}
+
+.btn-text-reconfig {
+    background: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-text-reconfig:hover {
+    background: rgba(99, 102, 241, 0.28);
+    color: #ffffff;
+}
+
+/* ==========================================================================
+   Interactive Question Modal Styling
+   ========================================================================== */
+.interactive-modal-wide {
+    max-width: 720px !important;
+    width: 95% !important;
+    max-height: 88vh;
+    overflow-y: auto;
+}
+
+.modal-title-with-badge {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.modal-header-badge {
+    font-size: 11px;
+    color: #a5b4fc;
+    font-weight: 500;
+}
+
+.activity-type-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 640px) {
+    .activity-type-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.activity-type-card {
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1.5px solid rgba(148, 163, 184, 0.2);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.activity-type-card:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(30, 41, 59, 0.85);
+}
+
+.activity-type-card.selected {
+    border-color: #8b5cf6;
+    background: rgba(139, 92, 246, 0.12);
+    box-shadow: 0 0 0 1px #8b5cf6;
+}
+
+.activity-card-icon {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.activity-card-info strong {
+    font-size: 13px;
+    color: #f1f5f9;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.activity-card-info p {
+    font-size: 11.5px;
+    color: #94a3b8;
+    margin: 0;
+    line-height: 1.4;
+}
+
+/* Generation Mode Selection Cards */
+.generation-mode-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+@media (max-width: 640px) {
+    .generation-mode-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.generation-mode-card {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1.5px solid rgba(148, 163, 184, 0.2);
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+    user-select: none;
+}
+
+.generation-mode-card:hover {
+    border-color: rgba(99, 102, 241, 0.45);
+    background: rgba(30, 41, 59, 0.7);
+    transform: translateY(-1px);
+}
+
+.generation-mode-card.active {
+    background: rgba(30, 27, 75, 0.65);
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25), 0 8px 20px -4px rgba(99, 102, 241, 0.2);
+}
+
+.mode-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.mode-badge-default {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.3));
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.mode-badge-option {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.3));
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.mode-card-title {
+    font-size: 13.5px;
+    font-weight: 700;
+    color: #f8fafc;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mode-card-desc {
+    font-size: 11.5px;
+    color: #94a3b8;
+    line-height: 1.45;
+}
+
+/* Source Type Selection Tabs */
+.source-type-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.7);
+    padding: 5px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    margin-bottom: 12px;
+    overflow-x: hidden;
+}
+
+.source-tab-btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.source-tab-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.source-tab-btn.active {
+    background: #6366f1;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.source-content-box {
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+    padding: 14px 16px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.source-content-box textarea,
+.source-content-box input,
+.source-content-box select {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.source-desc {
+    font-size: 12.5px;
+    color: #cbd5e1;
+    margin: 0 0 10px 0;
+    line-height: 1.5;
+}
+
+.source-desc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.btn-sample-paste {
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    color: #c7d2fe;
+    padding: 4px 10px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-sample-paste:hover {
+    background: rgba(99, 102, 241, 0.3);
+    color: #ffffff;
+}
+
+.slide-range-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.range-picker-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.range-picker-col label {
+    font-size: 11.5px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.range-picker-separator {
+    color: #818cf8;
+    font-weight: 700;
+    font-size: 16px;
+    padding-top: 18px;
+}
+
+.range-preview-summary {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, 0.1);
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+.modal-file-upload-box {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1.5px dashed rgba(148, 163, 184, 0.25);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+}
+
+.btn-select-file {
+    background: rgba(99, 102, 241, 0.15);
+    color: #c7d2fe;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-select-file:hover {
+    background: rgba(99, 102, 241, 0.3);
+    color: #ffffff;
+}
+
+.file-selected-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+}
+
+.file-selected-row .file-icon {
+    font-size: 22px;
+}
+
+.file-selected-row .file-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.file-selected-row .file-info strong {
+    font-size: 13px;
+    color: #f1f5f9;
+}
+
+.file-selected-row .file-info span {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.btn-remove-file {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.image-preview-thumbnail {
+    margin-top: 10px;
+    max-height: 120px;
+    overflow: hidden;
+    border-radius: 6px;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.image-preview-thumbnail img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+}
+
+/* Question Types Selection Grid */
+.form-group-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.btn-text-tiny {
+    background: none;
+    border: none;
+    color: #818cf8;
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+}
+
+.qtypes-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+@media (max-width: 640px) {
+    .qtypes-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.qtype-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: rgba(30, 41, 59, 0.5);
+    border: 1.5px solid rgba(148, 163, 184, 0.2);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.qtype-card:hover {
+    border-color: rgba(99, 102, 241, 0.4);
+    background: rgba(30, 41, 59, 0.7);
+}
+
+.qtype-card.checked {
+    border-color: #818cf8;
+    background: rgba(99, 102, 241, 0.12);
+}
+
+.qtype-card input[type="checkbox"] {
+    margin-top: 3px;
+    accent-color: #6366f1;
+    cursor: pointer;
+}
+
+.qtype-card-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.qtype-name {
+    font-size: 12px;
+    font-weight: 600;
+    color: #f1f5f9;
+}
+
+.qtype-sub {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.qtype-note {
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Gate Config Inputs */
+.gate-config-inputs-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.gate-input-box {
+    flex: 1;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.gate-input-box.wide {
+    flex: 2;
+    min-width: 220px;
+}
+
+.gate-input-box label {
+    font-size: 11.5px;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.input-with-suffix {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-with-suffix .add-slide-input {
+    padding-right: 50px;
+}
+
+.input-suffix {
+    position: absolute;
+    right: 10px;
+    font-size: 11.5px;
+    color: #94a3b8;
+    pointer-events: none;
+}
+
+.btn-subtle {
+    background: rgba(148, 163, 184, 0.1);
+    color: #cbd5e1;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-subtle:hover:not(:disabled) {
+    background: rgba(148, 163, 184, 0.2);
+    color: #ffffff;
+}
+
+.btn-generate-interactive-ai {
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%) !important;
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.4) !important;
+}
+
+.btn-generate-interactive-ai:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%) !important;
+    box-shadow: 0 6px 18px rgba(124, 58, 237, 0.5) !important;
+}
+
+/* Progression Policy Selection Box (Modal) */
+.progression-policy-box {
+    margin-top: 10px;
+    padding: 12px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px solid rgba(148, 163, 184, 0.15);
+    border-radius: 8px;
+}
+
+.progression-policy-heading {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+}
+
+.progression-policy-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+@media (max-width: 640px) {
+    .progression-policy-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.policy-choice-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1.5px solid rgba(148, 163, 184, 0.2);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.policy-choice-card:hover {
+    border-color: rgba(129, 140, 248, 0.4);
+    background: rgba(30, 41, 59, 0.85);
+}
+
+.policy-choice-card.selected {
+    border-color: #818cf8;
+    background: rgba(99, 102, 241, 0.14);
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+.policy-choice-card input[type="radio"] {
+    margin-top: 3px;
+    accent-color: #6366f1;
+    cursor: pointer;
+}
+
+.policy-choice-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.policy-choice-title {
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+.policy-choice-desc {
+    font-size: 11px;
+    line-height: 1.35;
+    color: #94a3b8;
+}
+
+/* Gate Policy Selector (Inside Slide Card) */
+.gate-policy-selector {
+    margin: 8px 0 10px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.gate-policy-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #94a3b8;
+}
+
+.gate-policy-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.gate-policy-pill {
+    padding: 6px 12px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border-radius: 6px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(30, 41, 59, 0.6);
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.gate-policy-pill:hover:not(:disabled) {
+    background: rgba(51, 65, 85, 0.7);
+    color: #cbd5e1;
+}
+
+.gate-policy-pill.active {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: #818cf8;
+    color: #c7d2fe;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.25);
+}
+
+.item-disabled {
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+.label-note {
+    font-weight: 400;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+/* Question Badges */
+.qtype-badge.qtype-match {
+    background: rgba(14, 165, 233, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(14, 165, 233, 0.35);
+}
+
+/* Matching Pairs Preview in Slide Card */
+.interactive-match-pairs-preview {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 1px dashed rgba(14, 165, 233, 0.3);
+    border-radius: 6px;
+}
+
+.match-pairs-preview-title {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #38bdf8;
+    margin-bottom: 6px;
+}
+
+.match-pairs-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 6px;
+}
+
+.match-pair-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    background: rgba(30, 41, 59, 0.7);
+    border-radius: 4px;
+    font-size: 11.5px;
+}
+
+.match-pair-preview-item .pair-left {
+    color: #e2e8f0;
+    font-weight: 500;
+}
+
+.match-pair-preview-item .pair-arrow {
+    color: #38bdf8;
+    font-weight: bold;
+}
+
+.match-pair-preview-item .pair-right {
+    color: #a5f3fc;
+    font-style: italic;
 }

@@ -228,6 +228,7 @@ model Slide {
   lessonId             String   @map("lesson_id")
   slideIndex           Int      @map("slide_index")
   slideType            String   @default("content")
+  layoutType           String   @default("split_standard") @map("layout_type")
   title                String
   content              String?
   optimizedContentJson String?  @map("optimized_content_json")
@@ -240,6 +241,7 @@ model Slide {
   extraAudioUrl        String?  @map("extra_audio_url")
   extraAudioName       String?  @map("extra_audio_name")
   extraAudioDuration   Float?   @map("extra_audio_duration")
+  interactiveData      String?  @map("interactive_data")
   status               String   @default("draft")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")

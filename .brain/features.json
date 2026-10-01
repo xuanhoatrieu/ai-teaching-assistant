@@ -1,6 +1,6 @@
 {
     "meta": {
-        "last_updated": "2026-05-15T05:58:00+07:00"
+        "last_updated": "2026-10-01T23:30:00+07:00"
     },
     "modules": {
         "auth": {
@@ -22,9 +22,9 @@
             "features": [
                 {"name": "Step 1: Outline Input", "description": "Raw text/PDF input"},
                 {"name": "Step 2: Detailed Outline", "description": "AI-generated detailed outline with JSON editing"},
-                {"name": "Step 3: Slide Script", "description": "AI-generated slide content (20-30 slides)"},
-                {"name": "Step 4: Audio Generation", "description": "2-step speaker notes (raw → optimized) + TTS audio. Async GenerationJob with useJobPolling."},
-                {"name": "Step 5: PPTX Generation", "description": "Template selection, image generation, PPTX export"},
+                {"name": "Step 3: Slide Script", "description": "AI-generated slide content (20-30 slides) with type-safe preview"},
+                {"name": "Step 4: Audio Generation", "description": "2-step speaker notes (raw → optimized) + TTS audio. Async GenerationJob with useJobPolling, single-slide AI note generation, and Vietnamese/English bilingual support."},
+                {"name": "Step 5: PPTX Generation & Interactive Slides", "description": "Template selection, image generation, PPTX export, interactive slide CRUD/reordering, 7 visual layouts, Mastery Gate progression (pass required vs open), 5 interactive question types (MC, TF, MR, FIB, MATCH), and independent sample audio embedding."},
                 {"name": "Step 6: Question Bank", "description": "Interactive (MC/MR) + Review (Bloom taxonomy) questions + Excel export. Async GenerationJob with useJobPolling."}
             ]
         },
@@ -67,7 +67,10 @@
             "features": [
                 {"name": "PPTX Export", "description": "Python python-pptx with template selection"},
                 {"name": "Question Excel Export", "description": "Review + Interactive question export"},
-                {"name": "Audio ZIP Download", "description": "Download all slide audio as ZIP (archiver)"}
+                {"name": "Audio ZIP Download", "description": "Download all slide audio as ZIP (archiver)"},
+                {"name": "SCORM 1.2 ZIP Export", "description": "HTML5 interactive presentation with SCORM data tracking and mastery gate"},
+                {"name": "H5P Course Presentation Export", "description": "Full H5P package with interactive question elements for Moodle LMS"},
+                {"name": "Moodle Quiz XML Export", "description": "Standard Moodle XML question bank export for lesson interactive questions"}
             ]
         },
         "images": {

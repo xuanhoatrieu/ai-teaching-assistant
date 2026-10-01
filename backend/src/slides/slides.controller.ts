@@ -11,7 +11,9 @@ import {
     Logger,
     UseInterceptors,
     UploadedFile,
+    Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { SlidesService } from './slides.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -39,6 +41,17 @@ class UpdateSlideContentDto {
     speakerNote?: string;
 
     @IsOptional()
+    @IsString()
+    slideType?: string;
+
+    @IsOptional()
+    @IsString()
+    layoutType?: string;
+
+    @IsOptional()
+    interactiveData?: any;
+
+    @IsOptional()
     @IsArray()
     optimizedContent?: Array<{
         emoji?: string;
@@ -59,6 +72,17 @@ class CreateSlideDto {
     @IsOptional()
     @IsString()
     speakerNote?: string;
+
+    @IsOptional()
+    @IsString()
+    slideType?: string;
+
+    @IsOptional()
+    @IsString()
+    layoutType?: string;
+
+    @IsOptional()
+    interactiveData?: any;
 
     @IsOptional()
     @IsNumber()
@@ -84,6 +108,33 @@ export class SlidesController {
     @Get()
     async getSlides(@Param('lessonId') lessonId: string) {
         return this.slidesService.getSlides(lessonId);
+    }
+
+    // GET /lessons/:lessonId/slides/export/scorm - Export lesson as ADL SCORM 1.2 zip
+    @Get('export/scorm')
+    async exportScorm(
+        @Param('lessonId') lessonId: string,
+        @Res() res: Response,
+    ) {
+        return this.slidesService.exportScorm(lessonId, res);
+    }
+
+    // GET /lessons/:lessonId/slides/export/h5p - Export lesson as H5P course presentation
+    @Get('export/h5p')
+    async exportH5p(
+        @Param('lessonId') lessonId: string,
+        @Res() res: Response,
+    ) {
+        return this.slidesService.exportH5p(lessonId, res);
+    }
+
+    // GET /lessons/:lessonId/slides/export/moodle-xml - Export interactive questions as Moodle Quiz XML
+    @Get('export/moodle-xml')
+    async exportMoodleXml(
+        @Param('lessonId') lessonId: string,
+        @Res() res: Response,
+    ) {
+        return this.slidesService.exportMoodleXml(lessonId, res);
     }
 
     // POST /lessons/:lessonId/slides - Add a new slide
@@ -179,6 +230,26 @@ export class SlidesController {
             body.optimizedContent,
             body.content,
             body.speakerNote,
+            body.slideType,
+            body.interactiveData,
+            body.layoutType,
+        );
+    }
+
+    // POST /lessons/:lessonId/slides/:slideIndex/generate-interactions - Generate interactive activity with AI
+    @Post(':slideIndex/generate-interactions')
+    async generateInteractions(
+        @Param('lessonId') lessonId: string,
+        @Param('slideIndex') slideIndex: string,
+        @Body() body: any,
+        @Request() req,
+    ) {
+        return this.slidesService.generateSlideInteractions(
+            lessonId,
+            parseInt(slideIndex, 10),
+            req.user.id,
+            body?.activityType,
+            body,
         );
     }
 

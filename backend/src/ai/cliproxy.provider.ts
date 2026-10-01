@@ -12,7 +12,7 @@ export interface CLIProxyConfig {
 
 export interface ChatMessage {
     role: 'user' | 'assistant' | 'system';
-    content: string;
+    content: string | any[];
 }
 
 export interface ChatCompletionResponse {

@@ -293,7 +293,7 @@ export class PptxAudioToolService {
 
     // ========== 4. EDIT NOTE ==========
 
-    async updateNote(sessionId: string, slideIndex: number, note: string) {
+    async updateNote(sessionId: string, slideIndex: number, note: string, targetLang?: 'vi' | 'en') {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
         });
@@ -307,13 +307,16 @@ export class PptxAudioToolService {
             throw new NotFoundException(`Slide ${slideIndex} not found`);
         }
 
+        const activeLang = targetLang || session.language || 'vi';
+
         // Update the active language note
-        if (session.language === 'en') {
+        if (activeLang === 'en') {
             slide.noteEN = note;
         } else {
             slide.noteVN = note;
         }
         slide.noteFull = note; // Also update full
+        slide.hasDual = !!(slide.noteVN?.trim() && slide.noteEN?.trim());
 
         await this.prisma.pptxAudioSession.update({
             where: { id: sessionId },
@@ -330,6 +333,7 @@ export class PptxAudioToolService {
         sessionId: string,
         userId: string,
         mode: 'all' | 'missing' = 'all',
+        targetLanguage?: 'vi' | 'en',
     ) {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
@@ -343,7 +347,15 @@ export class PptxAudioToolService {
             throw new BadRequestException('No slides found in session');
         }
 
-        const language = session.language || 'vi';
+        const language: 'vi' | 'en' = targetLanguage || (session.language as 'vi' | 'en') || 'vi';
+
+        // Synchronize session language if changed
+        if (targetLanguage && session.language !== targetLanguage) {
+            await this.prisma.pptxAudioSession.update({
+                where: { id: sessionId },
+                data: { language: targetLanguage },
+            });
+        }
 
         // Filter target slides
         const targetSlides = mode === 'missing'
@@ -383,35 +395,96 @@ export class PptxAudioToolService {
                 `Đang soạn lời giảng (Slide ${batchStart} - ${batchEnd} / ${targetSlides.length})...`,
             );
 
+            const isEnglish = language === 'en';
+
             // Build slides content text
             const slidesContent = batch.map(s => {
-                const existingNote = (language === 'en' ? s.noteEN : s.noteVN)?.trim() || s.noteFull?.trim();
+                const existingEnNote = s.noteEN?.trim();
+                const existingVnNote = s.noteVN?.trim() || s.noteFull?.trim();
                 const contentLines = Array.isArray(s.content) ? s.content.join('\n  • ') : (s.content || '');
-                let sText = `--- Slide ${s.index + 1} ---\nIndex: ${s.index}\nTiêu đề: ${s.title}\nNội dung chính:\n  • ${contentLines}`;
-                if (existingNote) {
-                    sText += `\nLời giảng / Ghi chú có sẵn của giảng viên:\n"${existingNote}"\n(Hướng dẫn: Hãy kết hợp ý tưởng của giảng viên với nội dung trên slide để hoàn thiện thành bài giảng chỉn chu, sâu sắc)`;
+                let sText = isEnglish
+                    ? `--- Slide ${s.index + 1} ---\nIndex: ${s.index}\nTitle: ${s.title}\nContent:\n  • ${contentLines}`
+                    : `--- Slide ${s.index + 1} ---\nIndex: ${s.index}\nTiêu đề: ${s.title}\nNội dung chính:\n  • ${contentLines}`;
+
+                if (isEnglish) {
+                    if (existingEnNote) {
+                        sText += `\nExisting English Lecture Note:\n"${existingEnNote}"\n(Instruction: Expand and polish this into a comprehensive academic lecture script in English)`;
+                    } else if (existingVnNote) {
+                        sText += `\nInstructor's Original Draft (in Vietnamese):\n"${existingVnNote}"\n(Instruction: Translate and elaborate these ideas into a thorough, inspiring academic lecture in 100% fluent English)`;
+                    }
+                } else {
+                    if (existingVnNote) {
+                        sText += `\nLời giảng / Ghi chú có sẵn của giảng viên:\n"${existingVnNote}"\n(Hướng dẫn: Hãy kết hợp ý tưởng của giảng viên với nội dung trên slide để hoàn thiện thành bài giảng chỉn chu, sâu sắc)`;
+                    }
                 }
                 return sText;
             }).join('\n\n');
 
             const promptContent = previousSlideBridge
-                ? `[Chủ đề vừa giải thích ở phần trước để nối mạch tự nhiên: "${previousSlideBridge}"]\n(Lưu ý: Tuyệt đối KHÔNG dùng từ "slide trước" hay "slide", hãy nối mạch kiến thức tự nhiên)\n\n${slidesContent}`
+                ? (isEnglish
+                    ? `[Previous topic for natural transition: "${previousSlideBridge}"]\n(Note: NEVER use the word "slide", transition naturally)\n\n${slidesContent}`
+                    : `[Chủ đề vừa giải thích ở phần trước để nối mạch tự nhiên: "${previousSlideBridge}"]\n(Lưu ý: Tuyệt đối KHÔNG dùng từ "slide trước" hay "slide", hãy nối mạch kiến thức tự nhiên)\n\n${slidesContent}`)
                 : slidesContent;
 
-            const langInstruction = language === 'en'
-                ? 'Generate natural, academic, spoken English speaker notes for university lectures.'
-                : 'Soạn lời giảng bằng tiếng Việt chuẩn mực, khẩu ngữ sư phạm tự nhiên như giảng viên đại học đang giảng trực tiếp.';
+            const prompt = isEnglish ? `**Task: Compose Academic English Lecture Transcripts (Speaker Notes) For Each Slide**
 
-            const prompt = `**Nhiệm vụ: Soạn Lời Giảng Sư Phạm Cho Từng Slide Thuyết Trình (Academic Lecture Transcript)**
+You are a distinguished university professor delivering an inspiring, academic lecture in English.
+Your task is to write spoken lecture transcripts (speaker notes) for each slide in FLUENT, NATURAL ENGLISH.
+
+CRITICAL INSTRUCTIONS:
+1. **100% ENGLISH ONLY:** All speaker notes MUST be written entirely in fluent, professional, academic English.
+2. **Translate & Explain:** If slide titles, bullet points, or instructor notes are in Vietnamese, translate all terms, concepts, and explanations accurately into standard English academic terminology.
+3. **Spoken Lecture Style:** Write naturally as a real lecturer speaking directly to university students in an interactive auditorium.
+
+**Lecture Information:**
+- Presentation: ${session.fileName}
+- Target Language: 100% ENGLISH
+
+**Slide Content to compose:**
+${promptContent}
+
+---
+
+## ⏱️ LENGTH & PACING STANDARDS:
+- **Core content slides:** **180 – 220 words** (~1.5 – 2.0 minutes standard speaking pace).
+- **Title / Objectives / Summary / Thank You slides:** **60 – 100 words** (30 – 45 seconds).
+- ⚠️ Do NOT write shorter than 120 words for content slides, and do not exceed 230 words.
+
+## 🎓 STRUCTURE OF AN ACADEMIC LECTURE SEGMENT:
+1. Engaging opening connecting to real-world applications or posing the core problem (1–2 sentences).
+2. Deep dive into principles, mechanisms, and vivid pedagogical examples (3–4 sentences).
+3. Practical tips, common pitfalls, or best practices (1–2 sentences).
+4. Smooth transition to the next concept (1 sentence).
+
+## 🚫 STRICT RULES:
+- ❌ **NEVER use the word "slide":** Do NOT say "on this slide", "as seen on the slide", "next slide", "in this presentation". Instead say: "Here we observe...", "Examining this architecture...", "Next, let us explore...".
+- ❌ **Do not overuse "you guys" or repetitive "everyone":** Use "we", active scholarly voice ("Notice that...", "It is vital to understand that...").
+- ❌ **Avoid clichéd AI buzzwords:** "delve into", "testament", "beacon", "game-changer", "dive right in", "unlock".
+
+---
+
+## OUTPUT FORMAT (STRICT JSON ONLY):
+\`\`\`json
+{
+  "speakerNotes": [
+    {
+      "slideIndex": 0,
+      "speakerNote": "Welcome everyone. In today's session, we examine the fundamental computational architecture of NumPy..."
+    }
+  ]
+}
+\`\`\`
+Return JSON only.`
+                : `**Nhiệm vụ: Soạn Lời Giảng Sư Phạm Cho Từng Slide Thuyết Trình (Academic Lecture Transcript)**
 
 Bạn là một giảng viên đại học giàu kinh nghiệm, uyên bác và truyền cảm hứng.
 Hãy chuyển đổi nội dung tóm tắt trên slide thành lời giảng nói trực tiếp trong lớp học cho từng slide dưới đây.
 
-${langInstruction}
+Soạn lời giảng bằng tiếng Việt chuẩn mực, khẩu ngữ sư phạm tự nhiên như giảng viên đại học đang giảng trực tiếp.
 
 **Thông tin bài giảng:**
 - Tên tệp: ${session.fileName}
-- Ngôn ngữ: ${language === 'en' ? 'English' : 'Tiếng Việt'}
+- Ngôn ngữ yêu cầu: TIẾNG VIỆT (Chuẩn mực sư phạm)
 
 **Nội dung các slide cần soạn:**
 ${promptContent}
@@ -465,6 +538,7 @@ Return JSON only.`;
                                 target.noteVN = cleanedText;
                             }
                             target.noteFull = cleanedText;
+                            target.hasDual = !!(target.noteVN?.trim() && target.noteEN?.trim());
                             if (target.audioStatus === 'done' || target.audioStatus === 'error') {
                                 target.audioStatus = 'pending';
                             }
@@ -478,7 +552,10 @@ Return JSON only.`;
 
                     await this.prisma.pptxAudioSession.update({
                         where: { id: sessionId },
-                        data: { slidesJson: JSON.stringify(slides) },
+                        data: {
+                            slidesJson: JSON.stringify(slides),
+                            language: language,
+                        },
                     });
                 }
             } catch (err: any) {
@@ -491,6 +568,7 @@ Return JSON only.`;
             data: {
                 slidesJson: JSON.stringify(slides),
                 status: 'notes_ready',
+                language: language,
             },
         });
 
@@ -545,13 +623,42 @@ Return JSON only.`;
                 `Đang tối ưu & kiểm duyệt nhịp điệu đọc TTS (Slide ${batchStart} - ${batchEnd} / ${slidesWithNotes.length})...`,
             );
 
+            const isEnglish = language === 'en';
+
             const slidesContent = batch.map(s => {
-                const currentNote = (language === 'en' ? s.noteEN : s.noteVN)?.trim() || s.noteFull?.trim();
+                const currentNote = (isEnglish ? s.noteEN : s.noteVN)?.trim() || s.noteFull?.trim();
                 const contentLines = Array.isArray(s.content) ? s.content.join(', ') : (s.content || '');
-                return `--- Slide ${s.index + 1} (Index: ${s.index}) ---\nTiêu đề: ${s.title}\nNội dung slide: ${contentLines}\nLời giảng hiện tại cần tối ưu:\n"${currentNote}"`;
+                return isEnglish
+                    ? `--- Slide ${s.index + 1} (Index: ${s.index}) ---\nTitle: ${s.title}\nSlide Content: ${contentLines}\nCurrent English Note to polish:\n"${currentNote}"`
+                    : `--- Slide ${s.index + 1} (Index: ${s.index}) ---\nTiêu đề: ${s.title}\nNội dung slide: ${contentLines}\nLời giảng hiện tại cần tối ưu:\n"${currentNote}"`;
             }).join('\n\n');
 
-            const prompt = `**Tối Ưu & Kiểm Duyệt Lời Giảng Cho Giọng Đọc AI (TTS Polish & Duration Control)**
+            const prompt = isEnglish ? `**TTS Voice Polish & Duration Control (Academic English Lecture)**
+
+You are a Voice Director and Pedagogical Specialist. Polish the following English speaker notes so they sound natural, engaging, and clear when converted into speech via Text-To-Speech (AI voice):
+1. **Natural Pacing & Breath Marks:** Add natural commas (,) and periods (.) so that the AI voice pauses and breathes naturally without rushing or sounding robotic.
+2. **Pronunciation Clarity:** Ensure all acronyms, technical terms, and formulas are written in phonetic or clear forms suitable for English TTS engines.
+3. **Pacing & Length:** Maintain 180 – 220 words per content slide (~1.5 – 2.0 minutes). Do not bloat or remove core substance.
+4. **Clean AI Clichés & Strict Rule:** NEVER use the word "slide".
+
+**Slide Notes to Polish:**
+${slidesContent}
+
+---
+
+## OUTPUT FORMAT (STRICT JSON ONLY):
+\`\`\`json
+{
+  "speakerNotes": [
+    {
+      "slideIndex": 0,
+      "speakerNote": "Polished lecture transcript with natural pauses and cadence..."
+    }
+  ]
+}
+\`\`\`
+Return JSON only.`
+                : `**Tối Ưu & Kiểm Duyệt Lời Giảng Cho Giọng Đọc AI (TTS Polish & Duration Control)**
 
 Bạn là Đạo diễn Giọng đọc và Chuyên gia Sư phạm. Hãy trau chuốt các đoạn lời giảng dưới đây để sẵn sàng tạo audio với công cụ Text-To-Speech (ViTTS / AI voice):
 1. **Ngắt nhịp tự nhiên:** Thêm dấu phẩy (,), dấu chấm (.) hợp lý để khi máy đọc có nhịp thở tự nhiên, êm tai, không bị dồn dập hay ngắt quãng vụng về.
@@ -593,12 +700,16 @@ Return JSON only.`;
                                 target.noteVN = cleanedText;
                             }
                             target.noteFull = cleanedText;
+                            target.hasDual = !!(target.noteVN?.trim() && target.noteEN?.trim());
                         }
                     }
 
                     await this.prisma.pptxAudioSession.update({
                         where: { id: sessionId },
-                        data: { slidesJson: JSON.stringify(slides) },
+                        data: {
+                            slidesJson: JSON.stringify(slides),
+                            language: language,
+                        },
                     });
                 }
             } catch (err: any) {
@@ -608,7 +719,10 @@ Return JSON only.`;
 
         await this.prisma.pptxAudioSession.update({
             where: { id: sessionId },
-            data: { slidesJson: JSON.stringify(slides) },
+            data: {
+                slidesJson: JSON.stringify(slides),
+                language: language,
+            },
         });
 
         await this.jobService.updateProgress(jobId, 100, `Hoàn tất tối ưu lời giảng cho ${slidesWithNotes.length} slide!`);

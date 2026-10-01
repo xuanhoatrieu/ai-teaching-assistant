@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import tempfile
 import os
 import json
@@ -80,6 +80,10 @@ class SlideContent(BaseModel):
     audioPath: Optional[str] = None
     speakerNote: Optional[str] = None
     slideType: Optional[str] = "content"
+    layoutType: Optional[str] = "split_standard"
+    isInteractive: Optional[bool] = False
+    interactiveData: Optional[Any] = None
+    extraAudioPath: Optional[str] = None
 
 
 class GeneratePPTXRequest(BaseModel):

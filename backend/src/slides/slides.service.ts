@@ -11,6 +11,8 @@ import { AiProviderService } from '../ai/ai-provider.service';
 import { SlideImageGeneratorService } from '../slide-data/slide-image-generator.service';
 import { FileStorageService } from '../file-storage/file-storage.service';
 import { Lesson } from '@prisma/client';
+import { packageScormZip } from './scorm-export.helper';
+import { packageH5pZip } from './h5p-export.helper';
 
 export interface GenerateSlideResult {
     content: string;
@@ -1090,6 +1092,9 @@ export class SlidesService {
         optimizedContent?: any[],
         content?: string,
         speakerNote?: string,
+        slideType?: string,
+        interactiveData?: any,
+        layoutType?: string,
     ) {
         const slide = await this.prisma.slide.findFirst({
             where: { lessonId, slideIndex },
@@ -1111,6 +1116,15 @@ export class SlidesService {
         }
         if (speakerNote !== undefined && speakerNote !== null) {
             updateData.speakerNote = speakerNote.trim();
+        }
+        if (slideType !== undefined && slideType !== null) {
+            updateData.slideType = slideType.trim();
+        }
+        if (layoutType !== undefined && layoutType !== null) {
+            updateData.layoutType = layoutType.trim();
+        }
+        if (interactiveData !== undefined) {
+            updateData.interactiveData = interactiveData === null ? null : (typeof interactiveData === 'string' ? interactiveData : JSON.stringify(interactiveData));
         }
 
         const updatedSlide = await this.prisma.slide.update({
@@ -1134,6 +1148,287 @@ export class SlidesService {
 
         this.logger.log(`[updateSlideContent] Slide ${slideIndex} updated for lesson ${lessonId}`);
         return updatedSlide;
+    }
+
+    /**
+     * Generate interactive activity for a slide (Listening quiz, dictation, checkpoint quiz, etc.)
+     */
+    async generateSlideInteractions(
+        lessonId: string,
+        slideIndex: number,
+        userId: string,
+        requestedType?: string,
+        options?: {
+            mode?: 'generate_new' | 'extract_existing';
+            sourceType?: 'slide_range' | 'custom_text' | 'current_slide' | 'audio' | 'image';
+            fromSlideIndex?: number;
+            toSlideIndex?: number;
+            customContent?: string;
+            imageBase64?: string;
+            selectedQuestionTypes?: string[];
+            questionCount?: number;
+            passScore?: number;
+            fallbackSlideIndex?: number;
+            allowContinueWithoutPass?: boolean;
+        },
+    ) {
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+            include: { subject: true },
+        });
+
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        const slide = await this.prisma.slide.findUnique({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+        });
+
+        if (!slide) {
+            throw new NotFoundException(`Slide ${slideIndex} not found in lesson ${lessonId}`);
+        }
+
+        let content = '';
+        const isExtractMode = options?.mode === 'extract_existing';
+        const sourceType = options?.sourceType || (isExtractMode ? 'custom_text' : 'current_slide');
+
+        if (sourceType === 'slide_range' && options?.fromSlideIndex && options?.toSlideIndex && !isExtractMode) {
+            const fromIdx = Math.min(Number(options.fromSlideIndex), Number(options.toSlideIndex));
+            const toIdx = Math.max(Number(options.fromSlideIndex), Number(options.toSlideIndex));
+            const rangeSlides = await this.prisma.slide.findMany({
+                where: {
+                    lessonId,
+                    slideIndex: { gte: fromIdx, lte: toIdx },
+                },
+                orderBy: { slideIndex: 'asc' },
+            });
+            content = rangeSlides.map(s => {
+                let sBody = s.content || '';
+                if (s.optimizedContentJson) {
+                    try {
+                        const parsed = JSON.parse(s.optimizedContentJson);
+                        if (Array.isArray(parsed)) {
+                            sBody = parsed.map((p: any) => `${p.emoji || '•'} ${p.point}: ${p.description || ''}`).join('\n');
+                        }
+                    } catch {}
+                }
+                return `[Slide ${s.slideIndex}: ${s.title}]\n${sBody}\n${s.speakerNote ? `Lời giảng: ${s.speakerNote}\n` : ''}`;
+            }).join('\n\n');
+        } else if ((sourceType === 'custom_text' || isExtractMode || sourceType === 'audio' || sourceType === 'image') && options?.customContent) {
+            content = `[Nội dung tài liệu/đề bài do giáo viên cung cấp]:\n${options.customContent}`;
+        } else {
+            if (slide.optimizedContentJson) {
+                try {
+                    const parsed = JSON.parse(slide.optimizedContentJson);
+                    if (Array.isArray(parsed)) {
+                        content = parsed.map((p: any) => `${p.emoji || '•'} ${p.point}: ${p.description || ''}`).join('\n');
+                    }
+                } catch {
+                    content = slide.content || '';
+                }
+            } else {
+                content = slide.content || '';
+            }
+        }
+
+        const hasAudioSample = !!(slide.extraAudioUrl || slide.extraAudioName);
+        const subjectName = lesson.subject?.name || '';
+        const courseName = lesson.subject?.courseName || '';
+        const targetAudience = lesson.subject?.targetAudience || 'Sinh viên đại học';
+
+        const selectedTypes = (options?.selectedQuestionTypes && options.selectedQuestionTypes.length > 0)
+            ? options.selectedQuestionTypes
+            : ['MC', 'TF', 'MR', 'FIB', 'MATCH'];
+
+        const typeLabels: Record<string, string> = {
+            MC: 'Trắc nghiệm đơn 1 đáp án đúng (type: "MC", options: 4 lựa chọn A, B, C, D, correctAnswer: "chuỗi đáp án đúng")',
+            TF: 'Đúng hay Sai (type: "TF", options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai")',
+            MR: 'Nhiều lựa chọn đúng (type: "MR", options: 4 lựa chọn, correctAnswers: [mảng chứa các đáp án đúng])',
+            FIB: 'Điền khuyết thuật ngữ vào chỗ trống (type: "FIB", question: câu hỏi chứa ký hiệu [.....], correctAnswer: "từ hoặc thuật ngữ cần điền")',
+            MATCH: 'Nối cặp tương ứng hai vế A và B (type: "MATCH", question: "Yêu cầu nối...", pairs: [ { "left": "Khái niệm/Thuật ngữ vế A", "right": "Định nghĩa/Ý nghĩa vế B tương ứng" }, ... ])',
+        };
+
+        const typesRequirementText = selectedTypes.map(t => `- ${typeLabels[t] || t}`).join('\n');
+        const questionCount = options?.questionCount ? Number(options.questionCount) : 5;
+        const passScore = options?.passScore !== undefined ? Number(options.passScore) : (questionCount >= 5 ? 4 : Math.max(1, questionCount - 1));
+        const fallbackSlideIndex = options?.fallbackSlideIndex !== undefined ? Number(options.fallbackSlideIndex) : (options?.fromSlideIndex || Math.max(1, slide.slideIndex - 1));
+
+        let promptText = '';
+
+        if (isExtractMode) {
+            promptText = `
+Bạn là CHUYÊN GIA SỐ HÓA VÀ TRÍCH XUẤT ĐỀ THI TỰ ĐỘNG (EXAM QUESTION EXTRACTOR) theo chuẩn Moodle / SCORM / H5P.
+Giáo viên ĐÃ CÓ SẴN CÂU HỎI TRONG TÀI LIỆU DƯỚI ĐÂY. Nhiệm vụ của bạn là ĐỌC VÀ TRÍCH XUẤT CHÍNH XÁC CÁC CÂU HỎI ĐÓ, KHÔNG TỰ BỊA RA CÂU HỎI MỚI.
+
+TÀI LIỆU / ĐỀ BÀI DO GIÁO VIÊN CUNG CẤP:
+${content || '(Chưa có nội dung đề bài dạng text)'}
+${options?.imageBase64 ? '\n[LƯU Ý ĐẶC BIỆT TỪ ẢNH ĐÍNH KÈM]: Giáo viên có gửi kèm HÌNH ẢNH CHỤP ĐỀ BÀI / SÁCH BÀI TẬP. Bạn hãy OCR đọc thật kỹ chữ và câu hỏi từ hình ảnh được đính kèm này để trích xuất đầy đủ, chính xác từng câu hỏi và đáp án!\n' : ''}
+QUY TẮC TRÍCH XUẤT BẮT BUỘC:
+1. TRÍCH XUẤT NGUYÊN VĂN: Giữ đúng câu hỏi, các phương án lựa chọn (A, B, C, D...) và nội dung nguyên bản của giáo viên. KHÔNG tự chế câu hỏi khác nếu tài liệu đã có câu hỏi.
+2. PHÂN LOẠI DẠNG CÂU HỎI CHÍNH XÁC:
+   - "MC": Trắc nghiệm 1 đáp án đúng (Single Choice, options: danh sách lựa chọn, correctAnswer: "đáp án đúng").
+   - "TF": Đúng hay Sai (True/False, options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai").
+   - "MR": Trắc nghiệm nhiều đáp án đúng (Multiple Response, options: danh sách lựa chọn, correctAnswers: mảng các đáp án đúng).
+   - "FIB": Điền khuyết từ vào chỗ trống (Fill in the Blank, question có ký hiệu [.....], correctAnswer: từ cần điền).
+   - "MATCH": Nối cặp tương ứng hai vế A và B (Matching Pairs, pairs: mảng các cặp đối xứng [ { "left": "vế A", "right": "vế B tương ứng" } ]).
+3. XÁC ĐỊNH ĐÁP ÁN ĐÚNG:
+   - Nếu trong văn bản đề bài có ghi rõ đáp án (ví dụ: dòng "Đáp án: A", hoặc có dấu *, gạch chân, in đậm, [x]), hãy lấy đúng đáp án đó.
+   - Nếu đề bài chưa ghi đáp án, bạn hãy giải và xác định đáp án chính xác 100%, kèm giải thích ngắn gọn (explanation).
+4. SỐ LƯỢNG & CHUẨN ĐẠT:
+   - Trích xuất toàn bộ các câu hỏi có trong tài liệu (ưu tiên trích xuất đầy đủ, nếu đề bài dài có thể lấy tối đa ${questionCount} câu).
+   - Chuẩn đạt tối thiểu (passScore): ${passScore}.
+   - Slide quay lại ôn tập nếu không đạt: Slide ${fallbackSlideIndex}.
+
+YÊU CẦU ĐẦU RA:
+Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài block json, không giải thích ngoài JSON) theo định dạng:
+{
+  "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
+  "badgeLabel": "${hasAudioSample ? '🎧 Bài tập nghe hiểu' : '🎯 Kiểm tra kiến thức (Chặn bài)'}",
+  "instruction": "Hãy trả lời các câu hỏi kiểm tra dưới đây",
+  "passScore": ${passScore},
+  "totalQuestions": ${questionCount},
+  "fallbackSlideIndex": ${fallbackSlideIndex},
+  "allowContinueWithoutPass": ${options?.allowContinueWithoutPass === true},
+  "hideSolutions": ${!hasAudioSample},
+  "questions": [
+    {
+      "id": "q1",
+      "type": "MC",
+      "question": "Nội dung câu hỏi nguyên bản...",
+      "options": ["Lựa chọn A", "Lựa chọn B", "Lựa chọn C", "Lựa chọn D"],
+      "correctAnswer": "Lựa chọn A",
+      "explanation": "Giải thích chi tiết..."
+    },
+    {
+      "id": "q2",
+      "type": "MATCH",
+      "question": "Nối các thuật ngữ sau với định nghĩa tương ứng:",
+      "pairs": [
+        { "left": "Thuật ngữ 1", "right": "Định nghĩa 1" },
+        { "left": "Thuật ngữ 2", "right": "Định nghĩa 2" }
+      ],
+      "explanation": "Giải thích các cặp nối..."
+    }
+  ]
+}
+`;
+        } else {
+            promptText = `
+Bạn là chuyên gia thiết kế sư phạm và học liệu điện tử tương tác cao (Instructional Designer) theo chuẩn Moodle / H5P / SCORM.
+Hãy tạo 1 hoạt động tương tác (Interactive Activity) tốt nhất cho Slide học sau:
+
+THÔNG TIN BÀI HỌC:
+- Môn học: ${subjectName} (${courseName})
+- Đối tượng: ${targetAudience}
+- Bài học: ${lesson.title}
+- Slide số: ${slide.slideIndex}
+- Tiêu đề slide: ${slide.title}
+${sourceType === 'slide_range' ? `- NGUỒN KIẾN THỨC TỔNG HỢP TỪ CÁC SLIDE (${options?.fromSlideIndex} ĐẾN ${options?.toSlideIndex}):` : '- Nội dung kiến thức nguồn:'}
+${content || '(Dựa vào tiêu đề slide)'}
+${slide.speakerNote && sourceType !== 'slide_range' ? `- Lời giảng thuyết minh: ${slide.speakerNote}` : ''}
+${hasAudioSample ? `- Slide có TỆP ÂM THANH MẪU: "${slide.extraAudioName || 'Audio mẫu'}" (Hãy ưu tiên tạo bài tập nghe hiểu hoặc nghe chép chính tả dựa trên ngữ cảnh này!)` : ''}
+${requestedType ? `- Loại tương tác được yêu cầu: ${requestedType}` : ''}
+
+QUY ĐỊNH BẮT BUỘC VỀ DẠNG CÂU HỎI:
+CHỈ ĐƯỢC TẠO các câu hỏi thuộc đúng các dạng sau đây:
+${typesRequirementText}
+TUYỆT ĐỐI KHÔNG sinh dạng câu hỏi nằm ngoài danh sách được phép trên!
+
+YÊU CẦU SỐ LƯỢNG & CHUẨN ĐẠT:
+- Hãy sinh CHÍNH XÁC đúng ${questionCount} câu hỏi (phân bố đều các dạng đã chọn ở trên).
+- Chuẩn đạt tối thiểu: ${passScore}/${questionCount} câu.
+- Slide quay lại ôn tập nếu không đạt: Slide ${fallbackSlideIndex}.
+- Chính sách cho phép qua slide: ${options?.allowContinueWithoutPass ? 'Cho phép sinh viên tiếp tục học kể cả chưa đạt điểm chuẩn' : 'Bắt buộc đạt chuẩn mới được qua slide'}.
+
+YÊU CẦU ĐẦU RA:
+Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài block json, không giải thích thêm) theo định dạng:
+{
+  "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
+  "badgeLabel": "${hasAudioSample ? '🎧 Bài tập nghe hiểu' : (options?.allowContinueWithoutPass ? '📝 Luyện tập & Khảo sát quan điểm' : '🎯 Kiểm tra kiến thức (Chặn bài)')}",
+  "instruction": "Hướng dẫn ngắn gọn cho sinh viên thực hiện bài tập",
+  "passScore": ${passScore},
+  "totalQuestions": ${questionCount},
+  "fallbackSlideIndex": ${fallbackSlideIndex},
+  "allowContinueWithoutPass": ${options?.allowContinueWithoutPass === true},
+  "hideSolutions": ${!hasAudioSample},
+  "questions": [
+    {
+      "id": "q1",
+      "type": "${selectedTypes[0] || 'MC'}",
+      "question": "Nội dung câu hỏi...",
+      "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+      "correctAnswer": "Đáp án A",
+      "explanation": "Giải thích chi tiết..."
+    }
+  ]
+}
+`;
+        }
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
+        const aiResult = await this.aiProvider.generateText(promptText, modelConfig.modelName, userId, { imageBase64: options?.imageBase64 });
+        const rawContent = aiResult.content;
+
+        let parsedInteractive: any = null;
+        try {
+            const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, rawContent];
+            const cleanJson = (jsonMatch[1] || rawContent).trim();
+            parsedInteractive = JSON.parse(cleanJson);
+        } catch (err) {
+            this.logger.error(`Failed to parse AI interactive JSON: ${err.message}. Raw: ${rawContent}`);
+            parsedInteractive = {
+                activityType: requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz'),
+                badgeLabel: hasAudioSample ? '🎧 Bài tập nghe hiểu' : (options?.allowContinueWithoutPass ? '📝 Luyện tập & Khảo sát quan điểm' : '🎯 Kiểm tra kiến thức (Chặn bài)'),
+                instruction: 'Trả lời các câu hỏi kiểm tra kiến thức để mở khóa bài học tiếp theo',
+                passScore: passScore,
+                totalQuestions: questionCount,
+                fallbackSlideIndex: fallbackSlideIndex,
+                allowContinueWithoutPass: options?.allowContinueWithoutPass === true,
+                hideSolutions: !hasAudioSample,
+                questions: [
+                    {
+                        id: 'q1',
+                        type: 'MC',
+                        question: `Kiến thức trọng tâm của ${slide.title} là gì?`,
+                        options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+                        correctAnswer: 'Phương án A',
+                        explanation: 'Vui lòng xem lại nội dung bài học để nắm rõ kiến thức.'
+                    },
+                    {
+                        id: 'q2',
+                        type: 'TF',
+                        question: `Nhận định: "${slide.title} đóng vai trò quan trọng trong học phần" là Đúng hay Sai?`,
+                        options: ['Đúng', 'Sai'],
+                        correctAnswer: 'Đúng',
+                        explanation: 'Đây là nhận định chính xác theo giáo trình.'
+                    }
+                ]
+            };
+        }
+
+        parsedInteractive.passScore = passScore;
+        parsedInteractive.fallbackSlideIndex = fallbackSlideIndex;
+        parsedInteractive.allowContinueWithoutPass = options?.allowContinueWithoutPass === true;
+        parsedInteractive.totalQuestions = parsedInteractive.questions?.length || questionCount;
+
+        const newSlideType = requestedType || (hasAudioSample ? 'interactive_audio' : 'checkpoint_quiz');
+        const newLayoutType = hasAudioSample ? 'audio_lab' : 'checkpoint_gate';
+
+        const updatedSlide = await this.prisma.slide.update({
+            where: { lessonId_slideIndex: { lessonId, slideIndex } },
+            data: {
+                interactiveData: JSON.stringify(parsedInteractive),
+                slideType: newSlideType,
+                layoutType: newLayoutType,
+            } as any,
+        });
+
+        this.logger.log(`[generateSlideInteractions] Successfully generated interaction for slide ${slideIndex} in lesson ${lessonId}`);
+        return {
+            ...updatedSlide,
+            interactiveDataParsed: parsedInteractive,
+        };
     }
 
     /**
@@ -1254,7 +1549,7 @@ export class SlidesService {
      */
     async createSlide(
         lessonId: string,
-        dto: { title?: string; content?: string; speakerNote?: string; insertAfterIndex?: number; }
+        dto: { title?: string; content?: string; speakerNote?: string; slideType?: string; layoutType?: string; interactiveData?: any; insertAfterIndex?: number; }
     ): Promise<any> {
         const existingSlides = await this.prisma.slide.findMany({
             where: { lessonId },
@@ -1300,9 +1595,11 @@ export class SlidesService {
                 title,
                 content: dto.content || '',
                 speakerNote: dto.speakerNote || '',
-                slideType: 'content',
+                slideType: dto.slideType || 'content',
+                layoutType: dto.layoutType || (dto.slideType === 'checkpoint_quiz' ? 'checkpoint_gate' : (dto.slideType === 'interactive_audio' ? 'audio_lab' : 'split_standard')),
+                interactiveData: dto.interactiveData ? (typeof dto.interactiveData === 'string' ? dto.interactiveData : JSON.stringify(dto.interactiveData)) : null,
                 status: 'draft',
-            },
+            } as any,
         });
 
         // Also create matching SlideAudio slot
@@ -1537,6 +1834,177 @@ export class SlidesService {
         });
 
         return updatedSlide;
+    }
+
+    /**
+     * Export lesson as ADL SCORM 1.2 ZIP package for Moodle LMS
+     */
+    async exportScorm(lessonId: string, res: any) {
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+        });
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        const slides = await this.prisma.slide.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        const slideAudios = await this.prisma.slideAudio.findMany({
+            where: { lessonId },
+        });
+        const audioMap = new Map(slideAudios.map(a => [a.slideIndex, a.audioUrl]));
+
+        const enrichedSlides = slides.map(s => ({
+            ...s,
+            audioUrl: s.audioUrl || audioMap.get(s.slideIndex) || '',
+        }));
+
+        const safeTitle = (lesson.title || 'lesson')
+            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
+            .replace(/\s+/g, '_');
+        const zipFileName = `${safeTitle}_SCORM_1.2.zip`;
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
+
+        await packageScormZip(lesson.title, lessonId, enrichedSlides, res);
+    }
+
+    /**
+     * Export lesson as H5P Course Presentation package (.h5p) for Moodle LMS
+     */
+    async exportH5p(lessonId: string, res: any) {
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+        });
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        const slides = await this.prisma.slide.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        const slideAudios = await this.prisma.slideAudio.findMany({
+            where: { lessonId },
+        });
+        const audioMap = new Map(slideAudios.map(a => [a.slideIndex, a.audioUrl]));
+
+        const enrichedSlides = slides.map(s => ({
+            ...s,
+            audioUrl: s.audioUrl || audioMap.get(s.slideIndex) || '',
+        }));
+
+        const safeTitle = (lesson.title || 'lesson')
+            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
+            .replace(/\s+/g, '_');
+        const h5pFileName = `${safeTitle}_H5P.h5p`;
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(h5pFileName)}"`);
+
+        await packageH5pZip(lesson.title, enrichedSlides, res);
+    }
+
+    /**
+     * Export all interactive & checkpoint questions as Moodle Quiz XML (.xml)
+     */
+    async exportMoodleXml(lessonId: string, res: any) {
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+        });
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        const slides = await this.prisma.slide.findMany({
+            where: { lessonId },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        const questions: any[] = [];
+        for (const slide of slides) {
+            const rawInteractive = (slide as any).interactiveData;
+            if (!rawInteractive) continue;
+            try {
+                const data = typeof rawInteractive === 'string'
+                    ? JSON.parse(rawInteractive)
+                    : rawInteractive;
+                const qList = Array.isArray(data.questions) ? data.questions : [];
+                qList.forEach((q: any, qIdx: number) => {
+                    questions.push({
+                        slideIndex: slide.slideIndex,
+                        slideTitle: slide.title,
+                        questionId: `Slide${slide.slideIndex}-Q${qIdx + 1}`,
+                        question: q.question,
+                        correctAnswer: q.correctAnswer,
+                        options: q.options || [],
+                        explanation: q.explanation || '',
+                        type: q.type || 'MC',
+                        badgeLabel: data.badgeLabel || 'Hoạt động tương tác',
+                    });
+                });
+            } catch (e) {
+                this.logger.warn(`Failed to parse interactiveData for slide ${slide.slideIndex}`);
+            }
+        }
+
+        const safeTitle = (lesson.title || 'lesson')
+            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
+            .replace(/\s+/g, '_');
+
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<quiz>\n`;
+        xml += `  <question type="category">\n    <category>\n      <text>$course$/top/${safeTitle}</text>\n    </category>\n  </question>\n\n`;
+
+        for (const q of questions) {
+            const otherOptions = (q.options || []).filter((opt: string) => opt.trim() !== (q.correctAnswer || '').trim());
+            const feedbackParts = [`<strong>Đáp án đúng là: </strong>${q.correctAnswer}`];
+            if (q.explanation) {
+                feedbackParts.push(`<strong>Vì: </strong>${q.explanation}`);
+            }
+            const feedbackHtml = feedbackParts.map((p) => `<p>${p}</p>`).join('\n      ');
+
+            xml += `  <question type="multichoice">\n`;
+            xml += `    <name><text><![CDATA[Slide ${q.slideIndex}: ${q.question.substring(0, 120)}]]></text></name>\n`;
+            xml += `    <questiontext format="html">\n`;
+            xml += `      <text><![CDATA[<p><strong>[${q.badgeLabel} - Slide ${q.slideIndex}: ${q.slideTitle}]</strong></p><p>${q.question}</p>]]></text>\n`;
+            xml += `    </questiontext>\n`;
+            xml += `    <generalfeedback format="html">\n`;
+            xml += `      <text><![CDATA[${feedbackHtml}]]></text>\n`;
+            xml += `    </generalfeedback>\n`;
+            xml += `    <defaultgrade>1.0000000</defaultgrade>\n`;
+            xml += `    <penalty>0.3333333</penalty>\n`;
+            xml += `    <hidden>0</hidden>\n`;
+            xml += `    <single>true</single>\n`;
+            xml += `    <shuffleanswers>true</shuffleanswers>\n`;
+            xml += `    <answernumbering>ABCD</answernumbering>\n`;
+
+            // Correct answer
+            xml += `    <answer fraction="100" format="html">\n`;
+            xml += `      <text><![CDATA[<p>${q.correctAnswer}</p>]]></text>\n`;
+            xml += `      <feedback format="html"><text><![CDATA[<p>Chính xác!</p>]]></text></feedback>\n`;
+            xml += `    </answer>\n`;
+
+            // Distractors
+            for (const distractor of otherOptions) {
+                xml += `    <answer fraction="0" format="html">\n`;
+                xml += `      <text><![CDATA[<p>${distractor}</p>]]></text>\n`;
+                xml += `      <feedback format="html"><text><![CDATA[<p>Chưa chính xác.</p>]]></text></feedback>\n`;
+                xml += `    </answer>\n`;
+            }
+            xml += `  </question>\n\n`;
+        }
+
+        xml += `</quiz>\n`;
+
+        const fileName = `${safeTitle}_moodle_quiz.xml`;
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
+        res.send(xml);
     }
 }
 

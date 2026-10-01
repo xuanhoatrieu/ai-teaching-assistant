@@ -472,15 +472,372 @@ class PPTXGeneratorService:
             except Exception as e:
                 print(f"[PPTX] Could not add agenda image: {e}")
     
+    def _populate_bullets_or_content(self, text_frame, bullets, content, title_pt=20, desc_pt=16):
+        """Helper to render formatted bullets or fallback string content into a text frame"""
+        text_frame.clear()
+        text_frame.word_wrap = True
+        
+        if bullets:
+            for bullet in bullets:
+                emoji = bullet.get('emoji', '')
+                point = bullet.get('point', '')
+                description = bullet.get('description', '')
+                
+                if point:
+                    p_point = text_frame.add_paragraph()
+                    p_point.text = f"{emoji} {point}".strip()
+                    p_point.font.name = "Arial"
+                    p_point.font.bold = True
+                    p_point.font.size = Pt(title_pt)
+                    p_point.font.color.rgb = RGBColor(26, 77, 46)
+                    p_point.space_after = Pt(2)
+                    
+                    if description:
+                        p_desc = text_frame.add_paragraph()
+                        p_desc.text = description
+                        p_desc.font.name = "Arial"
+                        p_desc.font.size = Pt(desc_pt)
+                        p_desc.font.color.rgb = RGBColor(50, 60, 55)
+                        p_desc.space_before = Pt(0)
+                        p_desc.space_after = Pt(6)
+                        p_desc.level = 1
+                else:
+                    p_point = text_frame.add_paragraph()
+                    p_point.text = description
+                    p_point.font.name = "Arial"
+                    p_point.font.size = Pt(desc_pt)
+                    p_point.font.color.rgb = RGBColor(50, 60, 55)
+                    p_point.space_after = Pt(6)
+        elif content:
+            for item in content:
+                p = text_frame.add_paragraph()
+                p.text = f"• {item}" if not item.startswith('•') else item
+                p.font.name = "Arial"
+                p.font.size = Pt(desc_pt)
+                p.font.color.rgb = RGBColor(50, 60, 55)
+                p.space_after = Pt(6)
+
+    def _render_layout_split_standard(self, slide, title, bullets, content, image_path, has_image):
+        """1. Split Standard: Text trái 4.5\", Image phải 4.5\""""
+        if has_image:
+            content_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(4.5), Inches(4.0))
+        else:
+            content_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9.0), Inches(4.0))
+        self._populate_bullets_or_content(content_shape.text_frame, bullets, content, title_pt=21, desc_pt=17)
+        if has_image:
+            try:
+                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.5))
+            except Exception as e:
+                print(f"[PPTX] Could not add picture {image_path}: {e}")
+
+    def _render_layout_split_reversed(self, slide, title, bullets, content, image_path, has_image):
+        """2. Split Reversed: Image trái 4.5\", Text phải 4.5\""""
+        if has_image:
+            try:
+                slide.shapes.add_picture(image_path, Inches(0.5), Inches(1.0), height=Inches(4.5))
+            except Exception as e:
+                print(f"[PPTX] Could not add picture {image_path}: {e}")
+            content_shape = slide.shapes.add_textbox(Inches(5.2), Inches(1.2), Inches(4.5), Inches(4.0))
+        else:
+            content_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9.0), Inches(4.0))
+        self._populate_bullets_or_content(content_shape.text_frame, bullets, content, title_pt=21, desc_pt=17)
+
+    def _render_layout_comparison_3col(self, slide, title, bullets, content, image_path, has_image):
+        """3. Comparison 3-Column: 3 Bento Cards song song"""
+        col_lefts = [Inches(0.5), Inches(3.6), Inches(6.7)]
+        col_w = Inches(2.8)
+        col_h = Inches(4.0)
+        col_y = Inches(1.2)
+        
+        # Prepare 3 data items
+        items = []
+        if bullets and len(bullets) >= 3:
+            items = bullets[:3]
+        elif content and len(content) >= 3:
+            for c in content[:3]:
+                parts = c.split(':', 1) if ':' in c else [c, '']
+                items.append({'emoji': '📌', 'point': parts[0].replace('•', '').strip(), 'description': parts[1].strip()})
+        else:
+            # Fallback spread
+            src = bullets if bullets else [{'point': c, 'description': ''} for c in content]
+            for i in range(3):
+                items.append(src[i % len(src)] if src else {'point': f'Mục {i+1}', 'description': ''})
+                
+        for idx, item in enumerate(items[:3]):
+            card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, col_lefts[idx], col_y, col_w, col_h)
+            card.fill.solid()
+            card.fill.fore_color.rgb = RGBColor(247, 250, 248)
+            card.line.color.rgb = RGBColor(185, 215, 198)
+            card.line.width = Pt(1.5)
+            
+            tf = card.text_frame
+            tf.word_wrap = True
+            tf.margin_left = Inches(0.2)
+            tf.margin_right = Inches(0.2)
+            tf.margin_top = Inches(0.25)
+            
+            p_head = tf.paragraphs[0]
+            emoji = item.get('emoji', '📌')
+            point = item.get('point', f'Cột {idx+1}')
+            p_head.text = f"{emoji} {point}".strip()
+            p_head.font.name = "Arial"
+            p_head.font.bold = True
+            p_head.font.size = Pt(17)
+            p_head.font.color.rgb = RGBColor(26, 77, 46)
+            p_head.space_after = Pt(8)
+            
+            p_body = tf.add_paragraph()
+            p_body.text = item.get('description', '')
+            p_body.font.name = "Arial"
+            p_body.font.size = Pt(13)
+            p_body.font.color.rgb = RGBColor(50, 60, 55)
+
+    def _render_layout_hero_infographic(self, slide, title, bullets, content, image_path, has_image):
+        """4. Hero Infographic: Visual/Hero lớn trên, 3 thẻ takeaways dưới"""
+        if has_image:
+            try:
+                slide.shapes.add_picture(image_path, Inches(2.2), Inches(1.1), height=Inches(2.3))
+            except Exception as e:
+                print(f"[PPTX] Hero infographic picture failed: {e}")
+        else:
+            hero_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(1.1), Inches(9.0), Inches(2.3))
+            hero_box.fill.solid()
+            hero_box.fill.fore_color.rgb = RGBColor(238, 246, 241)
+            hero_box.line.color.rgb = RGBColor(140, 195, 160)
+            hero_box.line.width = Pt(1.5)
+            tf = hero_box.text_frame
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            first_text = bullets[0].get('description') if bullets else (content[0] if content else title)
+            p.text = f"💡 {first_text}"
+            p.font.name = "Arial"
+            p.font.bold = True
+            p.font.size = Pt(19)
+            p.font.color.rgb = RGBColor(26, 77, 46)
+            p.alignment = PP_ALIGN.CENTER
+            
+        # Bottom 3 takeaway cards
+        col_lefts = [Inches(0.5), Inches(3.6), Inches(6.7)]
+        col_w = Inches(2.8)
+        takeaway_items = (bullets[1:4] if bullets and len(bullets) > 1 else bullets[:3]) or [{'point': c, 'description': ''} for c in content[:3]]
+        while len(takeaway_items) < 3:
+            takeaway_items.append({'point': f'Điểm nhấn {len(takeaway_items)+1}', 'description': 'Tóm tắt bài học'})
+            
+        for idx, item in enumerate(takeaway_items[:3]):
+            card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, col_lefts[idx], Inches(3.6), col_w, Inches(1.6))
+            card.fill.solid()
+            card.fill.fore_color.rgb = RGBColor(255, 255, 255)
+            card.line.color.rgb = RGBColor(190, 215, 202)
+            card.line.width = Pt(1.2)
+            tf = card.text_frame
+            tf.word_wrap = True
+            tf.margin_left = Inches(0.15)
+            tf.margin_right = Inches(0.15)
+            tf.margin_top = Inches(0.15)
+            
+            p_head = tf.paragraphs[0]
+            p_head.text = f"✅ {item.get('point', '')}".strip()
+            p_head.font.name = "Arial"
+            p_head.font.bold = True
+            p_head.font.size = Pt(14)
+            p_head.font.color.rgb = RGBColor(26, 77, 46)
+            
+            if item.get('description'):
+                p_body = tf.add_paragraph()
+                p_body.text = item.get('description', '')
+                p_body.font.name = "Arial"
+                p_body.font.size = Pt(11)
+                p_body.font.color.rgb = RGBColor(70, 80, 75)
+
+    def _render_layout_process_steps(self, slide, title, bullets, content, image_path, has_image):
+        """5. Process Steps: Timeline các bước (Node tròn số) + Visual phải"""
+        items = bullets if bullets else [{'point': c, 'description': ''} for c in content]
+        step_items = items[:4] if items else [{'point': 'Bước 1', 'description': ''}]
+        
+        # Left timeline
+        y_start = 1.2
+        step_gap = 0.95
+        for k, item in enumerate(step_items):
+            cur_y = y_start + (k * step_gap)
+            # Oval number circle
+            circle = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(0.5), Inches(cur_y), Inches(0.42), Inches(0.42))
+            circle.fill.solid()
+            circle.fill.fore_color.rgb = RGBColor(26, 120, 70)
+            circle.line.fill.background()
+            p_num = circle.text_frame.paragraphs[0]
+            p_num.text = str(k + 1)
+            p_num.font.name = "Arial"
+            p_num.font.bold = True
+            p_num.font.size = Pt(13)
+            p_num.font.color.rgb = RGBColor(255, 255, 255)
+            p_num.alignment = PP_ALIGN.CENTER
+            
+            # Step card textbox
+            step_box = slide.shapes.add_textbox(Inches(1.02), Inches(cur_y - 0.05), Inches(3.9), Inches(0.85))
+            tf = step_box.text_frame
+            tf.word_wrap = True
+            p_title = tf.paragraphs[0]
+            emoji = item.get('emoji', '')
+            point = item.get('point', f'Bước {k+1}')
+            p_title.text = f"{emoji} {point}".strip()
+            p_title.font.name = "Arial"
+            p_title.font.bold = True
+            p_title.font.size = Pt(15)
+            p_title.font.color.rgb = RGBColor(26, 77, 46)
+            
+            if item.get('description'):
+                p_desc = tf.add_paragraph()
+                p_desc.text = item.get('description', '')
+                p_desc.font.name = "Arial"
+                p_desc.font.size = Pt(12)
+                p_desc.font.color.rgb = RGBColor(60, 70, 65)
+
+        # Right side: Visual or summary box
+        if has_image:
+            try:
+                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.4))
+            except Exception as e:
+                print(f"[PPTX] Process steps image failed: {e}")
+        else:
+            sum_card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(5.2), Inches(1.2), Inches(4.3), Inches(3.9))
+            sum_card.fill.solid()
+            sum_card.fill.fore_color.rgb = RGBColor(245, 249, 246)
+            sum_card.line.color.rgb = RGBColor(180, 210, 195)
+            tf_s = sum_card.text_frame
+            tf_s.word_wrap = True
+            tf_s.margin_left = Inches(0.2)
+            tf_s.margin_right = Inches(0.2)
+            tf_s.margin_top = Inches(0.3)
+            p = tf_s.paragraphs[0]
+            p.text = "🎯 Mục tiêu & Kết quả quy trình"
+            p.font.name = "Arial"
+            p.font.bold = True
+            p.font.size = Pt(17)
+            p.font.color.rgb = RGBColor(26, 77, 46)
+            p.space_after = Pt(10)
+            p2 = tf_s.add_paragraph()
+            p2.text = "Tuân thủ chặt chẽ từng bước trên giúp tối ưu hóa hiệu quả thực hành và hiểu sâu bản chất kiến thức."
+            p2.font.name = "Arial"
+            p2.font.size = Pt(14)
+            p2.font.color.rgb = RGBColor(60, 70, 65)
+
+    def _render_layout_audio_lab(self, slide, title, bullets, content, image_path, has_image, slide_data):
+        """6. Audio Lab: Header badge + Transcript / Lời thoại trái + Visual / Tasks phải"""
+        banner = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(1.05), Inches(9.0), Inches(0.5))
+        banner.fill.solid()
+        banner.fill.fore_color.rgb = RGBColor(230, 245, 235)
+        banner.line.color.rgb = RGBColor(70, 160, 100)
+        banner.line.width = Pt(1.2)
+        p_b = banner.text_frame.paragraphs[0]
+        p_b.text = "🎧 PHÒNG THỰC HÀNH NGHE & PHÁT ÂM (AUDIO LAB)"
+        p_b.font.name = "Arial"
+        p_b.font.bold = True
+        p_b.font.size = Pt(14)
+        p_b.font.color.rgb = RGBColor(26, 77, 46)
+        p_b.alignment = PP_ALIGN.CENTER
+        
+        # Left: Dialogue & Transcript card
+        card_w = Inches(4.5) if has_image else Inches(9.0)
+        dialogue_card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(1.7), card_w, Inches(3.5))
+        dialogue_card.fill.solid()
+        dialogue_card.fill.fore_color.rgb = RGBColor(255, 255, 255)
+        dialogue_card.line.color.rgb = RGBColor(190, 215, 202)
+        dialogue_card.line.width = Pt(1.2)
+        
+        tf = dialogue_card.text_frame
+        tf.word_wrap = True
+        tf.margin_left = Inches(0.2)
+        tf.margin_right = Inches(0.2)
+        tf.margin_top = Inches(0.2)
+        p_head = tf.paragraphs[0]
+        p_head.text = "📝 Nội dung bài nghe / Transcript:"
+        p_head.font.name = "Arial"
+        p_head.font.bold = True
+        p_head.font.size = Pt(15)
+        p_head.font.color.rgb = RGBColor(26, 77, 46)
+        p_head.space_after = Pt(8)
+        
+        self._populate_bullets_or_content(tf, bullets, content, title_pt=15, desc_pt=13)
+        
+        if has_image:
+            try:
+                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.7), height=Inches(3.5))
+            except Exception as e:
+                print(f"[PPTX] Audio lab picture failed: {e}")
+
+    def _render_layout_checkpoint_gate(self, slide, title, bullets, content, image_path, has_image, slide_data):
+        """7. Checkpoint Gate: Trạm kiểm soát kiến thức chặn bài"""
+        banner = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(1.05), Inches(9.0), Inches(0.55))
+        banner.fill.solid()
+        banner.fill.fore_color.rgb = RGBColor(26, 77, 46)
+        banner.line.fill.background()
+        p_b = banner.text_frame.paragraphs[0]
+        p_b.text = "🎯 TRẠM KIỂM SOÁT KIẾN THỨC (MASTERY CHECKPOINT)"
+        p_b.font.name = "Arial"
+        p_b.font.bold = True
+        p_b.font.size = Pt(15)
+        p_b.font.color.rgb = RGBColor(255, 255, 255)
+        p_b.alignment = PP_ALIGN.CENTER
+        
+        quiz_card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.5), Inches(1.75), Inches(9.0), Inches(3.55))
+        quiz_card.fill.solid()
+        quiz_card.fill.fore_color.rgb = RGBColor(255, 255, 255)
+        quiz_card.line.color.rgb = RGBColor(190, 215, 202)
+        quiz_card.line.width = Pt(1.5)
+        
+        tf = quiz_card.text_frame
+        tf.word_wrap = True
+        tf.margin_left = Inches(0.25)
+        tf.margin_right = Inches(0.25)
+        tf.margin_top = Inches(0.2)
+        
+        # Check if interactiveData questions exist
+        inter = slide_data.get('interactiveData') or {}
+        questions = inter.get('questions', []) if isinstance(inter, dict) else []
+        
+        if questions:
+            for q_idx, q in enumerate(questions[:2]):  # Display up to 2 questions cleanly in PPTX
+                p_q = tf.paragraphs[0] if q_idx == 0 else tf.add_paragraph()
+                q_text = q.get('question', f'Câu {q_idx+1}')
+                p_q.text = f"Câu {q_idx+1}: {q_text}"
+                p_q.font.name = "Arial"
+                p_q.font.bold = True
+                p_q.font.size = Pt(14)
+                p_q.font.color.rgb = RGBColor(26, 77, 46)
+                p_q.space_after = Pt(4)
+                
+                options = q.get('options', [])
+                if options:
+                    p_opt = tf.add_paragraph()
+                    opt_labels = ['A', 'B', 'C', 'D', 'E']
+                    opt_str = "    ".join([f"[{opt_labels[o_idx]}] {opt}" for o_idx, opt in enumerate(options[:4])])
+                    p_opt.text = opt_str
+                    p_opt.font.name = "Arial"
+                    p_opt.font.size = Pt(12)
+                    p_opt.font.color.rgb = RGBColor(60, 70, 65)
+                    p_opt.space_after = Pt(8)
+        else:
+            self._populate_bullets_or_content(tf, bullets, content, title_pt=16, desc_pt=14)
+            
+        p_badge = tf.add_paragraph()
+        p_badge.text = "⚠️ Yêu cầu chuẩn đạt: Hoàn thành đúng tối thiểu 4/5 câu hỏi để mở khóa bài học kế tiếp."
+        p_badge.font.name = "Arial"
+        p_badge.font.italic = True
+        p_badge.font.size = Pt(11)
+        p_badge.font.color.rgb = RGBColor(180, 100, 20)
+        p_badge.space_before = Pt(8)
+
     def _add_content_slide_v2(self, slide, slide_data: Dict[str, Any], bg_path: Optional[str] = None):
         """
-        Add content slide with exact pptx_creator.py layout (lines 132-177)
-        - Title: white text at (0.5, 0.2)
-        - If image: content at left (4.5"), image at right (5.5, 1.5)
-        - If no image: content full width (9")
-        - Bullets: emoji+point bold 22pt, description 18pt
+        Add content slide with Multi-Layout Engine (7 Pedagogical Layouts):
+        - split_standard: Text trái, Image phải
+        - split_reversed: Image trái, Text phải
+        - comparison_3col: 3 Bento Cards song song
+        - hero_infographic: Hero visual lớn trên, 3 takeaways dưới
+        - process_steps: Timeline các bước (nodes tròn số) + Visual phải
+        - audio_lab: Audio header + Transcript trái + Tasks phải
+        - checkpoint_gate: Trạm kiểm soát kiến thức
         """
-        # Add background image if provided (MUST be added FIRST so it's behind text)
         if bg_path and os.path.exists(bg_path):
             try:
                 bg_pic = slide.shapes.add_picture(
@@ -488,7 +845,6 @@ class PPTXGeneratorService:
                     Inches(0), Inches(0),
                     width=Inches(10), height=Inches(5.625)
                 )
-                # Send to back
                 spTree = slide.shapes._spTree
                 spTree.insert(2, bg_pic._element)
                 print(f"[PPTX] Content slide background added: {bg_path}")
@@ -499,88 +855,37 @@ class PPTXGeneratorService:
         bullets = slide_data.get('bullets', [])
         content = slide_data.get('content', [])
         image_path = slide_data.get('imagePath')
+        has_image = bool(image_path and os.path.exists(image_path))
         
-        # Check if image exists
-        has_image = image_path and os.path.exists(image_path)
-        if image_path and not has_image:
-            print(f"[PPTX] Image NOT found: {image_path}")
-        elif has_image:
-            print(f"[PPTX] Image found: {image_path}")
-        
-        # Title textbox - white text at top (match pptx_creator.py lines 138-144)
-        title_shape = slide.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(9), Inches(0.8))
+        # Determine layout type
+        layout_type = slide_data.get('layoutType', 'split_standard')
+        if slide_data.get('isInteractive') or slide_data.get('slideType') == 'interactive':
+            layout_type = 'checkpoint_gate'
+            
+        # Title textbox - white text at top
+        title_shape = slide.shapes.add_textbox(Inches(0.5), Inches(0.2), Inches(9.0), Inches(0.8))
         p_title = title_shape.text_frame.paragraphs[0]
         p_title.text = title
         p_title.font.name = "Arial"
         p_title.font.size = Pt(28)
-        p_title.font.color.rgb = RGBColor(255, 255, 255)  # White text
+        p_title.font.color.rgb = RGBColor(255, 255, 255)
         p_title.alignment = PP_ALIGN.CENTER
         
-        # Content textbox - width depends on image
-        # Image 1:1 (4.5" x 4.5") at position 5.2", so content width = 4.5"
-        if has_image:
-            content_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(4.5), Inches(4.0))
-        else:
-            content_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(9), Inches(4.0))
-        
-        content_frame = content_shape.text_frame
-        content_frame.clear()
-        content_frame.word_wrap = True
-        
-        # Add bullets (match pptx_creator.py lines 159-177)
-        if bullets:
-            for bullet in bullets:
-                emoji = bullet.get('emoji', '')
-                point = bullet.get('point', '')
-                description = bullet.get('description', '')
-                
-                if point:
-                    # Bold emoji+point (22pt)
-                    p_point = content_frame.add_paragraph()
-                    p_point.text = f'{emoji} {point}' if emoji else point
-                    p_point.font.name = "Arial"
-                    p_point.font.bold = True
-                    p_point.font.size = Pt(22)
-                    p_point.font.color.rgb = RGBColor(58, 102, 77)
-                    p_point.space_after = Pt(2)
-                    
-                    # Description (18pt, indented)
-                    if description:
-                        p_desc = content_frame.add_paragraph()
-                        p_desc.text = description
-                        p_desc.font.name = "Arial"
-                        p_desc.font.size = Pt(18)
-                        p_desc.font.color.rgb = RGBColor(58, 102, 77)
-                        p_desc.space_before = Pt(0)
-                        p_desc.space_after = Pt(8)
-                        p_desc.level = 1
-                else:
-                    # Golden Rule/Definition: Just description (20pt)
-                    p_point = content_frame.add_paragraph()
-                    p_point.text = description
-                    p_point.font.name = "Arial"
-                    p_point.font.size = Pt(20)
-                    p_point.font.color.rgb = RGBColor(58, 102, 77)
-                    p_point.space_after = Pt(8)
-        
-        elif content:
-            # Fallback to flat content array
-            for item in content:
-                p = content_frame.add_paragraph()
-                p.text = f"• {item}" if not item.startswith('•') else item
-                p.font.name = "Arial"
-                p.font.size = Pt(18)
-                p.font.color.rgb = RGBColor(58, 102, 77)
-                p.space_after = Pt(6)
-        
-        # Add image if exists - 1:1 square ratio (4.5" x 4.5")
-        # Slide width 10", image 4.5", margin 0.3" -> offset 5.2"
-        if has_image:
-            try:
-                # Image starts right after title (Y=1.0")
-                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.5))
-            except Exception as e:
-                print(f"[PPTX] Could not add picture {image_path}: {e}")
+        # Dispatch to layout renderers
+        if layout_type == 'split_reversed':
+            self._render_layout_split_reversed(slide, title, bullets, content, image_path, has_image)
+        elif layout_type == 'comparison_3col':
+            self._render_layout_comparison_3col(slide, title, bullets, content, image_path, has_image)
+        elif layout_type == 'hero_infographic':
+            self._render_layout_hero_infographic(slide, title, bullets, content, image_path, has_image)
+        elif layout_type == 'process_steps':
+            self._render_layout_process_steps(slide, title, bullets, content, image_path, has_image)
+        elif layout_type == 'audio_lab':
+            self._render_layout_audio_lab(slide, title, bullets, content, image_path, has_image, slide_data)
+        elif layout_type == 'checkpoint_gate':
+            self._render_layout_checkpoint_gate(slide, title, bullets, content, image_path, has_image, slide_data)
+        else:  # default 'split_standard'
+            self._render_layout_split_standard(slide, title, bullets, content, image_path, has_image)
     
     def _get_layout_index(self, layouts, slide_type: str) -> int:
         """Get appropriate layout index for slide type"""

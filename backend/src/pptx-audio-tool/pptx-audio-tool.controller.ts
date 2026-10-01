@@ -99,8 +99,9 @@ export class PptxAudioToolController {
         @Param('sessionId') sessionId: string,
         @Param('index') index: string,
         @Body('note') note: string,
+        @Body('language') lang?: 'vi' | 'en',
     ) {
-        return this.service.updateNote(sessionId, parseInt(index), note);
+        return this.service.updateNote(sessionId, parseInt(index), note, lang);
     }
 
     // 5A. Generate speaker notes with AI (Background Job)
@@ -108,7 +109,7 @@ export class PptxAudioToolController {
     async generateSpeakerNotes(
         @Param('sessionId') sessionId: string,
         @Req() req: Request,
-        @Body() body: { mode?: 'all' | 'missing' },
+        @Body() body: { mode?: 'all' | 'missing'; language?: 'vi' | 'en' },
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
 
@@ -116,6 +117,10 @@ export class PptxAudioToolController {
         if (activeJob) {
             this.logger.log(`Active speaker notes job ${activeJob.id} already exists for session ${sessionId}. Re-attaching.`);
             return { jobId: activeJob.id, status: 'processing' };
+        }
+
+        if (body?.language) {
+            await this.service.setLanguage(sessionId, body.language).catch(e => this.logger.warn(`Failed to sync language to session: ${e.message}`));
         }
 
         const job = await this.jobService.createJob({
@@ -126,7 +131,7 @@ export class PptxAudioToolController {
 
         setImmediate(async () => {
             try {
-                await this.service.generateSpeakerNotesBackground(job.id, sessionId, userId, body?.mode || 'all');
+                await this.service.generateSpeakerNotesBackground(job.id, sessionId, userId, body?.mode || 'all', body?.language);
             } catch (err: any) {
                 this.logger.error(`[generateSpeakerNotes] Job ${job.id} failed: ${err.message}`);
                 await this.jobService.failJob(job.id, err.message);

@@ -53,7 +53,7 @@ export class AiProviderService {
         prompt: string,
         modelName: string,
         userId?: string,
-        options?: { maxTokens?: number },
+        options?: { maxTokens?: number; imageBase64?: string },
     ): Promise<AIProviderResult> {
         // Check if this is a dynamic custom OpenAI model
         if (modelName.startsWith('custom_openai:')) {
@@ -80,6 +80,26 @@ export class AiProviderService {
         if (await this.cliproxy.isEnabled()) {
             try {
                 this.logger.log(`Attempting CLIProxy with model: ${normalizedModel}`);
+
+                if (options?.imageBase64) {
+                    const formattedUrl = options.imageBase64.startsWith('data:')
+                        ? options.imageBase64
+                        : `data:image/jpeg;base64,${options.imageBase64}`;
+                    const messages: any[] = [{
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: prompt },
+                            { type: 'image_url', image_url: { url: formattedUrl } },
+                        ],
+                    }];
+                    const content = await this.cliproxy.chat(messages, normalizedModel, { maxTokens: options?.maxTokens });
+                    return {
+                        content,
+                        provider: 'cliproxy',
+                        model: normalizedModel,
+                    };
+                }
+
                 const content = await this.cliproxy.generateText(prompt, normalizedModel, { maxTokens: options?.maxTokens });
                 if (!content || content.trim().length === 0) {
                     this.logger.warn(`CLIProxy returned empty content with model ${normalizedModel}, trying fallback models...`);
@@ -119,7 +139,23 @@ export class AiProviderService {
                 this.logger.log(`Using Gemini SDK with model: ${normalizedModel}`);
                 const genAI = new GoogleGenerativeAI(geminiApiKey);
                 const model = genAI.getGenerativeModel({ model: normalizedModel });
-                const result = await model.generateContent(prompt);
+                let result;
+                if (options?.imageBase64) {
+                    const cleanBase64 = options.imageBase64.replace(/^data:[^;]+;base64,/, '');
+                    const mimeMatch = options.imageBase64.match(/^data:([^;]+);base64,/);
+                    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+                    result = await model.generateContent([
+                        prompt,
+                        {
+                            inlineData: {
+                                data: cleanBase64,
+                                mimeType,
+                            },
+                        },
+                    ]);
+                } else {
+                    result = await model.generateContent(prompt);
+                }
                 const response = await result.response;
 
                 return {

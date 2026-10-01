@@ -204,7 +204,7 @@ Quy trình tạo Speaker Notes được thiết kế theo chuẩn 2 lớp cực 
 2. **Lớp 2 - Tối ưu & Kiểm duyệt**: Nhấp nút **✅ Tối Ưu & Kiểm Duyệt**. AI sẽ chạy một quy trình QA kiểm duyệt chuyên sâu: sửa các lỗi diễn đạt thô, chuẩn hóa cách đọc các thuật ngữ khoa học/tiếng Anh, bổ sung các từ đệm tự nhiên như *"Kính chào các em"*, *"Tiếp theo chúng ta hãy cùng..."*, đảm bảo câu từ mượt mà nhất khi đưa vào máy đọc TTS.
 
 > [!TIP]
-> Giảng viên có thể nhấp vào biểu tượng chiếc bút chì **✏️** trên cột **Lời Giảng (Tối Ưu)** của từng slide để trực tiếp chỉnh sửa câu từ thuyết minh theo phong cách riêng của mình, sau đó bấm **💾 Lưu**.
+> **Tạo lời giảng riêng cho từng slide:** Đối với các slide mới thêm hoặc cần làm lại, thầy/cô có thể bấm **✨ AI tạo lời giảng** (hoặc **✨ Viết lại**) trên từng thẻ slide riêng lẻ mà không phải chạy lại toàn bài. Ngoài ra, thầy/cô có thể nhấp **✏️ Tự viết lời giảng** (hoặc icon **✏️** trên cột Lời Giảng) để tự soạn thảo và bấm **💾 Lưu**.
 
 #### 4.2 Cấu hình & Tạo âm thanh thuyết minh (Audio TTS)
 1. **Cấu hình giọng đọc (TTS Selector)**:
@@ -227,14 +227,21 @@ Quy trình tạo Speaker Notes được thiết kế theo chuẩn 2 lớp cực 
 ### Bước 5: Tạo PowerPoint
 Hệ thống tổng hợp tất cả các sản phẩm trung gian (nội dung, ảnh AI, audio thuyết minh) ở các bước trước để xuất bản ra tệp trình chiếu PowerPoint `.pptx` hoàn chỉnh.
 
-1. **Chọn mẫu PowerPoint (Template Selector)**:
+1. **Quản lý danh sách slide linh hoạt (Thêm, Xóa, Đổi thứ tự)**:
+   - **Thêm/Chèn slide:** Bấm nút **➕ Thêm slide** ở đầu hoặc cuối danh sách slide. Đặc biệt, khi rê chuột vào khoảng giữa 2 slide liền kề, một đường line tương tác **➕ Chèn slide vào đây** sẽ xuất hiện cho phép chèn slide trực tiếp vào đúng vị trí mong muốn.
+   - **Đổi thứ tự slide:** Sử dụng nút **⬆️ Lên** hoặc **⬇️ Xuống** trên góc từng thẻ slide để thay đổi vị trí. Số thứ tự slide sẽ tự động được đánh số lại liên tục (1..N) và đồng bộ sang Bước 3 và Bước 4.
+   - **Xóa slide:** Nhấp nút **🗑️** để xóa trang slide không cần thiết.
+2. **Tải lên Audio mẫu độc lập (Cho môn Ngoại ngữ / bài giảng đặc thù)**:
+   - Nhấp nút **🎧 Tải audio mẫu** trên thẻ slide để tải lên file âm thanh mẫu (mp3, wav, m4a...). Tệp này độc lập với file audio bài giảng và sẽ được nhúng trực tiếp vào slide PowerPoint kèm biểu tượng phát âm thanh để sinh viên nghe phát âm/hội thoại mẫu.
+   - Cho phép nghe thử trực tiếp trên slide card và xóa/thay thế file bất kỳ lúc nào.
+3. **Chọn mẫu PowerPoint (Template Selector)**:
    - Chọn một trong các theme/template có sẵn từ danh sách thả xuống. Mỗi mẫu sẽ hiển thị hình ảnh xem trước (Preview) của ảnh nền trang tiêu đề (Title BG) và ảnh nền trang nội dung (Content BG).
-2. **Tối ưu hóa hình ảnh & nội dung trang slide**:
+4. **Tối ưu hóa hình ảnh & nội dung trang slide**:
    - Nhấp nút **🚀 Tạo nội dung PPTX** (hoặc **Tạo lại nội dung**).
    - Hệ thống sẽ hiển thị một tiến trình chạy tròn thể hiện phần trăm hoàn thành. Mỗi trang slide sẽ được xử lý: tối ưu bố cục chữ kèm emoji tương ứng cho từng gạch đầu dòng, ghép ảnh Imagen 3.0 đã tạo.
    - *Tính năng sửa đổi tại chỗ*: Sau khi chạy xong, trên danh sách xem trước các slide bên dưới, thầy/cô có thể nhấp **🔄 Tạo lại nội dung** hoặc **🖼️ Tạo lại ảnh** cho một trang slide cụ thể nếu thấy bố cục hoặc ảnh vẽ chưa ưng ý mà không cần làm lại từ đầu cả bài.
-3. **Đóng gói và tải file PPTX về máy**:
-   - Nhấn **📦 Tạo PPTX (có Audio)** để đóng gói file PPTX nhúng sẵn âm thanh thuyết minh của từng slide. Sau khi đóng gói hoàn tất, nút sẽ chuyển thành **📥 Tải PPTX (có Audio)** để thầy/cô tải xuống.
+5. **Đóng gói và tải file PPTX về máy**:
+   - Nhấn **📦 Tạo PPTX (có Audio)** để đóng gói file PPTX nhúng sẵn âm thanh thuyết minh và âm thanh mẫu độc lập của từng slide. Sau khi đóng gói hoàn tất, nút sẽ chuyển thành **📥 Tải PPTX (có Audio)** để thầy/cô tải xuống.
    - Nhấn **📦 Tạo PPTX (không Audio)** nếu thầy/cô chỉ cần file slide trình chiếu tĩnh thông thường.
 
 ---

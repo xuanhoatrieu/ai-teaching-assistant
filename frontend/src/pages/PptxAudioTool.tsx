@@ -272,6 +272,7 @@ export function PptxAudioToolPage() {
     const [isGeneratingNotes, setIsGeneratingNotes] = useState(false);
     const [isOptimizingNotes, setIsOptimizingNotes] = useState(false);
     const [showNotesOptionsModal, setShowNotesOptionsModal] = useState(false);
+    const [notesLanguage, setNotesLanguage] = useState<'vi' | 'en'>('vi');
     const [notesJobId, setNotesJobId] = useState<string | null>(null);
     const [optimizeJobId, setOptimizeJobId] = useState<string | null>(null);
 
@@ -675,9 +676,9 @@ export function PptxAudioToolPage() {
     // ═══════════════════════════════════════════════════════════════
     const toggleLanguage = async (lang: 'en' | 'vi') => {
         if (!sessionId) return;
+        setLanguage(lang);
         try {
             await api.put(`/pptx-audio-tool/${sessionId}/language`, { language: lang });
-            setLanguage(lang);
         } catch (error) {
             console.error('Error setting language:', error);
         }
@@ -699,6 +700,7 @@ export function PptxAudioToolPage() {
         try {
             const res = await api.put(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/note`, {
                 note: editedNote,
+                language: language,
             });
             setSlides(prev => prev.map(s => s.index === slideIndex ? { ...s, ...res.data } : s));
             setEditingSlide(null);
@@ -708,12 +710,16 @@ export function PptxAudioToolPage() {
         }
     };
 
-    const startGenerateNotes = async (mode: 'all' | 'missing') => {
+    const startGenerateNotes = async (mode: 'all' | 'missing', targetLang: 'vi' | 'en' = notesLanguage) => {
         if (!sessionId) return;
         try {
             setIsGeneratingNotes(true);
             setShowNotesOptionsModal(false);
-            const res = await api.post(`/pptx-audio-tool/${sessionId}/speaker-notes/generate`, { mode });
+            setLanguage(targetLang);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/speaker-notes/generate`, {
+                mode,
+                language: targetLang,
+            });
             if (res.data?.jobId) {
                 setNotesJobId(res.data.jobId);
                 notesJob.startPolling(res.data.jobId);
@@ -1609,28 +1615,31 @@ export function PptxAudioToolPage() {
                                 </p>
                             </div>
                             <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                {/* Language Toggle */}
-                                {hasDualLanguage && (
-                                    <div className="language-toggle">
-                                        <button
-                                            className={`lang-btn ${language === 'vi' ? 'active' : ''}`}
-                                            onClick={() => toggleLanguage('vi')}
-                                        >
-                                            🇻🇳 VN
-                                        </button>
-                                        <button
-                                            className={`lang-btn ${language === 'en' ? 'active' : ''}`}
-                                            onClick={() => toggleLanguage('en')}
-                                        >
-                                            🇬🇧 EN
-                                        </button>
-                                    </div>
-                                )}
+                                {/* Language Toggle: Always visible so user can switch between VN and EN */}
+                                <div className="language-toggle">
+                                    <button
+                                        className={`lang-btn ${language === 'vi' ? 'active' : ''}`}
+                                        onClick={() => toggleLanguage('vi')}
+                                        title="Xem và chỉnh sửa lời giảng Tiếng Việt"
+                                    >
+                                        🇻🇳 VN
+                                    </button>
+                                    <button
+                                        className={`lang-btn ${language === 'en' ? 'active' : ''}`}
+                                        onClick={() => toggleLanguage('en')}
+                                        title="Xem và chỉnh sửa lời giảng English"
+                                    >
+                                        🇬🇧 EN
+                                    </button>
+                                </div>
 
                                 {/* Generate Speaker Notes */}
                                 <button
                                     className="btn-generate-notes"
-                                    onClick={() => setShowNotesOptionsModal(true)}
+                                    onClick={() => {
+                                        setNotesLanguage(language || 'vi');
+                                        setShowNotesOptionsModal(true);
+                                    }}
                                     disabled={isGeneratingNotes || isOptimizingNotes}
                                     title="Dùng AI soạn lời giảng từ nội dung slide"
                                 >
@@ -1998,69 +2007,148 @@ export function PptxAudioToolPage() {
                                     <h3 style={{ margin: '0 0 8px 0', color: '#f8fafc', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span>✨</span> Tùy Chọn Tạo Lời Giảng Bằng AI
                                     </h3>
-                                    <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: '0 0 20px 0' }}>
-                                        Chọn phương thức tạo lời giảng phù hợp với bài thuyết trình của bạn:
+                                    <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: '0 0 16px 0' }}>
+                                        Lựa chọn ngôn ngữ và phương thức soạn bài giảng phù hợp cho từng slide thuyết trình:
                                     </p>
 
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                        {/* Option 1: All slides */}
-                                        <div
-                                            onClick={() => startGenerateNotes('all')}
-                                            style={{
-                                                padding: '16px 18px',
-                                                border: '2px solid rgba(148, 163, 184, 0.2)',
-                                                borderRadius: 10,
-                                                cursor: 'pointer',
-                                                transition: 'all 0.2s',
-                                                background: 'rgba(15, 23, 42, 0.6)',
-                                            }}
-                                            onMouseEnter={e => (e.currentTarget.style.borderColor = '#0284c7')}
-                                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)')}
-                                        >
-                                            <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span>🎯 Tạo lại cho TẤT CẢ các slide ({slides.length} slide)</span>
-                                                {slidesWithNotes.length > 0 && (
-                                                    <span style={{ fontSize: '0.72rem', background: 'rgba(2, 132, 199, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: 999 }}>
-                                                        Khuyên dùng
-                                                    </span>
+                                    {/* Language Selection */}
+                                    <div style={{ marginBottom: 18 }}>
+                                        <label style={{ display: 'block', fontSize: '0.86rem', fontWeight: 600, color: '#cbd5e1', marginBottom: 8 }}>
+                                            🌐 Ngôn ngữ lời giảng bạn muốn soạn:
+                                        </label>
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                                            <div
+                                                onClick={() => setNotesLanguage('vi')}
+                                                style={{
+                                                    padding: '12px 14px',
+                                                    borderRadius: 10,
+                                                    cursor: 'pointer',
+                                                    border: `2px solid ${notesLanguage === 'vi' ? '#6366f1' : 'rgba(148, 163, 184, 0.2)'}`,
+                                                    background: notesLanguage === 'vi' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                                    boxShadow: notesLanguage === 'vi' ? '0 0 12px rgba(99, 102, 241, 0.25)' : 'none',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 10,
+                                                    transition: 'all 0.2s',
+                                                }}
+                                            >
+                                                <span style={{ fontSize: '1.5rem' }}>🇻🇳</span>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: notesLanguage === 'vi' ? '#c7d2fe' : '#f1f5f9' }}>
+                                                        Tiếng Việt <span style={{ fontSize: '0.7rem', background: 'rgba(99, 102, 241, 0.25)', color: '#a5b4fc', padding: '1px 6px', borderRadius: 4, fontWeight: 500, whiteSpace: 'nowrap' }}>Mặc định</span>
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
+                                                        Khẩu ngữ sư phạm tự nhiên
+                                                    </div>
+                                                </div>
+                                                {notesLanguage === 'vi' && (
+                                                    <span style={{ color: '#818cf8', fontWeight: 'bold', fontSize: '1.1rem' }}>✓</span>
                                                 )}
                                             </div>
-                                            <div style={{ color: '#94a3b8', fontSize: '0.84rem', marginTop: 6, lineHeight: 1.45 }}>
-                                                AI sẽ đọc đồng thời cả <strong>nội dung trên slide</strong> VÀ <strong>ghi chú hiện có (nếu có)</strong> để mở rộng, viết lại thành lời giảng chuẩn mực sư phạm (180 – 220 từ).
-                                            </div>
-                                        </div>
 
-                                        {/* Option 2: Missing slides */}
-                                        <div
-                                            onClick={() => {
-                                                if (slides.length - slidesWithNotes.length > 0) {
-                                                    startGenerateNotes('missing');
-                                                }
-                                            }}
-                                            style={{
-                                                padding: '16px 18px',
-                                                border: '2px solid rgba(148, 163, 184, 0.2)',
-                                                borderRadius: 10,
-                                                cursor: slides.length - slidesWithNotes.length === 0 ? 'not-allowed' : 'pointer',
-                                                opacity: slides.length - slidesWithNotes.length === 0 ? 0.5 : 1,
-                                                transition: 'all 0.2s',
-                                                background: 'rgba(15, 23, 42, 0.6)',
-                                            }}
-                                            onMouseEnter={e => {
-                                                if (slides.length - slidesWithNotes.length > 0) {
-                                                    e.currentTarget.style.borderColor = '#10b981';
-                                                }
-                                            }}
-                                            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)')}
-                                        >
-                                            <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                                <span>➕ Chỉ tạo cho các slide THIẾU ({slides.length - slidesWithNotes.length} slide)</span>
-                                            </div>
-                                            <div style={{ color: '#94a3b8', fontSize: '0.84rem', marginTop: 6, lineHeight: 1.45 }}>
-                                                Chỉ soạn bài giảng cho các slide chưa có ghi chú. Giữ nguyên 100% nội dung của {slidesWithNotes.length} slide đã có.
+                                            <div
+                                                onClick={() => setNotesLanguage('en')}
+                                                style={{
+                                                    padding: '12px 14px',
+                                                    borderRadius: 10,
+                                                    cursor: 'pointer',
+                                                    border: `2px solid ${notesLanguage === 'en' ? '#6366f1' : 'rgba(148, 163, 184, 0.2)'}`,
+                                                    background: notesLanguage === 'en' ? 'rgba(99, 102, 241, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                                    boxShadow: notesLanguage === 'en' ? '0 0 12px rgba(99, 102, 241, 0.25)' : 'none',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    gap: 10,
+                                                    transition: 'all 0.2s',
+                                                }}
+                                            >
+                                                <span style={{ fontSize: '1.5rem' }}>🇬🇧</span>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ fontWeight: 700, fontSize: '0.92rem', color: notesLanguage === 'en' ? '#c7d2fe' : '#f1f5f9' }}>
+                                                        English
+                                                    </div>
+                                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
+                                                        Academic spoken lecture
+                                                    </div>
+                                                </div>
+                                                {notesLanguage === 'en' && (
+                                                    <span style={{ color: '#818cf8', fontWeight: 'bold', fontSize: '1.1rem' }}>✓</span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
+
+                                    {(() => {
+                                        const currentLangNotesCount = slides.filter(s => {
+                                            const note = notesLanguage === 'en' ? s.noteEN : s.noteVN;
+                                            return note && note.trim().length > 0;
+                                        }).length;
+                                        const currentLangMissingCount = Math.max(0, slides.length - currentLangNotesCount);
+
+                                        return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                                {/* Option 1: All slides */}
+                                                <div
+                                                    onClick={() => startGenerateNotes('all', notesLanguage)}
+                                                    style={{
+                                                        padding: '16px 18px',
+                                                        border: '2px solid rgba(148, 163, 184, 0.2)',
+                                                        borderRadius: 10,
+                                                        cursor: 'pointer',
+                                                        transition: 'all 0.2s',
+                                                        background: 'rgba(15, 23, 42, 0.6)',
+                                                    }}
+                                                    onMouseEnter={e => (e.currentTarget.style.borderColor = '#0284c7')}
+                                                    onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)')}
+                                                >
+                                                    <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span>🎯 Tạo lại cho TẤT CẢ các slide ({slides.length} slide - {notesLanguage === 'en' ? 'English' : 'Tiếng Việt'})</span>
+                                                        {currentLangNotesCount > 0 && (
+                                                            <span style={{ fontSize: '0.72rem', background: 'rgba(2, 132, 199, 0.2)', color: '#38bdf8', padding: '2px 8px', borderRadius: 999 }}>
+                                                                Khuyên dùng
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ color: '#94a3b8', fontSize: '0.84rem', marginTop: 6, lineHeight: 1.45 }}>
+                                                        AI sẽ đọc đồng thời cả <strong>nội dung trên slide</strong> VÀ <strong>ghi chú hiện có (nếu có)</strong> để mở rộng, viết lại thành lời giảng chuẩn mực sư phạm (180 – 220 từ) bằng {notesLanguage === 'en' ? 'tiếng Anh' : 'tiếng Việt'}.
+                                                    </div>
+                                                </div>
+
+                                                {/* Option 2: Missing slides */}
+                                                <div
+                                                    onClick={() => {
+                                                        if (currentLangMissingCount > 0) {
+                                                            startGenerateNotes('missing', notesLanguage);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        padding: '16px 18px',
+                                                        border: '2px solid rgba(148, 163, 184, 0.2)',
+                                                        borderRadius: 10,
+                                                        cursor: currentLangMissingCount === 0 ? 'not-allowed' : 'pointer',
+                                                        opacity: currentLangMissingCount === 0 ? 0.5 : 1,
+                                                        transition: 'all 0.2s',
+                                                        background: 'rgba(15, 23, 42, 0.6)',
+                                                    }}
+                                                    onMouseEnter={e => {
+                                                        if (currentLangMissingCount > 0) {
+                                                            e.currentTarget.style.borderColor = '#10b981';
+                                                        }
+                                                    }}
+                                                    onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(148, 163, 184, 0.2)')}
+                                                >
+                                                    <div style={{ fontWeight: 600, color: '#f1f5f9', fontSize: '0.98rem', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span>➕ Chỉ tạo cho các slide THIẾU ({currentLangMissingCount} slide)</span>
+                                                    </div>
+                                                    <div style={{ color: '#94a3b8', fontSize: '0.84rem', marginTop: 6, lineHeight: 1.45 }}>
+                                                        {currentLangMissingCount === 0
+                                                            ? `Tất cả ${slides.length} slide đã có lời giảng ${notesLanguage === 'en' ? 'English' : 'tiếng Việt'}.`
+                                                            : `Chỉ soạn bài giảng cho ${currentLangMissingCount} slide chưa có lời giảng ${notesLanguage === 'en' ? 'English' : 'tiếng Việt'}. Giữ nguyên ${currentLangNotesCount} slide đã có.`
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
 
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 22 }}>
                                         <button
