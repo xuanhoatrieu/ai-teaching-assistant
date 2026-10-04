@@ -1239,7 +1239,7 @@ export class SlidesService {
 
         const selectedTypes = (options?.selectedQuestionTypes && options.selectedQuestionTypes.length > 0)
             ? options.selectedQuestionTypes
-            : ['MC', 'TF', 'MR', 'FIB', 'MATCH'];
+            : ['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE'];
 
         const typeLabels: Record<string, string> = {
             MC: 'Trắc nghiệm đơn 1 đáp án đúng (type: "MC", options: 4 lựa chọn A, B, C, D, correctAnswer: "chuỗi đáp án đúng")',
@@ -1247,6 +1247,8 @@ export class SlidesService {
             MR: 'Nhiều lựa chọn đúng (type: "MR", options: 4 lựa chọn, correctAnswers: [mảng chứa các đáp án đúng])',
             FIB: 'Điền khuyết thuật ngữ vào chỗ trống (type: "FIB", question: câu hỏi chứa ký hiệu [.....], correctAnswer: "từ hoặc thuật ngữ cần điền")',
             MATCH: 'Nối cặp tương ứng hai vế A và B (type: "MATCH", question: "Yêu cầu nối...", pairs: [ { "left": "Khái niệm/Thuật ngữ vế A", "right": "Định nghĩa/Ý nghĩa vế B tương ứng" }, ... ])',
+            ORDER: 'Sắp xếp thứ tự từ trong câu (type: "ORDER", question: "Sắp xếp các từ sau thành câu hoàn chỉnh:", words: ["mảng", "từ", "bị", "xáo", "trộn"], correctSentence: "Câu hoàn chỉnh đúng chuẩn ngữ pháp")',
+            CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại (type: "CLOZE", question: "Điền từ thích hợp vào các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", explanation: "Giải thích ngữ cảnh...")',
         };
 
         const typesRequirementText = selectedTypes.map(t => `- ${typeLabels[t] || t}`).join('\n');
@@ -1272,6 +1274,8 @@ QUY TẮC TRÍCH XUẤT BẮT BUỘC:
    - "MR": Trắc nghiệm nhiều đáp án đúng (Multiple Response, options: danh sách lựa chọn, correctAnswers: mảng các đáp án đúng).
    - "FIB": Điền khuyết từ vào chỗ trống (Fill in the Blank, question có ký hiệu [.....], correctAnswer: từ cần điền).
    - "MATCH": Nối cặp tương ứng hai vế A và B (Matching Pairs, pairs: mảng các cặp đối xứng [ { "left": "vế A", "right": "vế B tương ứng" } ]).
+   - "ORDER": Sắp xếp các từ thành câu hoàn chỉnh (words: mảng từ xáo trộn, correctSentence: câu chuẩn hoàn chỉnh).
+   - "CLOZE": Điền khuyết đoạn văn hoặc hội thoại (passage: đoạn văn hoặc kịch bản hội thoại có các từ cần điền đặt trong ngoặc vuông [từ]).
 3. XÁC ĐỊNH ĐÁP ÁN ĐÚNG:
    - Nếu trong văn bản đề bài có ghi rõ đáp án (ví dụ: dòng "Đáp án: A", hoặc có dấu *, gạch chân, in đậm, [x]), hãy lấy đúng đáp án đó.
    - Nếu đề bài chưa ghi đáp án, bạn hãy giải và xác định đáp án chính xác 100%, kèm giải thích ngắn gọn (explanation).
@@ -1302,13 +1306,18 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
     },
     {
       "id": "q2",
-      "type": "MATCH",
-      "question": "Nối các thuật ngữ sau với định nghĩa tương ứng:",
-      "pairs": [
-        { "left": "Thuật ngữ 1", "right": "Định nghĩa 1" },
-        { "left": "Thuật ngữ 2", "right": "Định nghĩa 2" }
-      ],
-      "explanation": "Giải thích các cặp nối..."
+      "type": "ORDER",
+      "question": "Sắp xếp các từ sau thành câu hoàn chỉnh:",
+      "words": ["English", "Learning", "is", "fun"],
+      "correctSentence": "Learning English is fun",
+      "explanation": "Giải thích cấu trúc câu..."
+    },
+    {
+      "id": "q3",
+      "type": "CLOZE",
+      "question": "Điền từ thích hợp vào chỗ trống trong đoạn hội thoại sau:",
+      "passage": "A: Good morning, how are [you]?\\nB: I am [fine], thank you.",
+      "explanation": "Đoạn hội thoại giao tiếp cơ bản."
     }
   ]
 }
@@ -1360,6 +1369,21 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
       "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
       "correctAnswer": "Đáp án A",
       "explanation": "Giải thích chi tiết..."
+    },
+    {
+      "id": "q2",
+      "type": "ORDER",
+      "question": "Sắp xếp các từ sau thành câu hoàn chỉnh:",
+      "words": ["English", "Learning", "is", "fun"],
+      "correctSentence": "Learning English is fun",
+      "explanation": "Giải thích cấu trúc ngữ pháp..."
+    },
+    {
+      "id": "q3",
+      "type": "CLOZE",
+      "question": "Điền từ thích hợp vào chỗ trống trong đoạn văn / hội thoại sau:",
+      "passage": "A: Good morning, how are [you]?\\nB: I am [fine], thank you.",
+      "explanation": "Đoạn văn / kịch bản hội thoại chuẩn ngữ cảnh."
     }
   ]
 }
@@ -1839,7 +1863,7 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
     /**
      * Export lesson as ADL SCORM 1.2 ZIP package for Moodle LMS
      */
-    async exportScorm(lessonId: string, res: any) {
+    async exportScorm(lessonId: string, res: any, templateId?: string, bgOption?: string, theme?: string) {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
         });
@@ -1861,6 +1885,21 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
             ...s,
             audioUrl: s.audioUrl || audioMap.get(s.slideIndex) || '',
         }));
+
+        // Retrieve template info
+        let selectedTemplate: any = null;
+        if (templateId && templateId !== 'blank') {
+            selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
+                where: { id: templateId },
+            });
+        }
+        if (!selectedTemplate) {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isDefault: true, isActive: true },
+            });
+        }
+
+        const effectiveBgOption = bgOption || 'tuaf_clean';
 
         const safeTitle = (lesson.title || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
@@ -1870,13 +1909,20 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
 
-        await packageScormZip(lesson.title, lessonId, enrichedSlides, res);
+        await packageScormZip(lesson.title, lessonId, enrichedSlides, res, {
+            templateId: selectedTemplate?.id,
+            templateName: selectedTemplate?.name,
+            titleBgUrl: selectedTemplate?.titleBgUrl,
+            contentBgUrl: selectedTemplate?.contentBgUrl,
+            bgOption: effectiveBgOption,
+            theme,
+        });
     }
 
     /**
      * Export lesson as H5P Course Presentation package (.h5p) for Moodle LMS
      */
-    async exportH5p(lessonId: string, res: any) {
+    async exportH5p(lessonId: string, res: any, templateId?: string, bgOption?: string, theme?: string) {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
         });
@@ -1899,6 +1945,20 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
             audioUrl: s.audioUrl || audioMap.get(s.slideIndex) || '',
         }));
 
+        let selectedTemplate: any = null;
+        if (templateId && templateId !== 'blank') {
+            selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
+                where: { id: templateId },
+            });
+        }
+        if (!selectedTemplate) {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isDefault: true, isActive: true },
+            });
+        }
+
+        const effectiveBgOption = bgOption || 'tuaf_clean';
+
         const safeTitle = (lesson.title || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
             .replace(/\s+/g, '_');
@@ -1907,7 +1967,14 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(h5pFileName)}"`);
 
-        await packageH5pZip(lesson.title, enrichedSlides, res);
+        await packageH5pZip(lesson.title, enrichedSlides, res, {
+            templateId: selectedTemplate?.id,
+            templateName: selectedTemplate?.name,
+            titleBgUrl: selectedTemplate?.titleBgUrl,
+            contentBgUrl: selectedTemplate?.contentBgUrl,
+            bgOption: effectiveBgOption,
+            theme,
+        });
     }
 
     /**

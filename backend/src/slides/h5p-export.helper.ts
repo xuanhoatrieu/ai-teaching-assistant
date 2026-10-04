@@ -6,10 +6,24 @@
  * extra sample audio, and interactive quizzes.
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import { resolveLocalMediaFile } from './scorm-export.helper';
 
 const archiver = require('archiver');
+
+export interface H5pExportOptions {
+    templateId?: string;
+    templateName?: string;
+    titleBgUrl?: string;
+    contentBgUrl?: string;
+    bgOption?: string; // 'tuaf_clean' | 'tuaf_full' | 'minimal' | 'custom'
+    theme?: string; // 'light' | 'dark'
+    hasTitleBg?: boolean;
+    hasContentBg?: boolean;
+    titleBgFilename?: string;
+    contentBgFilename?: string;
+}
 
 function escapeHtml(str: string): string {
     if (!str) return '';
@@ -40,7 +54,13 @@ export function generateH5pJson(lessonTitle: string): string {
     }, null, 2);
 }
 
-export function generateH5pContentJson(lessonTitle: string, slides: any[]): string {
+export function generateH5pContentJson(lessonTitle: string, slides: any[], options?: H5pExportOptions): string {
+    const isDarkTheme = options?.theme === 'dark';
+    const titleColor = isDarkTheme ? '#52b788' : '#005a36';
+    const pointColor = isDarkTheme ? '#ffffff' : '#0f172a';
+    const descColor = isDarkTheme ? '#cbd5e1' : '#334155';
+    const textColor = isDarkTheme ? '#f8fafc' : '#1e293b';
+
     const h5pSlides = slides.map((s, idx) => {
         const elements: any[] = [];
 
@@ -102,7 +122,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
             action: {
                 library: 'H5P.AdvancedText 1.1',
                 params: {
-                    text: `<h2 style="margin: 0; padding: 0; font-size: 1.3em; line-height: 1.25; color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700;">${escapeHtml(slideTitleText)}</h2>`
+                    text: `<h2 style="margin: 0; padding: 0; font-size: 1.3em; line-height: 1.25; color: ${titleColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700;">${escapeHtml(slideTitleText)}</h2>`
                 },
                 subContentId: `title_${idx}`
             }
@@ -140,6 +160,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
         // and avoid printing duplicate description when identical to point
         let contentHtml = '';
         if (hasBullets) {
+            const bulletGap = bullets.length <= 3 ? '22px' : '14px';
             const itemsHtml = bullets.map(b => {
                 const point = (b.point || '').trim();
                 const desc = (b.description || '').trim();
@@ -147,18 +168,18 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
                 const emoji = b.emoji || '📌';
 
                 return `
-                    <div style="margin-bottom: 16px; line-height: 1.5; color: #1e293b;">
+                    <div style="margin-bottom: ${bulletGap}; line-height: 1.5; color: ${textColor};">
                         <p style="margin: 0 0 4px 0; font-size: 1.05em; line-height: 1.35;">
                             <span style="font-size: 1.15em; margin-right: 6px;">${emoji}</span>
-                            <strong style="color: #0f172a;">${escapeHtml(point)}</strong>
+                            <strong style="color: ${pointColor};">${escapeHtml(point)}</strong>
                         </p>
-                        ${isDistinct ? `<p style="margin: 0 0 0 26px; font-size: 0.9em; color: #475569; line-height: 1.45;">${escapeHtml(desc)}</p>` : ''}
+                        ${isDistinct ? `<p style="margin: 0 0 0 26px; font-size: 0.9em; color: ${descColor}; line-height: 1.45;">${escapeHtml(desc)}</p>` : ''}
                     </div>
                 `;
             }).join('');
 
             contentHtml = `
-                <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding-top: 4px;">
+                <div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; padding-top: 4px;">
                     ${itemsHtml}
                 </div>
             `;
@@ -206,6 +227,15 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
                 typeBadgeHtml = '<span style="background: rgba(168, 85, 247, 0.15); color: #7e22ce; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn nhiều đáp án</span>';
             } else if (qType === 'FIB') {
                 typeBadgeHtml = '<span style="background: rgba(245, 158, 11, 0.15); color: #b45309; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Điền khuyết</span>';
+            } else if (qType === 'MATCH') {
+                typeBadgeHtml = '<span style="background: rgba(236, 72, 153, 0.15); color: #be185d; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Nối cặp</span>';
+            } else if (qType === 'ORDER') {
+                typeBadgeHtml = '<span style="background: rgba(6, 182, 212, 0.15); color: #0e7490; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Sắp xếp từ</span>';
+                if ((!optionsToUse || optionsToUse.length === 0) && firstQ.correctSentence) {
+                    optionsToUse = [firstQ.correctSentence];
+                }
+            } else if (qType === 'CLOZE') {
+                typeBadgeHtml = '<span style="background: rgba(217, 70, 239, 0.15); color: #a21caf; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Điền khuyết hội thoại</span>';
             } else {
                 typeBadgeHtml = '<span style="background: rgba(99, 102, 241, 0.15); color: #4338ca; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn 1 đáp án</span>';
             }
@@ -356,8 +386,10 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
             `).join('');
 
             const comparisonHtml = `
-                <div style="display: grid; grid-template-columns: repeat(${Math.min(3, Math.max(1, bullets.length))}, 1fr); gap: 14px; font-family: -apple-system, sans-serif; padding-top: 6px;">
-                    ${cardsHtml}
+                <div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; box-sizing: border-box;">
+                    <div style="display: grid; grid-template-columns: repeat(${Math.min(3, Math.max(1, bullets.length))}, 1fr); gap: 14px; font-family: -apple-system, sans-serif; padding-top: 6px;">
+                        ${cardsHtml}
+                    </div>
                 </div>
             `;
 
@@ -421,7 +453,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
             `).join('');
 
             const timelineHtml = `
-                <div style="font-family: -apple-system, sans-serif; padding-top: 4px;">
+                <div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; box-sizing: border-box; font-family: -apple-system, sans-serif; padding-top: 4px;">
                     ${stepsHtml}
                 </div>
             `;
@@ -461,9 +493,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
                 addImageElement(8, 14, 84, 82);
             } else if (hasBullets) {
                 elements.push({
-                    x: 8,
+                    x: 10,
                     y: 14,
-                    width: 84,
+                    width: 80,
                     height: 82,
                     action: {
                         library: 'H5P.AdvancedText 1.1',
@@ -480,24 +512,108 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[]): stri
         };
     });
 
+    // Check if title slide has custom title background
+    if (options?.hasTitleBg && options.titleBgFilename && h5pSlides.length > 0) {
+        (h5pSlides[0] as any).slideBackgroundSelector = {
+            fillType: 'image',
+            imageSlideBackground: {
+                path: options.titleBgFilename,
+                mime: 'image/png',
+                copyright: {
+                    title: 'TUAF Title Background',
+                    license: 'U'
+                },
+                width: 1920,
+                height: 1080
+            }
+        };
+    }
+
+    // Add subtle TUAF branding header to title slide in clean mode
+    if ((!options?.bgOption || options?.bgOption === 'tuaf_clean') && h5pSlides.length > 0) {
+        h5pSlides[0].elements.unshift({
+            x: 4,
+            y: 3,
+            width: 92,
+            height: 6,
+            action: {
+                library: 'H5P.AdvancedText 1.1',
+                params: {
+                    text: `<div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-size: 0.85em; font-weight: 800; color: ${isDarkTheme ? '#95d5b2' : '#005a36'}; text-transform: uppercase; letter-spacing: 0.8px; border-bottom: 2px solid ${isDarkTheme ? '#52b788' : '#005a36'}; padding-bottom: 4px;">🌿 TRƯỜNG ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN</div>`
+                },
+                subContentId: 'tuaf_header_badge'
+            }
+        });
+    }
+
+    // Global background configuration
+    let globalBackgroundSelector: any = {
+        fillType: 'fill',
+        fillColor: isDarkTheme ? '#0b1120' : '#ffffff'
+    };
+
+    if (options?.hasContentBg && options.contentBgFilename) {
+        globalBackgroundSelector = {
+            fillType: 'image',
+            imageGlobalBackground: {
+                path: options.contentBgFilename,
+                mime: 'image/png',
+                copyright: {
+                    title: 'TUAF Background',
+                    license: 'U'
+                },
+                width: 1920,
+                height: 1080
+            }
+        };
+    } else {
+        globalBackgroundSelector = {
+            fillType: 'fill',
+            fillColor: isDarkTheme ? '#0b1120' : '#ffffff'
+        };
+    }
+
     return JSON.stringify({
         presentation: {
             slides: h5pSlides,
             keywordListEnabled: true,
-            globalBackgroundSelector: {
-                fillType: 'fill',
-                fillColor: '#f8fafc'
-            }
+            globalBackgroundSelector
         }
     }, null, 2);
 }
 
-export async function packageH5pZip(lessonTitle: string, slides: any[], outputStream: any): Promise<void> {
+export async function packageH5pZip(
+    lessonTitle: string, 
+    slides: any[], 
+    outputStream: any,
+    options?: H5pExportOptions
+): Promise<void> {
     const archive = archiver('zip', { zlib: { level: 9 } });
 
     archive.pipe(outputStream);
 
     const packagedSlides = slides.map(s => ({ ...s }));
+    const opts: H5pExportOptions = { ...(options || {}) };
+
+    // Pack background images if full image mode or custom template requested
+    if (opts.bgOption === 'tuaf_full' || (opts.bgOption === 'custom' && (opts.titleBgUrl || opts.contentBgUrl))) {
+        if (opts.titleBgUrl) {
+            const resolvedTitleBg = resolveLocalMediaFile(opts.titleBgUrl);
+            if (resolvedTitleBg && fs.existsSync(resolvedTitleBg)) {
+                archive.file(resolvedTitleBg, { name: 'content/images/h5p_title_bg.png' });
+                opts.hasTitleBg = true;
+                opts.titleBgFilename = 'images/h5p_title_bg.png';
+            }
+        }
+        if (opts.contentBgUrl) {
+            const resolvedContentBg = resolveLocalMediaFile(opts.contentBgUrl);
+            if (resolvedContentBg && fs.existsSync(resolvedContentBg)) {
+                archive.file(resolvedContentBg, { name: 'content/images/h5p_content_bg.png' });
+                opts.hasContentBg = true;
+                opts.contentBgFilename = 'images/h5p_content_bg.png';
+            }
+        }
+    }
 
     for (const slide of packagedSlides) {
         // 1. Pack Slide Image into content/images/
@@ -535,7 +651,7 @@ export async function packageH5pZip(lessonTitle: string, slides: any[], outputSt
     }
 
     archive.append(generateH5pJson(lessonTitle), { name: 'h5p.json' });
-    archive.append(generateH5pContentJson(lessonTitle, packagedSlides), { name: 'content/content.json' });
+    archive.append(generateH5pContentJson(lessonTitle, packagedSlides, opts), { name: 'content/content.json' });
 
     await archive.finalize();
 }

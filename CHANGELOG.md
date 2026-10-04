@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.6.6] - 2026-10-04 - Word Ordering & Dialogue Cloze Question Types in SCORM/H5P/UI
+
+### Added
+- **Word Ordering Interactive Question Type (`ORDER`)**:
+  - AI generation schema and prompt examples for sentence scrambling into word components.
+  - Interactive SCORM student player with drag/click sentence assembly zone, word pool pills, reset button, and practice/gate verification.
+  - Full support for both Dark and Light high-contrast themes.
+- **Dialogue & Passage Cloze Question Type (`CLOZE`)**:
+  - AI generation schema and prompt examples for multi-speaker dialogues (`A:`, `B:`) and narrative paragraphs with bracketed inline blanks `[answer]` and alternatives `[opt1|opt2]`.
+  - Automatically generated Word Bank hint pills.
+  - SCORM player with inline inputs embedded directly into passage text lines with practice evaluation and mastery gate grading.
+- **Step 5 Generator UI & Slide Preview Enhancements**:
+  - Added checkboxes for `ORDER` and `CLOZE` in interactive questions configuration modal with updated "Chọn tất cả (7 dạng)".
+  - Specialized preview cards for ordered sentences and cloze passages in slide preview stack.
+- **E-Learning Export Polish**:
+  - H5P export helper updated with badge labels and data mapping for `ORDER` and `CLOZE`.
+  - SCORM helper enhanced with center-aligned layout, TUAF branding cleanup, and theme toggling.
+
 ## [v1.6.5] - 2026-10-01 - Interactive Slides, Matching Questions & Bilingual Speaker Notes
 
 ### Added

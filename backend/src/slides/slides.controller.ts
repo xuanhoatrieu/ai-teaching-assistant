@@ -6,6 +6,7 @@ import {
     Delete,
     Body,
     Param,
+    Query,
     UseGuards,
     Request,
     Logger,
@@ -114,18 +115,24 @@ export class SlidesController {
     @Get('export/scorm')
     async exportScorm(
         @Param('lessonId') lessonId: string,
+        @Query('templateId') templateId: string,
+        @Query('bgOption') bgOption: string,
+        @Query('theme') theme: string,
         @Res() res: Response,
     ) {
-        return this.slidesService.exportScorm(lessonId, res);
+        return this.slidesService.exportScorm(lessonId, res, templateId, bgOption, theme);
     }
 
     // GET /lessons/:lessonId/slides/export/h5p - Export lesson as H5P course presentation
     @Get('export/h5p')
     async exportH5p(
         @Param('lessonId') lessonId: string,
+        @Query('templateId') templateId: string,
+        @Query('bgOption') bgOption: string,
+        @Query('theme') theme: string,
         @Res() res: Response,
     ) {
-        return this.slidesService.exportH5p(lessonId, res);
+        return this.slidesService.exportH5p(lessonId, res, templateId, bgOption, theme);
     }
 
     // GET /lessons/:lessonId/slides/export/moodle-xml - Export interactive questions as Moodle Quiz XML

@@ -22,6 +22,17 @@ function escapeXml(str: string): string {
         .replace(/'/g, '&apos;');
 }
 
+export interface ScormExportOptions {
+    templateId?: string;
+    templateName?: string;
+    titleBgUrl?: string;
+    contentBgUrl?: string;
+    bgOption?: string; // 'tuaf_clean' | 'tuaf_full' | 'minimal' | 'custom'
+    theme?: string; // 'light' | 'dark'
+    hasTitleBg?: boolean;
+    hasContentBg?: boolean;
+}
+
 export function resolveLocalMediaFile(publicUrl: string): string | null {
     if (!publicUrl) return null;
     const cleanUrl = publicUrl.split('?')[0];
@@ -29,6 +40,22 @@ export function resolveLocalMediaFile(publicUrl: string): string | null {
     // Handle /uploads/... path
     if (cleanUrl.startsWith('/uploads')) {
         const p = path.join(process.cwd(), cleanUrl);
+        if (fs.existsSync(p)) return p;
+    }
+
+    // Handle /files/public/system/templates/{uuid}/{filename}
+    const systemTemplateMatch = cleanUrl.match(/^\/files\/public\/system\/templates\/([^/]+)\/(.+)$/);
+    if (systemTemplateMatch) {
+        const [, templateUuid, filename] = systemTemplateMatch;
+        const p = path.join(process.cwd(), 'datauser', 'system', 'templates', templateUuid, filename);
+        if (fs.existsSync(p)) return p;
+    }
+
+    // Handle /files/public/{userId}/templates/{uuid}/{filename}
+    const userTemplateMatch = cleanUrl.match(/^\/files\/public\/([^/]+)\/templates\/([^/]+)\/(.+)$/);
+    if (userTemplateMatch) {
+        const [, userId, templateUuid, filename] = userTemplateMatch;
+        const p = path.join(process.cwd(), 'datauser', userId, 'templates', templateUuid, filename);
         if (fs.existsSync(p)) return p;
     }
 
@@ -52,6 +79,22 @@ export function resolveLocalMediaFile(publicUrl: string): string | null {
     if (cleanUrl.startsWith('/templates')) {
         const p = path.join(process.cwd(), 'public', cleanUrl);
         if (fs.existsSync(p)) return p;
+
+        // Fallback: check in datauser/system/templates
+        const sysDir = path.join(process.cwd(), 'datauser', 'system', 'templates');
+        if (fs.existsSync(sysDir)) {
+            try {
+                const dirs = fs.readdirSync(sysDir);
+                for (const d of dirs) {
+                    const subPath = path.join(sysDir, d);
+                    if (fs.statSync(subPath).isDirectory()) {
+                        const isTitle = cleanUrl.includes('1.png') || cleanUrl.includes('title');
+                        const candidate = path.join(subPath, isTitle ? 'title_bg.png' : 'content_bg.png');
+                        if (fs.existsSync(candidate)) return candidate;
+                    }
+                }
+            } catch {}
+        }
     }
 
     // Fallback: absolute path
@@ -96,7 +139,13 @@ ${fileEntries}
 </manifest>`;
 }
 
-export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): string {
+export function generateScormPlayerHtml(lessonTitle: string, slides: any[], options?: ScormExportOptions): string {
+    const bgOption = options?.bgOption || 'tuaf_clean';
+    const initialTheme = (options?.theme === 'dark') ? 'dark' : 'light';
+    const isMinimal = bgOption === 'minimal';
+    const isImageBg = (bgOption === 'tuaf_full' || bgOption === 'custom') && (options?.hasTitleBg || options?.hasContentBg);
+    const isTuafClean = !isMinimal && !isImageBg;
+
     const slidesJson = JSON.stringify(slides.map(s => {
         let bullets: any[] = [];
         if (Array.isArray(s.bullets)) {
@@ -167,18 +216,60 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --primary: #4f46e5;
-      --primary-light: #e0e7ff;
-      --primary-dark: #3730a3;
+      --primary: #005a36;
+      --primary-light: #ecfdf5;
+      --primary-dark: #003d24;
       --success: #10b981;
       --success-light: #d1fae5;
       --danger: #ef4444;
       --danger-light: #fee2e2;
-      --bg: #0f172a;
+      --tuaf-green: #005a36;
+      --tuaf-dark-green: #003d24;
+      --tuaf-gold: #b45309;
+    }
+
+    /* Light Theme (TUAF Academic Light - Default) */
+    body.theme-light {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --card-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.08);
+      --text-main: #0f172a;
+      --text-sub: #334155;
+      --header-bg: rgba(255, 255, 255, 0.95);
+      --header-border: #e2e8f0;
+      --slide-title-color: #004d2c;
+      --bullet-bg: #ffffff;
+      --bullet-border: #e2e8f0;
+      --bullet-point: #0f172a;
+      --bullet-desc: #334155;
+      --btn-sec-bg: #f1f5f9;
+      --btn-sec-color: #1e293b;
+      --btn-sec-border: #cbd5e1;
+      --btn-pri-bg: #005a36;
+      --btn-pri-hover: #004328;
+    }
+
+    /* Dark Theme (Modern Dark) */
+    body.theme-dark {
+      --bg: #0b1120;
       --card-bg: #1e293b;
       --card-border: #334155;
+      --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
       --text-main: #f8fafc;
-      --text-sub: #94a3b8;
+      --text-sub: #cbd5e1;
+      --header-bg: rgba(30, 41, 59, 0.9);
+      --header-border: #334155;
+      --slide-title-color: #ffffff;
+      --bullet-bg: rgba(255, 255, 255, 0.03);
+      --bullet-border: rgba(255, 255, 255, 0.06);
+      --bullet-point: #f1f5f9;
+      --bullet-desc: #94a3b8;
+      --btn-sec-bg: rgba(255, 255, 255, 0.08);
+      --btn-sec-color: #e2e8f0;
+      --btn-sec-border: rgba(255, 255, 255, 0.15);
+      --btn-pri-bg: #2d6a4f;
+      --btn-pri-hover: #1b4332;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -189,13 +280,14 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      transition: background-color 0.25s ease, color 0.25s ease;
     }
 
     /* Header Bar */
     header {
-      background: rgba(30, 41, 59, 0.85);
+      background: var(--header-bg);
       backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--card-border);
+      border-bottom: 1px solid var(--header-border);
       padding: 12px 24px;
       display: flex;
       align-items: center;
@@ -203,29 +295,133 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       position: sticky;
       top: 0;
       z-index: 50;
+      transition: background 0.25s ease, border-color 0.25s ease;
     }
+    .header-title-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .tuaf-header-brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 10px;
+      border-radius: 8px;
+      flex-shrink: 0;
+    }
+    body.theme-light .tuaf-header-brand {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+    }
+    body.theme-dark .tuaf-header-brand {
+      background: rgba(45, 106, 79, 0.25);
+      border: 1px solid rgba(82, 183, 136, 0.4);
+    }
+    .tuaf-brand-icon {
+      font-size: 1.15rem;
+    }
+    .tuaf-brand-text {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.1;
+    }
+    .tuaf-brand-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    body.theme-light .tuaf-brand-title { color: #065f46; }
+    body.theme-dark .tuaf-brand-title { color: #95d5b2; }
+
+    .tuaf-brand-sub {
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    body.theme-light .tuaf-brand-sub { color: #047857; }
+    body.theme-dark .tuaf-brand-sub { color: #74c69d; }
+
+    .tuaf-header-sep {
+      width: 1px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    body.theme-light .tuaf-header-sep { background: #cbd5e1; }
+    body.theme-dark .tuaf-header-sep { background: rgba(255, 255, 255, 0.15); }
+
     .header-title {
       font-size: 1.1rem;
       font-weight: 700;
-      color: #fff;
       display: flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
+    }
+    .lesson-header-text {
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 480px;
     }
     .header-controls {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 14px;
     }
+    .theme-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--card-border);
+      transition: all 0.2s ease;
+    }
+    body.theme-light .theme-toggle-btn {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    body.theme-light .theme-toggle-btn:hover {
+      background: #ecfdf5;
+      border-color: #005a36;
+      color: #005a36;
+    }
+    body.theme-dark .theme-toggle-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+      color: #f8fafc;
+    }
+    body.theme-dark .theme-toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
     .score-badge {
-      background: rgba(16, 185, 129, 0.15);
-      color: #34d399;
-      border: 1px solid rgba(16, 185, 129, 0.3);
       padding: 4px 12px;
       border-radius: 999px;
       font-size: 0.85rem;
       font-weight: 600;
     }
+    body.theme-light .score-badge {
+      background: #ecfdf5;
+      color: #065f46;
+      border: 1px solid #a7f3d0;
+    }
+    body.theme-dark .score-badge {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
     .autoplay-toggle {
       display: flex;
       align-items: center;
@@ -239,12 +435,15 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
     /* Progress bar */
     .progress-track {
       height: 4px;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(0, 0, 0, 0.08);
       width: 100%;
+    }
+    body.theme-dark .progress-track {
+      background: rgba(255, 255, 255, 0.1);
     }
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, #6366f1, #10b981);
+      background: linear-gradient(90deg, #005a36, #10b981);
       width: 0%;
       transition: width 0.3s ease;
     }
@@ -261,17 +460,159 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       gap: 20px;
     }
 
-    /* Slide Card */
+    /* Slide Card Base */
     .slide-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 16px;
       padding: 28px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      box-shadow: var(--card-shadow);
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 20px;
       min-height: 520px;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .slide-body-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      width: 100%;
+      min-height: 0;
+    }
+    .slide-body-container.title-slide-body {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    .slide-body-container.title-slide-body .title-slide-hero {
+      max-width: 900px;
+      margin: 0 auto 16px auto;
+    }
+
+    /* TUAF Clean Mode (Maximum presentation area + subtle branding) */
+    .mode-tuaf-clean .slide-card {
+      border-top: 4px solid #005a36;
+    }
+
+    body.theme-light.mode-tuaf-clean .slide-card.is-title-slide {
+      background: radial-gradient(circle at 90% 10%, rgba(0, 90, 54, 0.08) 0%, #ffffff 75%);
+      border: 1px solid rgba(0, 90, 54, 0.2);
+      border-top: 6px solid #005a36;
+    }
+    body.theme-dark.mode-tuaf-clean .slide-card.is-title-slide {
+      background: radial-gradient(circle at 90% 10%, rgba(45, 106, 79, 0.4) 0%, rgba(15, 23, 42, 0.98) 75%);
+      border: 1px solid rgba(82, 183, 136, 0.35);
+      border-top: 6px solid #52b788;
+    }
+
+    /* Title Slide Specific Elements */
+    .title-slide-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    body.theme-light .title-slide-badge {
+      background: #ecfdf5;
+      border: 1px solid #a7f3d0;
+      color: #065f46;
+    }
+    body.theme-dark .title-slide-badge {
+      background: rgba(45, 106, 79, 0.3);
+      border: 1px solid rgba(82, 183, 136, 0.4);
+      color: #95d5b2;
+    }
+    .title-slide-badge .badge-sub {
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding-left: 8px;
+      margin-left: 4px;
+    }
+    body.theme-light .title-slide-badge .badge-sub {
+      color: #047857;
+      border-left: 1px solid #a7f3d0;
+    }
+    body.theme-dark .title-slide-badge .badge-sub {
+      color: rgba(255, 255, 255, 0.6);
+      border-left: 1px solid rgba(255, 255, 255, 0.2);
+    }
+    .title-slide-hero {
+      margin-bottom: 20px;
+    }
+    .title-slide-main-heading {
+      font-size: 2.2rem;
+      font-weight: 800;
+      line-height: 1.25;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+    body.theme-light .title-slide-main-heading {
+      color: #004d2c;
+    }
+    body.theme-dark .title-slide-main-heading {
+      color: #ffffff;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    }
+    .title-slide-desc {
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+    body.theme-light .title-slide-desc {
+      color: #334155;
+    }
+    body.theme-dark .title-slide-desc {
+      color: #cbd5e1;
+    }
+
+    /* Full Image Background Mode */
+    body.theme-light.mode-has-image-bg .slide-card.is-title-slide {
+      background: url('images/bg_title.png') center / cover no-repeat;
+      border: 1px solid rgba(0, 90, 54, 0.2);
+    }
+    body.theme-light.mode-has-image-bg .slide-card.is-content-slide {
+      background: url('images/bg_content.png') center / cover no-repeat;
+      border: 1px solid #e2e8f0;
+    }
+    body.theme-light.mode-has-image-bg .slide-content-grid .bullets-list,
+    body.theme-light.mode-has-image-bg .audio-lab-container .bullets-list {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(8px);
+      border-radius: 14px;
+      padding: 20px;
+      border: 1px solid rgba(0, 90, 54, 0.16);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+    }
+    body.theme-light.mode-has-image-bg .title-slide-hero {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(8px);
+      padding: 22px 26px;
+      border-radius: 16px;
+      border: 1px solid rgba(0, 90, 54, 0.18);
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
+    }
+    body.theme-light.mode-has-image-bg .slide-top-header {
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(6px);
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 90, 54, 0.12);
+    }
+
+    body.theme-dark.mode-has-image-bg .slide-card.is-title-slide {
+      background: linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.92)), url('images/bg_title.png') center / cover no-repeat;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    body.theme-dark.mode-has-image-bg .slide-card.is-content-slide {
+      background: linear-gradient(rgba(30, 41, 59, 0.9), rgba(30, 41, 59, 0.96)), url('images/bg_content.png') center / cover no-repeat;
+      border: 1px solid rgba(255, 255, 255, 0.12);
     }
 
     .slide-top-header {
@@ -326,7 +667,9 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       display: grid;
       grid-template-columns: 1.3fr 0.9fr;
       gap: 28px;
-      align-items: start;
+      align-items: center;
+      width: 100%;
+      margin: auto 0;
     }
     .slide-content-grid.single-media {
       display: flex;
@@ -344,9 +687,25 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
     /* Layout: Split Reversed (Left Media, Right Content) */
     .slide-content-grid.layout-split-reversed {
       grid-template-columns: 0.9fr 1.3fr;
+      align-items: center;
+      margin: auto 0;
     }
     @media (max-width: 860px) {
       .slide-content-grid.layout-split-reversed { grid-template-columns: 1fr; }
+    }
+
+    /* Layout when slide has no image (Center text block gracefully) */
+    .slide-content-grid.no-media {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      margin: auto 0;
+    }
+    .slide-content-grid.no-media .bullets-list {
+      max-width: 860px;
+      width: 100%;
     }
 
     /* Layout: Comparison 3 Columns (Bento Cards) */
@@ -355,7 +714,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       grid-template-columns: repeat(3, 1fr);
       gap: 20px;
       width: 100%;
-      margin-bottom: 24px;
+      margin: auto 0;
     }
     @media (max-width: 900px) {
       .layout-comparison-grid { grid-template-columns: 1fr; }
@@ -397,22 +756,27 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       flex-direction: column;
       gap: 24px;
       width: 100%;
+      margin: auto 0;
     }
     .hero-media-box {
       width: 100%;
       border-radius: 16px;
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.12);
-      background: #0f172a;
+      background: rgba(15, 23, 42, 0.6);
       max-height: 480px;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .hero-media-box img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+      max-width: 100%;
+      max-height: 480px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 14px;
+      display: block;
     }
     .hero-takeaways-grid {
       display: grid;
@@ -428,7 +792,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       position: relative;
       padding-left: 32px;
       border-left: 2px dashed rgba(99, 102, 241, 0.45);
-      margin: 12px 0 24px 20px;
+      margin: auto 0 auto 20px;
     }
     .process-step-item {
       position: relative;
@@ -533,16 +897,21 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       border-radius: 14px;
       overflow: hidden;
       border: 1px solid rgba(255, 255, 255, 0.1);
-      background: #0f172a;
-      aspect-ratio: 16 / 10;
+      background: rgba(15, 23, 42, 0.6);
       display: flex;
       align-items: center;
       justify-content: center;
+      max-height: 480px;
+      width: 100%;
     }
     .slide-media-box img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+      max-width: 100%;
+      max-height: 480px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 12px;
+      display: block;
     }
 
     /* Extra Sample Audio Player */
@@ -711,6 +1080,8 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
     .qtype-tag.mr { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.35); }
     .qtype-tag.fib { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.35); }
     .qtype-tag.match { background: rgba(236, 72, 153, 0.2); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.35); }
+    .qtype-tag.order { background: rgba(20, 184, 166, 0.2); color: #5eead4; border: 1px solid rgba(20, 184, 166, 0.35); }
+    .qtype-tag.cloze { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.35); }
 
     /* Matching Pairs styles */
     .match-container {
@@ -836,6 +1207,164 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       color: #6ee7b7 !important;
     }
     .fib-input.wrong {
+      border-color: #ef4444 !important;
+      background: rgba(239, 68, 68, 0.15) !important;
+      color: #fca5a5 !important;
+    }
+
+    /* ORDER Interactive (Put words in correct order) */
+    .order-interactive-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .order-sentence-zone {
+      min-height: 54px;
+      border: 2px dashed rgba(99, 102, 241, 0.4);
+      background: rgba(15, 23, 42, 0.4);
+      border-radius: 12px;
+      padding: 10px 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      transition: all 0.2s ease;
+    }
+    .order-sentence-zone:empty::before {
+      content: attr(data-placeholder);
+      color: var(--text-sub);
+      font-size: 0.9rem;
+      font-style: italic;
+    }
+    .order-word-pool {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      min-height: 52px;
+      align-items: center;
+    }
+    .word-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 14px;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1.5px solid rgba(99, 102, 241, 0.35);
+      color: #f8fafc;
+      border-radius: 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    }
+    .word-pill:hover {
+      transform: translateY(-2px);
+      border-color: #10b981;
+      color: #10b981;
+    }
+    .word-pill.in-zone {
+      background: #005a36;
+      border-color: #10b981;
+      color: #ffffff;
+    }
+    .word-pill.correct {
+      background: #059669 !important;
+      border-color: #10b981 !important;
+      color: #ffffff !important;
+    }
+    .word-pill.wrong {
+      background: #dc2626 !important;
+      border-color: #ef4444 !important;
+      color: #ffffff !important;
+    }
+    .order-actions-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 4px;
+    }
+
+    /* CLOZE Interactive (Inline passage/dialogue blanks) */
+    .cloze-interactive-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .cloze-word-bank {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      color: var(--text-sub);
+    }
+    .cloze-bank-title {
+      font-weight: 700;
+      margin-right: 6px;
+    }
+    .cloze-bank-pill {
+      display: inline-block;
+      padding: 3px 10px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .cloze-passage-box {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 18px 22px;
+      font-size: 1.05rem;
+      line-height: 2.2;
+      color: #f1f5f9;
+    }
+    .cloze-dialogue-line {
+      margin-bottom: 8px;
+    }
+    .cloze-speaker {
+      font-weight: 700;
+      color: #34d399;
+      margin-right: 8px;
+    }
+    .cloze-inline-input {
+      display: inline-block;
+      min-width: 90px;
+      max-width: 170px;
+      padding: 4px 10px;
+      margin: 0 4px;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1.5px solid rgba(99, 102, 241, 0.4);
+      border-radius: 6px;
+      color: #ffffff;
+      font-size: 1rem;
+      font-weight: 600;
+      text-align: center;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .cloze-inline-input:focus {
+      border-color: #10b981;
+      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    }
+    .cloze-inline-input.correct {
+      border-color: #10b981 !important;
+      background: rgba(16, 185, 129, 0.15) !important;
+      color: #6ee7b7 !important;
+    }
+    .cloze-inline-input.wrong {
       border-color: #ef4444 !important;
       background: rgba(239, 68, 68, 0.15) !important;
       color: #fca5a5 !important;
@@ -996,6 +1525,256 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
     }
 
     /* Suppress duplicate TUAF LMS floating chatbot when injected inside SCORM iframe */
+    /* ========================================================
+       LIGHT THEME ACCESSIBLE CONTRAST ENHANCEMENTS (WCAG AAA)
+       ======================================================== */
+    body.theme-light .slide-title { color: #004d2c; }
+    body.theme-light .slide-top-header { border-bottom-color: #e2e8f0; }
+    body.theme-light .bullet-item {
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    }
+    body.theme-light .bullet-item:hover {
+      background: #f0fdf4;
+      border-color: #005a36;
+    }
+    body.theme-light .bullet-point { color: #0f172a; font-weight: 700; }
+    body.theme-light .bullet-desc { color: #334155; }
+    body.theme-light .speaker-btn {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+      color: #065f46;
+    }
+    body.theme-light .speaker-btn:hover {
+      background: #d1fae5;
+      border-color: #34d399;
+      color: #004d2c;
+    }
+    body.theme-light .speaker-btn.playing {
+      background: #d1fae5;
+      border-color: #059669;
+      color: #047857;
+    }
+    body.theme-light .slide-media-box,
+    body.theme-light .hero-media-box {
+      background: #f8fafc;
+      border-color: #e2e8f0;
+    }
+    body.theme-light .comparison-card {
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    }
+    body.theme-light .comparison-card-header {
+      color: #0f172a;
+      border-bottom-color: #f1f5f9;
+    }
+    body.theme-light .comparison-card-desc { color: #334155; }
+    body.theme-light .process-steps-container { border-left-color: rgba(0, 90, 54, 0.4); }
+    body.theme-light .process-step-item {
+      background: #ffffff;
+      border: 1.5px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+    }
+    body.theme-light .process-step-item:hover {
+      background: #f0fdf4;
+      border-color: #005a36;
+    }
+    body.theme-light .process-step-node {
+      background: #005a36;
+      color: #ffffff;
+      box-shadow: 0 0 0 4px #ffffff;
+    }
+    body.theme-light .process-step-title { color: #0f172a; }
+    body.theme-light .process-step-desc { color: #334155; }
+    body.theme-light .sample-audio-card {
+      background: #ecfdf5;
+      border-color: #a7f3d0;
+    }
+    body.theme-light .sample-audio-title { color: #065f46; }
+    body.theme-light .sample-audio-player { accent-color: #005a36; }
+    body.theme-light .interaction-card {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+    }
+    body.theme-light .interaction-header { border-bottom-color: #e2e8f0; }
+    body.theme-light .interaction-header-left { color: #005a36; }
+    body.theme-light .interaction-instruction { color: #475569; }
+    body.theme-light .question-block {
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+    }
+    body.theme-light .question-prompt { color: #0f172a; }
+    body.theme-light .option-btn {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      color: #1e293b;
+    }
+    body.theme-light .option-btn:hover:not(:disabled) {
+      background: #f0fdf4;
+      border-color: #005a36;
+      color: #005a36;
+    }
+    body.theme-light .option-btn.selected {
+      background: #ecfdf5 !important;
+      border-color: #005a36 !important;
+      color: #065f46 !important;
+      box-shadow: 0 0 0 2px rgba(0, 90, 54, 0.25) !important;
+    }
+    body.theme-light .option-btn.correct {
+      background: #d1fae5 !important;
+      border-color: #10b981 !important;
+      color: #065f46 !important;
+    }
+    body.theme-light .option-btn.wrong {
+      background: #fee2e2 !important;
+      border-color: #ef4444 !important;
+      color: #991b1b !important;
+    }
+    body.theme-light .explanation-box {
+      background: #f1f5f9;
+      border-left-color: #005a36;
+      color: #334155;
+    }
+    body.theme-light .qtype-tag.mc { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    body.theme-light .qtype-tag.tf { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    body.theme-light .qtype-tag.mr { background: #faf5ff; color: #7e22ce; border: 1px solid #e9d5ff; }
+    body.theme-light .qtype-tag.fib { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+    body.theme-light .qtype-tag.match { background: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8; }
+    body.theme-light .qtype-tag.order { background: #ecfeff; color: #0e7490; border: 1px solid #a5f3fc; }
+    body.theme-light .qtype-tag.cloze { background: #fdf4ff; color: #a21caf; border: 1px solid #f0abfc; }
+    body.theme-light .order-interactive-wrapper,
+    body.theme-light .cloze-interactive-wrapper {
+      background: #ffffff;
+      border-color: #e2e8f0;
+    }
+    body.theme-light .order-sentence-zone {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+    body.theme-light .order-word-pool {
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+    }
+    body.theme-light .word-pill {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    body.theme-light .word-pill:hover {
+      background: #f0fdf4;
+      border-color: #005a36;
+      color: #005a36;
+    }
+    body.theme-light .word-pill.in-zone,
+    body.theme-light .word-pill.picked {
+      background: #005a36;
+      border-color: #005a36;
+      color: #ffffff;
+    }
+    body.theme-light .cloze-word-bank {
+      background: #f1f5f9;
+      border-color: #e2e8f0;
+      color: #334155;
+    }
+    body.theme-light .cloze-bank-pill {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    body.theme-light .cloze-passage-box {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+      color: #1e293b;
+    }
+    body.theme-light .cloze-speaker {
+      color: #005a36;
+    }
+    body.theme-light .cloze-inline-input {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #0f172a;
+    }
+    body.theme-light .cloze-inline-input:focus {
+      border-color: #005a36;
+      box-shadow: 0 0 0 2px rgba(0, 90, 54, 0.2);
+    }
+    body.theme-light .cloze-inline-input.correct {
+      border-color: #10b981 !important;
+      background: #d1fae5 !important;
+      color: #065f46 !important;
+    }
+    body.theme-light .cloze-inline-input.wrong {
+      border-color: #ef4444 !important;
+      background: #fee2e2 !important;
+      color: #991b1b !important;
+    }
+    body.theme-light .match-row {
+      background: #ffffff;
+      border-color: #e2e8f0;
+    }
+    body.theme-light .match-left { color: #0f172a; }
+    body.theme-light .match-arrow { color: #005a36; }
+    body.theme-light .match-select {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    body.theme-light .cb-indicator {
+      border-color: #94a3b8;
+      background: #f8fafc;
+    }
+    body.theme-light .option-btn.selected .cb-indicator {
+      background: #005a36;
+      border-color: #005a36;
+      color: #ffffff;
+    }
+    body.theme-light .fib-input {
+      background: #ffffff;
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    body.theme-light .fib-input:focus {
+      border-color: #005a36;
+      box-shadow: 0 0 0 3px rgba(0, 90, 54, 0.2);
+    }
+    body.theme-light .gate-action-bar {
+      background: #f8fafc;
+      border-color: #005a36;
+    }
+    body.theme-light .gate-status-text { color: #334155; }
+    body.theme-light .gate-modal-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15);
+    }
+    body.theme-light .gate-modal-title { color: #0f172a; }
+    body.theme-light .gate-modal-desc { color: #334155; }
+    body.theme-light footer {
+      background: rgba(255, 255, 255, 0.95);
+      border-top-color: #e2e8f0;
+    }
+    body.theme-light .btn-secondary {
+      background: #f1f5f9;
+      color: #1e293b;
+      border-color: #cbd5e1;
+    }
+    body.theme-light .btn-secondary:hover:not(:disabled) {
+      background: #e2e8f0;
+      color: #0f172a;
+    }
+    body.theme-light .btn-primary {
+      background: #005a36;
+      color: #ffffff;
+    }
+    body.theme-light .btn-primary:hover:not(:disabled) {
+      background: #004328;
+    }
+    body.theme-light .slide-counter { color: #475569; }
+
+    /* Suppress duplicate TUAF LMS floating chatbot when injected inside SCORM iframe */
     #tuaf-widget-bubble, #tuaf-widget-popup, [id*="tuaf-widget"] {
       display: none !important;
       visibility: hidden !important;
@@ -1006,15 +1785,36 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
     }
   </style>
 </head>
-<body>
+<body class="theme-${initialTheme} ${isTuafClean ? 'mode-tuaf-clean' : ''} ${isImageBg ? 'mode-has-image-bg' : ''} ${isMinimal ? 'mode-minimal' : ''}">
 
   <!-- Header -->
   <header>
+    ${!isMinimal ? `
+    <div class="header-title-wrapper">
+      <div class="tuaf-header-brand">
+        <span class="tuaf-brand-icon">🌿</span>
+        <div class="tuaf-brand-text">
+          <span class="tuaf-brand-title">ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN</span>
+          <span class="tuaf-brand-sub">HỌC LIỆU SỐ TƯƠNG TÁC • TUAF</span>
+        </div>
+      </div>
+      <div class="tuaf-header-sep"></div>
+      <div class="header-title">
+        <span>📖</span>
+        <span class="lesson-header-text">${escapeXml(lessonTitle)}</span>
+      </div>
+    </div>
+    ` : `
     <div class="header-title">
       <span>🎓</span>
-      <span>${escapeXml(lessonTitle)}</span>
+      <span class="lesson-header-text">${escapeXml(lessonTitle)}</span>
     </div>
+    `}
     <div class="header-controls">
+      <button class="theme-toggle-btn" id="themeToggleBtn" onclick="toggleTheme()" title="Chuyển chế độ Sáng / Tối">
+        <span id="themeIcon">${initialTheme === 'dark' ? '🌙' : '☀️'}</span>
+        <span id="themeLabel">${initialTheme === 'dark' ? 'Tối' : 'Sáng'}</span>
+      </button>
       <label class="autoplay-toggle">
         <input type="checkbox" id="autoplayCheckbox" checked>
         <span>Tự động phát lời giảng</span>
@@ -1292,6 +2092,10 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
             typeBadgeHtml = '<span class="qtype-tag fib">Điền vào chỗ trống</span>';
           } else if (qType === 'MATCH') {
             typeBadgeHtml = '<span class="qtype-tag match">Nối cặp tương ứng</span>';
+          } else if (qType === 'ORDER') {
+            typeBadgeHtml = '<span class="qtype-tag order">Sắp xếp từ</span>';
+          } else if (qType === 'CLOZE') {
+            typeBadgeHtml = '<span class="qtype-tag cloze">Điền khuyết hội thoại</span>';
           } else {
             typeBadgeHtml = '<span class="qtype-tag mc">Chọn 1 đáp án</span>';
           }
@@ -1443,6 +2247,134 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
               \${practiceCheckBtn}
             \`;
 
+          } else if (qType === 'ORDER') {
+            // Put words in correct order
+            const rawWords = (Array.isArray(q.words) && q.words.length > 0)
+              ? q.words
+              : (q.correctSentence || '').trim().split(/\\s+/);
+            const correctJson = encodeURIComponent(JSON.stringify(q.correctSentence || rawWords.join(' ')));
+            const savedSentence = (typeof selectedVal === 'string') ? selectedVal.trim() : '';
+            const pickedWords = savedSentence ? savedSentence.split(/\\s+/) : [];
+
+            let tempWords = [...rawWords].sort(() => 0.5 - Math.random());
+            let pickedHtml = '';
+            let poolHtml = '';
+
+            if (pickedWords.length > 0) {
+              pickedHtml = pickedWords.map((w) => {
+                return \`<button type="button" class="word-pill in-zone" data-word="\${encodeURIComponent(w)}" onclick="unpickOrderWord('\${qKey}', this, \${isGated ? 1 : 0}, \${idx})">\${w} ✕</button>\`;
+              }).join('');
+              let remainPool = [...tempWords];
+              pickedWords.forEach(pw => {
+                const fIdx = remainPool.findIndex(rw => rw.toLowerCase() === pw.toLowerCase());
+                if (fIdx > -1) remainPool.splice(fIdx, 1);
+              });
+              poolHtml = remainPool.map((w) => {
+                return \`<button type="button" class="word-pill" data-word="\${encodeURIComponent(w)}" onclick="pickOrderWord('\${qKey}', this, \${isGated ? 1 : 0}, \${idx})">\${w}</button>\`;
+              }).join('');
+            } else {
+              poolHtml = tempWords.map((w) => {
+                return \`<button type="button" class="word-pill" data-word="\${encodeURIComponent(w)}" onclick="pickOrderWord('\${qKey}', this, \${isGated ? 1 : 0}, \${idx})">\${w}</button>\`;
+              }).join('');
+            }
+
+            const practiceCheckBtn = !isGated ? \`
+              <div style="margin-top: 10px;">
+                <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 14px;" onclick="checkOrderPracticeAnswer('\${qKey}', '\${correctJson}', this, 'expl_\${qKey}')">
+                  🔍 Kiểm tra câu sắp xếp
+                </button>
+              </div>
+            \` : '';
+
+            bodyHtml = \`
+              <div class="order-interactive-wrapper" id="order_wrap_\${qKey}" data-correct="\${correctJson}">
+                <div class="order-zone-label" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; font-weight: 600;">
+                  <span>✏️ Câu bạn sắp xếp (nhấp từ để bỏ ra):</span>
+                  <button type="button" class="btn btn-secondary" style="font-size: 0.8rem; padding: 3px 10px;" onclick="resetOrderWords('\${qKey}', \${isGated ? 1 : 0}, \${idx})">🔄 Đặt lại</button>
+                </div>
+                <div class="order-sentence-zone" id="sentence_zone_\${qKey}" data-placeholder="Nhấp các từ bên dưới theo thứ tự đúng để tạo câu...">
+                  \${pickedHtml}
+                </div>
+                <div class="order-pool-label" style="font-size: 0.9rem; font-weight: 600; margin-top: 4px;">
+                  <span>📦 Kho từ ngữ (nhấp từ để ghép vào câu):</span>
+                </div>
+                <div class="order-word-pool" id="word_pool_\${qKey}">
+                  \${poolHtml}
+                </div>
+              </div>
+              \${practiceCheckBtn}
+            \`;
+
+          } else if (qType === 'CLOZE') {
+            // Dialogue or passage with inline blanks [answer]
+            const rawPassage = q.passage || q.questionText || q.question || '';
+            const passageLines = rawPassage.split(/\\r?\\n/);
+            let blankCounter = 0;
+            const hintWords = [];
+            const userAnswersObj = (typeof selectedVal === 'object' && selectedVal !== null) ? selectedVal : {};
+
+            const passageHtml = passageLines.map(line => {
+              const trimmed = line.trim();
+              if (!trimmed) return '<div style="height: 10px;"></div>';
+
+              let speakerPrefix = '';
+              let lineContent = line;
+              const speakerMatch = line.match(/^([A-Za-z0-9_\\sÀ-ỹ]{1,20}):\\s*(.*)$/);
+              if (speakerMatch) {
+                speakerPrefix = \`<span class="cloze-speaker">\${speakerMatch[1]}:</span>\`;
+                lineContent = speakerMatch[2];
+              }
+
+              const formattedLine = lineContent.replace(/\\[([^\\]]+)\\]/g, (match, p1) => {
+                const bIdx = blankCounter++;
+                const acceptable = p1.split('|').map(s => s.trim());
+                acceptable.forEach(w => {
+                  if (!hintWords.includes(w)) hintWords.push(w);
+                });
+                const userVal = userAnswersObj[bIdx] || '';
+                const correctAttr = encodeURIComponent(JSON.stringify(acceptable));
+
+                if (isGated) {
+                  return \`<input type="text" class="cloze-inline-input" data-blank-idx="\${bIdx}" value="\${userVal}" oninput="recordGateCloze('\${qKey}', \${bIdx}, this.value, \${idx})" placeholder="(\${bIdx + 1})" />\`;
+                } else {
+                  return \`<input type="text" class="cloze-inline-input" data-blank-idx="\${bIdx}" data-correct="\${correctAttr}" placeholder="(\${bIdx + 1})" />\`;
+                }
+              });
+
+              return \`
+                <div class="cloze-dialogue-line">
+                  \${speakerPrefix}
+                  <span class="cloze-line-text">\${formattedLine}</span>
+                </div>
+              \`;
+            }).join('');
+
+            const shuffledHints = [...hintWords].sort(() => 0.5 - Math.random());
+            const wordBankHtml = shuffledHints.length > 0 ? \`
+              <div class="cloze-word-bank">
+                <span class="cloze-bank-title">🔤 Từ gợi ý (Word Bank):</span>
+                \${shuffledHints.map(h => \`<span class="cloze-bank-pill">\${h}</span>\`).join('')}
+              </div>
+            \` : '';
+
+            const practiceCheckBtn = !isGated ? \`
+              <div style="margin-top: 10px;">
+                <button class="btn btn-secondary" style="font-size: 0.85rem; padding: 6px 14px;" onclick="checkClozePracticeAnswer('\${qKey}', this, 'expl_\${qKey}')">
+                  🔍 Kiểm tra các chỗ trống
+                </button>
+              </div>
+            \` : '';
+
+            bodyHtml = \`
+              <div class="cloze-interactive-wrapper" id="cloze_wrap_\${qKey}">
+                \${wordBankHtml}
+                <div class="cloze-passage-box">
+                  \${passageHtml}
+                </div>
+              </div>
+              \${practiceCheckBtn}
+            \`;
+
           } else {
             // Standard Single Choice (MC)
             const optionsHtml = (q.options || []).map((opt, optIndex) => {
@@ -1537,7 +2469,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
 
       if (layoutType === 'split_reversed') {
         layoutBodyHtml = \`
-          <div class="slide-content-grid layout-split-reversed">
+          <div class="slide-content-grid layout-split-reversed \${!mediaHtml ? 'no-media' : ''}">
             \${mediaHtml}
             \${bulletsHtml ? \`<div class="bullets-list">\${bulletsHtml}</div>\` : ''}
           </div>
@@ -1606,7 +2538,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       } else {
         // split_standard (Default)
         layoutBodyHtml = \`
-          <div class="\${bulletsHtml ? 'slide-content-grid' : 'slide-content-grid single-media'}">
+          <div class="\${bulletsHtml ? 'slide-content-grid' : 'slide-content-grid single-media'} \${!mediaHtml ? 'no-media' : ''}">
             \${bulletsHtml ? \`<div class="bullets-list">\${bulletsHtml}</div>\` : ''}
             \${mediaHtml}
           </div>
@@ -1617,13 +2549,36 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
 
       // Construct Slide HTML
       const slideCard = document.getElementById('slideCard');
-      slideCard.innerHTML = \`
-        <div class="slide-top-header">
-          <h2 class="slide-title">\${slide.title}</h2>
-          \${speakerBtnHtml}
-        </div>
-        \${layoutBodyHtml}
-      \`;
+      slideCard.className = 'slide-card ' + (idx === 0 ? 'is-title-slide' : 'is-content-slide');
+
+      if (idx === 0) {
+        slideCard.innerHTML = \`
+          <div class="slide-top-header title-slide-top">
+            <div class="title-slide-badge">
+              <span>🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN</span>
+              <span class="badge-sub">BÀI GIẢNG ĐIỆN TỬ</span>
+            </div>
+            \${speakerBtnHtml}
+          </div>
+          <div class="slide-body-container title-slide-body">
+            <div class="title-slide-hero">
+              <h1 class="title-slide-main-heading">\${slide.title}</h1>
+              \${slide.speakerNote ? \`<p class="title-slide-desc">\${slide.speakerNote}</p>\` : ''}
+            </div>
+            \${layoutBodyHtml}
+          </div>
+        \`;
+      } else {
+        slideCard.innerHTML = \`
+          <div class="slide-top-header">
+            <h2 class="slide-title">\${slide.title}</h2>
+            \${speakerBtnHtml}
+          </div>
+          <div class="slide-body-container">
+            \${layoutBodyHtml}
+          </div>
+        \`;
+      }
 
       // Handle Narration Audio
       const narrationAudio = document.getElementById('narrationAudio');
@@ -1817,6 +2772,116 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
       updateSCORMScore();
     }
 
+    // ORDER helper functions
+    function getSentenceFromZone(qKey) {
+      const zone = document.getElementById('sentence_zone_' + qKey);
+      if (!zone) return '';
+      const pills = zone.querySelectorAll('.word-pill');
+      return Array.from(pills).map(p => decodeURIComponent(p.getAttribute('data-word') || '')).join(' ');
+    }
+
+    function pickOrderWord(qKey, pillEl, isGated, slideIdx) {
+      const zone = document.getElementById('sentence_zone_' + qKey);
+      if (!zone) return;
+      pillEl.classList.add('in-zone');
+      pillEl.innerHTML = decodeURIComponent(pillEl.getAttribute('data-word') || '') + ' ✕';
+      pillEl.onclick = function() { unpickOrderWord(qKey, pillEl, isGated, slideIdx); };
+      zone.appendChild(pillEl);
+      zone.classList.remove('correct', 'wrong');
+
+      const assembled = getSentenceFromZone(qKey);
+      if (isGated) {
+        if (!userGateAnswers[slideIdx]) userGateAnswers[slideIdx] = {};
+        userGateAnswers[slideIdx][qKey] = assembled;
+      }
+    }
+
+    function unpickOrderWord(qKey, pillEl, isGated, slideIdx) {
+      const pool = document.getElementById('word_pool_' + qKey);
+      const zone = document.getElementById('sentence_zone_' + qKey);
+      if (!pool) return;
+      pillEl.classList.remove('in-zone');
+      pillEl.innerHTML = decodeURIComponent(pillEl.getAttribute('data-word') || '');
+      pillEl.onclick = function() { pickOrderWord(qKey, pillEl, isGated, slideIdx); };
+      pool.appendChild(pillEl);
+      if (zone) zone.classList.remove('correct', 'wrong');
+
+      const assembled = getSentenceFromZone(qKey);
+      if (isGated) {
+        if (!userGateAnswers[slideIdx]) userGateAnswers[slideIdx] = {};
+        userGateAnswers[slideIdx][qKey] = assembled;
+      }
+    }
+
+    function resetOrderWords(qKey, isGated, slideIdx) {
+      const zone = document.getElementById('sentence_zone_' + qKey);
+      const pool = document.getElementById('word_pool_' + qKey);
+      if (!zone || !pool) return;
+      const pills = Array.from(zone.querySelectorAll('.word-pill'));
+      pills.forEach(pillEl => {
+        pillEl.classList.remove('in-zone');
+        pillEl.innerHTML = decodeURIComponent(pillEl.getAttribute('data-word') || '');
+        pillEl.onclick = function() { pickOrderWord(qKey, pillEl, isGated, slideIdx); };
+        pool.appendChild(pillEl);
+      });
+      zone.classList.remove('correct', 'wrong');
+      if (isGated && userGateAnswers[slideIdx]) {
+        userGateAnswers[slideIdx][qKey] = '';
+      }
+    }
+
+    function checkOrderPracticeAnswer(qKey, correctJson, btnEl, explId) {
+      const correctSentence = JSON.parse(decodeURIComponent(correctJson));
+      const userSentence = getSentenceFromZone(qKey);
+      const norm = function(s) {
+        return (s || '').trim().toLowerCase().replace(/[.,!?;:]+$/, '').replace(/\\s+/g, ' ');
+      };
+      const isMatch = norm(userSentence) === norm(correctSentence);
+      studentScores[qKey] = isMatch;
+
+      const zone = document.getElementById('sentence_zone_' + qKey);
+      if (zone) {
+        zone.classList.remove('correct', 'wrong');
+        zone.classList.add(isMatch ? 'correct' : 'wrong');
+      }
+
+      const expl = document.getElementById(explId);
+      if (expl) expl.classList.add('show');
+      updateSCORMScore();
+    }
+
+    // CLOZE helper functions
+    function recordGateCloze(qKey, bIdx, val, slideIdx) {
+      if (!userGateAnswers[slideIdx]) userGateAnswers[slideIdx] = {};
+      if (!userGateAnswers[slideIdx][qKey] || typeof userGateAnswers[slideIdx][qKey] !== 'object') {
+        userGateAnswers[slideIdx][qKey] = {};
+      }
+      userGateAnswers[slideIdx][qKey][bIdx] = val;
+    }
+
+    function checkClozePracticeAnswer(qKey, btnEl, explId) {
+      const container = document.getElementById('cloze_wrap_' + qKey);
+      if (!container) return;
+      const inputs = container.querySelectorAll('.cloze-inline-input');
+      let allCorrect = true;
+      inputs.forEach(inp => {
+        const correctList = JSON.parse(decodeURIComponent(inp.getAttribute('data-correct') || '[]'));
+        const userVal = (inp.value || '').trim().toLowerCase();
+        const acceptable = correctList.map(c => (c || '').trim().toLowerCase());
+        inp.classList.remove('correct', 'wrong');
+        if (acceptable.includes(userVal)) {
+          inp.classList.add('correct');
+        } else {
+          inp.classList.add('wrong');
+          allCorrect = false;
+        }
+      });
+      studentScores[qKey] = allCorrect;
+      const expl = document.getElementById(explId);
+      if (expl) expl.classList.add('show');
+      updateSCORMScore();
+    }
+
     function submitGateQuiz(slideIdx) {
       const slide = SLIDES[slideIdx];
       const questions = slide.interaction?.questions || [];
@@ -1868,6 +2933,39 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
             });
             studentScores[qKey] = matchCorrect;
             if (matchCorrect) correctCount++;
+          }
+        } else if (qType === 'ORDER') {
+          const rawWords = (Array.isArray(q.words) && q.words.length > 0)
+            ? q.words
+            : (q.correctSentence || '').trim().split(/\\s+/);
+          const norm = function(s) {
+            return (s || '').trim().toLowerCase().replace(/[.,!?;:]+$/, '').replace(/\\s+/g, ' ');
+          };
+          const expected = norm(q.correctSentence || rawWords.join(' '));
+          if (typeof ans === 'string' && ans.trim() !== '') {
+            answeredCount++;
+            const isMatch = norm(ans) === expected;
+            studentScores[qKey] = isMatch;
+            if (isMatch) correctCount++;
+          }
+        } else if (qType === 'CLOZE') {
+          const rawPassage = q.passage || q.questionText || q.question || '';
+          const matches = [...rawPassage.matchAll(/\\[([^\\]]+)\\]/g)];
+          const totalBlanks = matches.length;
+          const userBlanks = (typeof ans === 'object' && ans !== null) ? ans : {};
+          const filledCount = Object.keys(userBlanks).filter(k => (userBlanks[k] || '').trim() !== '').length;
+          if (totalBlanks > 0 && filledCount >= totalBlanks) {
+            answeredCount++;
+            let allCorrect = true;
+            matches.forEach((m, bIdx) => {
+              const acceptable = m[1].split('|').map(s => s.trim().toLowerCase());
+              const userVal = (userBlanks[bIdx] || '').trim().toLowerCase();
+              if (!acceptable.includes(userVal)) {
+                allCorrect = false;
+              }
+            });
+            studentScores[qKey] = allCorrect;
+            if (allCorrect) correctCount++;
           }
         } else {
           // MC, TF
@@ -2036,6 +3134,43 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
         });
       }
 
+      // Theme Switch Logic
+      const defaultTheme = '${initialTheme}';
+      let currentTheme = defaultTheme;
+      try {
+        const saved = sessionStorage.getItem('scorm_theme_override');
+        if (saved === 'light' || saved === 'dark') {
+          currentTheme = saved;
+        }
+      } catch (e) {}
+
+      window.applyTheme = function(theme) {
+        currentTheme = theme;
+        const icon = document.getElementById('themeIcon');
+        const label = document.getElementById('themeLabel');
+        if (theme === 'dark') {
+          document.body.classList.remove('theme-light');
+          document.body.classList.add('theme-dark');
+          if (icon) icon.innerText = '🌙';
+          if (label) label.innerText = 'Tối';
+        } else {
+          document.body.classList.remove('theme-dark');
+          document.body.classList.add('theme-light');
+          if (icon) icon.innerText = '☀️';
+          if (label) label.innerText = 'Sáng';
+        }
+      };
+
+      window.toggleTheme = function() {
+        const next = currentTheme === 'light' ? 'dark' : 'light';
+        window.applyTheme(next);
+        try {
+          sessionStorage.setItem('scorm_theme_override', next);
+        } catch (e) {}
+      };
+
+      window.applyTheme(currentTheme);
+
       // Suppress duplicate TUAF LMS chatbot bubble if injected into SCORM frame
       function removeDuplicateLmsWidgets() {
         const bubble = document.getElementById('tuaf-widget-bubble');
@@ -2051,13 +3186,40 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[]): str
 </html>`;
 }
 
-export async function packageScormZip(lessonTitle: string, lessonId: string, slides: any[], outputStream: any): Promise<void> {
+export async function packageScormZip(
+    lessonTitle: string, 
+    lessonId: string, 
+    slides: any[], 
+    outputStream: any,
+    options?: ScormExportOptions
+): Promise<void> {
     const archive = archiver('zip', { zlib: { level: 9 } });
 
     archive.pipe(outputStream);
 
     const assetFiles: string[] = ['index.html'];
     const packagedSlides = slides.map(s => ({ ...s }));
+    const opts: ScormExportOptions = { ...(options || {}) };
+
+    // Pack background images if full image mode or custom template requested
+    if (opts.bgOption === 'tuaf_full' || (opts.bgOption === 'custom' && (opts.titleBgUrl || opts.contentBgUrl))) {
+        if (opts.titleBgUrl) {
+            const resolvedTitleBg = resolveLocalMediaFile(opts.titleBgUrl);
+            if (resolvedTitleBg && fs.existsSync(resolvedTitleBg)) {
+                archive.file(resolvedTitleBg, { name: 'images/bg_title.png' });
+                assetFiles.push('images/bg_title.png');
+                opts.hasTitleBg = true;
+            }
+        }
+        if (opts.contentBgUrl) {
+            const resolvedContentBg = resolveLocalMediaFile(opts.contentBgUrl);
+            if (resolvedContentBg && fs.existsSync(resolvedContentBg)) {
+                archive.file(resolvedContentBg, { name: 'images/bg_content.png' });
+                assetFiles.push('images/bg_content.png');
+                opts.hasContentBg = true;
+            }
+        }
+    }
 
     for (const slide of packagedSlides) {
         // 1. Pack Slide Image into images/
@@ -2100,7 +3262,7 @@ export async function packageScormZip(lessonTitle: string, lessonId: string, sli
     const manifestXml = generateScormManifest(lessonId, lessonTitle, assetFiles);
     archive.append(manifestXml, { name: 'imsmanifest.xml' });
 
-    const playerHtml = generateScormPlayerHtml(lessonTitle, packagedSlides);
+    const playerHtml = generateScormPlayerHtml(lessonTitle, packagedSlides, opts);
     archive.append(playerHtml, { name: 'index.html' });
 
     await archive.finalize();

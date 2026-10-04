@@ -50,6 +50,8 @@ export function Step5GeneratePPTX() {
     const [error, setError] = useState<string | null>(null);
     const [templates, setTemplates] = useState<Template[]>([]);
     const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+    const [scormH5pBgOption, setScormH5pBgOption] = useState<string>('tuaf_clean');
+    const [scormH5pTheme, setScormH5pTheme] = useState<'light' | 'dark'>('light');
     const [slideProgress, setSlideProgress] = useState<SlideProgress[]>([]);
     const [totalSlides, setTotalSlides] = useState(0);
     const [contentGenerated, setContentGenerated] = useState(false);
@@ -108,7 +110,7 @@ export function Step5GeneratePPTX() {
     const [interactiveImageBase64, setInteractiveImageBase64] = useState<string | null>(null);
     const modalAudioInputRef = useRef<HTMLInputElement | null>(null);
     const modalImageInputRef = useRef<HTMLInputElement | null>(null);
-    const [selectedQTypes, setSelectedQTypes] = useState<string[]>(['MC', 'TF', 'MR', 'FIB', 'MATCH']);
+    const [selectedQTypes, setSelectedQTypes] = useState<string[]>(['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
     const [interactiveQCount, setInteractiveQCount] = useState<number>(5);
     const [interactivePassScore, setInteractivePassScore] = useState<number>(4);
     const [interactiveFallbackSlide, setInteractiveFallbackSlide] = useState<number>(1);
@@ -494,7 +496,13 @@ export function Step5GeneratePPTX() {
     const handleExportScorm = async () => {
         try {
             setIsExportingScorm(true);
-            const res = await api.get(`/lessons/${lessonId}/slides/export/scorm`, { responseType: 'blob' });
+            const params = new URLSearchParams();
+            if (selectedTemplate) params.append('templateId', selectedTemplate);
+            if (scormH5pBgOption) params.append('bgOption', scormH5pBgOption);
+            if (scormH5pTheme) params.append('theme', scormH5pTheme);
+
+            const queryString = params.toString() ? `?${params.toString()}` : '';
+            const res = await api.get(`/lessons/${lessonId}/slides/export/scorm${queryString}`, { responseType: 'blob' });
             const blob = new Blob([res.data], { type: 'application/zip' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -515,7 +523,13 @@ export function Step5GeneratePPTX() {
     const handleExportH5p = async () => {
         try {
             setIsExportingH5p(true);
-            const res = await api.get(`/lessons/${lessonId}/slides/export/h5p`, { responseType: 'blob' });
+            const params = new URLSearchParams();
+            if (selectedTemplate) params.append('templateId', selectedTemplate);
+            if (scormH5pBgOption) params.append('bgOption', scormH5pBgOption);
+            if (scormH5pTheme) params.append('theme', scormH5pTheme);
+
+            const queryString = params.toString() ? `?${params.toString()}` : '';
+            const res = await api.get(`/lessons/${lessonId}/slides/export/h5p${queryString}`, { responseType: 'blob' });
             const blob = new Blob([res.data], { type: 'application/zip' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -900,7 +914,7 @@ export function Step5GeneratePPTX() {
         setInteractiveImageFile(null);
         setInteractiveImagePreview(null);
         setInteractiveImageBase64(null);
-        setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH']);
+        setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
         setInteractiveQCount(5);
         setInteractivePassScore(4);
         setInteractiveAllowContinueWithoutPass(false);
@@ -936,11 +950,11 @@ export function Step5GeneratePPTX() {
 
         if (parsed?.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
             const existingTypes = Array.from(new Set(parsed.questions.map((q: any) => q.type || 'MC'))) as string[];
-            setSelectedQTypes(existingTypes.length > 0 ? existingTypes : ['MC', 'TF', 'MR', 'FIB', 'MATCH']);
+            setSelectedQTypes(existingTypes.length > 0 ? existingTypes : ['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
             setInteractiveQCount(parsed.questions.length);
             setInteractivePassScore(parsed.passScore || 4);
         } else {
-            setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH']);
+            setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
             setInteractiveQCount(5);
             setInteractivePassScore(4);
         }
@@ -1322,36 +1336,70 @@ export function Step5GeneratePPTX() {
             {/* Template Selector with Preview */}
             {hasSlideScript && (
                 <div className="template-selector-section">
-                    <label htmlFor="template-select">🎨 Chọn mẫu PowerPoint:</label>
                     <div className="template-selector-row">
-                        <select
-                            id="template-select"
-                            value={selectedTemplate}
-                            onChange={(e) => setSelectedTemplate(e.target.value)}
-                            className="template-dropdown"
-                        >
-                            <optgroup label="Mẫu hệ thống">
-                                {templates.filter(t => t.isSystem).map(t => (
-                                    <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                            </optgroup>
-                            {templates.filter(t => !t.isSystem).length > 0 && (
-                                <optgroup label="Mẫu của tôi">
-                                    {templates.filter(t => !t.isSystem).map(t => (
+                        <div className="template-picker-group">
+                            <label htmlFor="template-select">🎨 Mẫu giao diện PowerPoint:</label>
+                            <select
+                                id="template-select"
+                                value={selectedTemplate}
+                                onChange={(e) => setSelectedTemplate(e.target.value)}
+                                className="template-dropdown"
+                            >
+                                <optgroup label="Mẫu hệ thống">
+                                    {templates.filter(t => t.isSystem).map(t => (
                                         <option key={t.id} value={t.id}>{t.name}</option>
                                     ))}
                                 </optgroup>
-                            )}
-                        </select>
+                                {templates.filter(t => !t.isSystem).length > 0 && (
+                                    <optgroup label="Mẫu của tôi">
+                                        {templates.filter(t => !t.isSystem).map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                            </select>
+                        </div>
+
+                        {/* SCORM / H5P Background Option */}
+                        <div className="template-picker-group">
+                            <label htmlFor="scorm-bg-select">🌐 Giao diện xuất SCORM & H5P:</label>
+                            <select
+                                id="scorm-bg-select"
+                                value={scormH5pBgOption}
+                                onChange={(e) => setScormH5pBgOption(e.target.value)}
+                                className="template-dropdown"
+                                title="Tùy chọn hình nền và nhận diện thương hiệu khi xuất SCORM / H5P"
+                            >
+                                <option value="tuaf_clean">🌿 Nhận diện TUAF Tối ưu (Khuyên dùng - Logo Player, viền xanh, tối đa diện tích slide)</option>
+                                <option value="tuaf_full">🖼️ Áp dụng ảnh nền gốc TUAF (Dùng cả 2 ảnh bìa & nội dung)</option>
+                                <option value="minimal">📄 Nền tối giản (Nền phẳng, không ảnh & không logo)</option>
+                                <option value="custom">🎨 Đồng bộ theo mẫu PPTX đã chọn ở trên</option>
+                            </select>
+                        </div>
+
+                        {/* SCORM / H5P Theme Mode */}
+                        <div className="template-picker-group">
+                            <label htmlFor="scorm-theme-select">🌓 Chủ đề màu sắc (Theme):</label>
+                            <select
+                                id="scorm-theme-select"
+                                value={scormH5pTheme}
+                                onChange={(e) => setScormH5pTheme(e.target.value as 'light' | 'dark')}
+                                className="template-dropdown"
+                                title="Lựa chọn tông màu sáng học thuật (độ tương phản cao) hoặc tông màu tối cho gói xuất"
+                            >
+                                <option value="light">☀️ Giao diện Sáng (Học thuật TUAF - Khuyên dùng cho LMS & Giảng đường)</option>
+                                <option value="dark">🌙 Giao diện Tối (Modern Slate Dark - Tối ưu ban đêm)</option>
+                            </select>
+                        </div>
 
                         {/* Template Preview */}
                         {selectedTpl && (
-                            <div className="template-preview-small">
+                            <div className="template-preview-small" title="Xem trước ảnh bìa và nội dung của template">
                                 {selectedTpl.titleBgUrl && (
-                                    <img src={`${API_BASE}${selectedTpl.titleBgUrl}`} alt="Title" title="Title BG" />
+                                    <img src={`${API_BASE}${selectedTpl.titleBgUrl}`} alt="Title" title="Ảnh bìa (Title)" />
                                 )}
                                 {selectedTpl.contentBgUrl && (
-                                    <img src={`${API_BASE}${selectedTpl.contentBgUrl}`} alt="Content" title="Content BG" />
+                                    <img src={`${API_BASE}${selectedTpl.contentBgUrl}`} alt="Content" title="Ảnh nội dung (Content)" />
                                 )}
                             </div>
                         )}
@@ -1860,7 +1908,7 @@ export function Step5GeneratePPTX() {
                                                                                     <div className="interactive-q-title">
                                                                                         <strong>Câu {qIdx + 1}:</strong> {q.question}
                                                                                         <span className={`qtype-badge qtype-${qType.toLowerCase()}`}>
-                                                                                            {qType === 'MR' ? '☑ Chọn nhiều' : qType === 'TF' ? '⚖️ Đúng / Sai' : qType === 'FIB' ? '✏️ Điền khuyết' : qType === 'MATCH' ? '🔗 Nối cặp' : '🔘 Chọn 1'}
+                                                                                            {qType === 'MR' ? '☑ Chọn nhiều' : qType === 'TF' ? '⚖️ Đúng / Sai' : qType === 'FIB' ? '✏️ Điền khuyết' : qType === 'MATCH' ? '🔗 Nối cặp' : qType === 'ORDER' ? '🔤 Sắp xếp từ' : qType === 'CLOZE' ? '💬 Điền khuyết hội thoại' : '🔘 Chọn 1'}
                                                                                         </span>
                                                                                     </div>
 
@@ -1901,6 +1949,35 @@ export function Step5GeneratePPTX() {
                                                                                                         <span className="pair-right">🎯 {pair.right}</span>
                                                                                                     </div>
                                                                                                 ))}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* Order words display */}
+                                                                                    {qType === 'ORDER' && (
+                                                                                        <div className="order-words-display" style={{ marginTop: 8, padding: '10px 14px', background: 'rgba(6, 182, 212, 0.08)', borderRadius: 8, border: '1px solid rgba(6, 182, 212, 0.25)' }}>
+                                                                                            <div style={{ fontSize: '0.85rem', color: '#0891b2', fontWeight: 600, marginBottom: 6 }}>
+                                                                                                🔤 Câu sắp xếp đúng: <code>{q.correctSentence || (Array.isArray(q.words) ? q.words.join(' ') : '')}</code>
+                                                                                            </div>
+                                                                                            {Array.isArray(q.words) && q.words.length > 0 && (
+                                                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                                                                                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Các từ thành phần:</span>
+                                                                                                    {q.words.map((w: string, wIdx: number) => (
+                                                                                                        <span key={wIdx} style={{ background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>{w}</span>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* Cloze passage display */}
+                                                                                    {qType === 'CLOZE' && (
+                                                                                        <div className="cloze-passage-display" style={{ marginTop: 8, padding: '12px 14px', background: 'rgba(217, 70, 239, 0.06)', borderRadius: 8, border: '1px solid rgba(217, 70, 239, 0.25)' }}>
+                                                                                            <div style={{ fontSize: '0.85rem', color: '#a21caf', fontWeight: 600, marginBottom: 6 }}>
+                                                                                                💬 Đoạn hội thoại / ngữ cảnh điền khuyết:
+                                                                                            </div>
+                                                                                            <div style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', color: '#334155', lineHeight: 1.8, fontStyle: 'italic', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                                                                                                {q.passage || q.questionText || ''}
                                                                                             </div>
                                                                                         </div>
                                                                                     )}
@@ -2916,9 +2993,9 @@ Câu 4: Water [.....] at 100 degrees Celsius.
                                             <button
                                                 type="button"
                                                 className="btn-text-tiny"
-                                                onClick={() => setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH'])}
+                                                onClick={() => setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE'])}
                                             >
-                                                Chọn tất cả (5 dạng)
+                                                Chọn tất cả (7 dạng)
                                             </button>
                                         </div>
                                     </div>
@@ -2995,6 +3072,36 @@ Câu 4: Water [.....] at 100 degrees Celsius.
                                             <div className="qtype-card-body">
                                                 <span className="qtype-name">🔗 Nối cặp tương ứng (Matching Pairs)</span>
                                                 <span className="qtype-sub">Ghép nối khái niệm cột A với định nghĩa cột B</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`qtype-card ${selectedQTypes.includes('ORDER') ? 'checked' : ''}`}
+                                            onClick={() => toggleQType('ORDER')}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedQTypes.includes('ORDER')}
+                                                onChange={() => {}}
+                                            />
+                                            <div className="qtype-card-body">
+                                                <span className="qtype-name">🔤 Sắp xếp từ thành câu (Word Ordering)</span>
+                                                <span className="qtype-sub">Put words in correct order: nhấp từ để ghép câu hoàn chỉnh</span>
+                                            </div>
+                                        </div>
+
+                                        <div
+                                            className={`qtype-card ${selectedQTypes.includes('CLOZE') ? 'checked' : ''}`}
+                                            onClick={() => toggleQType('CLOZE')}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedQTypes.includes('CLOZE')}
+                                                onChange={() => {}}
+                                            />
+                                            <div className="qtype-card-body">
+                                                <span className="qtype-name">💬 Điền khuyết hội thoại / đoạn văn (Cloze)</span>
+                                                <span className="qtype-sub">Hội thoại A-B hoặc đoạn văn có các ô trống [từ] trực tiếp</span>
                                             </div>
                                         </div>
                                     </div>
