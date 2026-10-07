@@ -2563,9 +2563,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
           <div class="slide-body-container title-slide-body">
             <div class="title-slide-hero">
               <h1 class="title-slide-main-heading">\${slide.title}</h1>
-              \${slide.speakerNote ? \`<p class="title-slide-desc">\${slide.speakerNote}</p>\` : ''}
             </div>
-            \${layoutBodyHtml}
           </div>
         \`;
       } else {

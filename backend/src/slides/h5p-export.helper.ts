@@ -112,7 +112,62 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         const hasAudio = !!s.h5pAudioPath;
         const hasSampleAudio = !!s.h5pSampleAudioPath;
 
-        // 3. Slide Title (Single-line clean header, no redundant 'Slide X' stacking)
+        // Special Layout for Slide 1 (idx === 0: Cover / Title Slide)
+        if (idx === 0) {
+            const slideTitleText = s.title || `Slide ${s.slideIndex}`;
+            const badgeBg = isDarkTheme ? 'rgba(45, 106, 79, 0.35)' : 'rgba(0, 90, 54, 0.12)';
+            const badgeColor = isDarkTheme ? '#95d5b2' : '#005a36';
+
+            // 1. Centered Title Card
+            elements.push({
+                x: 6,
+                y: 30,
+                width: 88,
+                height: 40,
+                action: {
+                    library: 'H5P.AdvancedText 1.1',
+                    params: {
+                        text: `<div style="text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            <div style="display: inline-block; padding: 4px 16px; border-radius: 999px; background: ${badgeBg}; color: ${badgeColor}; font-size: 0.9em; font-weight: 700; margin-bottom: 18px;">🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN • BÀI GIẢNG ĐIỆN TỬ</div>
+                            <h1 style="margin: 0; padding: 0; font-size: 2.4em; line-height: 1.35; color: ${titleColor}; font-weight: 800;">${escapeHtml(slideTitleText)}</h1>
+                        </div>`
+                    },
+                    subContentId: `title_${idx}`
+                }
+            });
+
+            // 2. Narration Audio Button (plays audio for slide 1!)
+            if (hasAudio) {
+                elements.push({
+                    x: 93.5,
+                    y: 2.5,
+                    width: 4,
+                    height: 6,
+                    action: {
+                        library: 'H5P.Audio 1.5',
+                        params: {
+                            playerMode: 'minimalistic',
+                            fitToWrapper: false,
+                            controls: false,
+                            autoplay: false,
+                            title: 'Nghe lời giảng',
+                            files: [
+                                {
+                                    path: s.h5pAudioPath,
+                                    mime: 'audio/mpeg',
+                                    copyright: { license: 'U' }
+                                }
+                            ]
+                        },
+                        subContentId: `audio_narration_${idx}`
+                    }
+                });
+            }
+
+            return { elements };
+        }
+
+        // 3. Slide Title (Single-line clean header for content slides)
         const slideTitleText = s.title || `Slide ${s.slideIndex}`;
         elements.push({
             x: 3,

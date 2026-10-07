@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.6.7] - 2026-10-07 - Clean Title Slide 1 in SCORM and H5P Export
+
+### Fixed
+- **SCORM & H5P Export Title Slide 1 Optimization**:
+  - Removed speaker note lecture transcript text (`speakerNote`) from being printed onto the visual screen of Slide 1 in SCORM exports, ensuring consistent presentation with subsequent slides.
+  - Removed body layout and bullet elements from Slide 1 in both SCORM and H5P packages, cleanly displaying only the centered lesson title and TUAF badge.
+  - Kept narration audio playback and speaker button intact on Slide 1 for both SCORM and H5P exports.
+
 ## [v1.6.6] - 2026-10-04 - Word Ordering & Dialogue Cloze Question Types in SCORM/H5P/UI
 
 ### Added
