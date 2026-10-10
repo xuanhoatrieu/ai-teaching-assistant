@@ -199,9 +199,118 @@ const MOODLE_NEGATIVE_FRACTIONS: Record<number, string> = {
 };
 
 /**
+ * Extract and normalize lesson number and title.
+ * Automatically pads single-digit lesson numbers (< 10) with leading zero (e.g., 'Bài 1' -> 'Bài 01', 'bai2' -> 'Bài 02').
+ * Returns { lessonCode: 'B01', normalizedTitle: 'Bài 01 - Giới thiệu', lessonNumber: 1 }.
+ */
+export function extractAndNormalizeLesson(rawTitle: string): {
+    lessonCode: string;
+    normalizedTitle: string;
+    lessonNumber: number;
+} {
+    if (!rawTitle || typeof rawTitle !== 'string') {
+        return { lessonCode: 'B01', normalizedTitle: 'Bài 01', lessonNumber: 1 };
+    }
+
+    let cleaned = rawTitle.replace(/\.pptx$/i, '').trim();
+
+    // 1. Try to find lesson number from common patterns
+    let lessonNum: number | null = null;
+    const patterns = [
+        /(?:bài|bai|lesson|unit|chương|chuong)\s*0*(\d+)/i,
+        /\bB0*(\d+)\b/i,
+        /(?:^|[\s_\-])0*(\d+)(?:[\s.:_\-]|$)/,
+    ];
+
+    for (const pat of patterns) {
+        const m = cleaned.match(pat);
+        if (m && m[1]) {
+            lessonNum = parseInt(m[1], 10);
+            break;
+        }
+    }
+
+    if (lessonNum === null || isNaN(lessonNum) || lessonNum <= 0) {
+        lessonNum = 1;
+    }
+
+    const paddedNum = String(lessonNum).padStart(2, '0');
+    const lessonCode = 'B' + paddedNum;
+
+    // 2. Normalize the title string so any single digit (<10) is padded to 2 digits
+    let normalizedTitle = cleaned;
+
+    // Replace 'Bài 1', 'Bai 2', 'Lesson 3', 'Unit 4', 'Chương 5' with single digit
+    normalizedTitle = normalizedTitle.replace(
+        /(bài|bai|lesson|unit|chương|chuong)\s*(\d)(?!\d)/gi,
+        (_match, prefix, digit) => prefix + ' ' + String(digit).padStart(2, '0'),
+    );
+
+    // Replace leading number like '1. ', '2 - ', '3: '
+    normalizedTitle = normalizedTitle.replace(
+        /^(\s*)(\d)([\s.:\-_])/g,
+        (_match, space, digit, delim) => space + String(digit).padStart(2, '0') + delim,
+    );
+
+    // If title has no 'Bài' or 'Lesson' or 'Unit' but was just 'bai02' -> 'Bài 02'
+    if (/^bai\s*0*\d+$/i.test(cleaned)) {
+        normalizedTitle = 'Bài ' + paddedNum;
+    }
+
+    return { lessonCode, normalizedTitle, lessonNumber: lessonNum };
+}
+
+/**
+ * Format question name for Moodle XML (Cách 1):
+ * Format: `${lessonCode}-${qCode}: ${preview}`
+ * e.g., "B01-ENG-01: What is the principal array object provided by NumPy?"
+ */
+export function formatEnglishQuestionName(
+    q: EnglishQuestionData,
+    lessonCode: string = 'B01',
+    defaultTypePrefix: string = 'ENG',
+): string {
+    const orderNum = q.questionOrder || 1;
+    const paddedOrder = String(orderNum).padStart(2, '0');
+
+    // Extract or build question code (e.g. ENG-01, MATCH-01, PHON-01)
+    let qCode = '';
+    if (q.title && q.title.trim()) {
+        const titleTrimmed = q.title.trim();
+        // If title already has something like "ENG-1" or "PHON-2" or "ENG-01" or "ENG 1"
+        const match = titleTrimmed.match(/^([A-Za-z]+)[-_ ]*0*(\d+)/);
+        if (match) {
+            const prefix = match[1].toUpperCase();
+            const num = String(match[2]).padStart(2, '0');
+            qCode = `${prefix}-${num}`;
+        } else {
+            qCode = titleTrimmed.length <= 15 ? titleTrimmed : `${defaultTypePrefix}-${paddedOrder}`;
+        }
+    } else {
+        qCode = `${defaultTypePrefix}-${paddedOrder}`;
+    }
+
+    // Clean question preview (strip cloze brackets/HTML/excess whitespace, limit to 80 chars)
+    let preview = (q.questionText || '')
+        .replace(/\{1:(?:SHORTANSWER|MULTICHOICE)[^}]*\}/gi, '___')
+        .replace(/<[^>]+>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    if (preview.length > 80) {
+        preview = preview.substring(0, 77) + '...';
+    }
+
+    if (!preview) {
+        return `${lessonCode}-${qCode}`;
+    }
+
+    return `${lessonCode}-${qCode}: ${preview}`;
+}
+
+/**
  * Build Moodle XML for Multiple Choice / Multiple Response
  */
-function buildEnglishMultichoiceXml(q: EnglishQuestionData, data: any): string {
+function buildEnglishMultichoiceXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
     const isSingle = data.single !== false && q.questionType.toUpperCase() !== 'MR';
     const options: Array<{ text: string; isCorrect?: boolean; fraction?: number; feedback?: string }> =
         Array.isArray(data.options) ? data.options : [];
@@ -263,7 +372,7 @@ function buildEnglishMultichoiceXml(q: EnglishQuestionData, data: any): string {
         }).join('\n');
     }
 
-    const name = q.title || `ENG-${q.questionOrder || 1}: ${q.questionText.substring(0, 80)}`;
+    const name = formatEnglishQuestionName(q, lessonCode, 'ENG');
 
     return `  <question type="multichoice">
     <name><text>${escapeForCdata(name)}</text></name>
@@ -285,9 +394,9 @@ ${answersXml}
 /**
  * Build Moodle XML for Matching question
  */
-function buildEnglishMatchXml(q: EnglishQuestionData, data: any): string {
+function buildEnglishMatchXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
     const pairs: Array<any> = Array.isArray(data.pairs) ? data.pairs : [];
-    const name = q.title || `MATCH-${q.questionOrder || 1}: ${q.questionText.substring(0, 80)}`;
+    const name = formatEnglishQuestionName(q, lessonCode, 'MATCH');
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
 
     const subquestionsXml = pairs.map((pair) => {
@@ -319,8 +428,8 @@ ${subquestionsXml}
 /**
  * Build Moodle XML for Cloze (Embedded Answers)
  */
-function buildEnglishClozeXml(q: EnglishQuestionData, data: any): string {
-    const name = q.title || `CLOZE-${q.questionOrder || 1}: ${q.questionText.substring(0, 80)}`;
+function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
+    const name = formatEnglishQuestionName(q, lessonCode, 'CLOZE');
     let rawContent = data.clozeText || q.questionText;
 
     // Normalize all blank weights to 1 so Moodle doesn't sum weights as 1+2=3.00
@@ -362,8 +471,8 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any): string {
 /**
  * Build Moodle XML for Short Answer
  */
-function buildEnglishShortAnswerXml(q: EnglishQuestionData, data: any): string {
-    const name = q.title || `SA-${q.questionOrder || 1}: ${q.questionText.substring(0, 80)}`;
+function buildEnglishShortAnswerXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
+    const name = formatEnglishQuestionName(q, lessonCode, 'SA');
     const answers: any[] = Array.isArray(data.acceptableAnswers)
         ? data.acceptableAnswers
         : data.correctAnswer ? [data.correctAnswer] : ['correct'];
@@ -399,8 +508,8 @@ ${answersXml}
 /**
  * Build Moodle XML for True / False
  */
-function buildEnglishTrueFalseXml(q: EnglishQuestionData, data: any): string {
-    const name = q.title || `TF-${q.questionOrder || 1}: ${q.questionText.substring(0, 80)}`;
+function buildEnglishTrueFalseXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
+    const name = formatEnglishQuestionName(q, lessonCode, 'TF');
     const isTrue = data.correctAnswer === true || String(data.correctAnswer).toLowerCase() === 'true';
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
 
@@ -428,8 +537,8 @@ function buildEnglishTrueFalseXml(q: EnglishQuestionData, data: any): string {
 /**
  * Build Moodle XML for Essay / Analysis
  */
-function buildEnglishEssayXml(q: EnglishQuestionData, data: any): string {
-    const name = q.title || `ESSAY-${q.questionOrder || 1}: ${q.questionText.substring(0, 80)}`;
+function buildEnglishEssayXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
+    const name = formatEnglishQuestionName(q, lessonCode, 'ESSAY');
     let graderInfoStr = '';
     const rawGrader = data.graderInfo || data.rubric;
     if (typeof rawGrader === 'object' && rawGrader !== null) {
@@ -470,7 +579,7 @@ function buildEnglishEssayXml(q: EnglishQuestionData, data: any): string {
 /**
  * Polymorphic dispatcher for English questions
  */
-export function buildEnglishQuestionXml(q: EnglishQuestionData): string {
+export function buildEnglishQuestionXml(q: EnglishQuestionData, lessonCode: string = 'B01'): string {
     let data: any = {};
     try {
         data = typeof q.dataJson === 'string' ? JSON.parse(q.dataJson) : q.dataJson || {};
@@ -483,22 +592,22 @@ export function buildEnglishQuestionXml(q: EnglishQuestionData): string {
     switch (type) {
         case 'MATCH':
         case 'MATCHING':
-            return buildEnglishMatchXml(q, data);
+            return buildEnglishMatchXml(q, data, lessonCode);
         case 'CLOZE':
-            return buildEnglishClozeXml(q, data);
+            return buildEnglishClozeXml(q, data, lessonCode);
         case 'SHORTANSWER':
         case 'SA':
-            return buildEnglishShortAnswerXml(q, data);
+            return buildEnglishShortAnswerXml(q, data, lessonCode);
         case 'TRUEFALSE':
         case 'TF':
-            return buildEnglishTrueFalseXml(q, data);
+            return buildEnglishTrueFalseXml(q, data, lessonCode);
         case 'ESSAY':
-            return buildEnglishEssayXml(q, data);
+            return buildEnglishEssayXml(q, data, lessonCode);
         case 'MC':
         case 'MR':
         case 'MULTICHOICE':
         default:
-            return buildEnglishMultichoiceXml(q, data);
+            return buildEnglishMultichoiceXml(q, data, lessonCode);
     }
 }
 
@@ -509,7 +618,9 @@ export function buildEnglishMoodleXml(
     questions: EnglishQuestionData[],
     lessonTitle: string,
 ): string {
-    const lessonSlug = lessonTitle
+    const { lessonCode, normalizedTitle } = extractAndNormalizeLesson(lessonTitle);
+
+    const lessonSlug = normalizedTitle
         .replace(/[^\w\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/gi, '')
         .replace(/\s+/g, '_')
         .substring(0, 50);
@@ -536,7 +647,7 @@ export function buildEnglishMoodleXml(
     for (const [type, list] of grouped.entries()) {
         parts.push(`  <!-- Type: ${type} (${list.length} questions) -->`);
         for (const q of list) {
-            parts.push(buildEnglishQuestionXml(q));
+            parts.push(buildEnglishQuestionXml(q, lessonCode));
             parts.push('');
         }
     }

@@ -30,6 +30,7 @@ import {
 import {
     buildMoodleXml,
     buildEnglishMoodleXml,
+    extractAndNormalizeLesson,
     ReviewQuestionData,
     EnglishQuestionData,
 } from '../questions/moodle-xml.helper';
@@ -241,6 +242,153 @@ export class PptxAudioToolService {
             // Clean up on failure
             await this.prisma.pptxAudioSession.delete({ where: { id: session.id } }).catch(() => {});
             throw new BadRequestException(`Failed to parse PPTX file: ${error.message}`);
+        }
+    }
+
+    // ========== CHUNKED UPLOAD SUPPORT ==========
+
+    async initChunkUpload(userId: string, fileName: string, fileSize: number, totalChunks: number) {
+        const safeFileName = fixUtf8Filename(fileName || 'presentation.pptx');
+        const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const chunkDir = path.join(process.cwd(), 'uploads', 'pptx-tool', 'chunks', uploadId);
+
+        if (!fs.existsSync(chunkDir)) {
+            fs.mkdirSync(chunkDir, { recursive: true });
+        }
+
+        // Clean up stale chunk directories older than 2 hours asynchronously
+        setImmediate(() => {
+            this.cleanStaleChunkDirs().catch((err) =>
+                this.logger.warn(`Failed cleaning stale chunks: ${err.message}`),
+            );
+        });
+
+        this.logger.log(
+            `Initialized chunked upload ${uploadId} for file "${safeFileName}" (${(fileSize / (1024 * 1024)).toFixed(1)} MB, ${totalChunks} chunks) by user ${userId}`,
+        );
+
+        return { uploadId, chunkSize: 10 * 1024 * 1024 };
+    }
+
+    async saveChunk(uploadId: string, chunkIndex: number, chunkFile: Express.Multer.File) {
+        const safeUploadId = uploadId.replace(/[^a-zA-Z0-9_-]/g, '');
+        const chunkDir = path.join(process.cwd(), 'uploads', 'pptx-tool', 'chunks', safeUploadId);
+
+        if (!fs.existsSync(chunkDir)) {
+            if (chunkFile.path && fs.existsSync(chunkFile.path)) {
+                fs.unlinkSync(chunkFile.path);
+            }
+            throw new BadRequestException('Session upload không tồn tại hoặc đã bị hủy.');
+        }
+
+        const targetChunkPath = path.join(chunkDir, `chunk_${chunkIndex}`);
+        try {
+            fs.renameSync(chunkFile.path, targetChunkPath);
+        } catch (err) {
+            fs.copyFileSync(chunkFile.path, targetChunkPath);
+            fs.unlinkSync(chunkFile.path);
+        }
+
+        return { success: true, chunkIndex };
+    }
+
+    async mergeChunksAndParse(uploadId: string, originalFileName: string, totalChunks: number, userId: string) {
+        const safeUploadId = uploadId.replace(/[^a-zA-Z0-9_-]/g, '');
+        const chunkDir = path.join(process.cwd(), 'uploads', 'pptx-tool', 'chunks', safeUploadId);
+
+        if (!fs.existsSync(chunkDir)) {
+            throw new BadRequestException('Session upload không tồn tại hoặc đã hết hạn.');
+        }
+
+        // Verify all chunks exist
+        for (let i = 0; i < totalChunks; i++) {
+            const chunkPath = path.join(chunkDir, `chunk_${i}`);
+            if (!fs.existsSync(chunkPath)) {
+                throw new BadRequestException(`Thiếu mảnh dữ liệu số ${i + 1}/${totalChunks}. Vui lòng thử lại.`);
+            }
+        }
+
+        const tempDir = path.join(process.cwd(), 'uploads', 'pptx-tool', 'temp');
+        if (!fs.existsSync(tempDir)) {
+            fs.mkdirSync(tempDir, { recursive: true });
+        }
+        const mergedPath = path.join(tempDir, `${safeUploadId}.pptx`);
+        const writeStream = fs.createWriteStream(mergedPath);
+
+        this.logger.log(`Merging ${totalChunks} chunks for uploadId ${safeUploadId} -> ${mergedPath}`);
+
+        try {
+            for (let i = 0; i < totalChunks; i++) {
+                const chunkPath = path.join(chunkDir, `chunk_${i}`);
+                await new Promise<void>((resolve, reject) => {
+                    const readStream = fs.createReadStream(chunkPath);
+                    readStream.on('error', reject);
+                    readStream.pipe(writeStream, { end: false });
+                    readStream.on('end', () => resolve());
+                });
+            }
+
+            await new Promise<void>((resolve, reject) => {
+                writeStream.end((err?: Error | null) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+        } catch (err: any) {
+            this.logger.error(`Error merging chunks for ${safeUploadId}: ${err.message}`);
+            if (fs.existsSync(mergedPath)) {
+                fs.unlinkSync(mergedPath);
+            }
+            throw new BadRequestException(`Lỗi khi ghép các mảnh file: ${err.message}`);
+        } finally {
+            // Always clean up chunk directory
+            try {
+                fs.rmSync(chunkDir, { recursive: true, force: true });
+            } catch (err: any) {
+                this.logger.warn(`Failed to clean up chunk directory ${chunkDir}: ${err.message}`);
+            }
+        }
+
+        const stat = fs.statSync(mergedPath);
+        this.logger.log(`Successfully merged ${safeUploadId}.pptx (${(stat.size / (1024 * 1024)).toFixed(2)} MB)`);
+
+        const mockMulterFile: Express.Multer.File = {
+            fieldname: 'file',
+            originalname: originalFileName,
+            encoding: '7bit',
+            mimetype: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            size: stat.size,
+            destination: tempDir,
+            filename: `${safeUploadId}.pptx`,
+            path: mergedPath,
+            buffer: Buffer.alloc(0),
+            stream: null as any,
+        };
+
+        return this.uploadAndParse(mockMulterFile, userId);
+    }
+
+    private async cleanStaleChunkDirs() {
+        const baseChunksDir = path.join(process.cwd(), 'uploads', 'pptx-tool', 'chunks');
+        if (!fs.existsSync(baseChunksDir)) return;
+
+        const entries = fs.readdirSync(baseChunksDir, { withFileTypes: true });
+        const now = Date.now();
+        const MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+        for (const entry of entries) {
+            if (entry.isDirectory()) {
+                const dirPath = path.join(baseChunksDir, entry.name);
+                try {
+                    const stat = fs.statSync(dirPath);
+                    if (now - stat.mtimeMs > MAX_AGE_MS) {
+                        fs.rmSync(dirPath, { recursive: true, force: true });
+                        this.logger.log(`Cleaned up stale chunk directory: ${entry.name}`);
+                    }
+                } catch {
+                    // Ignore individual folder errors
+                }
+            }
         }
     }
 
@@ -2011,23 +2159,27 @@ Return ONLY valid JSON format:
         const questions = (await this.getSessionQuestions(sessionId)).english;
         const session = await this.prisma.pptxAudioSession.findUnique({ where: { id: sessionId } });
 
+        const rawTitle = session?.fileName?.replace(/\.pptx$/i, '') || 'pptx_english';
+        const { normalizedTitle, lessonCode } = extractAndNormalizeLesson(rawTitle);
+
         const mapped: EnglishQuestionData[] = questions.map((q: any, i: number) => ({
-            id: q.id || `ENG-${i + 1}`,
+            id: q.id || `${lessonCode}-ENG-${String(i + 1).padStart(2, '0')}`,
             questionOrder: i + 1,
             questionType: (q.questionType || 'MC').toUpperCase(),
             subDiscipline: q.subDiscipline || 'ALL',
             difficulty: Number(q.difficulty) || 1,
-            title: q.title || `ENG-${i + 1}`,
+            title: q.title || `${lessonCode}-ENG-${String(i + 1).padStart(2, '0')}`,
             questionText: q.questionText,
             dataJson: q.dataJson,
             explanation: q.explanation || null,
             points: q.points || 1,
         }));
 
-        const xml = buildEnglishMoodleXml(mapped, session?.fileName?.replace('.pptx', '') || 'pptx_english');
-        const filename = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_moodle.xml`;
+        const xml = buildEnglishMoodleXml(mapped, normalizedTitle);
+        const filename = `${normalizedTitle}_english_moodle.xml`;
         res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
         res.send(xml);
     }
 

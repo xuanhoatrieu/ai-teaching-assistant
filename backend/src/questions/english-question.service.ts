@@ -6,7 +6,7 @@ import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { EnglishQuestion } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import type { Response } from 'express';
-import { buildEnglishMoodleXml, EnglishQuestionData } from './moodle-xml.helper';
+import { buildEnglishMoodleXml, extractAndNormalizeLesson, EnglishQuestionData } from './moodle-xml.helper';
 
 import { IsOptional, IsNumber, IsArray, IsString } from 'class-validator';
 
@@ -400,11 +400,15 @@ export class EnglishQuestionService implements OnModuleInit {
         const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
         const questions = await this.getQuestions(lessonId);
 
-        const xml = buildEnglishMoodleXml(questions as unknown as EnglishQuestionData[], lesson?.title || 'lesson');
-        const filename = `${lesson?.title || 'lesson'}_english_moodle.xml`;
+        const rawTitle = lesson?.title || 'lesson';
+        const { normalizedTitle } = extractAndNormalizeLesson(rawTitle);
+
+        const xml = buildEnglishMoodleXml(questions as unknown as EnglishQuestionData[], normalizedTitle);
+        const filename = `${normalizedTitle}_english_moodle.xml`;
 
         res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}"`);
         res.send(xml);
     }
 

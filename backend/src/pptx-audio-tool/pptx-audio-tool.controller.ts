@@ -40,6 +40,21 @@ const pptxStorage = diskStorage({
     },
 });
 
+// Configure multer for chunk uploads (temporary staging before moving into session folder)
+const chunkStorage = diskStorage({
+    destination: (req, file, cb) => {
+        const uploadDir = path.join(process.cwd(), 'uploads', 'pptx-tool', 'temp-chunks');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueName = `chunk-${Date.now()}-${Math.random().toString(36).substring(7)}.tmp`;
+        cb(null, uniqueName);
+    },
+});
+
 @Controller('pptx-audio-tool')
 @UseGuards(JwtAuthGuard)
 export class PptxAudioToolController {
@@ -57,7 +72,7 @@ export class PptxAudioToolController {
         return this.service.listSessions(userId);
     }
 
-    // 1. Upload PPTX → parse → create session
+    // 1. Upload PPTX (single request for small/medium files) → parse → create session
     @Post('upload')
     @UseInterceptors(FileInterceptor('file', { storage: pptxStorage }))
     async upload(
@@ -68,8 +83,52 @@ export class PptxAudioToolController {
         if (file?.originalname) {
             file.originalname = fixUtf8Filename(file.originalname);
         }
-        this.logger.log(`Upload PPTX: ${file.originalname} by user ${userId}`);
+        this.logger.log(`Upload PPTX: ${file?.originalname} by user ${userId}`);
         return this.service.uploadAndParse(file, userId);
+    }
+
+    // 1A. Init chunked upload (for large files to bypass Cloudflare 100MB limit)
+    @Post('upload-chunk/init')
+    async initChunkUpload(
+        @Body() body: { fileName: string; fileSize: number; totalChunks: number },
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.initChunkUpload(userId, body.fileName, body.fileSize, body.totalChunks);
+    }
+
+    // 1B. Upload single chunk (10MB/chunk)
+    @Post('upload-chunk')
+    @UseInterceptors(FileInterceptor('chunk', { storage: chunkStorage }))
+    async uploadChunk(
+        @UploadedFile() chunkFile: Express.Multer.File,
+        @Body('uploadId') uploadId: string,
+        @Body('chunkIndex') chunkIndex: string,
+        @Req() req: Request,
+    ) {
+        if (!chunkFile) {
+            throw new BadRequestException('Mảnh dữ liệu (chunk) không hợp lệ');
+        }
+        if (!uploadId || chunkIndex === undefined) {
+            if (chunkFile?.path && fs.existsSync(chunkFile.path)) {
+                fs.unlinkSync(chunkFile.path);
+            }
+            throw new BadRequestException('Thiếu uploadId hoặc chunkIndex');
+        }
+        return this.service.saveChunk(uploadId, parseInt(chunkIndex, 10), chunkFile);
+    }
+
+    // 1C. Complete chunked upload & merge chunks -> parse -> create session
+    @Post('upload-chunk/complete')
+    async completeChunkUpload(
+        @Body() body: { uploadId: string; fileName: string; totalChunks: number },
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        if (!body.uploadId || !body.fileName || !body.totalChunks) {
+            throw new BadRequestException('Thiếu thông tin hoàn tất upload');
+        }
+        return this.service.mergeChunksAndParse(body.uploadId, body.fileName, body.totalChunks, userId);
     }
 
     // 2. Get session info

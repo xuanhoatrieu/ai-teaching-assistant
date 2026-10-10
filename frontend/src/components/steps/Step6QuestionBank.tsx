@@ -606,10 +606,23 @@ export function Step6QuestionBank() {
             const response = await api.get(`/lessons/${lessonId}/english-questions/export/moodle-xml`, {
                 responseType: 'blob',
             });
+            const disposition = response.headers?.['content-disposition'] || response.headers?.['Content-Disposition'];
+            let filename = `${lessonData?.title || 'lesson'}_english_moodle.xml`;
+            if (disposition) {
+                const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+                if (utf8Match && utf8Match[1]) {
+                    filename = decodeURIComponent(utf8Match[1]);
+                } else {
+                    const asciiMatch = disposition.match(/filename=["']?([^"';]+)["']?/i);
+                    if (asciiMatch && asciiMatch[1]) {
+                        filename = decodeURIComponent(asciiMatch[1]);
+                    }
+                }
+            }
             const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/xml; charset=utf-8' }));
             const link = document.createElement('a');
             link.href = url;
-            link.setAttribute('download', `${lessonData?.title || 'lesson'}_english_moodle.xml`);
+            link.setAttribute('download', filename);
             document.body.appendChild(link);
             link.click();
             link.remove();

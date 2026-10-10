@@ -251,6 +251,7 @@ export function PptxAudioToolPage() {
     // Upload state
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadStatusText, setUploadStatusText] = useState('');
     const [dragOver, setDragOver] = useState(false);
 
     // Audio state
@@ -617,8 +618,10 @@ export function PptxAudioToolPage() {
 
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 1: UPLOAD
+    // STEP 1: UPLOAD (Direct upload for <= 25MB, Chunked Upload for > 25MB to bypass Cloudflare 100MB limit)
     // ═══════════════════════════════════════════════════════════════
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB per chunk
+
     const handleUpload = async (file: File) => {
         if (!file.name.endsWith('.pptx')) {
             alert('Chỉ hỗ trợ file .pptx');
@@ -627,35 +630,110 @@ export function PptxAudioToolPage() {
 
         try {
             setIsUploading(true);
-            setUploadProgress(10);
+            setUploadProgress(5);
 
-            const formData = new FormData();
-            formData.append('file', file);
+            let resData: any;
 
-            setUploadProgress(30);
-            const res = await api.post('/pptx-audio-tool/upload', formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: (e) => {
-                    if (e.total) setUploadProgress(Math.round((e.loaded / e.total) * 70) + 30);
-                },
-            });
+            if (file.size <= 25 * 1024 * 1024) {
+                // File nhỏ (<= 25MB): Upload 1 request thông thường
+                setUploadStatusText('Đang tải file bài giảng lên...');
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const res = await api.post('/pptx-audio-tool/upload', formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    onUploadProgress: (e) => {
+                        if (e.total) {
+                            setUploadProgress(Math.round((e.loaded / e.total) * 85) + 5);
+                        }
+                    },
+                });
+                resData = res.data;
+            } else {
+                // File lớn (> 25MB): Tải phân đoạn 10MB/mảnh để bypass Cloudflare 100MB limit & chống rớt mạng
+                const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+                const fileSizeMb = (file.size / (1024 * 1024)).toFixed(1);
+                console.log(`[Chunked Upload] ${file.name} (${fileSizeMb} MB) -> ${totalChunks} chunks`);
+
+                setUploadStatusText(`Đang khởi tạo tải phân đoạn (${fileSizeMb} MB)...`);
+                const initRes = await api.post('/pptx-audio-tool/upload-chunk/init', {
+                    fileName: file.name,
+                    fileSize: file.size,
+                    totalChunks,
+                });
+                const { uploadId } = initRes.data;
+
+                // Tải lần lượt từng chunk với cơ chế retry tối đa 3 lần
+                for (let i = 0; i < totalChunks; i++) {
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(file.size, start + CHUNK_SIZE);
+                    const chunkBlob = file.slice(start, end);
+
+                    const chunkFormData = new FormData();
+                    chunkFormData.append('chunk', chunkBlob, `chunk_${i}.tmp`);
+                    chunkFormData.append('uploadId', uploadId);
+                    chunkFormData.append('chunkIndex', String(i));
+
+                    let attempts = 0;
+                    let success = false;
+                    let lastErr: any = null;
+
+                    while (attempts < 3 && !success) {
+                        try {
+                            attempts++;
+                            setUploadStatusText(`Đang tải phần ${i + 1}/${totalChunks} (${Math.round((i / totalChunks) * 100)}%)...`);
+                            await api.post('/pptx-audio-tool/upload-chunk', chunkFormData, {
+                                headers: { 'Content-Type': 'multipart/form-data' },
+                            });
+                            success = true;
+                        } catch (err: any) {
+                            lastErr = err;
+                            console.warn(`[Chunked Upload] Retry chunk ${i + 1}/${totalChunks} (attempt ${attempts}):`, err);
+                            await new Promise((r) => setTimeout(r, 1000 * attempts));
+                        }
+                    }
+
+                    if (!success) {
+                        throw new Error(`Tải phần ${i + 1}/${totalChunks} thất bại sau 3 lần thử. ${lastErr?.message || ''}`);
+                    }
+
+                    // Tiến độ upload các mảnh từ 10% đến 85%
+                    const progressPercent = Math.round(10 + ((i + 1) / totalChunks) * 75);
+                    setUploadProgress(progressPercent);
+                }
+
+                // Hoàn tất và ghép các mảnh trên server
+                setUploadProgress(90);
+                setUploadStatusText('Đang ghép các phần và bóc tách slide PowerPoint...');
+                const completeRes = await api.post('/pptx-audio-tool/upload-chunk/complete', {
+                    uploadId,
+                    fileName: file.name,
+                    totalChunks,
+                });
+                resData = completeRes.data;
+            }
 
             setUploadProgress(100);
-            setSessionId(res.data.sessionId);
-            setSlides(res.data.slides || []);
-            setSession(res.data);
+            setUploadStatusText('Hoàn tất!');
+            setSessionId(resData.sessionId);
+            setSlides(resData.slides || []);
+            setSession(resData);
             setReviewQuestions([]);
             setInteractiveQuestions([]);
             setEnglishQuestions([]);
-            navigate(`/pptx-audio-tool/${res.data.sessionId}`);
+            navigate(`/pptx-audio-tool/${resData.sessionId}`);
             setActiveStep(1); // Auto-advance to audio step
             loadSessionHistory(); // Refresh history
         } catch (error: any) {
             console.error('Upload failed:', error);
-            alert(`Upload thất bại: ${error.response?.data?.message || error.message}`);
+            const msg = error.response?.status === 413
+                ? 'Dung lượng file vượt quá giới hạn tải lên (mã 413). Vui lòng thử lại.'
+                : (error.response?.data?.message || error.message);
+            alert(`Upload thất bại: ${msg}`);
         } finally {
             setIsUploading(false);
             setUploadProgress(0);
+            setUploadStatusText('');
         }
     };
 
@@ -1394,10 +1472,23 @@ export function PptxAudioToolPage() {
         if (!sessionId) return;
         try {
             const res = await api.get(`/pptx-audio-tool/${sessionId}/english-questions/export/moodle-xml`, { responseType: 'blob' });
+            const disposition = res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'];
+            let filename = `${session?.fileName?.replace(/\.pptx$/i, '') || 'pptx'}_english_moodle.xml`;
+            if (disposition) {
+                const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+                if (utf8Match && utf8Match[1]) {
+                    filename = decodeURIComponent(utf8Match[1]);
+                } else {
+                    const asciiMatch = disposition.match(/filename=["']?([^"';]+)["']?/i);
+                    if (asciiMatch && asciiMatch[1]) {
+                        filename = decodeURIComponent(asciiMatch[1]);
+                    }
+                }
+            }
             const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/xml; charset=utf-8' }));
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${session?.fileName?.replace('.pptx', '') || 'pptx'}_english_moodle.xml`;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -1512,10 +1603,11 @@ export function PptxAudioToolPage() {
                             {isUploading ? (
                                 <>
                                     <div className="upload-spinner"></div>
-                                    <p>Đang upload và phân tích file...</p>
+                                    <p>{uploadStatusText || 'Đang upload và phân tích file...'}</p>
                                     <div className="progress-bar-upload">
                                         <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
                                     </div>
+                                    <span style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '6px' }}>{uploadProgress}%</span>
                                 </>
                             ) : (
                                 <>

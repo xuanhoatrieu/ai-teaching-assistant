@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.6.8] - 2026-10-10 - Chunked Upload & Moodle XML Lesson Normalization
+
+### Added
+- **PPTX Audio Tool Chunked Upload (Bypassing HTTP 413 & Cloudflare 100MB limit)**:
+  - Client-side auto-slicing for PPTX files > 25MB into 10MB chunks with automatic 3-attempt retry per chunk.
+  - Backend streaming merge using Node.js filesystem streams (`fs.createReadStream` / `createWriteStream`) ensuring low memory overhead.
+  - Automatic directory cleanup with 2-hour TTL for abandoned chunk uploads.
+- **Moodle XML English Questions Export Normalization**:
+  - Automatic lesson number detection and zero-padding (`01..09`) from diverse naming formats (`Bài 1`, `bai 2`, `Lesson 3`, `Unit 4`, `1. Title`, `bai1.pptx`).
+  - Standardized category hierarchy in Moodle XML: `$course$/top/${lessonSlug}/English_Questions`.
+  - Question name tag `<name>` follows **Cách 1**: `<name><text>Bxx-ENG-yy: [Nội dung câu hỏi rút gọn]</text></name>` across all question types (MC, MR, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY).
+  - Dynamic UTF-8 `Content-Disposition` attachment filename support in PPTX Audio Tool and Question Bank UI.
+
 ## [v1.6.7] - 2026-10-07 - Clean Title Slide 1 in SCORM and H5P Export
 
 ### Fixed
