@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Component, type ErrorInfo, type ReactNode } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { api } from '../../lib/api';
+import { filenameFromDisposition } from '../../lib/download-filename';
 import { useJobPolling } from '../../hooks/useJobPolling';
 import { ModelSelector } from '../ModelSelector';
 import './Steps.css';
@@ -608,17 +609,7 @@ export function Step6QuestionBank() {
             });
             const disposition = response.headers?.['content-disposition'] || response.headers?.['Content-Disposition'];
             let filename = `${lessonData?.title || 'lesson'}_english_moodle.xml`;
-            if (disposition) {
-                const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-                if (utf8Match && utf8Match[1]) {
-                    filename = decodeURIComponent(utf8Match[1]);
-                } else {
-                    const asciiMatch = disposition.match(/filename=["']?([^"';]+)["']?/i);
-                    if (asciiMatch && asciiMatch[1]) {
-                        filename = decodeURIComponent(asciiMatch[1]);
-                    }
-                }
-            }
+            filename = filenameFromDisposition(disposition, filename, '.xml');
             const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/xml; charset=utf-8' }));
             const link = document.createElement('a');
             link.href = url;

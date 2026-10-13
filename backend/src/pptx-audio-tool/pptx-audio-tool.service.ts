@@ -2177,9 +2177,10 @@ Return ONLY valid JSON format:
 
         const xml = buildEnglishMoodleXml(mapped, normalizedTitle);
         const filename = `${normalizedTitle}_english_moodle.xml`;
-        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
         res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+        // res.attachment() -> content-disposition lib: valid header + UTF-8 filename* for Vietnamese titles
+        res.attachment(filename);
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
         res.send(xml);
     }
 

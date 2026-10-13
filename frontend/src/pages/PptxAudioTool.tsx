@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, Component, type ReactNode, type ErrorInfo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api, API_BASE_URL } from '../lib/api';
+import { filenameFromDisposition } from '../lib/download-filename';
 import { useJobPolling } from '../hooks/useJobPolling';
 import { TTSSelector } from '../components/TTSSelector';
 import { ModelSelector } from '../components/ModelSelector';
@@ -1474,17 +1475,7 @@ export function PptxAudioToolPage() {
             const res = await api.get(`/pptx-audio-tool/${sessionId}/english-questions/export/moodle-xml`, { responseType: 'blob' });
             const disposition = res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'];
             let filename = `${session?.fileName?.replace(/\.pptx$/i, '') || 'pptx'}_english_moodle.xml`;
-            if (disposition) {
-                const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-                if (utf8Match && utf8Match[1]) {
-                    filename = decodeURIComponent(utf8Match[1]);
-                } else {
-                    const asciiMatch = disposition.match(/filename=["']?([^"';]+)["']?/i);
-                    if (asciiMatch && asciiMatch[1]) {
-                        filename = decodeURIComponent(asciiMatch[1]);
-                    }
-                }
-            }
+            filename = filenameFromDisposition(disposition, filename, '.xml');
             const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/xml; charset=utf-8' }));
             const a = document.createElement('a');
             a.href = url;
