@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PptxController } from './pptx.controller';
+import { PptxFileController } from './pptx-file.controller';
 import { PptxService } from './pptx.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { SlideDataModule } from '../slide-data/slide-data.module';
@@ -19,7 +20,7 @@ import { GenerationJobModule } from '../generation-job/generation-job.module';
         AIModule,
         GenerationJobModule,
     ],
-    controllers: [PptxController],
+    controllers: [PptxController, PptxFileController],
     providers: [PptxService],
     exports: [PptxService],
 })

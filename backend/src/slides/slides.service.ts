@@ -1906,8 +1906,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
             .replace(/\s+/g, '_');
         const zipFileName = `${safeTitle}_SCORM_1.2.zip`;
 
+        // res.attachment() -> content-disposition lib (ASCII fallback + UTF-8 filename*), no percent-encoded names
+        res.attachment(zipFileName);
         res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
 
         await packageScormZip(lesson.title, lessonId, enrichedSlides, res, {
             templateId: selectedTemplate?.id,
@@ -1964,8 +1965,8 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
             .replace(/\s+/g, '_');
         const h5pFileName = `${safeTitle}_H5P.h5p`;
 
+        res.attachment(h5pFileName);
         res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(h5pFileName)}"`);
 
         await packageH5pZip(lesson.title, enrichedSlides, res, {
             templateId: selectedTemplate?.id,

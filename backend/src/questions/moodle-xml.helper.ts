@@ -425,15 +425,93 @@ ${subquestionsXml}
   </question>`;
 }
 
+/** A valid Moodle embedded answer, e.g. {1:SHORTANSWER:=word~=variant} or {1:MC:...} */
+const CLOZE_SUBQUESTION_RE = /\{\d*:[A-Z_]+:[^{}]*\}/;
+/** Raw blanks the AI sometimes leaves instead of embedded answers: "___" */
+const RAW_BLANK_RE = /_{2,}/g;
+
+/** Escape Moodle Cloze special characters inside an embedded answer. */
+function escapeClozeAnswer(text: string): string {
+    return text.replace(/([}#~\/"\\])/g, '\\$1');
+}
+
+function toCleanStringList(value: any): string[] {
+    const list = Array.isArray(value) ? value : (value !== undefined && value !== null ? [value] : []);
+    return list
+        .map((v) => (typeof v === 'object' && v !== null ? (v.text ?? v.answer ?? v.value ?? '') : v))
+        .map((v) => String(v ?? '').trim())
+        .filter((v) => v.length > 0);
+}
+
+/**
+ * Extract the answer key as a list of blanks, each with its acceptable variants.
+ * Supports the shapes the AI actually returns:
+ *   - answers: [{ position, acceptableAnswers: [...] }, ...]   (CLOZE)
+ *   - answers / blanks: ['word1', 'word2']                      (one variant per blank)
+ *   - acceptableAnswers / correctAnswers / acceptedAnswers: [...] (single blank, many variants)
+ *   - correctAnswer / answer: 'word' | ['word', ...]
+ */
+function extractAnswerKey(data: any): string[][] {
+    const perBlank = Array.isArray(data?.answers) ? data.answers : (Array.isArray(data?.blanks) ? data.blanks : null);
+    if (perBlank && perBlank.length > 0) {
+        const isStructured = perBlank.some((b: any) => typeof b === 'object' && b !== null);
+        if (isStructured) {
+            return [...perBlank]
+                .sort((a: any, b: any) => (Number(a?.position) || 0) - (Number(b?.position) || 0))
+                .map((b: any) => toCleanStringList(b?.acceptableAnswers ?? b?.answers ?? b?.answer ?? b?.correctAnswer ?? b?.text))
+                .filter((variants: string[]) => variants.length > 0);
+        }
+        return toCleanStringList(perBlank).map((v) => [v]);
+    }
+
+    const variants = toCleanStringList(
+        data?.acceptableAnswers ?? data?.correctAnswers ?? data?.acceptedAnswers ?? data?.correctAnswer ?? data?.answer,
+    );
+    return variants.length > 0 ? [variants] : [];
+}
+
+function buildEmbeddedShortAnswer(variants: string[]): string {
+    return `{1:SHORTANSWER:${variants.map((v) => `=${escapeClozeAnswer(v)}`).join('~')}}`;
+}
+
 /**
  * Build Moodle XML for Cloze (Embedded Answers)
  */
 function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
     const name = formatEnglishQuestionName(q, lessonCode, 'CLOZE');
-    let rawContent = data.clozeText || q.questionText;
+    let rawContent: string = String(data.clozeText || q.questionText || '');
+
+    // Moodle rejects a Cloze question without at least one embedded answer
+    // ("The question text must include at least one embedded answer") and aborts the WHOLE import.
+    if (!CLOZE_SUBQUESTION_RE.test(rawContent)) {
+        const blankCount = (rawContent.match(RAW_BLANK_RE) || []).length;
+        let key = extractAnswerKey(data);
+
+        // Last resort: quoted words in the explanation, e.g. `"So" introduces the effect...`
+        // Only used when the number of short quoted words matches the number of blanks exactly.
+        if (key.length === 0 && q.explanation && blankCount > 0) {
+            const quoted = [...String(q.explanation).matchAll(/["“]([^"”]{1,40})["”]/g)]
+                .map((m) => m[1].trim())
+                .filter((w) => w && w.split(/\s+/).length <= 4);
+            if (quoted.length === blankCount) {
+                key = quoted.map((w) => [w]);
+            }
+        }
+
+        if (blankCount > 0 && key.length >= blankCount) {
+            let idx = 0;
+            rawContent = rawContent.replace(RAW_BLANK_RE, () => buildEmbeddedShortAnswer(key[idx++]));
+        } else if (key.length > 0) {
+            // Answer key exists but there is no blank to embed it in -> plain short answer
+            return buildEnglishShortAnswerXml(q, data, lessonCode);
+        } else {
+            // No answer key at all -> keep the question gradable manually instead of breaking the import
+            return buildEnglishEssayXml(q, data, lessonCode);
+        }
+    }
 
     // Normalize all blank weights to 1 so Moodle doesn't sum weights as 1+2=3.00
-    rawContent = rawContent.replace(/\{(\d+):(SHORTANSWER|MULTICHOICE)/g, '{1:$2');
+    rawContent = rawContent.replace(/\{\d+:([A-Z_]+):/g, '{1:$1:');
 
     // Extract instruction from questionText if present
     let instruction = '';
@@ -473,13 +551,24 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: str
  */
 function buildEnglishShortAnswerXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
     const name = formatEnglishQuestionName(q, lessonCode, 'SA');
-    const answers: any[] = Array.isArray(data.acceptableAnswers)
-        ? data.acceptableAnswers
-        : data.correctAnswer ? [data.correctAnswer] : ['correct'];
+    // Flatten all acceptable variants (dedupe, case-insensitive since usecase=0)
+    const seen = new Set<string>();
+    const answers = extractAnswerKey(data).flat().filter((a) => {
+        const k = a.toLowerCase();
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+    });
+
+    // Previously this fell back to the literal answer "correct", so students typing the real
+    // answer got 0 points. Without an answer key, export as essay (manual grading) instead.
+    if (answers.length === 0) {
+        return buildEnglishEssayXml(q, data, lessonCode);
+    }
+
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
 
-    const answersXml = answers.map((ans) => {
-        const text = typeof ans === 'object' ? JSON.stringify(ans) : String(ans);
+    const answersXml = answers.map((text) => {
         return `    <answer fraction="100" format="moodle_auto_format">
       <text>${escapeForCdata(text)}</text>
       <feedback format="html"><text><![CDATA[<p>Correct!</p>]]></text></feedback>

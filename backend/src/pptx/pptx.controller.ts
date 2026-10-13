@@ -22,6 +22,14 @@ import { GeneratePptxDto } from './dto/generate-pptx.dto';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { GenerationJobService } from '../generation-job/generation-job.service';
 import { APIService } from '@prisma/client';
+import { IsString, Matches } from 'class-validator';
+import { DownloadTicketService } from '../common/download-ticket/download-ticket.service';
+
+class CreatePptxDownloadTicketDto {
+    @IsString()
+    @Matches(/^[a-zA-Z0-9_-]{1,100}$/)
+    fileKey: string;
+}
 
 @Controller('lessons/:lessonId/pptx')
 @UseGuards(JwtAuthGuard)
@@ -30,6 +38,7 @@ export class PptxController {
         private pptxService: PptxService,
         private apiKeysService: ApiKeysService,
         private jobService: GenerationJobService,
+        private downloadTickets: DownloadTicketService,
     ) { }
 
     /**
@@ -226,7 +235,30 @@ export class PptxController {
     }
 
     /**
-     * Download temporary PPTX file
+     * Issue a short-lived ticket for native browser download of a temp PPTX file.
+     * The browser then navigates to GET /lessons/:lessonId/pptx/file?ticket=...
+     * (see PptxFileController) so download managers like IDM work correctly.
+     */
+    @Post('download-ticket')
+    async createDownloadTicket(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: CreatePptxDownloadTicketDto,
+        @Request() req,
+    ) {
+        await this.downloadTickets.assertLessonAccess(lessonId, req.user);
+        // Throws 404 if the temp file was already cleaned up
+        this.pptxService.getTempPptxFile(lessonId, dto.fileKey);
+
+        return this.downloadTickets.issue({
+            kind: 'pptx-temp',
+            userId: req.user.id,
+            lessonId,
+            params: { fileKey: dto.fileKey },
+        });
+    }
+
+    /**
+     * Download temporary PPTX file (legacy: requires Authorization header, kept for compatibility)
      */
     @Get('download-temp')
     async downloadTemp(

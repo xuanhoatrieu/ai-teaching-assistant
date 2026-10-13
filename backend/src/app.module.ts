@@ -29,6 +29,7 @@ import { SlideDataModule } from './slide-data/slide-data.module';
 import { QuestionsModule } from './questions/questions.module';
 import { MigrationModule } from './migration/migration.module';
 import { PptxModule } from './pptx/pptx.module';
+import { DownloadTicketModule } from './common/download-ticket/download-ticket.module';
 import { PptxAudioToolModule } from './pptx-audio-tool/pptx-audio-tool.module';
 import { SyllabusModule } from './syllabus/syllabus.module';
 import { GenerationJobModule } from './generation-job/generation-job.module';
@@ -76,6 +77,7 @@ import { RemotionModule } from './remotion/remotion.module';
     QuestionsModule,
     MigrationModule,
     PptxModule,
+    DownloadTicketModule,
     PptxAudioToolModule,
     BullModule.forRoot({
       redis: {

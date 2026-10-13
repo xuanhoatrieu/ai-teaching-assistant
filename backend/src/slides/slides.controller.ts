@@ -19,7 +19,25 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { SlidesService } from './slides.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GenerationJobService } from '../generation-job/generation-job.service';
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsNumber } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsArray, IsNumber, Matches } from 'class-validator';
+import { DownloadTicketService } from '../common/download-ticket/download-ticket.service';
+
+class CreateExportTicketDto {
+    @IsOptional()
+    @IsString()
+    @Matches(/^[a-zA-Z0-9_-]{1,64}$/)
+    templateId?: string;
+
+    @IsOptional()
+    @IsString()
+    @Matches(/^[a-zA-Z0-9_-]{1,64}$/)
+    bgOption?: string;
+
+    @IsOptional()
+    @IsString()
+    @Matches(/^[a-zA-Z0-9_-]{1,64}$/)
+    theme?: string;
+}
 
 // DTOs
 class UpdateSlideScriptDto {
@@ -103,6 +121,7 @@ export class SlidesController {
     constructor(
         private slidesService: SlidesService,
         private readonly jobService: GenerationJobService,
+        private readonly downloadTickets: DownloadTicketService,
     ) { }
 
     // GET /lessons/:lessonId/slides - Get all Slide entities from database (for Step 5)
@@ -133,6 +152,38 @@ export class SlidesController {
         @Res() res: Response,
     ) {
         return this.slidesService.exportH5p(lessonId, res, templateId, bgOption, theme);
+    }
+
+    // POST /lessons/:lessonId/slides/export/scorm/ticket - Short-lived ticket for native browser download
+    @Post('export/scorm/ticket')
+    async createScormTicket(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: CreateExportTicketDto,
+        @Request() req,
+    ) {
+        await this.downloadTickets.assertLessonAccess(lessonId, req.user);
+        return this.downloadTickets.issue({
+            kind: 'scorm',
+            userId: req.user.id,
+            lessonId,
+            params: { templateId: dto.templateId, bgOption: dto.bgOption, theme: dto.theme },
+        });
+    }
+
+    // POST /lessons/:lessonId/slides/export/h5p/ticket - Short-lived ticket for native browser download
+    @Post('export/h5p/ticket')
+    async createH5pTicket(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: CreateExportTicketDto,
+        @Request() req,
+    ) {
+        await this.downloadTickets.assertLessonAccess(lessonId, req.user);
+        return this.downloadTickets.issue({
+            kind: 'h5p',
+            userId: req.user.id,
+            lessonId,
+            params: { templateId: dto.templateId, bgOption: dto.bgOption, theme: dto.theme },
+        });
     }
 
     // GET /lessons/:lessonId/slides/export/moodle-xml - Export interactive questions as Moodle Quiz XML
@@ -307,6 +358,17 @@ export class SlidesController {
         return this.slidesService.deleteExtraAudio(lessonId, parseInt(slideIndex, 10));
     }
 
+    // DELETE /lessons/:lessonId/slides/generated-content
+    // Reset all optimizedContentJson + imageUrl so slides can be regenerated from scratch
+    // NOTE: must be declared BEFORE @Delete(':slideIndex'), otherwise Nest matches
+    // slideIndex='generated-content' -> parseInt = NaN -> Prisma error 500.
+    @Delete('generated-content')
+    async clearGeneratedContent(
+        @Param('lessonId') lessonId: string,
+    ) {
+        return this.slidesService.clearGeneratedContent(lessonId);
+    }
+
     // DELETE /lessons/:lessonId/slides/:slideIndex - Delete slide
     @Delete(':slideIndex')
     async deleteSlide(
@@ -314,15 +376,6 @@ export class SlidesController {
         @Param('slideIndex') slideIndex: string,
     ) {
         return this.slidesService.deleteSlide(lessonId, parseInt(slideIndex, 10));
-    }
-
-    // DELETE /lessons/:lessonId/slides/generated-content
-    // Reset all optimizedContentJson + imageUrl so slides can be regenerated from scratch
-    @Delete('generated-content')
-    async clearGeneratedContent(
-        @Param('lessonId') lessonId: string,
-    ) {
-        return this.slidesService.clearGeneratedContent(lessonId);
     }
 
     // POST /lessons/:lessonId/slides/generate-all-content

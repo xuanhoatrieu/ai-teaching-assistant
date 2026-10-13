@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { SlidesService } from './slides.service';
 import { SlidesController } from './slides.controller';
+import { SlidesExportFileController } from './slides-export-file.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 import { ModelConfigModule } from '../model-config/model-config.module';
@@ -21,7 +22,7 @@ import { FileStorageModule } from '../file-storage/file-storage.module';
         GenerationJobModule,
         FileStorageModule,
     ],
-    controllers: [SlidesController],
+    controllers: [SlidesController, SlidesExportFileController],
     providers: [SlidesService],
     exports: [SlidesService],
 })

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLessonEditor } from '../../contexts/LessonEditorContext';
 import { ModelSelector } from '../ModelSelector';
-import { api } from '../../lib/api';
+import { api, API_BASE_URL } from '../../lib/api';
 import { useJobPolling } from '../../hooks/useJobPolling';
 import { ImageCropModal } from '../ImageCropModal';
 import './Steps.css';
@@ -458,35 +458,35 @@ export function Step5GeneratePPTX() {
         }
     }, [lessonId, selectedTemplate, tempFileKeyNoAudio]);
 
+    /**
+     * Trigger a NATIVE browser download (no fetch()+Blob).
+     * fetch()+Blob breaks when download managers (IDM, Coc Coc...) intercept the
+     * attachment response -> net::ERR_FAILED. The URL carries only a short-lived,
+     * file-scoped ticket (never the access token).
+     */
+    const triggerBrowserDownload = (url: string) => {
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = ''; // keep the SPA page; filename comes from Content-Disposition
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
+
     const handleDownloadTempFile = async (key: string, isNoAudio: boolean) => {
         if (isNoAudio) setDownloadingNoAudio(true);
         else setDownloadingAudio(true);
 
         try {
-            const token = localStorage.getItem('accessToken');
-            const res = await fetch(`/api/lessons/${lessonId}/pptx/download-temp?fileKey=${key}`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            if (!res.ok) {
-                const errData = await res.json().catch(() => null);
-                throw new Error(errData?.message || 'Không thể tải file PowerPoint tạm thời (có thể file đã hết hạn hoặc bị xóa)');
-            }
-
-            const blob = await res.blob();
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${lessonData?.title || 'presentation'}${isNoAudio ? '_no_audio' : ''}.pptx`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            // axios instance -> auto refreshes an expired access token before issuing the ticket
+            const { data } = await api.post(`/lessons/${lessonId}/pptx/download-ticket`, { fileKey: key });
+            triggerBrowserDownload(
+                `${API_BASE_URL}/lessons/${lessonId}/pptx/file?ticket=${encodeURIComponent(data.ticket)}`,
+            );
         } catch (err: any) {
-            console.error('Download error:', err);
-            setError(err.message || 'Lỗi khi tải file PowerPoint');
+            console.error('Download error:', err?.message);
+            setError(err.response?.data?.message || 'Không thể tải file PowerPoint tạm thời (có thể file đã hết hạn hoặc bị xóa)');
         } finally {
             if (isNoAudio) setDownloadingNoAudio(false);
             else setDownloadingAudio(false);
@@ -496,24 +496,16 @@ export function Step5GeneratePPTX() {
     const handleExportScorm = async () => {
         try {
             setIsExportingScorm(true);
-            const params = new URLSearchParams();
-            if (selectedTemplate) params.append('templateId', selectedTemplate);
-            if (scormH5pBgOption) params.append('bgOption', scormH5pBgOption);
-            if (scormH5pTheme) params.append('theme', scormH5pTheme);
-
-            const queryString = params.toString() ? `?${params.toString()}` : '';
-            const res = await api.get(`/lessons/${lessonId}/slides/export/scorm${queryString}`, { responseType: 'blob' });
-            const blob = new Blob([res.data], { type: 'application/zip' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${lessonData?.title || 'lesson'}_SCORM_1.2.zip`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            const { data } = await api.post(`/lessons/${lessonId}/slides/export/scorm/ticket`, {
+                templateId: selectedTemplate || undefined,
+                bgOption: scormH5pBgOption || undefined,
+                theme: scormH5pTheme || undefined,
+            });
+            triggerBrowserDownload(
+                `${API_BASE_URL}/lessons/${lessonId}/slides/export/scorm/file?ticket=${encodeURIComponent(data.ticket)}`,
+            );
         } catch (err: any) {
-            console.error('SCORM export error:', err);
+            console.error('SCORM export error:', err?.message);
             setError(`Không thể xuất gói SCORM: ${err.response?.data?.message || err.message}`);
         } finally {
             setIsExportingScorm(false);
@@ -523,24 +515,16 @@ export function Step5GeneratePPTX() {
     const handleExportH5p = async () => {
         try {
             setIsExportingH5p(true);
-            const params = new URLSearchParams();
-            if (selectedTemplate) params.append('templateId', selectedTemplate);
-            if (scormH5pBgOption) params.append('bgOption', scormH5pBgOption);
-            if (scormH5pTheme) params.append('theme', scormH5pTheme);
-
-            const queryString = params.toString() ? `?${params.toString()}` : '';
-            const res = await api.get(`/lessons/${lessonId}/slides/export/h5p${queryString}`, { responseType: 'blob' });
-            const blob = new Blob([res.data], { type: 'application/zip' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${lessonData?.title || 'lesson'}_H5P.h5p`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            window.URL.revokeObjectURL(url);
+            const { data } = await api.post(`/lessons/${lessonId}/slides/export/h5p/ticket`, {
+                templateId: selectedTemplate || undefined,
+                bgOption: scormH5pBgOption || undefined,
+                theme: scormH5pTheme || undefined,
+            });
+            triggerBrowserDownload(
+                `${API_BASE_URL}/lessons/${lessonId}/slides/export/h5p/file?ticket=${encodeURIComponent(data.ticket)}`,
+            );
         } catch (err: any) {
-            console.error('H5P export error:', err);
+            console.error('H5P export error:', err?.message);
             setError(`Không thể xuất gói H5P: ${err.response?.data?.message || err.message}`);
         } finally {
             setIsExportingH5p(false);

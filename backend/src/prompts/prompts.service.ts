@@ -679,10 +679,13 @@ Chỉ trả về JSON.`,
    - "MATCH" (Matching): 3-5 subquestion-answer pairs (e.g. term ⇄ definition, IPA symbol ⇄ description, sentence ⇄ translation technique).
    - "CLOZE": Text with embedded answers using Moodle Cloze syntax.
      CRITICAL CLOZE RULES:
+     * EVERY blank MUST be written as an embedded answer '{1:SHORTANSWER:=word}'. NEVER write bare underscores like "___" or "_____" in a CLOZE question — Moodle rejects the entire import file if a Cloze question has no embedded answer.
      * ALWAYS use weight 1 for every blank: '{1:SHORTANSWER:=word}' (do NOT use 2, 3 as blank numbering!).
      * For verb conjugation / word transformation exercises, ALWAYS provide the base word in brackets right after the blank (e.g., 'She usually {1:SHORTANSWER:=travels} (travel) by train, but today she {1:SHORTANSWER:=is travelling~=is traveling} (travel) by bus.') so students know what word to conjugate!
      * Include both UK and US spelling variations separated by '~=' where applicable.
+     * Required data shape: "data": {"clozeText": "... {1:SHORTANSWER:=word} ...", "answers": [{"position": 1, "acceptableAnswers": ["word"]}]}
    - "SHORTANSWER": Question with 1-3 acceptable answer strings.
+     * Required data shape: "data": {"acceptableAnswers": ["answer", "variant"], "caseSensitive": false}. acceptableAnswers MUST contain the real expected answer(s), never a placeholder.
    - "TRUEFALSE": Theoretical proposition with correctAnswer: true or false.
    - "ESSAY": In-depth analysis question (e.g., bracketed syntax tree, translation critique) with scoring criteria (graderInfo).
 
