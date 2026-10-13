@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.6.11] - 2026-10-13 - Import-Safe Moodle XML Export (Full Audit Against Moodle 4.4 Import Rules)
+
+### Fixed
+- **Moodle import aborted with `Error parsing XML: XML_ERR_NAME_REQUIRED`**: `&`, `<`, `>` in question names, matching answers and short answers are now XML-escaped; XML-illegal control characters are stripped; `--` can no longer appear inside XML comments.
+- Every condition that makes Moodle reject the **whole** import file is now checked before export, with a per-question fallback (auto-repair → short answer → essay with the answer key kept in grader info):
+  - Multiple choice with fewer than 2 non-empty options or no correct option; string options / letter answer keys are now understood.
+  - Multiple response fractions outside Moodle's fixed grade list (e.g. 11+ wrong options).
+  - Matching pairs with an empty answer (Moodle silently stopped importing all following questions); fewer than 2 valid pairs. `rightOptions` are exported as distractors.
+  - Cloze validated with an exact port of Moodle's embedded-answer parser: lowercase/unknown types, missing `=`, single-option MULTICHOICE, empty answers, non-numeric NUMERICAL are repaired or degraded.
+  - Non-numeric `defaultgrade` (e.g. `1.5.0000000`), non-integer essay `responsefieldlines`, invalid essay response format, empty category path.
+  - Short answers escape literal `*` (Moodle wildcard); True/False accepts `"True"`/`"Sai"`… and uses per-answer feedback.
+- **Slide interactive questions Moodle export**: skips questions without a correct answer and a distractor (would abort the import), escapes CDATA content and question names, tolerates non-string options, correct UTF-8 download filename.
+
 ## [v1.6.10] - 2026-10-13 - Correct `.xml` Filename for Moodle XML Exports
 
 ### Fixed
