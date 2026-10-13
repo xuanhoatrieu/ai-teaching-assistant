@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.6.9] - 2026-10-13 - Reliable PPTX/SCORM/H5P Downloads & Safe Moodle XML Cloze/Short Answer Export
+
+### Fixed
+- **PPTX / SCORM / H5P downloads failing with `net::ERR_FAILED` for some users**:
+  - Replaced `fetch()` + Blob downloads with native browser downloads authorised by short-lived (2 min), lesson + file scoped download tickets. Works with download managers (IDM, Cốc Cốc) and no longer breaks when the 15-minute access token has expired.
+  - The access token is never placed in a URL; issuing a ticket verifies lesson ownership.
+  - SCORM/H5P files now keep correct Vietnamese filenames (no more `B%C3%A0i...`).
+- **`DELETE /slides/generated-content` returned 500**: route was shadowed by `DELETE /slides/:slideIndex`.
+- **Moodle XML import aborted with "Invalid embedded answers (Cloze) question"**: Cloze questions without embedded answers are repaired from the answer key, or exported as short answer / essay instead of breaking the whole import.
+- **Short answer questions only accepted the literal answer "correct"**: real answer keys are exported; questions without an answer key are exported as essay (manual grading).
+- AI prompt for English questions now requires embedded answers in CLOZE and explicit data shapes for CLOZE / SHORTANSWER.
+
 ## [v1.6.8] - 2026-10-10 - Chunked Upload & Moodle XML Lesson Normalization
 
 ### Added
