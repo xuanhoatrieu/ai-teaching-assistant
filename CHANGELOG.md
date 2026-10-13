@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.6.10] - 2026-10-13 - Correct `.xml` Filename for Moodle XML Exports
+
+### Fixed
+- **Exported Moodle XML files were saved as `*.xml_` and rejected by Moodle import**:
+  - The `Content-Disposition` header had a stray trailing `"` (introduced in v1.6.8), which browsers turned into `_`.
+  - Backend now uses `res.attachment()` (RFC 6266/5987, correct Vietnamese filenames) for the Question Bank English export and the PPTX Audio Tool XML export.
+  - Frontend parses filenames defensively (`filenameFromDisposition`): prefers `filename*`, strips stray quotes / illegal characters and always enforces the `.xml` extension.
+
 ## [v1.6.9] - 2026-10-13 - Reliable PPTX/SCORM/H5P Downloads & Safe Moodle XML Cloze/Short Answer Export
 
 ### Fixed
