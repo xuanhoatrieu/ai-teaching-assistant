@@ -13,6 +13,7 @@ import { FileStorageService } from '../file-storage/file-storage.service';
 import { Lesson } from '@prisma/client';
 import { packageScormZip } from './scorm-export.helper';
 import { packageH5pZip } from './h5p-export.helper';
+import { escapeForCdata, escapeXmlText } from '../questions/moodle-xml.helper';
 
 export interface GenerateSlideResult {
     content: string;
@@ -2023,23 +2024,36 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
 
         const safeTitle = (lesson.title || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
-            .replace(/\s+/g, '_');
+            .replace(/\s+/g, '_')
+            .replace(/^_+|_+$/g, '') || 'lesson';
+
+        const str = (v: any) => (v === null || v === undefined ? '' : String(v)).trim();
 
         let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<quiz>\n`;
-        xml += `  <question type="category">\n    <category>\n      <text>$course$/top/${safeTitle}</text>\n    </category>\n  </question>\n\n`;
+        xml += `  <question type="category">\n    <category>\n      <text>$course$/top/${escapeXmlText(safeTitle)}</text>\n    </category>\n  </question>\n\n`;
 
+        let skipped = 0;
         for (const q of questions) {
-            const otherOptions = (q.options || []).filter((opt: string) => opt.trim() !== (q.correctAnswer || '').trim());
-            const feedbackParts = [`<strong>Đáp án đúng là: </strong>${q.correctAnswer}`];
+            const correct = str(q.correctAnswer);
+            const otherOptions = (Array.isArray(q.options) ? q.options : [])
+                .map(str)
+                .filter((opt: string) => opt !== '' && opt !== correct);
+            // Moodle multichoice needs a correct answer and >= 2 answers, otherwise the WHOLE import aborts.
+            if (!correct || otherOptions.length === 0 || !str(q.question)) {
+                skipped++;
+                continue;
+            }
+            const feedbackParts = [`<strong>Đáp án đúng là: </strong>${escapeForCdata(correct)}`];
             if (q.explanation) {
-                feedbackParts.push(`<strong>Vì: </strong>${q.explanation}`);
+                feedbackParts.push(`<strong>Vì: </strong>${escapeForCdata(q.explanation)}`);
             }
             const feedbackHtml = feedbackParts.map((p) => `<p>${p}</p>`).join('\n      ');
+            const question = str(q.question);
 
             xml += `  <question type="multichoice">\n`;
-            xml += `    <name><text><![CDATA[Slide ${q.slideIndex}: ${q.question.substring(0, 120)}]]></text></name>\n`;
+            xml += `    <name><text>${escapeXmlText(`Slide ${q.slideIndex}: ${question.substring(0, 120)}`)}</text></name>\n`;
             xml += `    <questiontext format="html">\n`;
-            xml += `      <text><![CDATA[<p><strong>[${q.badgeLabel} - Slide ${q.slideIndex}: ${q.slideTitle}]</strong></p><p>${q.question}</p>]]></text>\n`;
+            xml += `      <text><![CDATA[<p><strong>[${escapeForCdata(q.badgeLabel)} - Slide ${q.slideIndex}: ${escapeForCdata(q.slideTitle)}]</strong></p><p>${escapeForCdata(question)}</p>]]></text>\n`;
             xml += `    </questiontext>\n`;
             xml += `    <generalfeedback format="html">\n`;
             xml += `      <text><![CDATA[${feedbackHtml}]]></text>\n`;
@@ -2053,25 +2067,28 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
 
             // Correct answer
             xml += `    <answer fraction="100" format="html">\n`;
-            xml += `      <text><![CDATA[<p>${q.correctAnswer}</p>]]></text>\n`;
+            xml += `      <text><![CDATA[<p>${escapeForCdata(correct)}</p>]]></text>\n`;
             xml += `      <feedback format="html"><text><![CDATA[<p>Chính xác!</p>]]></text></feedback>\n`;
             xml += `    </answer>\n`;
 
             // Distractors
             for (const distractor of otherOptions) {
                 xml += `    <answer fraction="0" format="html">\n`;
-                xml += `      <text><![CDATA[<p>${distractor}</p>]]></text>\n`;
+                xml += `      <text><![CDATA[<p>${escapeForCdata(distractor)}</p>]]></text>\n`;
                 xml += `      <feedback format="html"><text><![CDATA[<p>Chưa chính xác.</p>]]></text></feedback>\n`;
                 xml += `    </answer>\n`;
             }
             xml += `  </question>\n\n`;
         }
+        if (skipped > 0) {
+            this.logger.warn(`[exportMoodleXml] Skipped ${skipped} interactive question(s) without a correct answer and at least one distractor (lesson ${lessonId})`);
+        }
 
         xml += `</quiz>\n`;
 
         const fileName = `${safeTitle}_moodle_quiz.xml`;
+        res.attachment(fileName);
         res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
         res.send(xml);
     }
 }

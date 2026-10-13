@@ -25,7 +25,7 @@ export interface ReviewQuestionData {
  * CDATA blocks handle most cases, but we still need to sanitize
  * any stray ]]> sequences inside the content.
  */
-function escapeForCdata(text: any): string {
+export function escapeForCdata(text: any): string {
     if (text === null || text === undefined) return '';
     if (typeof text === 'object') {
         try {
@@ -35,7 +35,30 @@ function escapeForCdata(text: any): string {
         }
     }
     // Split ]]> to prevent CDATA injection
-    return String(text).replace(/]]>/g, ']]]]><![CDATA[>');
+    return stripInvalidXmlChars(String(text)).replace(/]]>/g, ']]]]><![CDATA[>');
+}
+
+/**
+ * Remove characters that are illegal in XML 1.0 even inside CDATA
+ * (C0 control chars except TAB/LF/CR). They make Moodle's parser abort.
+ */
+function stripInvalidXmlChars(text: string): string {
+    // eslint-disable-next-line no-control-regex
+    return text.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+}
+
+/**
+ * Escape text for a plain XML text node (NOT wrapped in CDATA), e.g. <name><text>.
+ * Without this, an "&" or "<" in a question name breaks the whole import file
+ * (Moodle: "Error parsing XML: XML_ERR_NAME_REQUIRED").
+ */
+export function escapeXmlText(text: any): string {
+    if (text === null || text === undefined) return '';
+    const str = typeof text === 'object' ? escapeForCdata(text) : String(text);
+    return stripInvalidXmlChars(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
 }
 
 /**
@@ -60,7 +83,7 @@ function buildQuestionXml(q: ReviewQuestionData): string {
     const questionName = `${q.questionId}: ${questionPreview}`;
 
     return `  <question type="multichoice">
-    <name><text>${escapeForCdata(questionName)}</text></name>
+    <name><text>${escapeXmlText(questionName)}</text></name>
     <questiontext format="html">
       <text>${cdataHtml(q.question)}</text>
     </questiontext>
@@ -120,7 +143,8 @@ export function buildMoodleXml(
     const lessonSlug = lessonTitle
         .replace(/[^\w\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/gi, '')
         .replace(/\s+/g, '_')
-        .substring(0, 50);
+        .substring(0, 50)
+        .replace(/^_+|_+$/g, '') || 'lesson';
 
     // Group questions by Bloom's level
     const grouped = new Map<number, ReviewQuestionData[]>();
@@ -307,82 +331,143 @@ export function formatEnglishQuestionName(
     return `${lessonCode}-${qCode}: ${preview}`;
 }
 
+/** Escape Moodle Cloze special characters inside an embedded answer. */
+function escapeClozeAnswer(text: string): string {
+    return text.replace(/([}#~\/"\\])/g, '\\$1');
+}
+
+function toCleanStringList(value: any): string[] {
+    const list = Array.isArray(value) ? value : (value !== undefined && value !== null ? [value] : []);
+    return list
+        .map((v) => (typeof v === 'object' && v !== null ? (v.text ?? v.answer ?? v.value ?? '') : v))
+        .map((v) => String(v ?? '').trim())
+        .filter((v) => v.length > 0);
+}
+
+// ==================== IMPORT-SAFETY HELPERS ====================
+// Every rule below mirrors a check in Moodle 4.x that aborts the WHOLE import
+// ("Stop on error" is on by default), see question/format.php importprocess(),
+// qtype_*::save_question_options() and qtype_multianswer_validate_question().
+
+/** Moodle DB columns are numeric: "1.5.0000000" or "NaN.0000000" makes the insert fail. */
+function formatGrade(points: any, fallback: number): string {
+    const n = Number(points);
+    return (Number.isFinite(n) && n > 0 ? n : fallback).toFixed(7);
+}
+
+/** Text without HTML tags/whitespace, used only to decide whether something is "empty". */
+function plainText(value: any): string {
+    return String(value ?? '').replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+}
+
+/** Safe content for an XML comment ("--" is illegal inside comments). */
+function commentSafe(text: string): string {
+    return String(text).replace(/-{2,}/g, '-').replace(/[<>]/g, '');
+}
+
+/**
+ * Exported as essay (manual grading) when the data cannot form a valid auto-graded
+ * question. The known answer key (if any) is kept in the grader information.
+ */
+function essayFallback(q: EnglishQuestionData, data: any, lessonCode: string, answerKey: string[]): string {
+    const keyText = answerKey.filter((k) => k && k.trim()).join(' | ');
+    const graderInfo = keyText
+        ? `Đáp án tham khảo: ${keyText}${q.explanation ? `\n${q.explanation}` : ''}`
+        : (data?.graderInfo || data?.rubric || q.explanation || '');
+    return buildEnglishEssayXml(q, { ...data, graderInfo }, lessonCode);
+}
+
+// ---------- Multiple choice ----------
+
+interface NormalizedOption { text: string; correct: boolean; feedback?: string }
+
+const OPTION_LETTERS = 'ABCDEFGHIJ';
+
+function normalizeOptions(data: any): NormalizedOption[] {
+    const rawList = Array.isArray(data?.options) ? data.options
+        : Array.isArray(data?.choices) ? data.choices
+        : Array.isArray(data?.answers) ? data.answers : [];
+
+    const options: NormalizedOption[] = rawList.map((o: any) => {
+        if (o === null || o === undefined) return { text: '', correct: false };
+        if (typeof o !== 'object') return { text: String(o), correct: false };
+        const text = o.text ?? o.option ?? o.label ?? o.value ?? o.answer ?? o.content ?? '';
+        const frac = typeof o.fraction === 'string' ? parseFloat(o.fraction) : o.fraction;
+        const correct = o.isCorrect === true || o.correct === true || o.isCorrect === 'true'
+            || (typeof frac === 'number' && frac > 0);
+        return { text: typeof text === 'object' ? JSON.stringify(text) : String(text), correct, feedback: o.feedback };
+    });
+
+    // Answer key given separately: correctAnswer = "B" | 1 | "text" | ["A","C"]
+    if (!options.some((o) => o.correct)) {
+        const keys = toCleanStringList(data?.correctAnswers ?? data?.correctAnswer ?? data?.answer);
+        for (const key of keys) {
+            const letterIdx = /^[A-J]$/i.test(key) ? OPTION_LETTERS.indexOf(key.toUpperCase()) : -1;
+            const numIdx = /^\d+$/.test(key) ? parseInt(key, 10) : -1;
+            const byText = options.findIndex((o) => plainText(o.text).toLowerCase() === key.toLowerCase());
+            const idx = byText >= 0 ? byText : (letterIdx >= 0 ? letterIdx : (numIdx >= 0 && numIdx < options.length ? numIdx : -1));
+            if (idx >= 0 && options[idx]) options[idx].correct = true;
+        }
+    }
+
+    // Moodle silently drops answers whose text is empty -> they must not count.
+    return options.filter((o) => plainText(o.text) !== '');
+}
+
 /**
  * Build Moodle XML for Multiple Choice / Multiple Response
  */
 function buildEnglishMultichoiceXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
     const isSingle = data.single !== false && q.questionType.toUpperCase() !== 'MR';
-    const options: Array<{ text: string; isCorrect?: boolean; fraction?: number; feedback?: string }> =
-        Array.isArray(data.options) ? data.options : [];
+    const options = normalizeOptions(data);
+    const correctOptions = options.filter((o) => o.correct);
+
+    // Moodle: "at least 2 answers" (error -> whole import aborted).
+    // No identifiable correct option: previously option A was silently marked correct
+    // (wrong answer key). Export for manual grading instead.
+    if (options.length < 2 || correctOptions.length === 0) {
+        return essayFallback(q, data, lessonCode, correctOptions.map((o) => plainText(o.text)));
+    }
 
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
 
-    let answersXml = '';
-
+    let fractions: string[];
     if (isSingle) {
-        // Single choice: Exactly 1 correct answer (100%), all others 0%
-        const correctIdx = options.findIndex(o => o.isCorrect === true || (typeof o.fraction === 'number' && o.fraction > 0));
-        const effectiveCorrectIdx = correctIdx >= 0 ? correctIdx : 0;
-
-        answersXml = options.map((opt, idx) => {
-            const isCorr = idx === effectiveCorrectIdx;
-            const fraction = isCorr ? '100' : '0';
-            const optFeedback = opt.feedback
-                ? `\n      <feedback format="html"><text><![CDATA[<p>${escapeForCdata(opt.feedback)}</p>]]></text></feedback>`
-                : '';
-
-            return `    <answer fraction="${fraction}" format="html">
-      <text>${cdataHtml(opt.text)}</text>${optFeedback}
-    </answer>`;
-        }).join('\n');
+        // Single choice: exactly 1 correct answer (100%), all others 0% (first correct wins).
+        const correctIdx = options.findIndex((o) => o.correct);
+        fractions = options.map((_, idx) => (idx === correctIdx ? '100' : '0'));
     } else {
-        // Multiple Response (MR):
-        // 1. Identify which options are correct
-        const correctIndices = new Set<number>();
-        options.forEach((opt, idx) => {
-            if (opt.isCorrect === true || (typeof opt.fraction === 'number' && opt.fraction > 0)) {
-                correctIndices.add(idx);
-            }
-        });
-
-        // Fallback: at least one option must be correct
-        if (correctIndices.size === 0 && options.length > 0) {
-            correctIndices.add(0);
-        }
-
-        const correctCount = correctIndices.size;
+        const correctCount = correctOptions.length;
         const incorrectCount = options.length - correctCount;
+        // Fractions must be in Moodle's fixed grade list, otherwise "invalid grade" aborts the import.
+        const positiveFraction = MOODLE_POSITIVE_FRACTIONS[correctCount];
+        if (!positiveFraction) {
+            return essayFallback(q, data, lessonCode, correctOptions.map((o) => plainText(o.text)));
+        }
+        const negativeFraction = incorrectCount > 0 ? (MOODLE_NEGATIVE_FRACTIONS[incorrectCount] || '0') : '0';
+        fractions = options.map((o) => (o.correct ? positiveFraction : negativeFraction));
+    }
 
-        // Exact Moodle allowable fractions
-        const positiveFraction = MOODLE_POSITIVE_FRACTIONS[correctCount] || (100 / correctCount).toFixed(5);
-        const negativeFraction = incorrectCount > 0
-            ? (MOODLE_NEGATIVE_FRACTIONS[incorrectCount] || (-100 / incorrectCount).toFixed(5))
-            : '0';
-
-        answersXml = options.map((opt, idx) => {
-            const isCorr = correctIndices.has(idx);
-            const fraction = isCorr ? positiveFraction : negativeFraction;
-            const optFeedback = opt.feedback
-                ? `\n      <feedback format="html"><text><![CDATA[<p>${escapeForCdata(opt.feedback)}</p>]]></text></feedback>`
-                : '';
-
-            return `    <answer fraction="${fraction}" format="html">
+    const answersXml = options.map((opt, idx) => {
+        const optFeedback = opt.feedback
+            ? `\n      <feedback format="html"><text><![CDATA[<p>${escapeForCdata(opt.feedback)}</p>]]></text></feedback>`
+            : '';
+        return `    <answer fraction="${fractions[idx]}" format="html">
       <text>${cdataHtml(opt.text)}</text>${optFeedback}
     </answer>`;
-        }).join('\n');
-    }
+    }).join('\n');
 
     const name = formatEnglishQuestionName(q, lessonCode, 'ENG');
 
     return `  <question type="multichoice">
-    <name><text>${escapeForCdata(name)}</text></name>
+    <name><text>${escapeXmlText(name)}</text></name>
     <questiontext format="html">
       <text>${cdataHtml(q.questionText)}</text>
     </questiontext>
     <generalfeedback format="html">
       <text><![CDATA[${feedbackHtml}]]></text>
     </generalfeedback>
-    <defaultgrade>${q.points || 1}.0000000</defaultgrade>
+    <defaultgrade>${formatGrade(q.points, 1)}</defaultgrade>
     <penalty>0.3333333</penalty>
     <single>${isSingle ? 'true' : 'false'}</single>
     <shuffleanswers>true</shuffleanswers>
@@ -395,52 +480,146 @@ ${answersXml}
  * Build Moodle XML for Matching question
  */
 function buildEnglishMatchXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
-    const pairs: Array<any> = Array.isArray(data.pairs) ? data.pairs : [];
+    const rawPairs: Array<any> = Array.isArray(data.pairs) ? data.pairs : [];
+    const pairs = rawPairs
+        .map((pair) => ({
+            sub: String(pair?.subquestion ?? pair?.left ?? pair?.question ?? pair?.term ?? ''),
+            ans: String(pair?.answer ?? pair?.right ?? pair?.match ?? pair?.definition ?? '').trim(),
+        }))
+        // Moodle: a sub-question with an empty answer returns a "notice", which makes
+        // importprocess() return early -> every question after it is silently NOT imported.
+        .filter((p) => plainText(p.sub) !== '' && p.ans !== '');
+
+    if (pairs.length < 2) {
+        return essayFallback(q, data, lessonCode, pairs.map((p) => `${plainText(p.sub)} → ${p.ans}`));
+    }
+
     const name = formatEnglishQuestionName(q, lessonCode, 'MATCH');
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
 
-    const subquestionsXml = pairs.map((pair) => {
-        const sub = pair.subquestion ?? pair.left ?? pair.question ?? '';
-        const ans = pair.answer ?? pair.right ?? pair.match ?? '';
-        return `    <subquestion format="html">
-      <text>${cdataHtml(sub)}</text>
+    const subquestionsXml = pairs.map((p) => `    <subquestion format="html">
+      <text>${cdataHtml(p.sub)}</text>
       <answer>
-        <text>${escapeForCdata(ans)}</text>
+        <text>${escapeXmlText(p.ans)}</text>
       </answer>
-    </subquestion>`;
-    }).join('\n');
+    </subquestion>`);
+
+    // Extra right-hand options (distractors) = sub-question with empty text, supported by Moodle.
+    const used = new Set(pairs.map((p) => p.ans));
+    for (const extra of toCleanStringList(data.rightOptions ?? data.distractors)) {
+        if (used.has(extra)) continue;
+        used.add(extra);
+        subquestionsXml.push(`    <subquestion format="html">
+      <text></text>
+      <answer>
+        <text>${escapeXmlText(extra)}</text>
+      </answer>
+    </subquestion>`);
+    }
 
     return `  <question type="match">
-    <name><text>${escapeForCdata(name)}</text></name>
+    <name><text>${escapeXmlText(name)}</text></name>
     <questiontext format="html">
       <text>${cdataHtml(q.questionText)}</text>
     </questiontext>
     <generalfeedback format="html">
       <text><![CDATA[${feedbackHtml}]]></text>
     </generalfeedback>
-    <defaultgrade>${q.points || 1}.0000000</defaultgrade>
+    <defaultgrade>${formatGrade(q.points, 1)}</defaultgrade>
     <penalty>0.3333333</penalty>
     <shuffleanswers>true</shuffleanswers>
-${subquestionsXml}
+${subquestionsXml.join('\n')}
   </question>`;
 }
 
-/** A valid Moodle embedded answer, e.g. {1:SHORTANSWER:=word~=variant} or {1:MC:...} */
-const CLOZE_SUBQUESTION_RE = /\{\d*:[A-Z_]+:[^{}]*\}/;
+// ---------- Cloze (embedded answers) ----------
+// Exact port of Moodle's parser regexes (question/type/multianswer/questiontype.php).
+
+const CLOZE_TYPE_DEF =
+    '(NUMERICAL|NM)|(MULTICHOICE|MC)|(MULTICHOICE_V|MCV)|(MULTICHOICE_H|MCH)|' +
+    '(SHORTANSWER|SA|MW)|(SHORTANSWER_C|SAC|MWC)|' +
+    '(MULTICHOICE_S|MCS)|(MULTICHOICE_VS|MCVS)|(MULTICHOICE_HS|MCHS)|' +
+    '(MULTIRESPONSE|MR)|(MULTIRESPONSE_H|MRH)|(MULTIRESPONSE_S|MRS)|(MULTIRESPONSE_HS|MRHS)';
+const CLOZE_ALT_SRC =
+    String.raw`(=|%(-?[0-9]+(?:[.,][0-9]*)?)%)?` +
+    String.raw`(.+?(?<!\\|&|&amp;)(?=[~#}]|$))` +
+    String.raw`(#(.*?(?<!\\)(?=[~}]|$)))?`;
+const CLOZE_ANSWER_SRC =
+    String.raw`\{([0-9]*):(` + CLOZE_TYPE_DEF + String.raw`):(` +
+    CLOZE_ALT_SRC + '(~' + CLOZE_ALT_SRC + String.raw`)*)\}`;
+const CLOZE_VALID_TYPES = new Set(
+    CLOZE_TYPE_DEF.replace(/[()]/g, '').split('|'),
+);
+const CLOZE_SA_TYPES = new Set(['SHORTANSWER', 'SA', 'MW', 'SHORTANSWER_C', 'SAC', 'MWC']);
+const CLOZE_NUMBER_RE = /^-?(([0-9]+[.,]?[0-9]*|[.,][0-9]+)([eE][-+]?[0-9]+)?)(:-?(([0-9]+[.,]?[0-9]*|[.,][0-9]+)([eE][-+]?[0-9]+)?))?$/;
+/** Anything that looks like an embedded answer, even malformed: {1:shortanswer:word} */
+const CLOZE_LOOSE_TOKEN_RE = /\{(\d*):([A-Za-z_]+):([^{}]*)\}/g;
 /** Raw blanks the AI sometimes leaves instead of embedded answers: "___" */
 const RAW_BLANK_RE = /_{2,}/g;
 
-/** Escape Moodle Cloze special characters inside an embedded answer. */
-function escapeClozeAnswer(text: string): string {
-    return text.replace(/([}#~\/"\\])/g, '\\$1');
+/**
+ * Same checks as qtype_multianswer_validate_question(). Returns [] when Moodle will accept it.
+ */
+export function validateClozeText(text: string): string[] {
+    const errors: string[] = [];
+    let count = 0;
+    for (const m of text.matchAll(new RegExp(CLOZE_ANSWER_SRC, 'gs'))) {
+        count++;
+        const isNumerical = !!m[3];
+        const isMultiResponse = !!(m[12] || m[13] || m[14] || m[15]);
+        const isMultiChoice = isMultiResponse || !!(m[4] || m[5] || m[6] || m[9] || m[10] || m[11]);
+        const altRe = new RegExp('~?' + CLOZE_ALT_SRC, 's');
+        let remaining = m[16];
+        let answers = 0;
+        let hasFullMark = false;
+        let alt: RegExpExecArray | null;
+        while (remaining && (alt = altRe.exec(remaining)) && alt[0].length > 0) {
+            const fraction = alt[1] === '=' ? 1 : (alt[2] ? 0.01 * parseFloat(alt[2].replace(',', '.')) : 0);
+            const answer = (alt[3] || '').trim();
+            if (answer !== '') {
+                answers++;
+                if (isNumerical && !(CLOZE_NUMBER_RE.test(answer) || answer === '*')) {
+                    errors.push(`#${count}: numerical answer "${answer}" is not a number`);
+                }
+                if (fraction === 1 || (isMultiResponse && fraction > 0)) hasFullMark = true;
+            }
+            remaining = remaining.slice(alt.index + alt[0].length);
+        }
+        if (isMultiChoice && answers < 2) errors.push(`#${count}: multichoice needs at least 2 answers`);
+        else if (answers === 0) errors.push(`#${count}: no answer`);
+        if (!hasFullMark) errors.push(`#${count}: no 100% answer`);
+    }
+    if (count === 0) errors.push('no embedded answers');
+    return errors;
 }
 
-function toCleanStringList(value: any): string[] {
-    const list = Array.isArray(value) ? value : (value !== undefined && value !== null ? [value] : []);
-    return list
-        .map((v) => (typeof v === 'object' && v !== null ? (v.text ?? v.answer ?? v.value ?? '') : v))
-        .map((v) => String(v ?? '').trim())
-        .filter((v) => v.length > 0);
+/** Split Cloze alternatives on "~" that is not escaped with a backslash. */
+function splitClozeAlternatives(body: string): string[] {
+    return body.split(/(?<!\\)~/);
+}
+
+/**
+ * Repair common AI mistakes in embedded answers before validation:
+ *  - lowercase / unknown type ({1:shortanswer:...}, {1:FILL:...}) -> SHORTANSWER
+ *  - short answer without "=" ({1:SHORTANSWER:word}) -> every alternative is accepted
+ *  - multichoice with a single (correct) option -> SHORTANSWER
+ *  - weights other than 1 -> 1 (Moodle sums weights: 1+2 = 3.00 marks)
+ */
+function repairClozeTokens(text: string): string {
+    return text.replace(CLOZE_LOOSE_TOKEN_RE, (_full, _weight: string, rawType: string, body: string) => {
+        let type = rawType.toUpperCase();
+        if (!CLOZE_VALID_TYPES.has(type)) type = 'SHORTANSWER';
+        let alts = splitClozeAlternatives(body).map((a) => a.trim()).filter((a) => a !== '' && a !== '=');
+        const hasMark = (a: string) => /^(=|%-?[0-9]+(?:[.,][0-9]*)?%)/.test(a);
+
+        if (!CLOZE_SA_TYPES.has(type) && type !== 'NUMERICAL' && type !== 'NM' && alts.length === 1) {
+            type = 'SHORTANSWER';
+        }
+        if ((CLOZE_SA_TYPES.has(type) || type === 'NUMERICAL' || type === 'NM') && !alts.some((a) => a.startsWith('=') || /^%100%/.test(a))) {
+            alts = alts.map((a) => (hasMark(a) ? a : `=${a}`));
+        }
+        return `{1:${type}:${alts.join('~')}}`;
+    });
 }
 
 /**
@@ -479,39 +658,39 @@ function buildEmbeddedShortAnswer(variants: string[]): string {
  */
 function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
     const name = formatEnglishQuestionName(q, lessonCode, 'CLOZE');
-    let rawContent: string = String(data.clozeText || q.questionText || '');
-
-    // Moodle rejects a Cloze question without at least one embedded answer
-    // ("The question text must include at least one embedded answer") and aborts the WHOLE import.
-    if (!CLOZE_SUBQUESTION_RE.test(rawContent)) {
+    let rawContent: string = stripInvalidXmlChars(String(data.clozeText || q.questionText || ''));
+    const key = (() => {
+        let k = extractAnswerKey(data);
         const blankCount = (rawContent.match(RAW_BLANK_RE) || []).length;
-        let key = extractAnswerKey(data);
-
         // Last resort: quoted words in the explanation, e.g. `"So" introduces the effect...`
         // Only used when the number of short quoted words matches the number of blanks exactly.
-        if (key.length === 0 && q.explanation && blankCount > 0) {
+        if (k.length === 0 && q.explanation && blankCount > 0) {
             const quoted = [...String(q.explanation).matchAll(/["“]([^"”]{1,40})["”]/g)]
                 .map((m) => m[1].trim())
                 .filter((w) => w && w.split(/\s+/).length <= 4);
-            if (quoted.length === blankCount) {
-                key = quoted.map((w) => [w]);
-            }
+            if (quoted.length === blankCount) k = quoted.map((w) => [w]);
         }
+        return k;
+    })();
 
+    // No embedded answers at all: fill raw "___" blanks from the answer key.
+    if (!new RegExp(CLOZE_LOOSE_TOKEN_RE.source).test(rawContent)) {
+        const blankCount = (rawContent.match(RAW_BLANK_RE) || []).length;
         if (blankCount > 0 && key.length >= blankCount) {
             let idx = 0;
             rawContent = rawContent.replace(RAW_BLANK_RE, () => buildEmbeddedShortAnswer(key[idx++]));
-        } else if (key.length > 0) {
-            // Answer key exists but there is no blank to embed it in -> plain short answer
-            return buildEnglishShortAnswerXml(q, data, lessonCode);
-        } else {
-            // No answer key at all -> keep the question gradable manually instead of breaking the import
-            return buildEnglishEssayXml(q, data, lessonCode);
         }
     }
 
-    // Normalize all blank weights to 1 so Moodle doesn't sum weights as 1+2=3.00
-    rawContent = rawContent.replace(/\{\d+:([A-Z_]+):/g, '{1:$1:');
+    rawContent = repairClozeTokens(rawContent);
+
+    // Moodle aborts the WHOLE import on an invalid Cloze question. If it still is not
+    // valid, degrade this single question instead: short answer (key known) or essay.
+    if (validateClozeText(rawContent).length > 0) {
+        return key.length > 0
+            ? buildEnglishShortAnswerXml(q, data, lessonCode)
+            : essayFallback(q, data, lessonCode, []);
+    }
 
     // Extract instruction from questionText if present
     let instruction = '';
@@ -534,14 +713,14 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: str
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
 
     return `  <question type="cloze">
-    <name><text>${escapeForCdata(name)}</text></name>
+    <name><text>${escapeXmlText(name)}</text></name>
     <questiontext format="html">
       <text><![CDATA[${contentHtml}]]></text>
     </questiontext>
     <generalfeedback format="html">
       <text><![CDATA[${feedbackHtml}]]></text>
     </generalfeedback>
-    <defaultgrade>${q.points || 1}.0000000</defaultgrade>
+    <defaultgrade>${formatGrade(q.points, 1)}</defaultgrade>
     <penalty>0.3333333</penalty>
   </question>`;
 }
@@ -569,21 +748,22 @@ function buildEnglishShortAnswerXml(q: EnglishQuestionData, data: any, lessonCod
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
 
     const answersXml = answers.map((text) => {
+        // "*" is a wildcard in Moodle short answers; a literal asterisk must be escaped.
         return `    <answer fraction="100" format="moodle_auto_format">
-      <text>${escapeForCdata(text)}</text>
+      <text>${escapeXmlText(text.replace(/\*/g, '\\*'))}</text>
       <feedback format="html"><text><![CDATA[<p>Correct!</p>]]></text></feedback>
     </answer>`;
     }).join('\n');
 
     return `  <question type="shortanswer">
-    <name><text>${escapeForCdata(name)}</text></name>
+    <name><text>${escapeXmlText(name)}</text></name>
     <questiontext format="html">
       <text>${cdataHtml(q.questionText)}</text>
     </questiontext>
     <generalfeedback format="html">
       <text><![CDATA[${feedbackHtml}]]></text>
     </generalfeedback>
-    <defaultgrade>${q.points || 1}.0000000</defaultgrade>
+    <defaultgrade>${formatGrade(q.points, 1)}</defaultgrade>
     <penalty>0.3333333</penalty>
     <usecase>0</usecase>
 ${answersXml}
@@ -594,34 +774,48 @@ ${answersXml}
   </question>`;
 }
 
+const TRUE_WORDS = new Set(['true', 't', '1', 'yes', 'đúng', 'dung', 'right', 'correct']);
+const FALSE_WORDS = new Set(['false', 'f', '0', 'no', 'sai', 'wrong', 'incorrect']);
+
 /**
  * Build Moodle XML for True / False
  */
 function buildEnglishTrueFalseXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
+    const rawKey = data.correctAnswer ?? data.answer ?? data.correct ?? data.isTrue;
+    const keyWord = typeof rawKey === 'boolean' ? String(rawKey) : String(rawKey ?? '').trim().toLowerCase();
+    if (!TRUE_WORDS.has(keyWord) && !FALSE_WORDS.has(keyWord)) {
+        // Unknown key: previously exported as "false" silently (possibly wrong key).
+        return essayFallback(q, data, lessonCode, []);
+    }
+    const isTrue = TRUE_WORDS.has(keyWord);
+
     const name = formatEnglishQuestionName(q, lessonCode, 'TF');
-    const isTrue = data.correctAnswer === true || String(data.correctAnswer).toLowerCase() === 'true';
     const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
+    const fbTrue = data.feedbackTrue ? escapeForCdata(data.feedbackTrue) : (isTrue ? 'Correct!' : 'Incorrect.');
+    const fbFalse = data.feedbackFalse ? escapeForCdata(data.feedbackFalse) : (!isTrue ? 'Correct!' : 'Incorrect.');
 
     return `  <question type="truefalse">
-    <name><text>${escapeForCdata(name)}</text></name>
+    <name><text>${escapeXmlText(name)}</text></name>
     <questiontext format="html">
       <text>${cdataHtml(q.questionText)}</text>
     </questiontext>
     <generalfeedback format="html">
       <text><![CDATA[${feedbackHtml}]]></text>
     </generalfeedback>
-    <defaultgrade>${q.points || 1}.0000000</defaultgrade>
+    <defaultgrade>${formatGrade(q.points, 1)}</defaultgrade>
     <penalty>1.0000000</penalty>
     <answer fraction="${isTrue ? 100 : 0}" format="moodle_auto_format">
       <text>true</text>
-      <feedback format="html"><text><![CDATA[<p>${isTrue ? 'Correct!' : 'Incorrect.'}</p>]]></text></feedback>
+      <feedback format="html"><text><![CDATA[<p>${fbTrue}</p>]]></text></feedback>
     </answer>
     <answer fraction="${isTrue ? 0 : 100}" format="moodle_auto_format">
       <text>false</text>
-      <feedback format="html"><text><![CDATA[<p>${!isTrue ? 'Correct!' : 'Incorrect.'}</p>]]></text></feedback>
+      <feedback format="html"><text><![CDATA[<p>${fbFalse}</p>]]></text></feedback>
     </answer>
   </question>`;
 }
+
+const ESSAY_RESPONSE_FORMATS = new Set(['editor', 'editorfilepicker', 'plain', 'monospaced', 'noinline']);
 
 /**
  * Build Moodle XML for Essay / Analysis
@@ -647,16 +841,19 @@ function buildEnglishEssayXml(q: EnglishQuestionData, data: any, lessonCode: str
         graderInfoStr = String(q.explanation);
     }
 
-    const lines = data.responseFieldLines || 15;
+    // Integer DB column: a non-numeric value makes the insert (and the whole import) fail.
+    const parsedLines = parseInt(String(data.responseFieldLines ?? ''), 10);
+    const lines = Number.isFinite(parsedLines) ? Math.min(Math.max(parsedLines, 5), 40) : 15;
+    const responseFormat = ESSAY_RESPONSE_FORMATS.has(String(data.responseFormat)) ? String(data.responseFormat) : 'editor';
 
     return `  <question type="essay">
-    <name><text>${escapeForCdata(name)}</text></name>
+    <name><text>${escapeXmlText(name)}</text></name>
     <questiontext format="html">
       <text>${cdataHtml(q.questionText)}</text>
     </questiontext>
-    <defaultgrade>${q.points || 2}.0000000</defaultgrade>
+    <defaultgrade>${formatGrade(q.points, 2)}</defaultgrade>
     <penalty>0.0000000</penalty>
-    <responseformat>editor</responseformat>
+    <responseformat>${responseFormat}</responseformat>
     <responserequired>1</responserequired>
     <responsefieldlines>${lines}</responsefieldlines>
     <graderinfo format="html">
@@ -712,7 +909,8 @@ export function buildEnglishMoodleXml(
     const lessonSlug = normalizedTitle
         .replace(/[^\w\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/gi, '')
         .replace(/\s+/g, '_')
-        .substring(0, 50);
+        .substring(0, 50)
+        .replace(/^_+|_+$/g, '') || lessonCode;
 
     const parts: string[] = ['<?xml version="1.0" encoding="UTF-8"?>', '<quiz>', ''];
 
@@ -734,7 +932,7 @@ export function buildEnglishMoodleXml(
     }
 
     for (const [type, list] of grouped.entries()) {
-        parts.push(`  <!-- Type: ${type} (${list.length} questions) -->`);
+        parts.push(`  <!-- Type: ${commentSafe(type)} (${list.length} questions) -->`);
         for (const q of list) {
             parts.push(buildEnglishQuestionXml(q, lessonCode));
             parts.push('');
