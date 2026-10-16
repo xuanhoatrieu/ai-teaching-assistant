@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.6.13] - 2026-10-16 - Resilient Matching Question Moodle XML Export & PPTX Tool Integration
+
+### Fixed
+- **Matching questions exported as TinyMCE essay editors in Moodle**:
+  - Implemented `extractMatchPairs()` supporting diverse matching pair data schemas (`data.pairs`, `matchingPairs`, `matches`, `items`, `subquestions`, parallel arrays `columnA/columnB`, and key-value maps) and diverse symmetric field names (`statement/component`, `component/function`, `term/definition`).
+  - Added text fallback parsing to extract pairs from bulleted question text when structured pair data is omitted.
+  - Implemented **Auto-Recovery** in `buildEnglishQuestionXml`: automatically detects matching intent via `isMatchingQuestionText()` and reroutes questions improperly classified as `ESSAY` or `MULTICHOICE` into valid `<question type="match">` with `<subquestion>` entries.
+- **PPTX Audio Tool & Question Generation**:
+  - Enhanced English question prompt schema with explicit rules, examples, and prohibitions against generating matching questions as essays.
+  - Standardized JSON parsing and pair normalization in `PptxAudioToolService` and `EnglishQuestionService`.
+- **Frontend Preview**:
+  - Updated matching question cards in both Question Bank (`Step6QuestionBank.tsx`) and PPTX Audio Tool (`PptxAudioTool.tsx`) to flexibly render 2-column tables regardless of underlying pair field names.
+- Added comprehensive unit test coverage in `moodle-xml.helper.spec.ts` (20/20 passing tests).
+
 ## [v1.6.12] - 2026-10-16 - Option Prefix Stripping & Neutral Explanations for Moodle Shuffle Compatibility
 
 ### Fixed

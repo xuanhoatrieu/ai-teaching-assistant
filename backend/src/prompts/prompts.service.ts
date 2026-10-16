@@ -677,7 +677,9 @@ Chỉ trả về JSON.`,
 3. Question Types Specification:
    - "MC" (Multiple Choice single answer): single: true, 4 options (A, B, C, D) with 1 correct answer (fraction: 100).
    - "MR" (Multiple Response): single: false, 4-5 options with 2+ correct answers (sum of correct fractions = 100, distractors fraction = -50).
-   - "MATCH" (Matching): 3-5 subquestion-answer pairs (e.g. term ⇄ definition, IPA symbol ⇄ description, sentence ⇄ translation technique).
+   - "MATCH" (Matching): 3-5 subquestion-answer pairs (e.g. term ⇄ definition, component ⇄ function, concept ⇄ description, sentence ⇄ translation technique).
+     * CRITICAL RULE: NEVER format matching/pairing questions as ESSAY. If the task is matching, connecting, or pairing two columns/concepts, ALWAYS use questionType: "MATCH".
+     * Required data shape: "data": {"pairs": [{"left": "Term / Component / Statement", "right": "Definition / Function / Corresponding element"}], "rightOptions": ["Definition 1", "Definition 2", "Distractor (optional)"]}
    - "CLOZE": Text with embedded answers using Moodle Cloze syntax.
      CRITICAL CLOZE RULES:
      * EVERY blank MUST be written as an embedded answer '{1:SHORTANSWER:=word}'. NEVER write bare underscores like "___" or "_____" in a CLOZE question — Moodle rejects the entire import file if a Cloze question has no embedded answer.
@@ -689,6 +691,7 @@ Chỉ trả về JSON.`,
      * Required data shape: "data": {"acceptableAnswers": ["answer", "variant"], "caseSensitive": false}. acceptableAnswers MUST contain the real expected answer(s), never a placeholder.
    - "TRUEFALSE": Theoretical proposition with correctAnswer: true or false.
    - "ESSAY": In-depth analysis question (e.g., bracketed syntax tree, translation critique) with scoring criteria (graderInfo).
+     * CRITICAL RULE: Do NOT use ESSAY for matching questions. ESSAY is strictly for open-ended analytical or translation essays.
 
 ---
 
@@ -712,6 +715,28 @@ Chỉ trả về JSON.`,
         ]
       },
       "explanation": "/tʃ/ is produced by stopping airflow behind alveolar ridge and releasing with friction without vocal cord vibration.",
+      "points": 1
+    },
+    {
+      "questionOrder": 2,
+      "questionType": "MATCH",
+      "subDiscipline": "SYNTAX",
+      "difficulty": 2,
+      "title": "SYN-02: Syntactic Categories",
+      "questionText": "Ghép mỗi thành phần với chức năng phù hợp trong câu:",
+      "data": {
+        "pairs": [
+          {"left": "Subject (Chủ ngữ)", "right": "Thực hiện hành động hoặc là đối tượng được miêu tả"},
+          {"left": "Predicate (Vị ngữ)", "right": "Mô tả hành động hoặc trạng thái của chủ ngữ"},
+          {"left": "Direct Object (Tân ngữ trực tiếp)", "right": "Chịu tác động trực tiếp của ngoại động từ"}
+        ],
+        "rightOptions": [
+          "Thực hiện hành động hoặc là đối tượng được miêu tả",
+          "Mô tả hành động hoặc trạng thái của chủ ngữ",
+          "Chịu tác động trực tiếp của ngoại động từ"
+        ]
+      },
+      "explanation": "Mỗi thành phần cú pháp có vị trí và chức năng ngữ nghĩa xác định trong cấu trúc phân tầng của câu.",
       "points": 1
     }
   ]

@@ -6,7 +6,13 @@ import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { EnglishQuestion } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import type { Response } from 'express';
-import { buildEnglishMoodleXml, extractAndNormalizeLesson, EnglishQuestionData } from './moodle-xml.helper';
+import {
+    buildEnglishMoodleXml,
+    extractAndNormalizeLesson,
+    EnglishQuestionData,
+    isMatchingQuestionText,
+    extractMatchPairs,
+} from './moodle-xml.helper';
 
 import { IsOptional, IsNumber, IsArray, IsString } from 'class-validator';
 
@@ -350,17 +356,42 @@ export class EnglishQuestionService implements OnModuleInit {
             const createdList: EnglishQuestion[] = [];
             for (let i = 0; i < rawList.length; i++) {
                 const item = rawList[i];
-                const qType = (item.questionType || 'MC').toUpperCase();
-                const dataJson = typeof item.data === 'object'
-                    ? JSON.stringify(item.data)
-                    : (item.dataJson || JSON.stringify(item));
+                let qType = (item.questionType || 'MC').toUpperCase();
+                const questionText = item.questionText || item.question || 'English Question';
+
+                // Robust data extraction
+                let parsedData: any = null;
+                if (typeof item.data === 'object' && item.data !== null) {
+                    parsedData = item.data;
+                } else if (typeof item.dataJson === 'object' && item.dataJson !== null) {
+                    parsedData = item.dataJson;
+                } else if (typeof item.data === 'string') {
+                    try { parsedData = JSON.parse(item.data); } catch { parsedData = {}; }
+                } else if (typeof item.dataJson === 'string') {
+                    try { parsedData = JSON.parse(item.dataJson); } catch { parsedData = {}; }
+                } else {
+                    parsedData = item;
+                }
+
+                // Auto-detect matching intent and normalize pairs
+                const matchCheck = extractMatchPairs(parsedData, questionText, item.explanation || item.feedback || '');
+                if (matchCheck.pairs.length >= 2) {
+                    if (qType !== 'MATCH' && (qType === 'ESSAY' || isMatchingQuestionText(questionText))) {
+                        qType = 'MATCH';
+                    }
+                    if (qType === 'MATCH' && (!Array.isArray(parsedData.pairs) || parsedData.pairs.length === 0)) {
+                        parsedData.pairs = matchCheck.pairs.map((p) => ({ left: p.sub, right: p.ans }));
+                    }
+                }
+
+                const dataJson = JSON.stringify(parsedData);
 
                 const created = await this.createQuestion(lessonId, {
                     questionType: qType,
                     subDiscipline: item.subDiscipline || dto.subDiscipline || 'GENERAL',
                     difficulty: item.difficulty || 1,
                     title: item.title || `ENG-${i + 1}`,
-                    questionText: item.questionText || item.question || 'English Question',
+                    questionText: questionText,
                     dataJson: dataJson,
                     explanation: item.explanation || item.feedback || null,
                     points: item.points || 1,

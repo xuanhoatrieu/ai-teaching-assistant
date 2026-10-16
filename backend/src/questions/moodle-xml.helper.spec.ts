@@ -3,6 +3,10 @@ import {
     cleanExplanation,
     buildMoodleXml,
     ReviewQuestionData,
+    isMatchingQuestionText,
+    extractMatchPairs,
+    buildEnglishQuestionXml,
+    EnglishQuestionData,
 } from './moodle-xml.helper';
 
 describe('moodle-xml.helper', () => {
@@ -122,4 +126,126 @@ describe('moodle-xml.helper', () => {
             expect(xml).toContain('<strong>Giải thích: </strong>Câu hỏi hiện tại đơn với "you" dùng "do", sau đó là động từ nguyên mẫu "do".');
         });
     });
+
+    describe('Matching Question Improvements & Auto-Recovery', () => {
+        it('isMatchingQuestionText should identify matching intent correctly', () => {
+            expect(isMatchingQuestionText('Ghép mỗi thành phần với chức năng phù hợp.')).toBe(true);
+            expect(isMatchingQuestionText('Ghép mỗi câu trong presentation model với thành phần tương ứng.')).toBe(true);
+            expect(isMatchingQuestionText('Nối mỗi khái niệm với định nghĩa đúng:')).toBe(true);
+            expect(isMatchingQuestionText('Match each term with its definition.')).toBe(true);
+            expect(isMatchingQuestionText('Hãy ghép các cặp sau:')).toBe(true);
+            expect(isMatchingQuestionText('Chọn đáp án đúng nhất')).toBe(false);
+            expect(isMatchingQuestionText('What is the main function of numpy?')).toBe(false);
+        });
+
+        it('extractMatchPairs should extract pairs from data.matchingPairs', () => {
+            const data = {
+                matchingPairs: [
+                    { left: 'Thành phần A', right: 'Chức năng A' },
+                    { left: 'Thành phần B', right: 'Chức năng B' },
+                ],
+            };
+            const result = extractMatchPairs(data);
+            expect(result.pairs).toHaveLength(2);
+            expect(result.pairs[0]).toEqual({ sub: 'Thành phần A', ans: 'Chức năng A' });
+            expect(result.pairs[1]).toEqual({ sub: 'Thành phần B', ans: 'Chức năng B' });
+        });
+
+        it('extractMatchPairs should extract pairs from diverse key names (component / function, term / definition)', () => {
+            const data = {
+                items: [
+                    { component: 'Presentation Model', function: 'Quản lý trạng thái và logic hiển thị' },
+                    { component: 'View', function: 'Hiển thị giao diện người dùng' },
+                    { component: 'Data Model', function: 'Lưu trữ và xử lý nghiệp vụ dữ liệu' },
+                ],
+            };
+            const result = extractMatchPairs(data);
+            expect(result.pairs).toHaveLength(3);
+            expect(result.pairs[0].sub).toBe('Presentation Model');
+            expect(result.pairs[0].ans).toBe('Quản lý trạng thái và logic hiển thị');
+        });
+
+        it('extractMatchPairs should extract pairs from parallel arrays (columnA / columnB)', () => {
+            const data = {
+                columnA: ['Model', 'View', 'Controller'],
+                columnB: ['Dữ liệu', 'Giao diện', 'Điều hướng'],
+            };
+            const result = extractMatchPairs(data);
+            expect(result.pairs).toHaveLength(3);
+            expect(result.pairs[0]).toEqual({ sub: 'Model', ans: 'Dữ liệu' });
+            expect(result.pairs[2]).toEqual({ sub: 'Controller', ans: 'Điều hướng' });
+        });
+
+        it('extractMatchPairs should extract pairs from bulleted question text when data is missing', () => {
+            const text = `Ghép mỗi thành phần với chức năng phù hợp:
+1. Presentation Model - Lưu trữ trạng thái UI
+2. View - Hiển thị giao diện
+3. Service - Gọi API xử lý dữ liệu`;
+            const result = extractMatchPairs({}, text);
+            expect(result.pairs).toHaveLength(3);
+            expect(result.fromText).toBe(true);
+            expect(result.pairs[0]).toEqual({ sub: 'Presentation Model', ans: 'Lưu trữ trạng thái UI' });
+        });
+
+        it('buildEnglishQuestionXml should export valid matching XML even when stored under data.matchingPairs', () => {
+            const q: EnglishQuestionData = {
+                id: 'B01-MATCH-01',
+                questionOrder: 12,
+                questionType: 'MATCH',
+                questionText: 'Ghép mỗi thành phần với chức năng phù hợp.',
+                dataJson: JSON.stringify({
+                    matchingPairs: [
+                        { left: 'Thành phần A', right: 'Chức năng 1' },
+                        { left: 'Thành phần B', right: 'Chức năng 2' },
+                        { left: 'Thành phần C', right: 'Chức năng 3' },
+                    ],
+                }),
+                explanation: 'Mỗi thành phần đảm nhiệm một vai trò riêng biệt.',
+                points: 1,
+            };
+
+            const xml = buildEnglishQuestionXml(q, 'B01');
+
+            // Positive proof: MUST export as match question with subquestions
+            expect(xml).toContain('<question type="match">');
+            expect(xml).toContain('<subquestion format="html">');
+            expect(xml).toContain('<text><![CDATA[<p class="cell">Thành phần A</p>]]></text>');
+            expect(xml).toContain('<text>Chức năng 1</text>');
+            expect(xml).toContain('<text><![CDATA[<p class="cell">Thành phần B</p>]]></text>');
+            expect(xml).toContain('<text>Chức năng 2</text>');
+
+            // Negative proof: MUST NOT fallback to essay question
+            expect(xml).not.toContain('<question type="essay">');
+            expect(xml).not.toContain('<responseformat>');
+        });
+
+        it('buildEnglishQuestionXml should AUTO-RECOVER questions incorrectly marked as ESSAY when matching intent and pairs exist', () => {
+            // Case identical to Câu 12 / Câu 13 from user report:
+            const q: EnglishQuestionData = {
+                id: 'B01-ESSAY-12',
+                questionOrder: 12,
+                questionType: 'ESSAY', // Misclassified as ESSAY by AI
+                questionText: 'Ghép mỗi câu trong presentation model với thành phần tương ứng.',
+                dataJson: JSON.stringify({
+                    items: [
+                        { statement: 'Lưu trữ state của view', component: 'Presentation Model' },
+                        { statement: 'Render các widget giao diện', component: 'View' },
+                    ],
+                }),
+                points: 1,
+            };
+
+            const xml = buildEnglishQuestionXml(q, 'B01');
+
+            // Positive proof: Auto-recovered to match question
+            expect(xml).toContain('<question type="match">');
+            expect(xml).toContain('<subquestion format="html">');
+            expect(xml).toContain('Lưu trữ state của view');
+            expect(xml).toContain('Presentation Model');
+
+            // Negative proof: MUST NOT export as essay (no TinyMCE text area on Moodle!)
+            expect(xml).not.toContain('<question type="essay">');
+        });
+    });
 });
+

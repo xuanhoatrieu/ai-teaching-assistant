@@ -35,6 +35,8 @@ import {
     EnglishQuestionData,
     stripOptionPrefix,
     cleanExplanation,
+    isMatchingQuestionText,
+    extractMatchPairs,
 } from '../questions/moodle-xml.helper';
 import { fixUtf8Filename } from '../common/string.util';
 
@@ -2095,7 +2097,9 @@ SUPPORTED TYPES & dataJson STRUCTURE:
 2. "MR" (Multiple Response - multiple correct):
    dataJson: {"options": [{"text": "First choice", "isCorrect": true}, {"text": "Second choice", "isCorrect": true}, ...]}
 3. "MATCH" (Matching pairs):
-   dataJson: {"pairs": [{"left": "Term 1", "right": "Definition 1"}, {"left": "Term 2", "right": "Definition 2"}]}
+   - MUST have 3 to 5 matching pairs.
+   - dataJson: {"pairs": [{"left": "Term / Component 1", "right": "Definition / Function 1"}, {"left": "Term / Component 2", "right": "Definition / Function 2"}, ...], "rightOptions": ["Definition 1", "Definition 2", "Distractor (optional)"]}
+   - CRITICAL: NEVER format matching/pairing questions as ESSAY. ALWAYS use questionType: "MATCH".
 4. "CLOZE" (Moodle Embedded Cloze sentence):
    questionText: "Sentence with embedded Moodle Cloze like {1:SHORTANSWER:=word} or {1:MULTICHOICE:=correct~wrong}"
    dataJson: {"rawCloze": "..."}
@@ -2143,7 +2147,15 @@ Return ONLY valid JSON format:
         }
 
         const formatted = newQuestions.map((q, idx) => {
-            let dataJsonStr = typeof q.dataJson === 'string' ? q.dataJson : JSON.stringify(q.dataJson || {});
+            let dataJsonStr = typeof q.dataJson === 'string'
+                ? q.dataJson
+                : (typeof q.data === 'string'
+                    ? q.data
+                    : JSON.stringify(q.dataJson ?? q.data ?? {}));
+
+            let resolvedType = (q.questionType || 'MC').toUpperCase();
+            const questionText = (q.questionText || '').trim();
+
             try {
                 const parsedData = JSON.parse(dataJsonStr);
                 if (Array.isArray(parsedData.options)) {
@@ -2153,6 +2165,18 @@ Return ONLY valid JSON format:
                     }));
                     dataJsonStr = JSON.stringify(parsedData);
                 }
+
+                // Auto-detect matching intent and normalize pairs
+                const matchCheck = extractMatchPairs(parsedData, questionText, q.explanation || '');
+                if (matchCheck.pairs.length >= 2) {
+                    if (resolvedType !== 'MATCH' && (resolvedType === 'ESSAY' || isMatchingQuestionText(questionText))) {
+                        resolvedType = 'MATCH';
+                    }
+                    if (resolvedType === 'MATCH' && (!Array.isArray(parsedData.pairs) || parsedData.pairs.length === 0)) {
+                        parsedData.pairs = matchCheck.pairs.map((p) => ({ left: p.sub, right: p.ans }));
+                        dataJsonStr = JSON.stringify(parsedData);
+                    }
+                }
             } catch {
                 // Keep dataJsonStr as is if not JSON
             }
@@ -2160,11 +2184,11 @@ Return ONLY valid JSON format:
             return {
                 id: q.id || `ENG-${Date.now()}-${idx + 1}`,
                 questionOrder: idx + 1,
-                questionType: (q.questionType || 'MC').toUpperCase(),
+                questionType: resolvedType,
                 subDiscipline: q.subDiscipline || subDiscipline,
                 difficulty: Number(q.difficulty) || 1,
                 title: q.title || `ENG-${String(idx + 1).padStart(2, '0')}`,
-                questionText: (q.questionText || '').trim(),
+                questionText,
                 dataJson: dataJsonStr,
                 explanation: cleanExplanation(q.explanation || ''),
                 points: Number(q.points) || 1,

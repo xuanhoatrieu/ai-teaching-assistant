@@ -1450,36 +1450,48 @@ export function Step6QuestionBank() {
                                                 )}
 
                                                 {/* Matching Pairs */}
-                                                {(q.questionType === 'MATCH' || q.questionType === 'MATCHING') && Array.isArray(parsedData.pairs) && (
-                                                    <div className="matching-preview-box">
-                                                        <table className="matching-table">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>Thuật ngữ / Nội dung</th>
-                                                                    <th></th>
-                                                                    <th>Khái niệm / Ghép đôi</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {parsedData.pairs.map((pair: any, pIdx: number) => {
-                                                                    const leftVal = pair.left ?? pair.subquestion ?? pair.question ?? '';
-                                                                    const rightVal = pair.right ?? pair.answer ?? pair.match ?? '';
-                                                                    return (
-                                                                        <tr key={pIdx}>
-                                                                            <td className="match-sub">
-                                                                                {typeof leftVal === 'object' ? JSON.stringify(leftVal) : String(leftVal)}
-                                                                            </td>
-                                                                            <td className="match-arrow">➔</td>
-                                                                            <td className="match-ans">
-                                                                                {typeof rightVal === 'object' ? JSON.stringify(rightVal) : String(rightVal)}
-                                                                            </td>
-                                                                        </tr>
-                                                                    );
-                                                                })}
-                                                            </tbody>
-                                                        </table>
-                                                    </div>
-                                                )}
+                                                {(() => {
+                                                    const isMatch = q.questionType === 'MATCH' || q.questionType === 'MATCHING' ||
+                                                        (q.questionText && (q.questionText.startsWith('Ghép') || q.questionText.startsWith('Nối') || q.questionText.startsWith('Match')));
+                                                    const rawPairs = Array.isArray(parsedData?.pairs) ? parsedData.pairs
+                                                        : Array.isArray(parsedData?.matchingPairs) ? parsedData.matchingPairs
+                                                        : Array.isArray(parsedData?.matches) ? parsedData.matches
+                                                        : Array.isArray(parsedData?.items) ? parsedData.items
+                                                        : Array.isArray(parsedData?.subquestions) ? parsedData.subquestions
+                                                        : Array.isArray(parsedData) ? parsedData
+                                                        : [];
+                                                    if (!isMatch || rawPairs.length === 0) return null;
+                                                    return (
+                                                        <div className="matching-preview-box">
+                                                            <table className="matching-table">
+                                                                <thead>
+                                                                    <tr>
+                                                                        <th>Thuật ngữ / Vế A</th>
+                                                                        <th></th>
+                                                                        <th>Định nghĩa / Ghép đôi Vế B</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody>
+                                                                    {rawPairs.map((pair: any, pIdx: number) => {
+                                                                        const leftVal = pair.left ?? pair.subquestion ?? pair.question ?? pair.term ?? pair.item ?? pair.component ?? pair.statement ?? pair.A ?? '';
+                                                                        const rightVal = pair.right ?? pair.answer ?? pair.match ?? pair.definition ?? pair.target ?? pair.function ?? pair.description ?? pair.B ?? '';
+                                                                        return (
+                                                                            <tr key={pIdx}>
+                                                                                <td className="match-sub">
+                                                                                    {typeof leftVal === 'object' ? JSON.stringify(leftVal) : String(leftVal)}
+                                                                                </td>
+                                                                                <td className="match-arrow">➔</td>
+                                                                                <td className="match-ans">
+                                                                                    {typeof rightVal === 'object' ? JSON.stringify(rightVal) : String(rightVal)}
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    );
+                                                })()}
 
                                                 {/* Cloze Text */}
                                                 {q.questionType === 'CLOZE' && (
