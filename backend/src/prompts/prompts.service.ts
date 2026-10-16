@@ -580,11 +580,12 @@ Chỉ trả về JSON.`,
 **YÊU CẦU CHI TIẾT:**
 
 1. **Quy tắc chung:**
-- Mỗi câu hỏi chỉ có MỘT đáp án đúng duy nhất
-- Phương án nhiễu phải hợp lý, thuyết phục
+- Mỗi câu hỏi chỉ có MỘT đáp án đúng duy nhất (lưu tại correctAnswer)
+- Phương án nhiễu phải hợp lý, thuyết phục (lưu tại optionB, optionC, optionD)
 - Tránh từ phủ định (KHÔNG, NGOẠI TRỪ)
 - Các lựa chọn có độ dài và cấu trúc tương tự
-- Vị trí đáp án đúng cân bằng giữa A, B, C, D
+- TUYỆT ĐỐI KHÔNG thêm tiền tố nhãn (A., B., C., D., 1., 2.) vào trường correctAnswer hay optionB/C/D. Chỉ ghi nội dung thuần túy của phương án.
+- explanation: Giải thích ngắn gọn bản chất vì sao đáp án đúng dựa trên kiến thức. TUYỆT ĐỐI KHÔNG dùng từ định danh vị trí như "A đúng vì", "Phương án A", "Chọn A vì" (do thứ tự đáp án sẽ được xáo trộn ngẫu nhiên trên LMS).
 
 2. **Mức BIẾT (Độ khó 1):**
 - Kiểm tra trí nhớ về khái niệm, thuật ngữ, định nghĩa ĐÃ ĐƯỢC GIẢNG
@@ -607,33 +608,33 @@ Chỉ trả về JSON.`,
       "difficulty": 1,
       "bloomLevel": "remember",
       "question": "Câu hỏi mức Biết?",
-      "correctAnswer": "Đáp án đúng (A)",
-      "optionB": "Phương án B",
-      "optionC": "Phương án C",
-      "optionD": "Phương án D",
-      "explanation": "Giải thích ngắn gọn tại sao A đúng"
+      "correctAnswer": "Nội dung đáp án đúng",
+      "optionB": "Nội dung phương án sai B",
+      "optionC": "Nội dung phương án sai C",
+      "optionD": "Nội dung phương án sai D",
+      "explanation": "Giải thích ngắn gọn bản chất vì sao đáp án này đúng"
     },
     {
       "questionId": "B1-2-01",
       "difficulty": 2,
       "bloomLevel": "understand",
       "question": "Câu hỏi mức Hiểu?",
-      "correctAnswer": "Đáp án đúng (A)",
-      "optionB": "Phương án B",
-      "optionC": "Phương án C",
-      "optionD": "Phương án D",
-      "explanation": "Giải thích"
+      "correctAnswer": "Nội dung đáp án đúng",
+      "optionB": "Nội dung phương án sai B",
+      "optionC": "Nội dung phương án sai C",
+      "optionD": "Nội dung phương án sai D",
+      "explanation": "Giải thích ngắn gọn bản chất vì sao đáp án này đúng"
     },
     {
       "questionId": "B1-3-01",
       "difficulty": 3,
       "bloomLevel": "apply",
       "question": "Tình huống: ... Câu hỏi vận dụng?",
-      "correctAnswer": "Đáp án đúng (A)",
-      "optionB": "Phương án B",
-      "optionC": "Phương án C",
-      "optionD": "Phương án D",
-      "explanation": "Giải thích"
+      "correctAnswer": "Nội dung đáp án đúng",
+      "optionB": "Nội dung phương án sai B",
+      "optionC": "Nội dung phương án sai C",
+      "optionD": "Nội dung phương án sai D",
+      "explanation": "Giải thích ngắn gọn bản chất vì sao đáp án này đúng"
     }
   ]
 }

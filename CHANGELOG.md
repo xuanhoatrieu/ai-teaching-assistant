@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.6.12] - 2026-10-16 - Option Prefix Stripping & Neutral Explanations for Moodle Shuffle Compatibility
+
+### Fixed
+- **Double lettering in Moodle choices (`A. A. ...`, `B. A. ...`)**: Added `stripOptionPrefix()` to strip option prefixes (`A. `, `B) `, `(A) `, `[A] `, `1. `) before exporting to Moodle XML, preventing duplication with Moodle's built-in `<answernumbering>ABCD</answernumbering>`.
+- **Hardcoded option letter "A." in general feedback**: Removed hardcoded `Đáp án đúng là: A.` from `<generalfeedback>` in [moodle-xml.helper.ts](file:///mnt/nvme/ai-teaching-assistant/backend/src/questions/moodle-xml.helper.ts) so explanations remain accurate when Moodle shuffles choices randomly (`<shuffleanswers>true</shuffleanswers>`).
+- **Position-dependent explanations (`A đúng vì...`, `Option A is correct because...`)**: Added `cleanExplanation()` to neutralize letter references into pure conceptual explanations suitable for randomized options.
+- **AI Question Generation & Import normalization**:
+  - Updated AI prompt rules in `prompts.service.ts`, `pptx-audio-tool.service.ts`, and database seed scripts to strictly prohibit letter prefixes in option contents and position references in explanations.
+  - Automatically sanitizes question options and explanations on AI generation, Excel imports, manual editing, and XML exports in both Review Questions, Question Bank, and PPTX Audio Tools.
+- Added comprehensive unit test suite in `moodle-xml.helper.spec.ts` (13/13 passing tests).
+
 ## [v1.6.11] - 2026-10-13 - Import-Safe Moodle XML Export (Full Audit Against Moodle 4.4 Import Rules)
 
 ### Fixed

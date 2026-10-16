@@ -5,6 +5,7 @@ import { ApiKeysService } from '../api-keys/api-keys.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { ReviewQuestion } from '@prisma/client';
+import { stripOptionPrefix, cleanExplanation } from './moodle-xml.helper';
 
 interface LevelCounts {
     level1: number; // Biết (Remember)
@@ -90,12 +91,12 @@ export class ReviewQuestionService {
                 questionId,
                 questionOrder: count,
                 level: dto.level,
-                question: dto.question,
-                correctAnswer: dto.correctAnswer,
-                optionB: dto.optionB,
-                optionC: dto.optionC,
-                optionD: dto.optionD,
-                explanation: dto.explanation,
+                question: dto.question?.trim(),
+                correctAnswer: stripOptionPrefix(dto.correctAnswer),
+                optionB: stripOptionPrefix(dto.optionB),
+                optionC: stripOptionPrefix(dto.optionC),
+                optionD: stripOptionPrefix(dto.optionD),
+                explanation: cleanExplanation(dto.explanation),
             },
         });
     }
@@ -120,12 +121,12 @@ export class ReviewQuestionService {
             data: {
                 ...(dto.questionId !== undefined && { questionId: dto.questionId }),
                 ...(dto.level !== undefined && { level: dto.level }),
-                ...(dto.question !== undefined && { question: dto.question }),
-                ...(dto.correctAnswer !== undefined && { correctAnswer: dto.correctAnswer }),
-                ...(dto.optionB !== undefined && { optionB: dto.optionB }),
-                ...(dto.optionC !== undefined && { optionC: dto.optionC }),
-                ...(dto.optionD !== undefined && { optionD: dto.optionD }),
-                ...(dto.explanation !== undefined && { explanation: dto.explanation }),
+                ...(dto.question !== undefined && { question: dto.question?.trim() }),
+                ...(dto.correctAnswer !== undefined && { correctAnswer: stripOptionPrefix(dto.correctAnswer) }),
+                ...(dto.optionB !== undefined && { optionB: stripOptionPrefix(dto.optionB) }),
+                ...(dto.optionC !== undefined && { optionC: stripOptionPrefix(dto.optionC) }),
+                ...(dto.optionD !== undefined && { optionD: stripOptionPrefix(dto.optionD) }),
+                ...(dto.explanation !== undefined && { explanation: cleanExplanation(dto.explanation) }),
                 ...(dto.questionOrder !== undefined && { questionOrder: dto.questionOrder }),
             },
         });

@@ -317,6 +317,8 @@ VALUES (
 - Các phương án sai phải có tính hợp lý, thuyết phục
 - Tránh từ phủ định (KHÔNG, NGOẠI TRỪ)
 - **correctAnswer là đáp án đúng**, các options khác là sai
+- TUYỆT ĐỐI KHÔNG thêm tiền tố nhãn (A., B., C., D., 1., 2.) vào trường correctAnswer hay optionB/C/D. Chỉ ghi nội dung thuần túy của phương án.
+- explanation: Giải thích ngắn gọn bản chất vì sao đáp án đúng dựa trên kiến thức bài học. TUYỆT ĐỐI KHÔNG dùng từ "A đúng vì", "Phương án A", "Chọn A vì" (do thứ tự đáp án sẽ được xáo trộn ngẫu nhiên trên LMS).
 
 ---
 
@@ -330,11 +332,11 @@ VALUES (
       "questionOrder": 1,
       "level": 1,
       "question": "Nội dung câu hỏi?",
-      "correctAnswer": "Đáp án đúng (A)",
-      "optionB": "Đáp án B",
-      "optionC": "Đáp án C",
-      "optionD": "Đáp án D",
-      "explanation": "Giải thích tại sao A đúng..."
+      "correctAnswer": "Nội dung đáp án đúng",
+      "optionB": "Nội dung đáp án sai B",
+      "optionC": "Nội dung đáp án sai C",
+      "optionD": "Nội dung đáp án sai D",
+      "explanation": "Giải thích ngắn gọn bản chất vì sao đáp án này đúng..."
     },
     {
       "questionId": "B1-2-01",

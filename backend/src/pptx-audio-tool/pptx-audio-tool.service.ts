@@ -33,6 +33,8 @@ import {
     extractAndNormalizeLesson,
     ReviewQuestionData,
     EnglishQuestionData,
+    stripOptionPrefix,
+    cleanExplanation,
 } from '../questions/moodle-xml.helper';
 import { fixUtf8Filename } from '../common/string.util';
 
@@ -1491,13 +1493,13 @@ Return JSON only.`;
 NỘI DUNG BÀI GIẢNG:
 ${contentText}
 
-YÊU CẦU:
+YÊU CẦU BẮT BUỘC:
 - Tạo ${level1} câu hỏi mức 1 (Biết/Remember - Kiến thức cơ bản, định nghĩa)
 - Tạo ${level2} câu hỏi mức 2 (Hiểu/Understand - Phân tích, so sánh, bản chất)
 - Tạo ${level3} câu hỏi mức 3 (Vận dụng/Apply - Tình huống, ứng dụng thực tế)
-- Mỗi câu có 4 đáp án A, B, C, D
-- Đáp án A LUÔN là đáp án đúng
-- Có giải thích rõ ràng vì sao A đúng
+- Mỗi câu có 4 đáp án: correctAnswer là đáp án đúng, optionB/optionC/optionD là các đáp án sai.
+- TUYỆT ĐỐI KHÔNG thêm tiền tố nhãn (như A., B., C., D., 1., 2.) vào nội dung của correctAnswer và các option. Chỉ điền nội dung phương án thuần túy.
+- explanation: Giải thích ngắn gọn bản chất vì sao đáp án đúng dựa trên kiến thức bài giảng. TUYỆT ĐỐI KHÔNG dùng từ "A đúng vì", "Phương án A", "Chọn A vì" (do thứ tự đáp án sẽ được xáo trộn ngẫu nhiên trên LMS).
 - Đánh số mã câu hỏi theo format: B1-1-01, B1-2-01, v.v.
 
 Trả lời CHỈ bằng JSON hợp lệ:
@@ -1509,11 +1511,11 @@ Trả lời CHỈ bằng JSON hợp lệ:
       "questionId": "B1-1-01",
       "level": 1,
       "question": "Nội dung câu hỏi?",
-      "correctAnswer": "Đáp án đúng A",
-      "optionB": "Đáp án sai B",
-      "optionC": "Đáp án sai C",
-      "optionD": "Đáp án sai D",
-      "explanation": "Giải thích vì sao A đúng"
+      "correctAnswer": "Nội dung đáp án đúng",
+      "optionB": "Nội dung đáp án sai B",
+      "optionC": "Nội dung đáp án sai C",
+      "optionD": "Nội dung đáp án sai D",
+      "explanation": "Giải thích ngắn gọn bản chất vì sao đáp án này đúng"
     }
   ]
 }
@@ -1547,12 +1549,12 @@ Trả lời CHỈ bằng JSON hợp lệ:
             id: q.id || `REV-${Date.now()}-${idx + 1}`,
             questionId: q.questionId || `B1-${q.level || 1}-${String(idx + 1).padStart(2, '0')}`,
             level: Number(q.level) || 1,
-            question: q.question || '',
-            correctAnswer: q.correctAnswer || '',
-            optionB: q.optionB || '',
-            optionC: q.optionC || '',
-            optionD: q.optionD || '',
-            explanation: q.explanation || '',
+            question: (q.question || '').trim(),
+            correctAnswer: stripOptionPrefix(q.correctAnswer || ''),
+            optionB: stripOptionPrefix(q.optionB || ''),
+            optionC: stripOptionPrefix(q.optionC || ''),
+            optionD: stripOptionPrefix(q.optionD || ''),
+            explanation: cleanExplanation(q.explanation || ''),
         }));
 
         const current = await this.getSessionQuestions(sessionId);
@@ -1722,12 +1724,12 @@ Trả lời CHỈ bằng JSON hợp lệ:
         const mapped: ReviewQuestionData[] = questions.map((q: any, i: number) => ({
             questionId: q.questionId || `Q${i + 1}`,
             level: Number(q.level) || 1,
-            question: q.question,
-            correctAnswer: q.correctAnswer,
-            optionB: q.optionB,
-            optionC: q.optionC,
-            optionD: q.optionD,
-            explanation: q.explanation || null,
+            question: (q.question || '').trim(),
+            correctAnswer: stripOptionPrefix(q.correctAnswer),
+            optionB: stripOptionPrefix(q.optionB),
+            optionC: stripOptionPrefix(q.optionC),
+            optionD: stripOptionPrefix(q.optionD),
+            explanation: cleanExplanation(q.explanation || null),
         }));
 
         const xml = buildMoodleXml(mapped, session?.fileName?.replace('.pptx', '') || 'pptx_lesson');
@@ -1822,11 +1824,11 @@ Trả lời CHỈ bằng JSON hợp lệ:
                 questionId: `B1-${levelVal}-${String(imported.length + 1).padStart(2, '0')}`,
                 level: levelVal,
                 question,
-                correctAnswer,
-                optionB,
-                optionC: optionC || '-',
-                optionD: optionD || '-',
-                explanation,
+                correctAnswer: stripOptionPrefix(correctAnswer),
+                optionB: stripOptionPrefix(optionB),
+                optionC: stripOptionPrefix(optionC) || '-',
+                optionD: stripOptionPrefix(optionD) || '-',
+                explanation: cleanExplanation(explanation),
             });
         }
 
@@ -1859,10 +1861,11 @@ Hãy tạo ${count} câu hỏi tương tác từ nội dung bài giảng sau:
 NỘI DUNG BÀI GIẢNG:
 ${contentText}
 
-YÊU CẦU:
+YÊU CẦU BẮT BUỘC:
 - Gồm câu hỏi Multiple Choice (MC: 1 đáp án đúng) và Multiple Response (MR: nhiều đáp án đúng)
 - Phương án đúng PHẢI có dấu hoa thị (*) ở đầu (ví dụ: "*Đáp án đúng", "Đáp án sai")
-- Có phản hồi khi trả lời đúng (correctFeedback) và phản hồi khi trả lời sai (incorrectFeedback)
+- TUYỆT ĐỐI KHÔNG thêm tiền tố nhãn (A., B., C., D., 1., 2.) vào nội dung câu trả lời.
+- Có phản hồi khi trả lời đúng (correctFeedback) và phản hồi khi trả lời sai (incorrectFeedback). Giải thích bản chất kiến thức, không gán nhãn cố định A, B.
 - Điểm mặc định mỗi câu: 1
 
 Trả lời CHỈ bằng JSON hợp lệ:
@@ -1903,10 +1906,16 @@ Trả lời CHỈ bằng JSON hợp lệ:
             id: q.id || `INT-${Date.now()}-${idx + 1}`,
             questionOrder: idx + 1,
             questionType: q.questionType || 'MC',
-            questionText: q.questionText || '',
-            answers: Array.isArray(q.answers) ? q.answers : [],
-            correctFeedback: q.correctFeedback || 'Chính xác!',
-            incorrectFeedback: q.incorrectFeedback || 'Chưa đúng, hãy xem lại.',
+            questionText: (q.questionText || '').trim(),
+            answers: Array.isArray(q.answers)
+                ? q.answers.map((a: string) => {
+                    const isCorrect = String(a).startsWith('*');
+                    const cleanText = stripOptionPrefix(isCorrect ? String(a).substring(1) : String(a));
+                    return isCorrect ? `*${cleanText}` : cleanText;
+                })
+                : [],
+            correctFeedback: cleanExplanation(q.correctFeedback || 'Chính xác!'),
+            incorrectFeedback: cleanExplanation(q.incorrectFeedback || 'Chưa đúng, hãy xem lại.'),
             points: Number(q.points) || 1,
         }));
 
@@ -2077,12 +2086,14 @@ SPECIFICATIONS:
 - Sub-Discipline: ${subDiscipline}
 - Allowed Question Types: ${types}
 - Bloom Distribution: Level 1 (Remember/Biết): ${level1}, Level 2 (Understand/Hiểu): ${level2}, Level 3 (Apply/Vận dụng): ${level3}
+- IMPORTANT: Do NOT prefix option texts with letters (A., B., C., D.). Provide only the plain answer text.
+- IMPORTANT: In explanations, explain the underlying linguistic concept neutrally without referring to option letters ("Option A is correct", "Choose A").
 
 SUPPORTED TYPES & dataJson STRUCTURE:
 1. "MC" (Multiple Choice - 1 correct):
-   dataJson: {"options": [{"text": "Option A", "isCorrect": true}, {"text": "Option B", "isCorrect": false}, ...]}
+   dataJson: {"options": [{"text": "First choice", "isCorrect": true}, {"text": "Second choice", "isCorrect": false}, ...]}
 2. "MR" (Multiple Response - multiple correct):
-   dataJson: {"options": [{"text": "Option A", "isCorrect": true}, {"text": "Option B", "isCorrect": true}, ...]}
+   dataJson: {"options": [{"text": "First choice", "isCorrect": true}, {"text": "Second choice", "isCorrect": true}, ...]}
 3. "MATCH" (Matching pairs):
    dataJson: {"pairs": [{"left": "Term 1", "right": "Definition 1"}, {"left": "Term 2", "right": "Definition 2"}]}
 4. "CLOZE" (Moodle Embedded Cloze sentence):
@@ -2131,18 +2142,34 @@ Return ONLY valid JSON format:
             throw new BadRequestException('AI response was not valid JSON.');
         }
 
-        const formatted = newQuestions.map((q, idx) => ({
-            id: q.id || `ENG-${Date.now()}-${idx + 1}`,
-            questionOrder: idx + 1,
-            questionType: (q.questionType || 'MC').toUpperCase(),
-            subDiscipline: q.subDiscipline || subDiscipline,
-            difficulty: Number(q.difficulty) || 1,
-            title: q.title || `ENG-${String(idx + 1).padStart(2, '0')}`,
-            questionText: q.questionText || '',
-            dataJson: typeof q.dataJson === 'string' ? q.dataJson : JSON.stringify(q.dataJson || {}),
-            explanation: q.explanation || '',
-            points: Number(q.points) || 1,
-        }));
+        const formatted = newQuestions.map((q, idx) => {
+            let dataJsonStr = typeof q.dataJson === 'string' ? q.dataJson : JSON.stringify(q.dataJson || {});
+            try {
+                const parsedData = JSON.parse(dataJsonStr);
+                if (Array.isArray(parsedData.options)) {
+                    parsedData.options = parsedData.options.map((opt: any) => ({
+                        ...opt,
+                        text: stripOptionPrefix(opt.text ?? opt.option ?? opt.label ?? ''),
+                    }));
+                    dataJsonStr = JSON.stringify(parsedData);
+                }
+            } catch {
+                // Keep dataJsonStr as is if not JSON
+            }
+
+            return {
+                id: q.id || `ENG-${Date.now()}-${idx + 1}`,
+                questionOrder: idx + 1,
+                questionType: (q.questionType || 'MC').toUpperCase(),
+                subDiscipline: q.subDiscipline || subDiscipline,
+                difficulty: Number(q.difficulty) || 1,
+                title: q.title || `ENG-${String(idx + 1).padStart(2, '0')}`,
+                questionText: (q.questionText || '').trim(),
+                dataJson: dataJsonStr,
+                explanation: cleanExplanation(q.explanation || ''),
+                points: Number(q.points) || 1,
+            };
+        });
 
         const current = await this.getSessionQuestions(sessionId);
         const finalEnglish = isAppend ? [...current.english, ...formatted] : formatted;
@@ -2324,7 +2351,15 @@ Return ONLY valid JSON format:
     async updateQuestion(sessionId: string, type: 'review' | 'interactive' | 'english', id: string, data: any) {
         const current = await this.getSessionQuestions(sessionId);
         const list = current[type] || [];
-        const updatedList = list.map((item: any) => (item.id === id ? { ...item, ...data } : item));
+        let cleanData = { ...data };
+        if (type === 'review') {
+            if (cleanData.correctAnswer !== undefined) cleanData.correctAnswer = stripOptionPrefix(cleanData.correctAnswer);
+            if (cleanData.optionB !== undefined) cleanData.optionB = stripOptionPrefix(cleanData.optionB);
+            if (cleanData.optionC !== undefined) cleanData.optionC = stripOptionPrefix(cleanData.optionC);
+            if (cleanData.optionD !== undefined) cleanData.optionD = stripOptionPrefix(cleanData.optionD);
+            if (cleanData.explanation !== undefined) cleanData.explanation = cleanExplanation(cleanData.explanation);
+        }
+        const updatedList = list.map((item: any) => (item.id === id ? { ...item, ...cleanData } : item));
         await this.saveSessionQuestions(sessionId, { [type]: updatedList });
         return { success: true, updatedList };
     }
@@ -2343,8 +2378,19 @@ Return ONLY valid JSON format:
     }
 
     async updateQuestionsList(sessionId: string, type: 'review' | 'interactive' | 'english', list: any[]) {
-        await this.saveSessionQuestions(sessionId, { [type]: list });
-        return { success: true, count: list.length };
+        let cleanedList = list;
+        if (type === 'review' && Array.isArray(list)) {
+            cleanedList = list.map((item: any) => ({
+                ...item,
+                correctAnswer: stripOptionPrefix(item.correctAnswer),
+                optionB: stripOptionPrefix(item.optionB),
+                optionC: stripOptionPrefix(item.optionC),
+                optionD: stripOptionPrefix(item.optionD),
+                explanation: cleanExplanation(item.explanation),
+            }));
+        }
+        await this.saveSessionQuestions(sessionId, { [type]: cleanedList });
+        return { success: true, count: cleanedList.length };
     }
 
     // Backward-compatible wrappers for old endpoints

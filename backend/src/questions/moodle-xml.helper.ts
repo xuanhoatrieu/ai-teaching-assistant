@@ -69,12 +69,74 @@ function cdataHtml(text: any): string {
 }
 
 /**
+ * Strips option prefixes like "A. ", "A) ", "(A) ", "[A] ", "A - ", "1. " from answer text.
+ * Prevents double-lettering when Moodle adds <answernumbering> (e.g. avoiding "A. A. ...").
+ * Loops until all nested/duplicated prefixes are removed.
+ */
+export function stripOptionPrefix(text: any): string {
+    if (text === null || text === undefined) return '';
+    const original = (typeof text === 'object' ? JSON.stringify(text) : String(text)).trim();
+    if (!original) return '';
+
+    let cur = original;
+    let prev = '';
+    while (cur !== prev) {
+        prev = cur;
+        cur = cur
+            .replace(/^\s*\(\s*[A-Ja-j\d]+\s*\)\s*/, '')
+            .replace(/^\s*\[\s*[A-Ja-j\d]+\s*\]\s*/, '')
+            .replace(/^\s*[A-Ja-j\d]+\s*[\.\)\:\-]\s+/, '')
+            .replace(/^\s*[A-Da-d]\s*[\.\)]\s*(?=[^\s\d\.\)])/, '')
+            .trim();
+    }
+
+    return cur || original;
+}
+
+/**
+ * Cleans explanation text by removing letter-dependent phrases like:
+ * "Vì: A đúng vì...", "A đúng vì...", "Phương án A đúng vì...", "Chọn A vì...",
+ * converting them to neutral statements suitable for randomized/shuffled choices.
+ */
+export function cleanExplanation(text: any): string {
+    if (text === null || text === undefined) return '';
+    let str = (typeof text === 'object' ? JSON.stringify(text) : String(text)).trim();
+    if (!str) return '';
+
+    // Remove leading labels like "Vì:", "Giải thích:", "Explanation:", "Gợi ý:"
+    str = str.replace(/^(?:Vì|Giải thích|Explanation|Gợi ý)\s*:\s*/i, '').trim();
+
+    // Strip letter-based phrases at the start
+    // e.g. "Vì A đúng vì...", "A đúng vì...", "Phương án A là đáp án đúng vì...", "Đáp án A đúng do...", "Chọn A vì..."
+    str = str.replace(/^(?:vì\s+)?(?:phương án|lựa chọn|đáp án|câu)?\s*[A-Da-d]\s+(?:là\s+(?:đáp án\s+)?(?:chính xác|đúng)(?:\s+nhất)?|đúng)\s*(?:vì|do|bởi vì|\s*,\s*vì|\s*:|\s*-)\s*/i, '');
+    str = str.replace(/^(?:vì\s+)?(?:phương án|lựa chọn|đáp án|câu)?\s*[A-Da-d]\s+(?:sai|không đúng)\s*(?:vì|do|bởi vì|\s*,\s*vì|\s*:|\s*-)\s*/i, '');
+    str = str.replace(/^chọn\s+[A-Da-d]\s+(?:vì|do|bởi vì)\s*/i, '');
+    str = str.replace(/^(?:Option|Answer)?\s*[A-Da-d]\s+is\s+(?:the\s+)?(?:correct|right)(?:\s+answer)?\s*(?:because|as|since|\s*:\s*)\s*/i, '');
+    str = str.replace(/^(?:Option|Answer)?\s*[A-Da-d]\s+is\s+(?:incorrect|wrong)\s*(?:because|as|since|\s*:\s*)\s*/i, '');
+
+    // Capitalize first character
+    if (str.length > 0) {
+        str = str.charAt(0).toUpperCase() + str.slice(1);
+    }
+    return str;
+}
+
+/**
  * Build a single multichoice question XML block.
  */
 function buildQuestionXml(q: ReviewQuestionData): string {
-    const feedbackParts = [`<strong>Đáp án đúng là: </strong>A. ${escapeForCdata(q.correctAnswer)}`];
-    if (q.explanation) {
-        feedbackParts.push(`<strong>Vì: </strong>${escapeForCdata(q.explanation)}`);
+    const cleanCorrect = stripOptionPrefix(q.correctAnswer);
+    const cleanB = stripOptionPrefix(q.optionB);
+    const cleanC = stripOptionPrefix(q.optionC);
+    const cleanD = stripOptionPrefix(q.optionD);
+    const explanation = cleanExplanation(q.explanation);
+
+    const feedbackParts: string[] = [];
+    if (cleanCorrect) {
+        feedbackParts.push(`<strong>Đáp án đúng: </strong>${escapeForCdata(cleanCorrect)}`);
+    }
+    if (explanation) {
+        feedbackParts.push(`<strong>Giải thích: </strong>${escapeForCdata(explanation)}`);
     }
     const feedbackHtml = feedbackParts.map((p) => `<p class="cell">${p}</p>`).join('\n      ');
 
@@ -97,16 +159,16 @@ function buildQuestionXml(q: ReviewQuestionData): string {
     <shuffleanswers>true</shuffleanswers>
     <answernumbering>ABCD</answernumbering>
     <answer fraction="100" format="html">
-      <text>${cdataHtml(q.correctAnswer)}</text>
+      <text>${cdataHtml(cleanCorrect)}</text>
     </answer>
     <answer fraction="0" format="html">
-      <text>${cdataHtml(q.optionB)}</text>
+      <text>${cdataHtml(cleanB)}</text>
     </answer>
     <answer fraction="0" format="html">
-      <text>${cdataHtml(q.optionC)}</text>
+      <text>${cdataHtml(cleanC)}</text>
     </answer>
     <answer fraction="0" format="html">
-      <text>${cdataHtml(q.optionD)}</text>
+      <text>${cdataHtml(cleanD)}</text>
     </answer>
   </question>`;
 }
@@ -390,12 +452,13 @@ function normalizeOptions(data: any): NormalizedOption[] {
 
     const options: NormalizedOption[] = rawList.map((o: any) => {
         if (o === null || o === undefined) return { text: '', correct: false };
-        if (typeof o !== 'object') return { text: String(o), correct: false };
-        const text = o.text ?? o.option ?? o.label ?? o.value ?? o.answer ?? o.content ?? '';
+        if (typeof o !== 'object') return { text: stripOptionPrefix(String(o)), correct: false };
+        const rawText = o.text ?? o.option ?? o.label ?? o.value ?? o.answer ?? o.content ?? '';
+        const text = stripOptionPrefix(typeof rawText === 'object' ? JSON.stringify(rawText) : String(rawText));
         const frac = typeof o.fraction === 'string' ? parseFloat(o.fraction) : o.fraction;
         const correct = o.isCorrect === true || o.correct === true || o.isCorrect === 'true'
             || (typeof frac === 'number' && frac > 0);
-        return { text: typeof text === 'object' ? JSON.stringify(text) : String(text), correct, feedback: o.feedback };
+        return { text, correct, feedback: o.feedback ? cleanExplanation(o.feedback) : undefined };
     });
 
     // Answer key given separately: correctAnswer = "B" | 1 | "text" | ["A","C"]
@@ -404,7 +467,7 @@ function normalizeOptions(data: any): NormalizedOption[] {
         for (const key of keys) {
             const letterIdx = /^[A-J]$/i.test(key) ? OPTION_LETTERS.indexOf(key.toUpperCase()) : -1;
             const numIdx = /^\d+$/.test(key) ? parseInt(key, 10) : -1;
-            const byText = options.findIndex((o) => plainText(o.text).toLowerCase() === key.toLowerCase());
+            const byText = options.findIndex((o) => plainText(o.text).toLowerCase() === stripOptionPrefix(key).toLowerCase());
             const idx = byText >= 0 ? byText : (letterIdx >= 0 ? letterIdx : (numIdx >= 0 && numIdx < options.length ? numIdx : -1));
             if (idx >= 0 && options[idx]) options[idx].correct = true;
         }
@@ -429,7 +492,8 @@ function buildEnglishMultichoiceXml(q: EnglishQuestionData, data: any, lessonCod
         return essayFallback(q, data, lessonCode, correctOptions.map((o) => plainText(o.text)));
     }
 
-    const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
+    const cleanedExplanation = cleanExplanation(q.explanation);
+    const feedbackHtml = cleanedExplanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(cleanedExplanation)}</p>` : '';
 
     let fractions: string[];
     if (isSingle) {
@@ -495,7 +559,8 @@ function buildEnglishMatchXml(q: EnglishQuestionData, data: any, lessonCode: str
     }
 
     const name = formatEnglishQuestionName(q, lessonCode, 'MATCH');
-    const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
+    const cleanedExplanation = cleanExplanation(q.explanation);
+    const feedbackHtml = cleanedExplanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(cleanedExplanation)}</p>` : '';
 
     const subquestionsXml = pairs.map((p) => `    <subquestion format="html">
       <text>${cdataHtml(p.sub)}</text>
@@ -710,7 +775,8 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: str
     }
 
     const contentHtml = `<p><strong>${escapeForCdata(instruction)}</strong></p>\n<p class="cell">${escapeForCdata(rawContent)}</p>`;
-    const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
+    const cleanedExplanation = cleanExplanation(q.explanation);
+    const feedbackHtml = cleanedExplanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(cleanedExplanation)}</p>` : '';
 
     return `  <question type="cloze">
     <name><text>${escapeXmlText(name)}</text></name>
@@ -745,7 +811,8 @@ function buildEnglishShortAnswerXml(q: EnglishQuestionData, data: any, lessonCod
         return buildEnglishEssayXml(q, data, lessonCode);
     }
 
-    const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
+    const cleanedExplanation = cleanExplanation(q.explanation);
+    const feedbackHtml = cleanedExplanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(cleanedExplanation)}</p>` : '';
 
     const answersXml = answers.map((text) => {
         // "*" is a wildcard in Moodle short answers; a literal asterisk must be escaped.
@@ -790,7 +857,8 @@ function buildEnglishTrueFalseXml(q: EnglishQuestionData, data: any, lessonCode:
     const isTrue = TRUE_WORDS.has(keyWord);
 
     const name = formatEnglishQuestionName(q, lessonCode, 'TF');
-    const feedbackHtml = q.explanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(q.explanation)}</p>` : '';
+    const cleanedExplanation = cleanExplanation(q.explanation);
+    const feedbackHtml = cleanedExplanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(cleanedExplanation)}</p>` : '';
     const fbTrue = data.feedbackTrue ? escapeForCdata(data.feedbackTrue) : (isTrue ? 'Correct!' : 'Incorrect.');
     const fbFalse = data.feedbackFalse ? escapeForCdata(data.feedbackFalse) : (!isTrue ? 'Correct!' : 'Incorrect.');
 

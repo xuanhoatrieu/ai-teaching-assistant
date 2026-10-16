@@ -198,11 +198,11 @@ Chỉ trả về JSON, không thêm text khác.`,
       "questionOrder": 1,
       "level": 1,
       "question": "Câu hỏi?",
-      "correctAnswer": "Đáp án đúng (A)",
-      "optionB": "Đáp án B",
-      "optionC": "Đáp án C",
-      "optionD": "Đáp án D",
-      "explanation": "Giải thích..."
+      "correctAnswer": "Nội dung đáp án đúng",
+      "optionB": "Nội dung đáp án sai B",
+      "optionC": "Nội dung đáp án sai C",
+      "optionD": "Nội dung đáp án sai D",
+      "explanation": "Giải thích ngắn gọn bản chất vì sao đáp án này đúng..."
     }
   ]
 }

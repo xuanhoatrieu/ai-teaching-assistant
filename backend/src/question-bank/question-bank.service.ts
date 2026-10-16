@@ -5,6 +5,7 @@ import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { AiProviderService } from '../ai/ai-provider.service';
 import { QuestionBank } from '@prisma/client';
+import { stripOptionPrefix, cleanExplanation } from '../questions/moodle-xml.helper';
 
 export interface LevelCounts {
     level1: number;  // Biết
@@ -145,12 +146,12 @@ export class QuestionBankService {
 
         return questions.map((q: any) => ({
             id: q.questionId || q.id,
-            question: q.question,
-            correctAnswer: q.correctAnswer,
-            optionB: q.optionB,
-            optionC: q.optionC,
-            optionD: q.optionD,
-            explanation: q.explanation || '',
+            question: q.question?.trim(),
+            correctAnswer: stripOptionPrefix(q.correctAnswer),
+            optionB: stripOptionPrefix(q.optionB),
+            optionC: stripOptionPrefix(q.optionC),
+            optionD: stripOptionPrefix(q.optionD),
+            explanation: cleanExplanation(q.explanation || ''),
             level: q.level || 1,
         }));
     }
@@ -174,11 +175,11 @@ export class QuestionBankService {
                     questions.push({
                         id: cells[0],
                         question: cells[1],
-                        correctAnswer: cells[2],
-                        optionB: cells[3],
-                        optionC: cells[4],
-                        optionD: cells[5],
-                        explanation: cells[6],
+                        correctAnswer: stripOptionPrefix(cells[2]),
+                        optionB: stripOptionPrefix(cells[3]),
+                        optionC: stripOptionPrefix(cells[4]),
+                        optionD: stripOptionPrefix(cells[5]),
+                        explanation: cleanExplanation(cells[6]),
                         level: parseInt(cells[0].split('-')[1]) || 1,
                     });
                 }
