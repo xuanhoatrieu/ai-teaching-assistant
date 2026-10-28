@@ -6,6 +6,7 @@ import { useJobPolling } from '../hooks/useJobPolling';
 import { TTSSelector } from '../components/TTSSelector';
 import { ModelSelector } from '../components/ModelSelector';
 import { ImageCropModal } from '../components/ImageCropModal';
+import { ExamManagerPanel } from '../components/exam/ExamManagerPanel';
 import './PptxAudioTool.css';
 import '../components/steps/Steps.css';
 
@@ -330,9 +331,10 @@ export function PptxAudioToolPage() {
     const [importMessage, setImportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // ─────────────────────────────────────────────────────────────
-    // Questions 3-Tab State
+    // Questions 4-Tab State
     // ─────────────────────────────────────────────────────────────
-    const [activeQuestionTab, setActiveQuestionTab] = useState<'review' | 'interactive' | 'english'>('review');
+    const [activeQuestionTab, setActiveQuestionTab] = useState<'review' | 'interactive' | 'english' | 'exam'>('review');
+    const [showSubjectExamPanel, setShowSubjectExamPanel] = useState<boolean>(false);
     const [questionMessage, setQuestionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     // 1. Review Questions state
@@ -3002,6 +3004,46 @@ export function PptxAudioToolPage() {
                                 )}
                             </div>
                         )}
+
+                        {/* 4. MULTI-LESSON EXAM GENERATOR IN PPTX SUBJECT */}
+                        {activeFilterSubject && (
+                            <div style={{ marginTop: 18 }}>
+                                <div
+                                    style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        padding: '14px 18px',
+                                        borderRadius: 12,
+                                        background: 'rgba(79, 70, 229, 0.14)',
+                                        border: '1px solid rgba(99, 102, 241, 0.45)',
+                                    }}
+                                >
+                                    <div>
+                                        <strong style={{ color: '#f8fafc', fontSize: '0.98rem' }}>
+                                            📝 Tạo Bộ Câu Hỏi Kiểm Tra Theo Nhóm Bài Học — Môn: {activeFilterSubject.name}
+                                        </strong>
+                                        <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: 3 }}>
+                                            Chọn nhóm bài (VD: Bài 1 → Bài 6) trong môn này để sinh 100% câu hỏi mới và xuất Moodle XML gom vào 1 Category duy nhất.
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="btn-add-subject"
+                                        onClick={() => setShowSubjectExamPanel(prev => !prev)}
+                                    >
+                                        {showSubjectExamPanel ? '🔼 Thu gọn Bài kiểm tra' : '📝 Mở Trình Tạo Bài Kiểm Tra'}
+                                    </button>
+                                </div>
+                                {showSubjectExamPanel && (
+                                    <ExamManagerPanel
+                                        mode="pptx-subject"
+                                        pptxSubjectId={activeFilterSubject.id}
+                                        subjectName={activeFilterSubject.name}
+                                    />
+                                )}
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -5413,6 +5455,12 @@ export function PptxAudioToolPage() {
                             >
                                 🇬🇧 Câu hỏi Tiếng Anh ({englishQuestions.length}) {(isGeneratingEnglish || isAppendingEnglish) && '⏳'}
                             </button>
+                            <button
+                                className={`tab ${activeQuestionTab === 'exam' ? 'active' : ''}`}
+                                onClick={() => setActiveQuestionTab('exam')}
+                            >
+                                📋 Bài kiểm tra (Nhiều bài học)
+                            </button>
                         </div>
 
                         {/* ════════════ TAB: REVIEW QUESTIONS (DEFAULT) ════════════ */}
@@ -6279,6 +6327,33 @@ export function PptxAudioToolPage() {
                                     <div className="empty-state" style={{ padding: '36px 0', textAlign: 'center', color: '#94a3b8' }}>
                                         <p style={{ fontSize: '1.05rem', margin: '0 0 10px' }}>Chưa có câu hỏi tiếng Anh.</p>
                                         <p style={{ fontSize: '0.88rem', margin: 0 }}>Hãy chọn các dạng câu hỏi và bấm "🤖 Tạo Mới Câu Hỏi Tiếng Anh" để bắt đầu.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ════════════ TAB: MULTI-LESSON EXAM GENERATOR ════════════ */}
+                        {activeQuestionTab === 'exam' && (
+                            <div className="question-section">
+                                {session?.pptxSubject?.id ? (
+                                    <ExamManagerPanel
+                                        mode="pptx-subject"
+                                        pptxSubjectId={session.pptxSubject.id}
+                                        subjectName={session.pptxSubject.name}
+                                    />
+                                ) : (
+                                    <div className="empty-state" style={{ padding: '32px', textAlign: 'center' }}>
+                                        <h3>⚠️ Bài giảng này chưa được gắn vào Môn học PPTX</h3>
+                                        <p style={{ color: '#94a3b8', marginBottom: 14 }}>
+                                            Để tạo đề kiểm tra tổng hợp từ nhiều bài học (VD: Bài 1 → Bài 6), vui lòng gắn bài giảng này vào một Môn học.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            className="btn-primary"
+                                            onClick={openSessionContextModal}
+                                        >
+                                            📚 Gắn vào Môn học ngay
+                                        </button>
                                     </div>
                                 )}
                             </div>

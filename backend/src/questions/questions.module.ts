@@ -8,13 +8,15 @@ import { GenerationJobModule } from '../generation-job/generation-job.module';
 import { InteractiveQuestionService } from './interactive-question.service';
 import { ReviewQuestionService } from './review-question.service';
 import { EnglishQuestionService } from './english-question.service';
+import { ExamSetService } from './exam-set.service';
 import { QuestionsController } from './questions.controller';
+import { ExamSetController } from './exam-set.controller';
 
 @Module({
     imports: [PrismaModule, AIModule, PromptsModule, ApiKeysModule, ModelConfigModule, GenerationJobModule],
-    controllers: [QuestionsController],
-    providers: [InteractiveQuestionService, ReviewQuestionService, EnglishQuestionService],
-    exports: [InteractiveQuestionService, ReviewQuestionService, EnglishQuestionService],
+    controllers: [QuestionsController, ExamSetController],
+    providers: [InteractiveQuestionService, ReviewQuestionService, EnglishQuestionService, ExamSetService],
+    exports: [InteractiveQuestionService, ReviewQuestionService, EnglishQuestionService, ExamSetService],
 })
 export class QuestionsModule { }
 

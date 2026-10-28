@@ -1144,3 +1144,96 @@ export function buildEnglishMoodleXml(
     return parts.join('\n');
 }
 
+/**
+ * Convert an exam title or category string into a clean ASCII/underscore Moodle category name,
+ * e.g. "Kiểm tra Giữa kỳ - Bài 1 đến Bài 6" -> "Kiem_tra_Giua_ky_Bai_1_den_Bai_6"
+ */
+export function toMoodleCategorySlug(rawName: string): string {
+    if (!rawName || !rawName.trim()) return 'Exam_Questions';
+    const noDiacritics = rawName
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd')
+        .replace(/Đ/g, 'D');
+    return (
+        noDiacritics
+            .replace(/[^A-Za-z0-9\s_-]/g, ' ')
+            .trim()
+            .replace(/[\s-]+/g, '_')
+            .replace(/_+/g, '_')
+            .substring(0, 80)
+            .replace(/^_+|_+$/g, '') || 'Exam_Questions'
+    );
+}
+
+/**
+ * Build Moodle XML for a Multi-Lesson Exam Set where 100% of questions are placed
+ * inside ONE single category ($course$/top/{categorySlug}), inheriting buildQuestionXml()
+ * and buildEnglishQuestionXml() without duplicating XML generation logic.
+ */
+export function buildSingleCategoryExamMoodleXml(
+    questions: any[],
+    categoryName: string,
+    mode: 'REVIEW' | 'ENGLISH' = 'REVIEW',
+): string {
+    const categorySlug = toMoodleCategorySlug(categoryName);
+    const parts: string[] = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<quiz>',
+        '',
+        `  <!-- Exam Category: ${commentSafe(categorySlug)} (${questions.length} questions) -->`,
+        `  <question type="category">`,
+        `    <category>`,
+        `      <text>$course$/top/${escapeXmlText(categorySlug)}</text>`,
+        `    </category>`,
+        `  </question>`,
+        '',
+    ];
+
+    if (String(mode).toUpperCase() === 'ENGLISH') {
+        for (let i = 0; i < questions.length; i++) {
+            const q = questions[i];
+            const engQ: EnglishQuestionData = {
+                id: q.id || `EX-${i + 1}`,
+                questionOrder: q.questionOrder ?? i + 1,
+                questionType: q.questionType || 'MC',
+                subDiscipline: q.subDiscipline || 'GENERAL',
+                difficulty: q.difficulty || q.level || 1,
+                title: q.title || q.questionId || `${categorySlug}-${String(i + 1).padStart(2, '0')}`,
+                questionText: q.questionText || q.question || '',
+                dataJson: typeof q.dataJson === 'string' ? q.dataJson : JSON.stringify(q.data || q.dataJson || {}),
+                explanation: q.explanation || '',
+                points: q.points || 1,
+            };
+            const xmlBlock = buildEnglishQuestionXml(engQ, categorySlug);
+            if (xmlBlock && xmlBlock.trim()) {
+                parts.push(xmlBlock);
+                parts.push('');
+            }
+        }
+    } else {
+        for (let i = 0; i < questions.length; i++) {
+            const q = questions[i];
+            const revQ: ReviewQuestionData = {
+                questionId: q.questionId || q.title || `${categorySlug}-${String(i + 1).padStart(2, '0')}`,
+                level: q.level || q.difficulty || 1,
+                question: q.question || q.questionText || '',
+                correctAnswer: q.correctAnswer || '',
+                optionB: q.optionB || '',
+                optionC: q.optionC || '',
+                optionD: q.optionD || '',
+                explanation: q.explanation || '',
+            };
+            const xmlBlock = buildQuestionXml(revQ);
+            if (xmlBlock && xmlBlock.trim()) {
+                parts.push(xmlBlock);
+                parts.push('');
+            }
+        }
+    }
+
+    parts.push('</quiz>');
+    return parts.join('\n');
+}
+
+

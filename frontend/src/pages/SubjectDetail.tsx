@@ -13,6 +13,7 @@ import {
 import { VideoListPanel } from '../components/VideoListPanel';
 import { RemotionVideoListPanel } from '../components/remotion/RemotionVideoListPanel';
 import { SyllabusPanel } from '../components/syllabus/SyllabusPanel';
+import { ExamManagerPanel } from '../components/exam/ExamManagerPanel';
 import { syllabusApi, type Syllabus } from '../lib/syllabus-api';
 import './SubjectDetail.css';
 
@@ -23,7 +24,7 @@ export function SubjectDetailPage() {
     const [lessons, setLessons] = useState<Lesson[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-    const [activeTab, setActiveTab] = useState<'lessons' | 'videos' | 'video-remotion' | 'syllabus'>('lessons');
+    const [activeTab, setActiveTab] = useState<'lessons' | 'exams' | 'videos' | 'video-remotion' | 'syllabus'>('lessons');
 
     // Create lesson modal
     const [showModal, setShowModal] = useState(false);
@@ -325,6 +326,12 @@ export function SubjectDetailPage() {
                     <span className="tab-count">{lessons.length}</span>
                 </button>
                 <button
+                    className={`tab-btn ${activeTab === 'exams' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('exams')}
+                >
+                    📝 Bài kiểm tra
+                </button>
+                <button
                     className={`tab-btn ${activeTab === 'videos' ? 'active' : ''}`}
                     onClick={() => setActiveTab('videos')}
                 >
@@ -391,6 +398,15 @@ export function SubjectDetailPage() {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* Tab: Exams */}
+            {activeTab === 'exams' && (
+                <ExamManagerPanel
+                    mode="subject"
+                    subjectId={id!}
+                    subjectName={subject.name}
+                />
             )}
 
             {/* Tab: Videos */}

@@ -8,6 +8,8 @@ import {
     buildEnglishQuestionXml,
     buildEnglishMoodleXml,
     EnglishQuestionData,
+    toMoodleCategorySlug,
+    buildSingleCategoryExamMoodleXml,
 } from './moodle-xml.helper';
 
 describe('moodle-xml.helper', () => {
@@ -310,6 +312,62 @@ describe('moodle-xml.helper', () => {
             expect(xml).not.toContain('<question type="shortanswer">');
             expect(xml).not.toContain('Viết một đoạn ngắn từ 4 đến 6 câu');
             expect(xml).not.toContain('Tự đặt một câu tiếng Anh');
+        });
+
+        it('buildSingleCategoryExamMoodleXml should place all exam questions into a single Moodle category', () => {
+            expect(toMoodleCategorySlug('Giữa Kỳ - Bài 1 đến Bài 6')).toBe('Giua_Ky_Bai_1_den_Bai_6');
+
+            const reviewQs = [
+                {
+                    questionId: 'GK-01',
+                    level: 1,
+                    question: 'Câu hỏi bài 1?',
+                    correctAnswer: 'Đáp án đúng 1',
+                    optionB: 'Sai B',
+                    optionC: 'Sai C',
+                    optionD: 'Sai D',
+                },
+                {
+                    questionId: 'GK-02',
+                    level: 3,
+                    question: 'Câu hỏi bài 6?',
+                    correctAnswer: 'Đáp án đúng 6',
+                    optionB: 'Sai B',
+                    optionC: 'Sai C',
+                    optionD: 'Sai D',
+                },
+            ];
+            const xmlReview = buildSingleCategoryExamMoodleXml(reviewQs, 'Giua_Ky_Bai_1_6', 'REVIEW');
+            const catMatches = xmlReview.match(/<question type="category">/g) || [];
+            expect(catMatches.length).toBe(1);
+            expect(xmlReview).toContain('<text>$course$/top/Giua_Ky_Bai_1_6</text>');
+            expect(xmlReview).toContain('Câu hỏi bài 1?');
+            expect(xmlReview).toContain('Câu hỏi bài 6?');
+
+            const engQs = [
+                {
+                    id: '1',
+                    questionOrder: 1,
+                    questionType: 'TRUEFALSE',
+                    title: 'GK-TF-01',
+                    questionText: 'Present simple is used for timetables.',
+                    dataJson: JSON.stringify({ correctAnswer: true }),
+                },
+                {
+                    id: '2',
+                    questionOrder: 2,
+                    questionType: 'ESSAY',
+                    title: 'GK-ESSAY-02',
+                    questionText: 'Write an essay.',
+                    dataJson: JSON.stringify({}),
+                },
+            ];
+            const xmlEng = buildSingleCategoryExamMoodleXml(engQs, 'Giua_Ky_Bai_1_6', 'ENGLISH');
+            const engCatMatches = xmlEng.match(/<question type="category">/g) || [];
+            expect(engCatMatches.length).toBe(1);
+            expect(xmlEng).toContain('<text>$course$/top/Giua_Ky_Bai_1_6</text>');
+            expect(xmlEng).toContain('<question type="truefalse">');
+            expect(xmlEng).not.toContain('<question type="essay">');
         });
     });
 });

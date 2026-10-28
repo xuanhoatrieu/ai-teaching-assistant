@@ -31,6 +31,7 @@ model User {
   ttsConfigs           UserTTSConfig[]
   videoGenerations     VideoGeneration[]
   remotionVideos       RemotionVideo[]
+  examQuestionSets     ExamQuestionSet[]
 
   @@map("users")
 }
@@ -54,6 +55,7 @@ model Subject {
   syllabus          Syllabus?
   videoGenerations  VideoGeneration[]
   remotionVideos    RemotionVideo[]
+  examQuestionSets  ExamQuestionSet[]
 
   @@map("subjects")
 }
@@ -346,9 +348,33 @@ model PptxSubject {
   updatedAt         DateTime           @updatedAt @map("updated_at")
   user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessions          PptxAudioSession[]
+  examQuestionSets  ExamQuestionSet[]
 
   @@index([userId])
   @@map("pptx_subjects")
+}
+
+model ExamQuestionSet {
+  id            String       @id @default(uuid())
+  userId        String       @map("user_id")
+  subjectId     String?      @map("subject_id")
+  pptxSubjectId String?      @map("pptx_subject_id")
+  title         String
+  categoryName  String       @map("category_name")
+  mode          String       @default("REVIEW") // REVIEW | ENGLISH
+  lessonIdsJson String       @default("[]") @map("lesson_ids_json")
+  configJson    String       @default("{}") @map("config_json")
+  questionsJson String       @default("[]") @map("questions_json")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  user          User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject       Subject?     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  pptxSubject   PptxSubject? @relation(fields: [pptxSubjectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([pptxSubjectId])
+  @@map("exam_question_sets")
 }
 
 model PptxAudioSession {

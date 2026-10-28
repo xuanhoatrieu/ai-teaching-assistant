@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.6.15] - 2026-10-29 - Multi-Lesson Grounded Exam Generator (US-028)
+
+### Added & Changed
+- **Multi-Lesson Grounded Exam Question Set Generator (`US-028`)**:
+  - Added shared `ExamQuestionSet` (`exam_question_sets`) data model supporting both Main Subject Workflow (`Subject`) and PPTX Audio Tool (`PptxSubject`).
+  - Implemented per-lesson **Closed-World & Anti-Duplication** asynchronous generation pipeline (`ExamSetService`, `ExamSetController`) that distributes question quotas across selected lessons (e.g., Lesson 1 to Lesson 6, 50 questions), strictly grounds AI generation in each lesson's content, and cross-references existing lesson question banks to preserve terminology/style while generating 100% new questions.
+  - Added `toMoodleCategorySlug()` and `buildSingleCategoryExamMoodleXml()` in `moodle-xml.helper.ts` to export all exam questions into a single customizable Moodle category (`$course$/top/{categoryName}`, e.g. `Giua_Ky_Bai_1_6`) while reusing existing `REVIEW` and `ENGLISH` XML builders (22/22 unit tests passing).
+  - Added Excel (`.xlsx`) export with source lesson (`Source Lesson`) and section traceability.
+  - Created shared `<ExamManagerPanel />` component integrated into both `SubjectDetail.tsx` (`📝 Bài kiểm tra` tab) and `PptxAudioTool.tsx` (`📝 Bài kiểm tra của môn`).
+
 ## [v1.6.14] - 2026-10-28 - 100% Auto-Gradable English Question Bank & PPTX Audio Tool Workspace Upgrade
 
 ### Changed & Fixed
