@@ -349,34 +349,100 @@ def _split_bilingual_notes(note_text: str) -> dict:
         }
 
 
-def _extract_slides_from_pptx(prs) -> list:
+def _extract_shapes_recursive(shapes, title_shape, title_text: str, slide_content: list, pictures: list):
+    """Recursively extract text from text frames, tables, group shapes, and collect pictures."""
+    for shape in shapes:
+        # 1. Group shape -> recurse into child shapes
+        if hasattr(shape, "shapes"):
+            try:
+                _extract_shapes_recursive(shape.shapes, title_shape, title_text, slide_content, pictures)
+            except Exception as e:
+                logger.debug(f"Could not recurse into group shape: {e}")
+
+        # 2. Table shape -> format rows with pipe separator
+        if getattr(shape, "has_table", False):
+            try:
+                table_rows = []
+                for row in shape.table.rows:
+                    cells = []
+                    for cell in row.cells:
+                        c_text = " ".join(cell.text.strip().split())
+                        if c_text:
+                            cells.append(c_text)
+                    if cells:
+                        RowStr = " | ".join(cells)
+                        if not table_rows or table_rows[-1] != RowStr:
+                            table_rows.append(RowStr)
+                if table_rows:
+                    slide_content.append("[Bảng dữ liệu]: " + " ; ".join(table_rows))
+            except Exception as e:
+                logger.debug(f"Could not extract table: {e}")
+
+        # 3. Text frame
+        if getattr(shape, "has_text_frame", False) and shape != title_shape:
+            try:
+                for para in shape.text_frame.paragraphs:
+                    text = para.text.strip()
+                    if text and text != title_text and text not in slide_content:
+                        slide_content.append(text)
+            except Exception as e:
+                logger.debug(f"Could not extract text frame: {e}")
+
+        # 4. Picture shape -> collect candidate image for SCORM/H5P & preview
+        if hasattr(shape, "image"):
+            try:
+                img = shape.image
+                if img and img.blob:
+                    width = getattr(shape, "width", 0) or 0
+                    height = getattr(shape, "height", 0) or 0
+                    area = width * height
+                    pictures.append((area, img))
+            except Exception:
+                pass
+
+
+def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> list:
     slides_data = []
+    if output_images_dir:
+        os.makedirs(output_images_dir, exist_ok=True)
 
     for i, slide in enumerate(prs.slides):
         # Extract title (first text shape or placeholder title)
         title = ""
+        title_shape = None
         if slide.shapes.title and slide.shapes.title.has_text_frame:
             title = slide.shapes.title.text_frame.text.strip()
+            title_shape = slide.shapes.title
 
         if not title:
             # Fallback: find first text shape
             for shape in slide.shapes:
-                if shape.has_text_frame and shape.text_frame.text.strip():
+                if getattr(shape, "has_text_frame", False) and shape.text_frame.text.strip():
                     title = shape.text_frame.text.strip()
+                    title_shape = shape
                     break
 
-        # Extract content (all non-title text shapes)
+        # Extract content (all non-title text shapes, tables, group shapes) and pictures
         slide_content = []
-        for shape in slide.shapes:
-            if not shape.has_text_frame:
-                continue
-            # Skip if this is the title shape
-            if shape == slide.shapes.title:
-                continue
-            for para in shape.text_frame.paragraphs:
-                text = para.text.strip()
-                if text and text != title:
-                    slide_content.append(text)
+        pictures = []
+        _extract_shapes_recursive(slide.shapes, title_shape, title, slide_content, pictures)
+
+        # Save largest meaningful picture from slide if output_images_dir is provided
+        image_file_name = None
+        if output_images_dir and pictures:
+            try:
+                pictures.sort(key=lambda item: item[0], reverse=True)
+                best_area, best_img = pictures[0]
+                ext = (best_img.ext or "png").lower()
+                if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
+                    ext = "png"
+                fname = f"slide_{i:02d}.{ext}"
+                fpath = os.path.join(output_images_dir, fname)
+                with open(fpath, "wb") as img_f:
+                    img_f.write(best_img.blob)
+                image_file_name = fname
+            except Exception as e:
+                logger.warning(f"Could not save extracted image for slide {i}: {e}")
 
         # Extract speaker notes
         note_full = ""
@@ -396,6 +462,7 @@ def _extract_slides_from_pptx(prs) -> list:
             "noteEN": note_data["en"],
             "noteVN": note_data["vi"],
             "hasDual": note_data["has_dual"],
+            "imageFileName": image_file_name,
         })
     return slides_data
 
@@ -442,7 +509,8 @@ async def parse_pptx_local(request: ParseLocalRequest):
             raise HTTPException(status_code=404, detail=f"File not found: {request.file_path}")
 
         prs = PptxPresentation(request.file_path)
-        slides_data = _extract_slides_from_pptx(prs)
+        images_dir = os.path.join(os.path.dirname(request.file_path), "images")
+        slides_data = _extract_slides_from_pptx(prs, output_images_dir=images_dir)
 
         logger.info(f"Parsed Local PPTX: {len(slides_data)} slides from {request.file_path}")
         return {"slides": slides_data, "totalSlides": len(slides_data)}

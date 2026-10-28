@@ -1671,3 +1671,815 @@
         padding: 12px 14px;
     }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   UPGRADE v2: SUBJECTS, LESSON CONTEXT ENRICHMENT & STEP 5 PARITY
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Top Create Subject Button */
+.btn-create-subject,
+.btn-create-subject-top,
+.btn-add-subject {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(99, 102, 241, 0.5);
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.86rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}
+
+.btn-create-subject:hover,
+.btn-create-subject-top:hover,
+.btn-add-subject:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+/* Active Lesson Banner */
+.active-lesson-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 18px;
+    margin-bottom: 18px;
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.92));
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
+}
+
+.active-lesson-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.lesson-subject-pill,
+.subject-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: rgba(99, 102, 241, 0.2);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+.lesson-subject-pill.unassigned {
+    background: rgba(148, 163, 184, 0.14);
+    color: #94a3b8;
+    border-color: rgba(148, 163, 184, 0.28);
+}
+
+.lesson-subject-major {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(14, 165, 233, 0.15);
+    color: #7dd3fc;
+}
+
+.lesson-divider,
+.banner-sep {
+    color: #64748b;
+    font-weight: bold;
+}
+
+.active-lesson-title,
+.lesson-title-text {
+    color: #f8fafc;
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.active-lesson-file-tag,
+.lesson-meta-tag {
+    font-size: 0.76rem;
+    color: #94a3b8;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.context-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.context-status-badge.attached {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.context-status-badge.empty {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.context-status-badge:hover {
+    filter: brightness(1.12);
+}
+
+.active-lesson-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-context-badge,
+.btn-context-Action {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid rgba(56, 189, 248, 0.4);
+    background: rgba(14, 165, 233, 0.14);
+    color: #7dd3fc;
+}
+
+.btn-context-badge.has-context {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+}
+
+.btn-context-badge:hover,
+.btn-context-Action:hover {
+    transform: translateY(-1px);
+    background: rgba(14, 165, 233, 0.24);
+    color: #e0f2fe;
+}
+
+.btn-switch-lesson {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(30, 41, 59, 0.75);
+    color: #cbd5e1;
+    transition: all 0.2s;
+}
+
+.btn-switch-lesson:hover {
+    border-color: #6366f1;
+    color: #fff;
+}
+
+/* Subject Workspace */
+.pptx-subjects-workspace,
+.subjects-workspace-section {
+    margin-bottom: 24px;
+    padding: 20px;
+    background: rgba(30, 41, 59, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 14px;
+}
+
+.workspace-section-header,
+.section-header-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+
+.workspace-section-header h2,
+.workspace-section-title {
+    margin: 0 0 4px 0;
+    font-size: 1.12rem;
+    font-weight: 700;
+    color: #f8fafc;
+}
+
+.section-sub-desc,
+.workspace-section-desc {
+    margin: 0;
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+
+.pptx-subject-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 12px;
+}
+
+.pptx-subject-card {
+    padding: 14px 16px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1.5px solid rgba(148, 163, 184, 0.18);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pptx-subject-card:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(30, 41, 59, 0.85);
+}
+
+.pptx-subject-card.selected {
+    border-color: #6366f1;
+    background: rgba(99, 102, 241, 0.14);
+    box-shadow: 0 0 16px rgba(99, 102, 241, 0.2);
+}
+
+.subject-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.subject-icon,
+.subject-card-icon {
+    font-size: 1.35rem;
+}
+
+.subject-card-actions,
+.subject-card-top-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-icon-mini,
+.subject-icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.82rem;
+    padding: 3px 6px;
+    border-radius: 6px;
+    color: #cbd5e1;
+    opacity: 0.75;
+    transition: opacity 0.15s, background 0.15s;
+}
+
+.btn-icon-mini:hover,
+.subject-icon-btn:hover {
+    opacity: 1;
+    background: rgba(148, 163, 184, 0.18);
+}
+
+.subject-icon-btn.danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.subject-lesson-count {
+    font-size: 0.74rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.2);
+    color: #c7d2fe;
+    font-weight: 600;
+}
+
+.subject-card-title,
+.subject-card-name {
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #f1f5f9;
+}
+
+.subject-card-sub,
+.subject-card-meta {
+    font-size: 0.78rem;
+    color: #94a3b8;
+    line-height: 1.35;
+}
+
+/* Step 1.2: Create Lesson + Context Enrichment Card */
+.create-lesson-upload-card {
+    padding: 22px;
+    margin-bottom: 24px;
+    background: rgba(30, 41, 59, 0.55);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 14px;
+}
+
+.create-lesson-upload-card h2 {
+    margin: 0 0 16px 0;
+    font-size: 1.15rem;
+    color: #f8fafc;
+}
+
+.lesson-prep-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 16px;
+}
+
+.prep-field label,
+.prep-label {
+    display: block;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin-bottom: 6px;
+}
+
+.form-select-dark,
+.form-input-dark,
+.form-textarea-dark,
+.prep-select,
+.prep-input,
+.context-textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 9px;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.75);
+    color: #f8fafc;
+    font-size: 0.88rem;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+.prep-select {
+    flex: 1;
+}
+
+.form-select-dark:focus,
+.form-input-dark:focus,
+.form-textarea-dark:focus,
+.prep-select:focus,
+.prep-input:focus,
+.context-textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+.btn-quick-subject {
+    padding: 0 14px;
+    border-radius: 9px;
+    border: 1px solid rgba(99, 102, 241, 0.45);
+    background: rgba(99, 102, 241, 0.18);
+    color: #c7d2fe;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.btn-quick-subject:hover {
+    background: rgba(99, 102, 241, 0.32);
+    color: #fff;
+}
+
+.lesson-context-enrichment-box {
+    margin-bottom: 18px;
+    padding: 16px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px dashed rgba(99, 102, 241, 0.4);
+}
+
+.context-box-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.context-box-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #f1f5f9;
+    font-size: 0.9rem;
+}
+
+.context-optional-tag {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    background: rgba(99, 102, 241, 0.16);
+    color: #a5b4fc;
+}
+
+.context-box-header p {
+    margin: 4px 0 0 0;
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+.context-upload-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-upload-context-doc {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: 1px solid rgba(56, 189, 248, 0.45);
+    background: rgba(14, 165, 233, 0.15);
+    color: #7dd3fc;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-upload-context-doc:hover:not(:disabled) {
+    background: rgba(14, 165, 233, 0.28);
+    color: #e0f2fe;
+}
+
+.btn-toggle-context-text {
+    padding: 7px 13px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(30, 41, 59, 0.75);
+    color: #cbd5e1;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.btn-toggle-context-text:hover {
+    border-color: #818cf8;
+    color: #fff;
+}
+
+.context-file-badge,
+.context-attached-file-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-top: 10px;
+    border-radius: 8px;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-size: 0.82rem;
+}
+
+.btn-clear-context-inline,
+.btn-clear-context {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 6px;
+    padding: 3px 8px;
+    color: #fca5a5;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.btn-clear-context-inline:hover,
+.btn-clear-context:hover {
+    background: rgba(239, 68, 68, 0.3);
+    color: #fff;
+}
+
+/* History Meta Pills & Actions */
+.history-subject-pill,
+.history-subject-tag {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(99, 102, 241, 0.18);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    font-weight: 600;
+}
+
+.history-subject-tag.uncategorized {
+    background: rgba(148, 163, 184, 0.14);
+    color: #94a3b8;
+    border-color: rgba(148, 163, 184, 0.25);
+}
+
+.history-context-pill,
+.history-context-tag {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(16, 185, 129, 0.16);
+    color: #6ee7b7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    font-weight: 600;
+}
+
+.btn-show-all-lessons {
+    padding: 5px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    background: rgba(99, 102, 241, 0.15);
+    color: #a5b4fc;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-show-all-lessons:hover {
+    background: rgba(99, 102, 241, 0.28);
+    color: #fff;
+}
+
+.empty-subject-lessons {
+    padding: 24px;
+    text-align: center;
+    color: #94a3b8;
+    background: rgba(15, 23, 42, 0.45);
+    border: 1px dashed rgba(148, 163, 184, 0.25);
+    border-radius: 10px;
+    font-size: 0.88rem;
+}
+
+.history-edit-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    background: rgba(14, 165, 233, 0.12);
+    color: #7dd3fc;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s;
+    white-space: nowrap;
+}
+
+.history-edit-btn:hover {
+    background: rgba(14, 165, 233, 0.25);
+    color: #fff;
+}
+
+/* Step 3: Step5GeneratePPTX CSS Scoping & Collision Fixes inside .pptx-audio-tool */
+.pptx-audio-tool .step5-generate-pptx .slide-card {
+    padding: 0;
+    background: rgba(15, 23, 42, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.pptx-audio-tool .step5-generate-pptx .slide-card-header {
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.pptx-audio-tool .step5-generate-pptx .slide-title {
+    flex: 1;
+    font-size: 0.92rem;
+    color: #e2e8f0;
+    font-weight: 600;
+    margin: 0;
+}
+
+.pptx-audio-tool .step5-generate-pptx .slide-image-col {
+    width: 220px;
+    flex-shrink: 0;
+}
+
+.pptx-audio-tool .step5-generate-pptx .slide-image-col img {
+    width: 100%;
+    height: 124px;
+    object-fit: cover;
+    border-radius: 8px;
+    display: block;
+}
+
+.exp-stat-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    background: rgba(99, 102, 241, 0.16);
+    color: #c7d2fe;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+/* Extracted Slide Image Preview in Step 2 */
+.slide-extracted-image-box {
+    width: 220px;
+    flex-shrink: 0;
+    padding: 8px;
+    border-radius: 10px;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    text-align: center;
+}
+
+.slide-extracted-image-box img {
+    width: 100%;
+    height: auto;
+    max-height: 140px;
+    object-fit: contain;
+    border-radius: 6px;
+    display: block;
+    margin-bottom: 6px;
+}
+
+.slide-extracted-image-box span {
+    font-size: 0.74rem;
+    color: #94a3b8;
+}
+
+/* Modals for Subject & Lesson Context */
+.pptx-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.75);
+    backdrop-filter: blur(4px);
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.pptx-modal-dialog {
+    background: #1e293b;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 14px;
+    width: 100%;
+    max-width: 560px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.65);
+}
+
+.pptx-modal-dialog.modal-lg {
+    max-width: 720px;
+}
+
+.pptx-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 22px;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.pptx-modal-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    color: #f8fafc;
+}
+
+.btn-close-modal {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #94a3b8;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-close-modal:hover {
+    background: rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+}
+
+.pptx-modal-body {
+    padding: 20px 22px;
+}
+
+.modal-desc-text {
+    margin: 0 0 16px 0;
+    font-size: 0.85rem;
+    color: #94a3b8;
+    line-height: 1.45;
+}
+
+.pptx-form-group {
+    margin-bottom: 14px;
+}
+
+.pptx-form-group label {
+    display: block;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: #cbd5e1;
+    margin-bottom: 6px;
+}
+
+.pptx-form-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.pptx-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.btn-modal-cancel {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(30, 41, 59, 0.8);
+    color: #cbd5e1;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-modal-cancel:hover:not(:disabled) {
+    background: rgba(51, 65, 85, 0.9);
+    color: #fff;
+}
+
+.btn-modal-confirm {
+    padding: 9px 20px;
+    border-radius: 8px;
+    border: 1px solid rgba(99, 102, 241, 0.5);
+    background: linear-gradient(135deg, #4f46e5, #6366f1);
+    color: #fff;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+}
+
+.btn-modal-confirm:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.btn-modal-confirm:disabled,
+.btn-modal-cancel:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+    .lesson-prep-grid,
+    .pptx-form-row-2 {
+        grid-template-columns: 1fr;
+    }
+
+    .slide-extracted-image-box,
+    .pptx-audio-tool .step5-generate-pptx .slide-image-col {
+        width: 100%;
+    }
+}
+
+

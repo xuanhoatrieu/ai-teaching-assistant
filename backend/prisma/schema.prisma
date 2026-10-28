@@ -24,6 +24,7 @@ model User {
   resetPasswordToken   String?            @map("reset_password_token")
   apiKeys              ApiKey[]
   modelConfigs         ModelConfig[]
+  pptxSubjects         PptxSubject[]
   pptxAudioSessions    PptxAudioSession[]
   templates            PPTXTemplate[]
   subjects             Subject[]
@@ -329,20 +330,47 @@ model SystemConfig {
   @@map("system_configs")
 }
 
-model PptxAudioSession {
-  id            String   @id @default(uuid())
-  userId        String   @map("user_id")
-  fileName      String   @map("file_name")
-  filePath      String   @map("file_path")
-  slidesJson    String?  @map("slides_json")
-  contentJson   String?  @map("content_json")
-  questionsJson String?  @map("questions_json")
-  language      String   @default("vi")
-  status        String   @default("uploaded")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model PptxSubject {
+  id                String             @id @default(uuid())
+  userId            String             @map("user_id")
+  name              String
+  description       String?
+  institutionType   String?            @default("Đại học") @map("institution_type")
+  expertiseArea     String?            @map("expertise_area")
+  courseName        String?            @map("course_name")
+  targetAudience    String?            @map("target_audience")
+  majorName         String?            @map("major_name")
+  additionalContext String?            @map("additional_context")
+  language          String             @default("vi")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions          PptxAudioSession[]
 
+  @@index([userId])
+  @@map("pptx_subjects")
+}
+
+model PptxAudioSession {
+  id              String       @id @default(uuid())
+  userId          String       @map("user_id")
+  pptxSubjectId   String?      @map("pptx_subject_id")
+  lessonTitle     String?      @map("lesson_title")
+  contextText     String?      @map("context_text")
+  contextFileName String?      @map("context_file_name")
+  fileName        String       @map("file_name")
+  filePath        String       @map("file_path")
+  slidesJson      String?      @map("slides_json")
+  contentJson     String?      @map("content_json")
+  questionsJson   String?      @map("questions_json")
+  language        String       @default("vi")
+  status          String       @default("uploaded")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pptxSubject     PptxSubject? @relation(fields: [pptxSubjectId], references: [id], onDelete: SetNull)
+
+  @@index([pptxSubjectId])
   @@map("pptx_audio_sessions")
 }
 

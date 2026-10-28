@@ -8,10 +8,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TTSService } from '../tts/tts.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { AiProviderService } from '../ai/ai-provider.service';
+import { ImagenService, GeneratedImage } from '../ai/imagen.service';
+import { GeminiService } from '../ai/gemini.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { GenerationJobService } from '../generation-job/generation-job.service';
+import { APIService } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as os from 'os';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import type { Response } from 'express';
 import * as ExcelJS from 'exceljs';
 import {
@@ -37,21 +43,56 @@ import {
     cleanExplanation,
     isMatchingQuestionText,
     extractMatchPairs,
+    escapeForCdata,
+    escapeXmlText,
 } from '../questions/moodle-xml.helper';
 import { fixUtf8Filename } from '../common/string.util';
+import { packageScormZip } from '../slides/scorm-export.helper';
+import { packageH5pZip } from '../slides/h5p-export.helper';
+
+const execFileAsync = promisify(execFile);
 
 export interface ParsedSlide {
     index: number;
+    originalSlideIndex?: number | null;
+    slideType?: string;
+    layoutType?: string;
     title: string;
     content: string[];
+    optimizedContent?: Array<{ emoji: string; point: string; description: string }> | null;
+    interactiveData?: string | null;
     noteFull: string;
     noteEN: string;
     noteVN: string;
     hasDual: boolean;
+    imageUrl?: string | null;
     audioUrl: string | null;
     audioDuration: number | null;
     audioStatus: string; // pending | generating | done | error
     errorMessage: string | null;
+    extraAudioUrl?: string | null;
+    extraAudioName?: string | null;
+    extraAudioDuration?: number | null;
+}
+
+export interface PptxSubjectDto {
+    name: string;
+    description?: string;
+    major?: string;
+    majorName?: string;
+    expertiseArea?: string;
+    courseName?: string;
+    targetAudience?: string;
+    institutionType?: string;
+    language?: string;
+    additionalContext?: string;
+}
+
+export interface SessionUploadMeta {
+    pptxSubjectId?: string | null;
+    lessonTitle?: string;
+    contextText?: string;
+    contextFileName?: string | null;
 }
 
 export interface TTSOptions {
@@ -72,6 +113,8 @@ export class PptxAudioToolService {
         private readonly ttsService: TTSService,
         private readonly modelConfigService: ModelConfigService,
         private readonly aiProvider: AiProviderService,
+        private readonly imagenService: ImagenService,
+        private readonly geminiService: GeminiService,
         private readonly apiKeysService: ApiKeysService,
         private readonly jobService: GenerationJobService,
     ) {
@@ -79,6 +122,251 @@ export class PptxAudioToolService {
         if (!fs.existsSync(this.uploadsDir)) {
             fs.mkdirSync(this.uploadsDir, { recursive: true });
         }
+    }
+
+    // ========== PPTX SUBJECT MANAGEMENT ==========
+
+    async listSubjects(userId: string) {
+        const subjects = await this.prisma.pptxSubject.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                _count: {
+                    select: { sessions: true },
+                },
+            },
+        });
+        return subjects.map(sub => ({
+            ...sub,
+            major: sub.majorName || sub.expertiseArea || null,
+            sessionCount: sub._count?.sessions || 0,
+        }));
+    }
+
+    async createSubject(userId: string, dto: PptxSubjectDto) {
+        if (!dto?.name?.trim()) {
+            throw new BadRequestException('Vui lòng nhập tên môn học.');
+        }
+        const majorVal = (dto.majorName ?? dto.major)?.trim() || null;
+        const created = await this.prisma.pptxSubject.create({
+            data: {
+                userId,
+                name: dto.name.trim(),
+                description: dto.description?.trim() || null,
+                majorName: majorVal,
+                expertiseArea: dto.expertiseArea?.trim() || majorVal,
+                courseName: dto.courseName?.trim() || dto.name.trim(),
+                targetAudience: dto.targetAudience?.trim() || null,
+                institutionType: dto.institutionType?.trim() || null,
+                language: dto.language || 'vi',
+                additionalContext: dto.additionalContext?.trim() || null,
+            },
+        });
+        return {
+            ...created,
+            major: created.majorName || created.expertiseArea || null,
+            sessionCount: 0,
+        };
+    }
+
+    async updateSubject(subjectId: string, userId: string, dto: Partial<PptxSubjectDto>) {
+        const existing = await this.prisma.pptxSubject.findUnique({
+            where: { id: subjectId },
+        });
+        if (!existing) throw new NotFoundException('Không tìm thấy môn học.');
+        if (existing.userId !== userId) throw new BadRequestException('Không có quyền chỉnh sửa môn học này.');
+
+        const majorInput = dto.majorName !== undefined ? dto.majorName : dto.major;
+        const updated = await this.prisma.pptxSubject.update({
+            where: { id: subjectId },
+            data: {
+                ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+                ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+                ...(majorInput !== undefined ? { majorName: majorInput?.trim() || null } : {}),
+                ...(dto.expertiseArea !== undefined ? { expertiseArea: dto.expertiseArea?.trim() || null } : {}),
+                ...(dto.courseName !== undefined ? { courseName: dto.courseName?.trim() || null } : {}),
+                ...(dto.targetAudience !== undefined ? { targetAudience: dto.targetAudience?.trim() || null } : {}),
+                ...(dto.institutionType !== undefined ? { institutionType: dto.institutionType?.trim() || null } : {}),
+                ...(dto.language !== undefined ? { language: dto.language } : {}),
+                ...(dto.additionalContext !== undefined ? { additionalContext: dto.additionalContext?.trim() || null } : {}),
+            },
+        });
+        return {
+            ...updated,
+            major: updated.majorName || updated.expertiseArea || null,
+        };
+    }
+
+    async deleteSubject(subjectId: string, userId: string) {
+        const existing = await this.prisma.pptxSubject.findUnique({
+            where: { id: subjectId },
+        });
+        if (!existing) throw new NotFoundException('Không tìm thấy môn học.');
+        if (existing.userId !== userId) throw new BadRequestException('Không có quyền xóa môn học này.');
+
+        await this.prisma.pptxSubject.delete({
+            where: { id: subjectId },
+        });
+        return { deleted: true };
+    }
+
+    // ========== CONTEXT DOCUMENT EXTRACTION (.DOCX / .PDF / .TXT / .MD) ==========
+
+    async extractTextFromDocument(file: Express.Multer.File): Promise<{ fileName: string; text: string; charCount: number }> {
+        if (!file) {
+            throw new BadRequestException('Vui lòng chọn file tài liệu (.docx, .pdf, .txt, .md).');
+        }
+        const safeFileName = fixUtf8Filename(file.originalname || 'document');
+        const ext = path.extname(safeFileName).toLowerCase();
+        const buffer = file.buffer && file.buffer.length > 0
+            ? file.buffer
+            : (file.path && fs.existsSync(file.path) ? fs.readFileSync(file.path) : Buffer.alloc(0));
+
+        if (buffer.length === 0) {
+            throw new BadRequestException('File tài liệu trống hoặc không thể đọc.');
+        }
+
+        let extractedText = '';
+        if (ext === '.docx') {
+            try {
+                const mammoth = await import('mammoth');
+                const res = await mammoth.extractRawText({ buffer });
+                extractedText = res.value || '';
+            } catch (err: any) {
+                this.logger.error(`Failed to extract DOCX text: ${err.message}`);
+                throw new BadRequestException(`Không thể đọc file Word (.docx): ${err.message}`);
+            }
+        } else if (ext === '.pdf') {
+            const tmpPdfPath = path.join(
+                os.tmpdir(),
+                `ata_ctx_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.pdf`,
+            );
+            try {
+                fs.writeFileSync(tmpPdfPath, buffer);
+                const { stdout } = await execFileAsync('pdftotext', ['-layout', tmpPdfPath, '-'], {
+                    maxBuffer: 25 * 1024 * 1024,
+                });
+                extractedText = stdout || '';
+            } catch (err: any) {
+                this.logger.error(`Failed to extract PDF text via pdftotext: ${err.message}`);
+                throw new BadRequestException(`Không thể trích xuất văn bản từ file PDF: ${err.message}`);
+            } finally {
+                if (fs.existsSync(tmpPdfPath)) {
+                    try { fs.unlinkSync(tmpPdfPath); } catch { /* ignore */ }
+                }
+            }
+        } else if (ext === '.txt' || ext === '.md') {
+            extractedText = buffer.toString('utf-8');
+        } else {
+            throw new BadRequestException('Định dạng file không hỗ trợ. Vui lòng chọn file .docx, .pdf, .txt hoặc .md.');
+        }
+
+        // Clean up temp upload file if stored on disk by multer
+        if (file.path && fs.existsSync(file.path)) {
+            try { fs.unlinkSync(file.path); } catch { /* ignore */ }
+        }
+
+        const cleanedText = extractedText
+            .replace(/\r\n/g, '\n')
+            .replace(/\u0000/g, '')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim()
+            .substring(0, 80000);
+
+        if (!cleanedText) {
+            throw new BadRequestException('Không tìm thấy nội dung văn bản trong file (có thể là file PDF scan ảnh). Hãy nhập văn bản trực tiếp.');
+        }
+
+        return {
+            fileName: safeFileName,
+            text: cleanedText,
+            charCount: cleanedText.length,
+        };
+    }
+
+    async uploadSessionContextFile(
+        sessionId: string,
+        userId: string,
+        file: Express.Multer.File,
+        mode: 'replace' | 'append' = 'append',
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const extracted = await this.extractTextFromDocument(file);
+        const existingText = (session.contextText || '').trim();
+        const combinedText = (mode === 'append' && existingText)
+            ? `${existingText}\n\n--- [Tài liệu bổ sung: ${extracted.fileName}] ---\n${extracted.text}`.substring(0, 80000)
+            : extracted.text;
+
+        const existingFileName = (session.contextFileName || '').trim();
+        const newFileName = (mode === 'append' && existingFileName && !existingFileName.includes(extracted.fileName))
+            ? `${existingFileName}, ${extracted.fileName}`
+            : extracted.fileName;
+
+        const updated = await this.prisma.pptxAudioSession.update({
+            where: { id: sessionId },
+            data: {
+                contextText: combinedText,
+                contextFileName: newFileName,
+            },
+            include: { pptxSubject: true },
+        });
+
+        return {
+            sessionId: updated.id,
+            contextText: updated.contextText,
+            contextFileName: updated.contextFileName,
+            extractedCharCount: extracted.charCount,
+            fileName: extracted.fileName,
+        };
+    }
+
+    async updateSessionMeta(
+        sessionId: string,
+        userId: string,
+        dto: {
+            lessonTitle?: string;
+            pptxSubjectId?: string | null;
+            contextText?: string;
+            contextFileName?: string | null;
+        },
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        if (dto.pptxSubjectId) {
+            const sub = await this.prisma.pptxSubject.findUnique({ where: { id: dto.pptxSubjectId } });
+            if (!sub || sub.userId !== userId) {
+                throw new BadRequestException('Môn học không hợp lệ.');
+            }
+        }
+
+        const updated = await this.prisma.pptxAudioSession.update({
+            where: { id: sessionId },
+            data: {
+                ...(dto.lessonTitle !== undefined ? { lessonTitle: dto.lessonTitle?.trim() || null } : {}),
+                ...(dto.pptxSubjectId !== undefined ? { pptxSubjectId: dto.pptxSubjectId || null } : {}),
+                ...(dto.contextText !== undefined ? { contextText: dto.contextText || null } : {}),
+                ...(dto.contextFileName !== undefined ? { contextFileName: dto.contextFileName || null } : {}),
+            },
+            include: { pptxSubject: true },
+        });
+
+        const slides = updated.slidesJson ? JSON.parse(updated.slidesJson) : [];
+        return {
+            ...updated,
+            fileName: fixUtf8Filename(updated.fileName),
+            slides,
+            totalSlides: slides.length,
+        };
     }
 
     // ========== SESSION MANAGEMENT ==========
@@ -89,12 +377,25 @@ export class PptxAudioToolService {
             orderBy: { createdAt: 'desc' },
             select: {
                 id: true,
+                pptxSubjectId: true,
+                lessonTitle: true,
+                contextText: true,
+                contextFileName: true,
                 fileName: true,
                 status: true,
                 language: true,
                 createdAt: true,
                 updatedAt: true,
                 slidesJson: true,
+                pptxSubject: {
+                    select: {
+                        id: true,
+                        name: true,
+                        majorName: true,
+                        expertiseArea: true,
+                        language: true,
+                    },
+                },
             },
         });
 
@@ -108,9 +409,19 @@ export class PptxAudioToolService {
                     audioCount = slides.filter((sl: any) => sl.audioStatus === 'done').length;
                 } catch { /* empty */ }
             }
+            const cleanFileName = fixUtf8Filename(s.fileName);
+            const subObj = (s as any).pptxSubject;
             return {
                 id: s.id,
-                fileName: fixUtf8Filename(s.fileName),
+                pptxSubjectId: s.pptxSubjectId || null,
+                pptxSubject: subObj
+                    ? { ...subObj, major: subObj.majorName || subObj.expertiseArea || null }
+                    : null,
+                lessonTitle: s.lessonTitle || cleanFileName.replace(/\.pptx$/i, ''),
+                hasContext: !!(s.contextText && s.contextText.trim().length > 0),
+                contextFileName: s.contextFileName || null,
+                contextLength: s.contextText ? s.contextText.length : 0,
+                fileName: cleanFileName,
                 status: s.status,
                 language: s.language,
                 createdAt: s.createdAt,
@@ -158,17 +469,37 @@ export class PptxAudioToolService {
 
     // ========== 1. UPLOAD & PARSE ==========
 
-    async uploadAndParse(file: Express.Multer.File, userId: string) {
+    async uploadAndParse(file: Express.Multer.File, userId: string, meta?: SessionUploadMeta) {
         const fileName = fixUtf8Filename(file.originalname);
-        this.logger.log(`Uploading PPTX: ${fileName} (${file.size} bytes)`);
+        const lessonTitle = meta?.lessonTitle?.trim() || fileName.replace(/\.pptx$/i, '');
+        this.logger.log(`Uploading PPTX: ${fileName} (lessonTitle="${lessonTitle}", ${file.size} bytes)`);
+
+        let initialLang = 'vi';
+        let validSubjectId: string | null = null;
+        if (meta?.pptxSubjectId) {
+            const sub = await this.prisma.pptxSubject.findUnique({
+                where: { id: meta.pptxSubjectId },
+            });
+            if (sub && sub.userId === userId) {
+                validSubjectId = sub.id;
+                if (sub.language === 'en' || sub.language === 'vi') {
+                    initialLang = sub.language;
+                }
+            }
+        }
 
         // Create session first to get ID
         const session = await this.prisma.pptxAudioSession.create({
             data: {
                 userId,
+                pptxSubjectId: validSubjectId,
+                lessonTitle,
+                contextText: meta?.contextText?.trim() || null,
+                contextFileName: meta?.contextFileName?.trim() || null,
                 fileName,
                 filePath: '', // Will update after moving file
                 status: 'uploaded',
+                language: initialLang,
             },
         });
 
@@ -202,19 +533,28 @@ export class PptxAudioToolService {
 
             const result = await response.json() as { slides: any[]; totalSlides: number };
 
-            // Build slides JSON with audio status
-            const slides: ParsedSlide[] = result.slides.map((s: any) => ({
+            // Build slides JSON with audio status + extracted imageUrl
+            const slides: ParsedSlide[] = result.slides.map((s: any, idx: number) => ({
                 index: s.index,
+                originalSlideIndex: s.index,
+                slideType: idx === 0 ? 'title' : 'content',
+                layoutType: 'split_standard',
                 title: s.title || `Slide ${s.index + 1}`,
                 content: s.content || [],
+                optimizedContent: null,
+                interactiveData: null,
                 noteFull: s.noteFull || '',
                 noteEN: s.noteEN || '',
                 noteVN: s.noteVN || '',
                 hasDual: s.hasDual || false,
+                imageUrl: s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null,
                 audioUrl: null,
                 audioDuration: null,
                 audioStatus: 'pending',
                 errorMessage: null,
+                extraAudioUrl: null,
+                extraAudioName: null,
+                extraAudioDuration: null,
             }));
 
             // Build content JSON
@@ -222,10 +562,11 @@ export class PptxAudioToolService {
                 index: s.index,
                 title: s.title || `Slide ${s.index + 1}`,
                 content: s.content || [],
+                imageUrl: s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null,
             }));
 
             // Update session
-            const updated = await this.prisma.pptxAudioSession.update({
+            await this.prisma.pptxAudioSession.update({
                 where: { id: session.id },
                 data: {
                     slidesJson: JSON.stringify(slides),
@@ -236,6 +577,10 @@ export class PptxAudioToolService {
 
             return {
                 sessionId: session.id,
+                pptxSubjectId: validSubjectId,
+                lessonTitle,
+                contextText: session.contextText,
+                contextFileName: session.contextFileName,
                 fileName,
                 totalSlides: slides.length,
                 slides,
@@ -296,7 +641,7 @@ export class PptxAudioToolService {
         return { success: true, chunkIndex };
     }
 
-    async mergeChunksAndParse(uploadId: string, originalFileName: string, totalChunks: number, userId: string) {
+    async mergeChunksAndParse(uploadId: string, originalFileName: string, totalChunks: number, userId: string, meta?: SessionUploadMeta) {
         const safeUploadId = uploadId.replace(/[^a-zA-Z0-9_-]/g, '');
         const chunkDir = path.join(process.cwd(), 'uploads', 'pptx-tool', 'chunks', safeUploadId);
 
@@ -369,7 +714,7 @@ export class PptxAudioToolService {
             stream: null as any,
         };
 
-        return this.uploadAndParse(mockMulterFile, userId);
+        return this.uploadAndParse(mockMulterFile, userId, meta);
     }
 
     private async cleanStaleChunkDirs() {
@@ -401,14 +746,17 @@ export class PptxAudioToolService {
     async getSession(sessionId: string) {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
+            include: { pptxSubject: true },
         });
         if (!session) {
             throw new NotFoundException(`Session ${sessionId} not found`);
         }
         const slides = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const cleanFileName = fixUtf8Filename(session.fileName);
         return {
             ...session,
-            fileName: fixUtf8Filename(session.fileName),
+            fileName: cleanFileName,
+            lessonTitle: session.lessonTitle || cleanFileName.replace(/\.pptx$/i, ''),
             slides,
             totalSlides: slides.length,
         };
@@ -478,6 +826,75 @@ export class PptxAudioToolService {
         return slide;
     }
 
+    // ========== 4A. BUILD PEDAGOGICAL CONTEXT BLOCK FOR AI ==========
+
+    private buildPedagogicalContextBlock(
+        session: any,
+        slides: ParsedSlide[],
+        isEnglish: boolean,
+        maxDocChars = 25000,
+    ): string {
+        const sub = session.pptxSubject;
+        const lessonTitle = session.lessonTitle || fixUtf8Filename(session.fileName || '').replace(/\.pptx$/i, '');
+        const slideMapLines = slides
+            .map(s => `  ${s.index + 1}. ${s.title || `Slide ${s.index + 1}`}`)
+            .join('\n');
+
+        const parts: string[] = [];
+
+        if (isEnglish) {
+            parts.push(`**Course & Lesson Context:**`);
+            parts.push(`- Lesson Title: ${lessonTitle}`);
+            parts.push(`- Source File: ${fixUtf8Filename(session.fileName || '')}`);
+            if (sub) {
+                const subMajor = sub.majorName || sub.expertiseArea || sub.major;
+                parts.push(`- Subject / Course: ${sub.name}`);
+                if (subMajor) parts.push(`- Academic Discipline / Major: ${subMajor}`);
+                if (sub.targetAudience) parts.push(`- Target Audience: ${sub.targetAudience}`);
+                if (sub.institutionType) parts.push(`- Institution Level: ${sub.institutionType}`);
+                if (sub.description) parts.push(`- Course Overview: ${sub.description}`);
+                if (sub.additionalContext) parts.push(`- Pedagogical Guidelines: ${sub.additionalContext}`);
+            }
+            if (slideMapLines) {
+                parts.push(`\n**Full Presentation Slide Map (for structural awareness & avoiding premature repetition):**\n${slideMapLines}`);
+            }
+            if (session.contextText && session.contextText.trim()) {
+                const docSnippet = session.contextText.trim().substring(0, maxDocChars);
+                parts.push(
+                    `\n**Supplementary Reference Material / Textbook Context (${session.contextFileName || 'Instructor Notes'}):**\n` +
+                    `Use the following detailed reference material to accurately explain abbreviated bullet points, formulas, tables, or diagrams on the slides:\n` +
+                    `"""\n${docSnippet}\n"""`,
+                );
+            }
+        } else {
+            parts.push(`**Ngữ cảnh Môn học & Bài giảng:**`);
+            parts.push(`- Tên bài học: ${lessonTitle}`);
+            parts.push(`- Tệp trình chiếu: ${fixUtf8Filename(session.fileName || '')}`);
+            if (sub) {
+                const subMajor = sub.majorName || sub.expertiseArea || sub.major;
+                parts.push(`- Môn học / Học phần: ${sub.name}`);
+                if (subMajor) parts.push(`- Chuyên ngành / Lĩnh vực: ${subMajor}`);
+                if (sub.targetAudience) parts.push(`- Đối tượng người học: ${sub.targetAudience}`);
+                if (sub.institutionType) parts.push(`- Bậc đào tạo: ${sub.institutionType}`);
+                if (sub.description) parts.push(`- Mô tả môn học: ${sub.description}`);
+                if (sub.additionalContext) parts.push(`- Định hướng sư phạm bổ sung: ${sub.additionalContext}`);
+            }
+            if (slideMapLines) {
+                parts.push(`\n**Bản đồ cấu trúc toàn bộ bài trình chiếu (để nắm mạch bài giảng tổng thể, không giảng chồng lấn sang phần sau):**\n${slideMapLines}`);
+            }
+            if (session.contextText && session.contextText.trim()) {
+                const docSnippet = session.contextText.trim().substring(0, maxDocChars);
+                parts.push(
+                    `\n**Tài liệu tham khảo / Giáo trình chi tiết đính kèm (${session.contextFileName || 'Ghi chú giảng viên'}):**\n` +
+                    `Hãy khai thác kiến thức chuyên sâu từ tài liệu tham khảo dưới đây để giải thích tường tận các gạch đầu dòng viết tắt, bảng biểu, số liệu hoặc sơ đồ trên slide:\n` +
+                    `"""\n${docSnippet}\n"""`,
+                );
+            }
+        }
+
+        return parts.join('\n');
+    }
+
     // ========== 4B. GENERATE & OPTIMIZE SPEAKER NOTES (AI BACKGROUND JOBS) ==========
 
     async generateSpeakerNotesBackground(
@@ -489,6 +906,7 @@ export class PptxAudioToolService {
     ) {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
+            include: { pptxSubject: true },
         });
         if (!session) {
             throw new NotFoundException(`Session ${sessionId} not found`);
@@ -500,6 +918,8 @@ export class PptxAudioToolService {
         }
 
         const language: 'vi' | 'en' = targetLanguage || (session.language as 'vi' | 'en') || 'vi';
+        const isEnglish = language === 'en';
+        const pedagogicalContext = this.buildPedagogicalContextBlock(session, slides, isEnglish, 25000);
 
         // Synchronize session language if changed
         if (targetLanguage && session.language !== targetLanguage) {
@@ -547,8 +967,6 @@ export class PptxAudioToolService {
                 `Đang soạn lời giảng (Slide ${batchStart} - ${batchEnd} / ${targetSlides.length})...`,
             );
 
-            const isEnglish = language === 'en';
-
             // Build slides content text
             const slidesContent = batch.map(s => {
                 const existingEnNote = s.noteEN?.trim();
@@ -588,9 +1006,7 @@ CRITICAL INSTRUCTIONS:
 2. **Translate & Explain:** If slide titles, bullet points, or instructor notes are in Vietnamese, translate all terms, concepts, and explanations accurately into standard English academic terminology.
 3. **Spoken Lecture Style:** Write naturally as a real lecturer speaking directly to university students in an interactive auditorium.
 
-**Lecture Information:**
-- Presentation: ${session.fileName}
-- Target Language: 100% ENGLISH
+${pedagogicalContext}
 
 **Slide Content to compose:**
 ${promptContent}
@@ -634,9 +1050,7 @@ Hãy chuyển đổi nội dung tóm tắt trên slide thành lời giảng nói
 
 Soạn lời giảng bằng tiếng Việt chuẩn mực, khẩu ngữ sư phạm tự nhiên như giảng viên đại học đang giảng trực tiếp.
 
-**Thông tin bài giảng:**
-- Tên tệp: ${session.fileName}
-- Ngôn ngữ yêu cầu: TIẾNG VIỆT (Chuẩn mực sư phạm)
+${pedagogicalContext}
 
 **Nội dung các slide cần soạn:**
 ${promptContent}
@@ -1114,8 +1528,15 @@ Return JSON only.`;
 
             // Save audio file
             const audioDir = this.getAudioDir(sessionId);
+            if (slide.audioUrl) {
+                try {
+                    const prevRel = slide.audioUrl.split('?')[0].replace(/^\//, '');
+                    const prevPath = path.join(process.cwd(), prevRel);
+                    if (fs.existsSync(prevPath)) fs.unlinkSync(prevPath);
+                } catch { /* ignore */ }
+            }
             const fileExt = result.format === 'wav' ? 'wav' : 'mp3';
-            const fileName = `slide_${String(slideIndex).padStart(2, '0')}.${fileExt}`;
+            const fileName = `slide_${String(slideIndex).padStart(2, '0')}_${Date.now()}.${fileExt}`;
             const filePath = path.join(audioDir, fileName);
 
             if (result.audio) {
@@ -1321,6 +1742,14 @@ Return JSON only.`;
 
         // Delete audio file
         if (slide.audioUrl) {
+            try {
+                const cleanRel = slide.audioUrl.split('?')[0].replace(/^\//, '');
+                const directPath = path.join(process.cwd(), cleanRel);
+                if (fs.existsSync(directPath)) {
+                    fs.unlinkSync(directPath);
+                    this.logger.log(`Deleted audio: ${directPath}`);
+                }
+            } catch { /* ignore */ }
             const audioDir = this.getAudioDir(sessionId);
             const fileName = `slide_${String(slideIndex).padStart(2, '0')}`;
             // Try both extensions
@@ -1357,18 +1786,29 @@ Return JSON only.`;
 
         const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
 
-        // Build audio files list for injection
+        // Build audio files list for injection into original.pptx
         const audioFiles: { slideIndex: number; audioPath: string }[] = [];
         const audioDir = this.getAudioDir(sessionId);
 
         for (const slide of slides) {
             if (slide.audioStatus === 'done' && slide.audioUrl) {
-                // Find actual audio file
+                const origIdx = slide.originalSlideIndex !== undefined ? slide.originalSlideIndex : slide.index;
+                if (origIdx === null || origIdx < 0) {
+                    // Newly inserted slide (not in original.pptx) -> skip for raw PPTX audio injection
+                    continue;
+                }
+                const cleanRel = slide.audioUrl.split('?')[0].replace(/^\//, '');
+                const directPath = path.join(process.cwd(), cleanRel);
+                if (fs.existsSync(directPath)) {
+                    audioFiles.push({ slideIndex: origIdx, audioPath: directPath });
+                    continue;
+                }
+                // Fallback to legacy filename pattern
                 const fileName = `slide_${String(slide.index).padStart(2, '0')}`;
                 for (const ext of ['wav', 'mp3']) {
                     const filePath = path.join(audioDir, `${fileName}.${ext}`);
                     if (fs.existsSync(filePath)) {
-                        audioFiles.push({ slideIndex: slide.index, audioPath: filePath });
+                        audioFiles.push({ slideIndex: origIdx, audioPath: filePath });
                         break;
                     }
                 }
@@ -1398,10 +1838,1114 @@ Return JSON only.`;
         const buffer = Buffer.from(result.buffer, 'base64');
 
         // Generate filename
-        const baseName = path.basename(session.fileName, '.pptx');
-        const filename = `${baseName}_with_audio.pptx`;
+        const rawBase = session.lessonTitle?.trim() || path.basename(fixUtf8Filename(session.fileName), '.pptx');
+        const filename = `${rawBase}_with_audio.pptx`;
 
         return { buffer, filename };
+    }
+
+    // ========== 8A. STEP 5 SLIDE WORKSPACE CRUD & AI METHODS ==========
+
+    private async saveSlidesAndSyncContent(sessionId: string, slides: ParsedSlide[]) {
+        // Re-index 0..N-1
+        slides.forEach((s, idx) => {
+            s.index = idx;
+        });
+        const content = slides.map(s => ({
+            index: s.index,
+            title: s.title || `Slide ${s.index + 1}`,
+            content: Array.isArray(s.content) ? s.content : [],
+            imageUrl: s.imageUrl || null,
+        }));
+        await this.prisma.pptxAudioSession.update({
+            where: { id: sessionId },
+            data: {
+                slidesJson: JSON.stringify(slides),
+                contentJson: JSON.stringify(content),
+            },
+        });
+        return slides;
+    }
+
+    async updateSlideContent(
+        sessionId: string,
+        slideIndex: number,
+        userId: string,
+        dto: {
+            title?: string;
+            content?: string[] | string;
+            optimizedContent?: Array<{ emoji: string; point: string; description: string }> | null;
+            speakerNote?: string;
+            slideType?: string;
+            layoutType?: string;
+            interactiveData?: any;
+        },
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slide = slides.find(s => s.index === slideIndex) || slides[slideIndex];
+        if (!slide) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        if (dto.title !== undefined && dto.title !== null) {
+            slide.title = dto.title.trim();
+        }
+        if (dto.content !== undefined && dto.content !== null) {
+            if (Array.isArray(dto.content)) {
+                slide.content = dto.content.map(l => String(l).trim()).filter(Boolean);
+            } else if (typeof dto.content === 'string') {
+                slide.content = dto.content
+                    .split('\n')
+                    .map(l => l.replace(/^[-*•]\s*/, '').trim())
+                    .filter(Boolean);
+            }
+        }
+        if (dto.optimizedContent !== undefined) {
+            slide.optimizedContent = dto.optimizedContent;
+            if (Array.isArray(dto.optimizedContent) && dto.optimizedContent.length > 0 && dto.content === undefined) {
+                slide.content = dto.optimizedContent
+                    .map(b => `${b.point || ''}${b.description ? `: ${b.description}` : ''}`.trim())
+                    .filter(Boolean);
+            }
+        }
+        if (dto.speakerNote !== undefined && dto.speakerNote !== null) {
+            const note = dto.speakerNote.trim();
+            if (session.language === 'en') {
+                slide.noteEN = note;
+            } else {
+                slide.noteVN = note;
+            }
+            slide.noteFull = note;
+            slide.hasDual = !!(slide.noteVN?.trim() && slide.noteEN?.trim());
+        }
+        if (dto.slideType !== undefined && dto.slideType !== null) {
+            slide.slideType = dto.slideType.trim();
+        }
+        if (dto.layoutType !== undefined && dto.layoutType !== null) {
+            slide.layoutType = dto.layoutType.trim();
+        }
+        if (dto.interactiveData !== undefined) {
+            slide.interactiveData = dto.interactiveData === null
+                ? null
+                : (typeof dto.interactiveData === 'string'
+                    ? dto.interactiveData
+                    : JSON.stringify(dto.interactiveData));
+        }
+
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+        return slide;
+    }
+
+    async createSlide(
+        sessionId: string,
+        userId: string,
+        dto: {
+            title?: string;
+            content?: string | string[];
+            speakerNote?: string;
+            slideType?: string;
+            layoutType?: string;
+            interactiveData?: any;
+            insertAfterIndex?: number;
+        },
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const total = slides.length;
+
+        // insertAfterIndex convention (matching Step5GeneratePPTX):
+        // 0 -> insert before first slide (array index 0)
+        // 1..total -> insert right after 1-based slide #insertAfterIndex (array index insertAfterIndex)
+        // -1 or undefined -> append at the end (array index total)
+        let targetArrayPos = total;
+        if (dto.insertAfterIndex !== undefined && dto.insertAfterIndex >= 0 && dto.insertAfterIndex <= total) {
+            targetArrayPos = dto.insertAfterIndex;
+        }
+
+        let contentArr: string[] = [];
+        if (Array.isArray(dto.content)) {
+            contentArr = dto.content.map(l => String(l).trim()).filter(Boolean);
+        } else if (typeof dto.content === 'string' && dto.content.trim()) {
+            contentArr = dto.content
+                .split('\n')
+                .map(l => l.replace(/^[-*•]\s*/, '').trim())
+                .filter(Boolean);
+        }
+
+        const noteText = (dto.speakerNote || '').trim();
+        const isEn = session.language === 'en';
+        const slideType = dto.slideType || 'content';
+        const layoutType = dto.layoutType || (
+            slideType === 'checkpoint_quiz'
+                ? 'checkpoint_gate'
+                : (slideType === 'interactive_audio' ? 'audio_lab' : 'split_standard')
+        );
+
+        const newSlide: ParsedSlide = {
+            index: targetArrayPos,
+            originalSlideIndex: null,
+            slideType,
+            layoutType,
+            title: dto.title?.trim() || `Slide ${targetArrayPos + 1}`,
+            content: contentArr,
+            optimizedContent: null,
+            interactiveData: dto.interactiveData
+                ? (typeof dto.interactiveData === 'string' ? dto.interactiveData : JSON.stringify(dto.interactiveData))
+                : null,
+            noteFull: noteText,
+            noteEN: isEn ? noteText : '',
+            noteVN: isEn ? '' : noteText,
+            hasDual: false,
+            imageUrl: null,
+            audioUrl: null,
+            audioDuration: null,
+            audioStatus: 'pending',
+            errorMessage: null,
+            extraAudioUrl: null,
+            extraAudioName: null,
+            extraAudioDuration: null,
+        };
+
+        slides.splice(targetArrayPos, 0, newSlide);
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return {
+            slide: newSlide,
+            slides,
+            totalSlides: slides.length,
+        };
+    }
+
+    async deleteSlide(sessionId: string, slideIndex: number, userId: string) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        if (slides.length <= 1) {
+            throw new BadRequestException('Không thể xóa slide duy nhất trong bài giảng.');
+        }
+
+        const pos = slides.findIndex(s => s.index === slideIndex);
+        if (pos === -1) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        const removed = slides[pos];
+        if (removed.extraAudioUrl) {
+            try {
+                const localPath = path.join(process.cwd(), removed.extraAudioUrl.split('?')[0].replace(/^\//, ''));
+                if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+            } catch { /* ignore */ }
+        }
+        if (removed.audioUrl) {
+            try {
+                const localPath = path.join(process.cwd(), removed.audioUrl.split('?')[0].replace(/^\//, ''));
+                if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+            } catch { /* ignore */ }
+        }
+
+        slides.splice(pos, 1);
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return {
+            success: true,
+            totalSlides: slides.length,
+            slides,
+        };
+    }
+
+    async moveSlide(sessionId: string, slideIndex: number, userId: string, direction: 'up' | 'down') {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const pos = slides.findIndex(s => s.index === slideIndex);
+        if (pos === -1) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        if (direction === 'up' && pos <= 0) {
+            throw new BadRequestException('Slide đầu tiên không thể di chuyển lên.');
+        }
+        if (direction === 'down' && pos >= slides.length - 1) {
+            throw new BadRequestException('Slide cuối cùng không thể di chuyển xuống.');
+        }
+
+        const targetPos = direction === 'up' ? pos - 1 : pos + 1;
+        const temp = slides[pos];
+        slides[pos] = slides[targetPos];
+        slides[targetPos] = temp;
+
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+        return slides;
+    }
+
+    async uploadCustomSlideImage(
+        sessionId: string,
+        slideIndex: number,
+        userId: string,
+        file: Express.Multer.File,
+    ) {
+        if (!file || (!file.buffer && !file.path)) {
+            throw new BadRequestException('Vui lòng chọn file hình ảnh.');
+        }
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slide = slides.find(s => s.index === slideIndex) || slides[slideIndex];
+        if (!slide) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        let ext = 'png';
+        if (file.mimetype === 'image/jpeg' || file.mimetype === 'image/jpg') ext = 'jpg';
+        else if (file.mimetype === 'image/webp') ext = 'webp';
+
+        const imagesDir = path.join(this.getSessionDir(sessionId), 'images');
+        if (!fs.existsSync(imagesDir)) {
+            fs.mkdirSync(imagesDir, { recursive: true });
+        }
+
+        const fileName = `slide_${slideIndex + 1}_custom_${Date.now()}.${ext}`;
+        const filePath = path.join(imagesDir, fileName);
+        const buf = file.buffer && file.buffer.length > 0
+            ? file.buffer
+            : (file.path && fs.existsSync(file.path) ? fs.readFileSync(file.path) : Buffer.alloc(0));
+        fs.writeFileSync(filePath, buf);
+
+        if (file.path && fs.existsSync(file.path)) {
+            try { fs.unlinkSync(file.path); } catch { /* ignore */ }
+        }
+
+        slide.imageUrl = `/uploads/pptx-tool/${sessionId}/images/${fileName}`;
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return slide;
+    }
+
+    async regenerateSlideContent(sessionId: string, slideIndex: number, userId: string) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            include: { pptxSubject: true },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slide = slides.find(s => s.index === slideIndex) || slides[slideIndex];
+        if (!slide) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        const isEnglish = session.language === 'en';
+        const pedagogicalContext = this.buildPedagogicalContextBlock(session, slides, isEnglish, 15000);
+        const rawLines = Array.isArray(slide.content) ? slide.content.join('\n• ') : String(slide.content || '');
+        const noteText = (isEnglish ? slide.noteEN : slide.noteVN) || slide.noteFull || '';
+
+        const prompt = isEnglish
+            ? `You are an Academic Instructional Designer. Optimize the content of Slide #${slide.index + 1} ("${slide.title}") into 3 to 5 clear, structured, high-impact academic bullet points suitable for a university presentation slide.
+
+${pedagogicalContext}
+
+**Current Slide Information:**
+- Slide Title: ${slide.title}
+- Existing Slide Text:
+${rawLines || '(Empty - derive from title and context)'}
+${noteText ? `- Speaker Note / Explanation:\n${noteText}` : ''}
+
+Return ONLY valid JSON in the exact format below:
+\`\`\`json
+{
+  "bullets": [
+    {
+      "emoji": "📌",
+      "point": "Concise key concept (3-7 words)",
+      "description": "Clear, insightful academic explanation (10-22 words)"
+    }
+  ]
+}
+\`\`\``
+            : `Bạn là Chuyên gia Thiết kế Bài giảng Đại học (Instructional Designer). Hãy tối ưu hóa và cấu trúc lại nội dung của Slide số ${slide.index + 1} ("${slide.title}") thành 3 đến 5 ý chính (bullet points) súc tích, học thuật, trực quan và chuẩn sư phạm.
+
+${pedagogicalContext}
+
+**Thông tin Slide hiện tại:**
+- Tiêu đề Slide: ${slide.title}
+- Nội dung thô trên slide:
+${rawLines || '(Chưa có nội dung - hãy tổng hợp từ tiêu đề, lời giảng và tài liệu tham khảo)'}
+${noteText ? `- Lời giảng của slide:\n${noteText}` : ''}
+
+Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
+\`\`\`json
+{
+  "bullets": [
+    {
+      "emoji": "📌",
+      "point": "Ý chính ngắn gọn, đắt giá (3-8 từ)",
+      "description": "Mô tả giải thích rõ bản chất học thuật, ngắn gọn dễ nhìn trên slide (12-25 từ)"
+    }
+  ]
+}
+\`\`\``;
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
+        const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName || 'gemini-2.5-flash', userId);
+        const cleaned = this.cleanJsonResponse(aiResult.content || '');
+
+        let bullets: Array<{ emoji: string; point: string; description: string }> = [];
+        try {
+            const parsed = JSON.parse(cleaned);
+            const rawList = Array.isArray(parsed) ? parsed : (parsed.bullets || parsed.optimizedContent || []);
+            if (Array.isArray(rawList)) {
+                bullets = rawList.map((b: any) => ({
+                    emoji: String(b.emoji || '📌').trim(),
+                    point: String(b.point || b.title || '').trim(),
+                    description: String(b.description || b.text || b.content || '').trim(),
+                })).filter(b => b.point || b.description);
+            }
+        } catch (err: any) {
+            this.logger.error(`Failed to parse regenerateSlideContent JSON: ${err.message}`);
+            throw new BadRequestException('AI trả về định dạng chưa hợp lệ. Vui lòng thử lại.');
+        }
+
+        if (bullets.length === 0) {
+            throw new BadRequestException('Không thể tạo nội dung tối ưu cho slide này. Vui lòng thử lại.');
+        }
+
+        slide.optimizedContent = bullets;
+        slide.content = bullets.map(b => `${b.point}${b.description ? `: ${b.description}` : ''}`.trim());
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return {
+            ...slide,
+            optimizedContentJson: JSON.stringify(bullets),
+        };
+    }
+
+    async regenerateSlideImage(sessionId: string, slideIndex: number, userId: string) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            include: { pptxSubject: true },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slide = slides.find(s => s.index === slideIndex) || slides[slideIndex];
+        if (!slide) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        const bulletsText = Array.isArray(slide.optimizedContent) && slide.optimizedContent.length > 0
+            ? slide.optimizedContent.map(b => `${b.point}: ${b.description}`).join('; ')
+            : (Array.isArray(slide.content) ? slide.content.join('; ') : '');
+        const subjectContext = session.pptxSubject?.name ? `Course: ${session.pptxSubject.name}. ` : '';
+        const visualSource = `${subjectContext}Slide topic: "${slide.title}". Key concepts: ${bulletsText.substring(0, 350)}`;
+
+        let imagePrompt = `Educational slide illustration for "${slide.title}": ${visualSource}. Style: Clean, modern, professional academic illustration, no random garbled text.`;
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'IMAGE');
+        const apiKey = await this.apiKeysService.getActiveKey(userId, APIService.GEMINI);
+
+        const isImageGenProvider = modelConfig.provider === 'IMAGE_GEN'
+            || modelConfig.modelName.toLowerCase().includes('flux')
+            || modelConfig.modelName.startsWith('imagegen:');
+
+        if (isImageGenProvider) {
+            try {
+                const lang = session.language || session.pptxSubject?.language || 'vi';
+                if (lang === 'vi' || lang === 'vi-en') {
+                    imagePrompt = await this.geminiService.optimizeFluxPrompt(visualSource, slide.title);
+                }
+            } catch (err: any) {
+                this.logger.warn(`Flux prompt optimization skipped: ${err.message}`);
+            }
+        }
+
+        let effectiveModelName = modelConfig.modelName;
+        if (modelConfig.provider === 'CLIPROXY' && !modelConfig.modelName.startsWith('cliproxy:')) {
+            effectiveModelName = `cliproxy:${modelConfig.modelName}`;
+        } else if (isImageGenProvider && !modelConfig.modelName.startsWith('imagegen:') && !modelConfig.modelName.toLowerCase().includes('flux')) {
+            effectiveModelName = `imagegen:${modelConfig.modelName}`;
+        }
+
+        const effectiveApiKey = apiKey || process.env.GEMINI_API_KEY || undefined;
+
+        let generatedImage: GeneratedImage | null = null;
+        let lastError: any = null;
+        for (let attempt = 0; attempt <= 2; attempt++) {
+            try {
+                if (attempt > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
+                }
+                generatedImage = await this.imagenService.generateImage(
+                    imagePrompt,
+                    '1:1',
+                    effectiveModelName,
+                    effectiveApiKey,
+                    userId,
+                );
+                if (generatedImage && generatedImage.mimeType !== 'image/svg+xml') {
+                    break;
+                }
+            } catch (err: any) {
+                lastError = err;
+            }
+        }
+
+        if (!generatedImage) {
+            throw new BadRequestException(`Không thể tạo hình ảnh minh họa: ${lastError?.message || 'Lỗi kết nối AI'}`);
+        }
+
+        const mimeMap: Record<string, string> = {
+            'image/png': 'png',
+            'image/jpeg': 'jpg',
+            'image/jpg': 'jpg',
+            'image/webp': 'webp',
+            'image/svg+xml': 'svg',
+        };
+        const ext = mimeMap[generatedImage.mimeType] || 'png';
+        const imagesDir = path.join(this.getSessionDir(sessionId), 'images');
+        if (!fs.existsSync(imagesDir)) {
+            fs.mkdirSync(imagesDir, { recursive: true });
+        }
+
+        const fileName = `slide_${slideIndex + 1}_ai_${Date.now()}.${ext}`;
+        const filePath = path.join(imagesDir, fileName);
+        fs.writeFileSync(filePath, Buffer.from(generatedImage.base64, 'base64'));
+
+        slide.imageUrl = `/uploads/pptx-tool/${sessionId}/images/${fileName}`;
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return slide;
+    }
+
+    async uploadExtraAudio(
+        sessionId: string,
+        slideIndex: number,
+        userId: string,
+        file: Express.Multer.File,
+    ) {
+        if (!file) throw new BadRequestException('Vui lòng chọn file âm thanh.');
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slide = slides.find(s => s.index === slideIndex) || slides[slideIndex];
+        if (!slide) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        const audioDir = this.getAudioDir(sessionId);
+        if (slide.extraAudioUrl) {
+            try {
+                const oldPath = path.join(process.cwd(), slide.extraAudioUrl.split('?')[0].replace(/^\//, ''));
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            } catch { /* ignore */ }
+        }
+
+        const safeOrigName = fixUtf8Filename(file.originalname || 'sample_audio.mp3');
+        const ext = path.extname(safeOrigName).replace('.', '') || 'mp3';
+        const fileName = `slide_${String(slideIndex).padStart(2, '0')}_extra_${Date.now()}.${ext}`;
+        const filePath = path.join(audioDir, fileName);
+
+        const buf = file.buffer && file.buffer.length > 0
+            ? file.buffer
+            : (file.path && fs.existsSync(file.path) ? fs.readFileSync(file.path) : Buffer.alloc(0));
+        fs.writeFileSync(filePath, buf);
+        if (file.path && fs.existsSync(file.path)) {
+            try { fs.unlinkSync(file.path); } catch { /* ignore */ }
+        }
+
+        slide.extraAudioUrl = `/uploads/pptx-tool/${sessionId}/audio/${fileName}`;
+        slide.extraAudioName = safeOrigName;
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return slide;
+    }
+
+    async deleteExtraAudio(sessionId: string, slideIndex: number, userId: string) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slide = slides.find(s => s.index === slideIndex) || slides[slideIndex];
+        if (!slide) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        if (slide.extraAudioUrl) {
+            try {
+                const oldPath = path.join(process.cwd(), slide.extraAudioUrl.split('?')[0].replace(/^\//, ''));
+                if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+            } catch { /* ignore */ }
+        }
+
+        slide.extraAudioUrl = null;
+        slide.extraAudioName = null;
+        slide.extraAudioDuration = null;
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return slide;
+    }
+
+    async generateSlideInteractions(
+        sessionId: string,
+        slideIndex: number,
+        userId: string,
+        requestedType?: string,
+        options?: {
+            mode?: 'generate_new' | 'extract_existing';
+            sourceType?: 'slide_range' | 'custom_text' | 'current_slide' | 'audio' | 'image';
+            fromSlideIndex?: number;
+            toSlideIndex?: number;
+            customContent?: string;
+            imageBase64?: string;
+            selectedQuestionTypes?: string[];
+            questionCount?: number;
+            passScore?: number;
+            fallbackSlideIndex?: number;
+            allowContinueWithoutPass?: boolean;
+        },
+    ) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            include: { pptxSubject: true },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+        if (session.userId !== userId) throw new BadRequestException('Not authorized');
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slide = slides.find(s => s.index === slideIndex) || slides[slideIndex];
+        if (!slide) throw new NotFoundException(`Slide ${slideIndex} not found`);
+
+        const oneBasedSlideNumber = slide.index + 1;
+        let content = '';
+        const isExtractMode = options?.mode === 'extract_existing';
+        const sourceType = options?.sourceType || (isExtractMode ? 'custom_text' : 'current_slide');
+
+        if (sourceType === 'slide_range' && options?.fromSlideIndex && options?.toSlideIndex && !isExtractMode) {
+            const fromIdx = Math.min(Number(options.fromSlideIndex), Number(options.toSlideIndex));
+            const toIdx = Math.max(Number(options.fromSlideIndex), Number(options.toSlideIndex));
+            const rangeSlides = slides.filter(s => (s.index + 1) >= fromIdx && (s.index + 1) <= toIdx);
+            content = rangeSlides.map(s => {
+                let sBody = Array.isArray(s.content) ? s.content.join('\n') : String(s.content || '');
+                if (Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0) {
+                    sBody = s.optimizedContent.map(p => `${p.emoji || '•'} ${p.point}: ${p.description || ''}`).join('\n');
+                }
+                const note = s.noteVN || s.noteEN || s.noteFull || '';
+                return `[Slide ${s.index + 1}: ${s.title}]\n${sBody}\n${note ? `Lời giảng: ${note}\n` : ''}`;
+            }).join('\n\n');
+            if (session.contextText && session.contextText.trim()) {
+                content += `\n\n[Tài liệu tham khảo bổ sung của bài học]:\n${session.contextText.trim().substring(0, 12000)}`;
+            }
+        } else if ((sourceType === 'custom_text' || isExtractMode || sourceType === 'audio' || sourceType === 'image') && options?.customContent) {
+            content = `[Nội dung tài liệu/đề bài do giáo viên cung cấp]:\n${options.customContent}`;
+        } else {
+            if (Array.isArray(slide.optimizedContent) && slide.optimizedContent.length > 0) {
+                content = slide.optimizedContent.map(p => `${p.emoji || '•'} ${p.point}: ${p.description || ''}`).join('\n');
+            } else {
+                content = Array.isArray(slide.content) ? slide.content.join('\n') : String(slide.content || '');
+            }
+        }
+
+        const hasAudioSample = !!(slide.extraAudioUrl || slide.extraAudioName);
+        const subjectName = session.pptxSubject?.name || '';
+        const courseName = session.pptxSubject?.courseName || '';
+        const targetAudience = session.pptxSubject?.targetAudience || 'Sinh viên đại học';
+        const lessonTitle = session.lessonTitle || fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '');
+
+        const selectedTypes = (options?.selectedQuestionTypes && options.selectedQuestionTypes.length > 0)
+            ? options.selectedQuestionTypes
+            : ['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE'];
+
+        const typeLabels: Record<string, string> = {
+            MC: 'Trắc nghiệm đơn 1 đáp án đúng (type: "MC", options: 4 lựa chọn A, B, C, D, correctAnswer: "chuỗi đáp án đúng")',
+            TF: 'Đúng hay Sai (type: "TF", options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai")',
+            MR: 'Nhiều lựa chọn đúng (type: "MR", options: 4 lựa chọn, correctAnswers: [mảng chứa các đáp án đúng])',
+            FIB: 'Điền khuyết thuật ngữ vào chỗ trống (type: "FIB", question: câu hỏi chứa ký hiệu [.....], correctAnswer: "từ hoặc thuật ngữ cần điền")',
+            MATCH: 'Nối cặp tương ứng hai vế A và B (type: "MATCH", question: "Yêu cầu nối...", pairs: [ { "left": "Khái niệm/Thuật ngữ vế A", "right": "Định nghĩa/Ý nghĩa vế B tương ứng" }, ... ])',
+            ORDER: 'Sắp xếp thứ tự từ trong câu (type: "ORDER", question: "Sắp xếp các từ sau thành câu hoàn chỉnh:", words: ["mảng", "từ", "bị", "xáo", "trộn"], correctSentence: "Câu hoàn chỉnh đúng chuẩn ngữ pháp")',
+            CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại (type: "CLOZE", question: "Điền từ thích hợp vào các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", explanation: "Giải thích ngữ cảnh...")',
+        };
+
+        const typesRequirementText = selectedTypes.map(t => `- ${typeLabels[t] || t}`).join('\n');
+        const questionCount = options?.questionCount ? Number(options.questionCount) : 5;
+        const passScore = options?.passScore !== undefined ? Number(options.passScore) : (questionCount >= 5 ? 4 : Math.max(1, questionCount - 1));
+        const fallbackSlideIndex = options?.fallbackSlideIndex !== undefined ? Number(options.fallbackSlideIndex) : (options?.fromSlideIndex || Math.max(1, oneBasedSlideNumber - 1));
+
+        let promptText = '';
+        if (isExtractMode) {
+            promptText = `
+Bạn là CHUYÊN GIA SỐ HÓA VÀ TRÍCH XUẤT ĐỀ THI TỰ ĐỘNG (EXAM QUESTION EXTRACTOR) theo chuẩn Moodle / SCORM / H5P.
+Giáo viên ĐÃ CÓ SẴN CÂU HỎI TRONG TÀI LIỆU DƯỚI ĐÂY. Nhiệm vụ của bạn là ĐỌC VÀ TRÍCH XUẤT CHÍNH XÁC CÁC CÂU HỎI ĐÓ, KHÔNG TỰ BỊA RA CÂU HỎI MỚI.
+
+TÀI LIỆU / ĐỀ BÀI DO GIÁO VIÊN CUNG CẤP:
+${content || '(Chưa có nội dung đề bài dạng text)'}
+${options?.imageBase64 ? '\n[LƯU Ý ĐẶC BIỆT TỪ ẢNH ĐÍNH KÈM]: Giáo viên có gửi kèm HÌNH ẢNH CHỤP ĐỀ BÀI / SÁCH BÀI TẬP. Bạn hãy OCR đọc thật kỹ chữ và câu hỏi từ hình ảnh được đính kèm này để trích xuất đầy đủ, chính xác từng câu hỏi và đáp án!\n' : ''}
+QUY TẮC TRÍCH XUẤT BẮT BUỘC:
+1. TRÍCH XUẤT NGUYÊN VĂN: Giữ đúng câu hỏi, các phương án lựa chọn (A, B, C, D...) và nội dung nguyên bản của giáo viên.
+2. PHÂN LOẠI DẠNG CÂU HỎI CHÍNH XÁC: "MC", "TF", "MR", "FIB", "MATCH", "ORDER", "CLOZE".
+3. XÁC ĐỊNH ĐÁP ÁN ĐÚNG kèm giải thích ngắn gọn (explanation).
+4. SỐ LƯỢNG & CHUẨN ĐẠT:
+   - Trích xuất tối đa ${questionCount} câu.
+   - Chuẩn đạt tối thiểu (passScore): ${passScore}.
+   - Slide quay lại ôn tập nếu không đạt: Slide ${fallbackSlideIndex}.
+
+YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
+{
+  "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
+  "badgeLabel": "${hasAudioSample ? '🎧 Bài tập nghe hiểu' : '🎯 Kiểm tra kiến thức (Chặn bài)'}",
+  "instruction": "Hãy trả lời các câu hỏi kiểm tra dưới đây",
+  "passScore": ${passScore},
+  "totalQuestions": ${questionCount},
+  "fallbackSlideIndex": ${fallbackSlideIndex},
+  "allowContinueWithoutPass": ${options?.allowContinueWithoutPass === true},
+  "hideSolutions": ${!hasAudioSample},
+  "questions": [
+    {
+      "id": "q1",
+      "type": "MC",
+      "question": "Nội dung câu hỏi...",
+      "options": ["Lựa chọn A", "Lựa chọn B", "Lựa chọn C", "Lựa chọn D"],
+      "correctAnswer": "Lựa chọn A",
+      "explanation": "Giải thích chi tiết..."
+    }
+  ]
+}`;
+        } else {
+            const slideNote = slide.noteVN || slide.noteEN || slide.noteFull || '';
+            promptText = `
+Bạn là chuyên gia thiết kế sư phạm và học liệu điện tử tương tác cao (Instructional Designer) theo chuẩn Moodle / H5P / SCORM.
+Hãy tạo 1 hoạt động tương tác (Interactive Activity) tốt nhất cho Slide học sau:
+
+THÔNG TIN BÀI HỌC:
+- Môn học: ${subjectName} (${courseName})
+- Đối tượng: ${targetAudience}
+- Bài học: ${lessonTitle}
+- Slide số: ${oneBasedSlideNumber}
+- Tiêu đề slide: ${slide.title}
+${sourceType === 'slide_range' ? `- NGUỒN KIẾN THỨC TỔNG HỢP TỪ CÁC SLIDE (${options?.fromSlideIndex} ĐẾN ${options?.toSlideIndex}):` : '- Nội dung kiến thức nguồn:'}
+${content || '(Dựa vào tiêu đề slide)'}
+${slideNote && sourceType !== 'slide_range' ? `- Lời giảng thuyết minh: ${slideNote}` : ''}
+${hasAudioSample ? `- Slide có TỆP ÂM THANH MẪU: "${slide.extraAudioName || 'Audio mẫu'}" (Hãy ưu tiên tạo bài tập nghe hiểu hoặc nghe chép chính tả dựa trên ngữ cảnh này!)` : ''}
+${requestedType ? `- Loại tương tác được yêu cầu: ${requestedType}` : ''}
+
+QUY ĐỊNH BẮT BUỘC VỀ DẠNG CÂU HỎI:
+CHỈ ĐƯỢC TẠO các câu hỏi thuộc đúng các dạng sau đây:
+${typesRequirementText}
+TUYỆT ĐỐI KHÔNG sinh dạng câu hỏi nằm ngoài danh sách được phép trên!
+
+YÊU CẦU SỐ LƯỢNG & CHUẨN ĐẠT:
+- Hãy sinh CHÍNH XÁC đúng ${questionCount} câu hỏi (phân bố đều các dạng đã chọn ở trên).
+- Chuẩn đạt tối thiểu: ${passScore}/${questionCount} câu.
+- Slide quay lại ôn tập nếu không đạt: Slide ${fallbackSlideIndex}.
+- Chính sách cho phép qua slide: ${options?.allowContinueWithoutPass ? 'Cho phép sinh viên tiếp tục học kể cả chưa đạt điểm chuẩn' : 'Bắt buộc đạt chuẩn mới được qua slide'}.
+
+YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
+{
+  "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
+  "badgeLabel": "${hasAudioSample ? '🎧 Bài tập nghe hiểu' : (options?.allowContinueWithoutPass ? '📝 Luyện tập & Khảo sát quan điểm' : '🎯 Kiểm tra kiến thức (Chặn bài)')}",
+  "instruction": "Hướng dẫn ngắn gọn cho sinh viên thực hiện bài tập",
+  "passScore": ${passScore},
+  "totalQuestions": ${questionCount},
+  "fallbackSlideIndex": ${fallbackSlideIndex},
+  "allowContinueWithoutPass": ${options?.allowContinueWithoutPass === true},
+  "hideSolutions": ${!hasAudioSample},
+  "questions": [
+    {
+      "id": "q1",
+      "type": "${selectedTypes[0] || 'MC'}",
+      "question": "Nội dung câu hỏi...",
+      "options": ["Đáp án A", "Đáp án B", "Đáp án C", "Đáp án D"],
+      "correctAnswer": "Đáp án A",
+      "explanation": "Giải thích chi tiết..."
+    }
+  ]
+}`;
+        }
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
+        const aiResult = await this.aiProvider.generateText(
+            promptText,
+            modelConfig.modelName || 'gemini-2.5-flash',
+            userId,
+            { imageBase64: options?.imageBase64 },
+        );
+        const rawContent = aiResult.content || '';
+
+        let parsedInteractive: any = null;
+        try {
+            const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, rawContent];
+            const cleanJson = (jsonMatch[1] || rawContent).trim();
+            parsedInteractive = JSON.parse(cleanJson);
+        } catch (err: any) {
+            this.logger.error(`Failed to parse AI interactive JSON: ${err.message}`);
+            parsedInteractive = {
+                activityType: requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz'),
+                badgeLabel: hasAudioSample ? '🎧 Bài tập nghe hiểu' : (options?.allowContinueWithoutPass ? '📝 Luyện tập & Khảo sát quan điểm' : '🎯 Kiểm tra kiến thức (Chặn bài)'),
+                instruction: 'Trả lời các câu hỏi kiểm tra kiến thức để mở khóa bài học tiếp theo',
+                passScore,
+                totalQuestions: questionCount,
+                fallbackSlideIndex,
+                allowContinueWithoutPass: options?.allowContinueWithoutPass === true,
+                hideSolutions: !hasAudioSample,
+                questions: [
+                    {
+                        id: 'q1',
+                        type: 'MC',
+                        question: `Kiến thức trọng tâm của ${slide.title} là gì?`,
+                        options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+                        correctAnswer: 'Phương án A',
+                        explanation: 'Vui lòng xem lại nội dung bài học để nắm rõ kiến thức.',
+                    },
+                ],
+            };
+        }
+
+        parsedInteractive.passScore = passScore;
+        parsedInteractive.fallbackSlideIndex = fallbackSlideIndex;
+        parsedInteractive.allowContinueWithoutPass = options?.allowContinueWithoutPass === true;
+        parsedInteractive.totalQuestions = parsedInteractive.questions?.length || questionCount;
+
+        slide.interactiveData = JSON.stringify(parsedInteractive);
+        slide.slideType = requestedType || (hasAudioSample ? 'interactive_audio' : 'checkpoint_quiz');
+        slide.layoutType = hasAudioSample ? 'audio_lab' : 'checkpoint_gate';
+
+        await this.saveSlidesAndSyncContent(sessionId, slides);
+
+        return {
+            ...slide,
+            interactiveDataParsed: parsedInteractive,
+        };
+    }
+
+    async exportMoodleXml(sessionId: string, res: Response) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const questions: any[] = [];
+
+        for (const slide of slides) {
+            if (!slide.interactiveData) continue;
+            try {
+                const data = typeof slide.interactiveData === 'string'
+                    ? JSON.parse(slide.interactiveData)
+                    : slide.interactiveData;
+                const qList = Array.isArray(data?.questions) ? data.questions : [];
+                qList.forEach((q: any, qIdx: number) => {
+                    questions.push({
+                        slideIndex: slide.index + 1,
+                        slideTitle: slide.title,
+                        questionId: `Slide${slide.index + 1}-Q${qIdx + 1}`,
+                        question: q.question,
+                        correctAnswer: q.correctAnswer || (Array.isArray(q.correctAnswers) ? q.correctAnswers[0] : ''),
+                        options: q.options || [],
+                        explanation: q.explanation || '',
+                        type: q.type || 'MC',
+                        badgeLabel: data.badgeLabel || 'Hoạt động tương tác',
+                    });
+                });
+            } catch { /* ignore */ }
+        }
+
+        // Also include session-level interactive questions if no slide had interactiveData
+        if (questions.length === 0) {
+            const allQuestions = await this.getSessionQuestions(sessionId);
+            const interactiveList = Array.isArray(allQuestions.interactive) ? allQuestions.interactive : [];
+            interactiveList.forEach((q: any, qIdx: number) => {
+                const rawAnswers: string[] = Array.isArray(q.answers) ? q.answers : [];
+                const options = rawAnswers.map(a => String(a).replace(/^\*/, '').trim()).filter(Boolean);
+                const correctAnswers = rawAnswers
+                    .filter(a => String(a).startsWith('*'))
+                    .map(a => String(a).replace(/^\*/, '').trim())
+                    .filter(Boolean);
+                questions.push({
+                    slideIndex: 1,
+                    slideTitle: session.lessonTitle || 'Bài giảng',
+                    questionId: `Interactive-Q${qIdx + 1}`,
+                    question: q.questionText || '',
+                    correctAnswer: correctAnswers[0] || options[0] || '',
+                    options,
+                    explanation: q.correctFeedback || q.incorrectFeedback || '',
+                    type: q.questionType || 'MC',
+                    badgeLabel: 'Hoạt động tương tác',
+                });
+            });
+        }
+
+        const lessonTitle = session.lessonTitle?.trim() || fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '') || 'lesson';
+        const safeTitle = lessonTitle
+            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
+            .replace(/\s+/g, '_')
+            .replace(/^_+|_+$/g, '') || 'lesson';
+
+        const str = (v: any) => (v === null || v === undefined ? '' : String(v)).trim();
+
+        let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<quiz>\n`;
+        xml += `  <question type="category">\n    <category>\n      <text>$course$/top/${escapeXmlText(safeTitle)}</text>\n    </category>\n  </question>\n\n`;
+
+        for (const q of questions) {
+            const correct = str(q.correctAnswer);
+            const otherOptions = (Array.isArray(q.options) ? q.options : [])
+                .map(str)
+                .filter((opt: string) => opt !== '' && opt !== correct);
+            if (!correct || otherOptions.length === 0 || !str(q.question)) {
+                continue;
+            }
+            const feedbackParts = [`<strong>Đáp án đúng là: </strong>${escapeForCdata(correct)}`];
+            if (q.explanation) {
+                feedbackParts.push(`<strong>Vì: </strong>${escapeForCdata(q.explanation)}`);
+            }
+            const feedbackHtml = feedbackParts.map((p) => `<p>${p}</p>`).join('\n      ');
+            const question = str(q.question);
+
+            xml += `  <question type="multichoice">\n`;
+            xml += `    <name><text>${escapeXmlText(`Slide ${q.slideIndex}: ${question.substring(0, 120)}`)}</text></name>\n`;
+            xml += `    <questiontext format="html">\n`;
+            xml += `      <text><![CDATA[<p><strong>[${escapeForCdata(q.badgeLabel)} - Slide ${q.slideIndex}: ${escapeForCdata(q.slideTitle)}]</strong></p><p>${escapeForCdata(question)}</p>]]></text>\n`;
+            xml += `    </questiontext>\n`;
+            xml += `    <generalfeedback format="html">\n`;
+            xml += `      <text><![CDATA[${feedbackHtml}]]></text>\n`;
+            xml += `    </generalfeedback>\n`;
+            xml += `    <defaultgrade>1.0000000</defaultgrade>\n`;
+            xml += `    <penalty>0.3333333</penalty>\n`;
+            xml += `    <hidden>0</hidden>\n`;
+            xml += `    <single>true</single>\n`;
+            xml += `    <shuffleanswers>true</shuffleanswers>\n`;
+            xml += `    <answernumbering>ABCD</answernumbering>\n`;
+
+            xml += `    <answer fraction="100" format="html">\n`;
+            xml += `      <text><![CDATA[<p>${escapeForCdata(correct)}</p>]]></text>\n`;
+            xml += `      <feedback format="html"><text><![CDATA[<p>Chính xác!</p>]]></text></feedback>\n`;
+            xml += `    </answer>\n`;
+
+            for (const distractor of otherOptions) {
+                xml += `    <answer fraction="0" format="html">\n`;
+                xml += `      <text><![CDATA[<p>${escapeForCdata(distractor)}</p>]]></text>\n`;
+                xml += `      <feedback format="html"><text><![CDATA[<p>Chưa chính xác.</p>]]></text></feedback>\n`;
+                xml += `    </answer>\n`;
+            }
+            xml += `  </question>\n\n`;
+        }
+
+        xml += `</quiz>\n`;
+
+        const fileName = `${safeTitle}_moodle_quiz.xml`;
+        res.attachment(fileName);
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+        res.send(xml);
+    }
+
+    // ========== 8B. EXPORT SCORM 1.2 & H5P ==========
+
+    async getTemplates(userId?: string) {
+        return this.prisma.pPTXTemplate.findMany({
+            where: {
+                isActive: true,
+                OR: [
+                    { isSystem: true },
+                    ...(userId ? [{ userId }] : []),
+                ],
+            },
+            orderBy: [
+                { isDefault: 'desc' },
+                { name: 'asc' },
+            ],
+        });
+    }
+
+    private async buildExportSlidesForSession(sessionId: string, forH5p = false) {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            include: { pptxSubject: true },
+        });
+        if (!session) {
+            throw new NotFoundException(`Session ${sessionId} not found`);
+        }
+
+        const parsedSlides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        if (parsedSlides.length === 0) {
+            throw new BadRequestException('Không có slide nào trong bài học để xuất.');
+        }
+
+        const activeLang = session.language || 'vi';
+        let hasInlineInteractiveSlide = false;
+        const exportSlides: any[] = parsedSlides.map((s, idx) => {
+            const speakerNote = activeLang === 'en'
+                ? (s.noteEN || s.noteVN || s.noteFull || '')
+                : (s.noteVN || s.noteEN || s.noteFull || '');
+            if (s.interactiveData) {
+                hasInlineInteractiveSlide = true;
+            }
+            return {
+                slideIndex: idx + 1,
+                slideType: s.slideType || (idx === 0 ? 'title' : 'content'),
+                layoutType: s.layoutType || 'split_standard',
+                title: s.title || `Slide ${idx + 1}`,
+                content: Array.isArray(s.content) ? s.content : [],
+                optimizedContentJson: Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0
+                    ? JSON.stringify(s.optimizedContent)
+                    : null,
+                speakerNote,
+                imageUrl: s.imageUrl || '',
+                audioUrl: (s.audioStatus === 'done' && s.audioUrl) ? s.audioUrl : '',
+                extraAudioUrl: s.extraAudioUrl || null,
+                extraAudioName: s.extraAudioName || null,
+                interactiveData: s.interactiveData || null,
+            };
+        });
+
+        // If no inline interactive/checkpoint slide has been configured yet,
+        // fallback to attaching session-level interactive questions at the end.
+        if (!hasInlineInteractiveSlide) {
+            const allQuestions = await this.getSessionQuestions(sessionId);
+            const interactiveList = Array.isArray(allQuestions.interactive) ? allQuestions.interactive : [];
+            if (interactiveList.length > 0) {
+                const mappedQuestions = interactiveList.map((q: any) => {
+                    const rawAnswers: string[] = Array.isArray(q.answers) ? q.answers : [];
+                    const options = rawAnswers
+                        .map(a => String(a).replace(/^\*/, '').trim())
+                        .filter(Boolean);
+                    const correctAnswers = rawAnswers
+                        .filter(a => String(a).startsWith('*'))
+                        .map(a => String(a).replace(/^\*/, '').trim())
+                        .filter(Boolean);
+                    const correctAnswer = correctAnswers[0] || options[0] || '';
+                    return {
+                        question: (q.questionText || '').trim(),
+                        type: (q.questionType || 'MC').toUpperCase(),
+                        options,
+                        correctAnswer,
+                        correctAnswers,
+                        explanation: q.correctFeedback || q.incorrectFeedback || '',
+                    };
+                }).filter(mq => mq.question && mq.options.length >= 2);
+
+                if (mappedQuestions.length > 0) {
+                    if (forH5p) {
+                        mappedQuestions.forEach((mq, idx) => {
+                            exportSlides.push({
+                                slideIndex: exportSlides.length + 1,
+                                slideType: 'interactive',
+                                layoutType: 'checkpoint_gate',
+                                title: mappedQuestions.length > 1
+                                    ? `Câu hỏi tương tác (${idx + 1}/${mappedQuestions.length})`
+                                    : 'Câu hỏi tương tác',
+                                content: [mq.question],
+                                speakerNote: '',
+                                imageUrl: '',
+                                audioUrl: '',
+                                interactiveData: JSON.stringify({
+                                    badgeLabel: 'Hoạt động tương tác',
+                                    questions: [mq],
+                                }),
+                            });
+                        });
+                    } else {
+                        exportSlides.push({
+                            slideIndex: exportSlides.length + 1,
+                            slideType: 'interactive',
+                            layoutType: 'checkpoint_gate',
+                            title: 'Bài tập tương tác & Củng cố kiến thức',
+                            content: ['Hãy hoàn thành các câu hỏi tương tác dưới đây để kiểm tra mức độ nắm vững bài học.'],
+                            speakerNote: '',
+                            imageUrl: '',
+                            audioUrl: '',
+                            interactiveData: JSON.stringify({
+                                badgeLabel: 'Hoạt động tương tác',
+                                questions: mappedQuestions,
+                            }),
+                        });
+                    }
+                }
+            }
+        }
+
+        const lessonTitle = session.lessonTitle?.trim() || fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '') || 'Bài giảng tương tác';
+        return { session, lessonTitle, exportSlides };
+    }
+
+    async exportScorm(sessionId: string, res: Response, templateId?: string, bgOption?: string, theme?: string) {
+        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, false);
+
+        let selectedTemplate: any = null;
+        if (templateId && templateId !== 'blank') {
+            selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
+                where: { id: templateId },
+            });
+        }
+        if (!selectedTemplate) {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isDefault: true, isActive: true },
+            });
+        }
+
+        const effectiveBgOption = bgOption || 'tuaf_clean';
+        const safeTitle = (lessonTitle || 'lesson')
+            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
+            .replace(/\s+/g, '_');
+        const zipFileName = `${safeTitle}_SCORM_1.2.zip`;
+
+        res.attachment(zipFileName);
+        res.setHeader('Content-Type', 'application/zip');
+
+        await packageScormZip(lessonTitle, sessionId, exportSlides, res, {
+            templateId: selectedTemplate?.id,
+            templateName: selectedTemplate?.name,
+            titleBgUrl: selectedTemplate?.titleBgUrl,
+            contentBgUrl: selectedTemplate?.contentBgUrl,
+            bgOption: effectiveBgOption,
+            theme: theme || 'light',
+        });
+    }
+
+    async exportH5p(sessionId: string, res: Response, templateId?: string, bgOption?: string, theme?: string) {
+        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, true);
+
+        let selectedTemplate: any = null;
+        if (templateId && templateId !== 'blank') {
+            selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
+                where: { id: templateId },
+            });
+        }
+        if (!selectedTemplate) {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isDefault: true, isActive: true },
+            });
+        }
+
+        const effectiveBgOption = bgOption || 'tuaf_clean';
+        const safeTitle = (lessonTitle || 'lesson')
+            .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
+            .replace(/\s+/g, '_');
+        const h5pFileName = `${safeTitle}_H5P.h5p`;
+
+        res.attachment(h5pFileName);
+        res.setHeader('Content-Type', 'application/zip');
+
+        await packageH5pZip(lessonTitle, exportSlides, res, {
+            templateId: selectedTemplate?.id,
+            templateName: selectedTemplate?.name,
+            titleBgUrl: selectedTemplate?.titleBgUrl,
+            contentBgUrl: selectedTemplate?.contentBgUrl,
+            bgOption: effectiveBgOption,
+            theme: theme || 'light',
+        });
     }
 
     // ========== 9. QUESTION MANAGEMENT (REVIEW, INTERACTIVE, ENGLISH) ==========
@@ -1451,23 +2995,52 @@ Return JSON only.`;
     private async getSessionContentText(sessionId: string): Promise<string> {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
+            include: { pptxSubject: true },
         });
         if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
 
         const content = session.contentJson ? JSON.parse(session.contentJson) : [];
         const slides = session.slidesJson ? JSON.parse(session.slidesJson) : [];
 
+        const contextHeaderParts: string[] = [];
+        const lessonTitle = session.lessonTitle || fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '');
+        contextHeaderParts.push(`Tên bài học: ${lessonTitle}`);
+        if (session.pptxSubject) {
+            const sub = session.pptxSubject;
+            const subMajor = sub.majorName || sub.expertiseArea;
+            contextHeaderParts.push(`Môn học: ${sub.name}`);
+            if (subMajor) contextHeaderParts.push(`Chuyên ngành: ${subMajor}`);
+            if (sub.targetAudience) contextHeaderParts.push(`Đối tượng người học: ${sub.targetAudience}`);
+            if (sub.additionalContext) contextHeaderParts.push(`Định hướng sư phạm: ${sub.additionalContext}`);
+        }
+        if (session.contextText && session.contextText.trim()) {
+            contextHeaderParts.push(
+                `\n=== TÀI LIỆU THAM KHẢO / GIÁO TRÌNH BỔ SUNG (${session.contextFileName || 'Ghi chú bài học'}) ===\n` +
+                session.contextText.trim().substring(0, 35000),
+            );
+        }
+
+        const headerStr = contextHeaderParts.length > 0
+            ? `${contextHeaderParts.join('\n')}\n\n=== NỘI DUNG CÁC SLIDE BÀI GIẢNG ===\n\n`
+            : '';
+
         if (content.length > 0) {
-            return content.map((s: any, idx: number) => {
+            const slidesText = content.map((s: any, idx: number) => {
                 const slideNote = slides[idx]?.noteFull || slides[idx]?.noteVN || slides[idx]?.noteEN || '';
                 return `Slide ${s.index + 1}: ${s.title || ''}\nNội dung:\n${(s.content || []).join('\n')}${slideNote ? `\nSpeaker note:\n${slideNote}` : ''}`;
             }).join('\n\n---\n\n');
+            return `${headerStr}${slidesText}`;
         }
 
         if (slides.length > 0) {
-            return slides.map((s: any) =>
+            const slidesText = slides.map((s: any) =>
                 `Slide ${s.index + 1}: ${s.title || ''}\nSpeaker note:\n${s.noteFull || s.noteVN || s.noteEN || ''}`
             ).join('\n\n---\n\n');
+            return `${headerStr}${slidesText}`;
+        }
+
+        if (session.contextText && session.contextText.trim()) {
+            return headerStr;
         }
 
         throw new BadRequestException('Không tìm thấy nội dung bài giảng để tạo câu hỏi.');
@@ -2073,9 +3646,13 @@ Trả lời CHỈ bằng JSON hợp lệ:
         const level2 = dto.level2 ?? 20;
         const level3 = dto.level3 ?? 10;
         const total = level1 + level2 + level3;
-        const types = dto.questionTypes && dto.questionTypes.length > 0
-            ? dto.questionTypes.join(', ')
-            : 'MC, MR, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY';
+        const allowedTypes = ['MC', 'MR', 'MATCH', 'CLOZE', 'TRUEFALSE'];
+        const requestedTypes = Array.isArray(dto.questionTypes)
+            ? dto.questionTypes.map((t) => String(t).toUpperCase()).filter((t) => allowedTypes.includes(t))
+            : [];
+        const types = requestedTypes.length > 0
+            ? requestedTypes.join(', ')
+            : 'MC, MR, MATCH, CLOZE, TRUEFALSE';
         const subDiscipline = dto.subDiscipline || 'ALL';
 
         const prompt = `You are a Professor of English Linguistics and Higher Education Assessment.
@@ -2090,6 +3667,7 @@ SPECIFICATIONS:
 - Bloom Distribution: Level 1 (Remember/Biết): ${level1}, Level 2 (Understand/Hiểu): ${level2}, Level 3 (Apply/Vận dụng): ${level3}
 - IMPORTANT: Do NOT prefix option texts with letters (A., B., C., D.). Provide only the plain answer text.
 - IMPORTANT: In explanations, explain the underlying linguistic concept neutrally without referring to option letters ("Option A is correct", "Choose A").
+- STRICT RULE: ONLY generate 100% auto-gradable Moodle Quiz question types (${types}). NEVER generate "ESSAY" or standalone "SHORTANSWER" questions.
 
 SUPPORTED TYPES & dataJson STRUCTURE:
 1. "MC" (Multiple Choice - 1 correct):
@@ -2099,16 +3677,11 @@ SUPPORTED TYPES & dataJson STRUCTURE:
 3. "MATCH" (Matching pairs):
    - MUST have 3 to 5 matching pairs.
    - dataJson: {"pairs": [{"left": "Term / Component 1", "right": "Definition / Function 1"}, {"left": "Term / Component 2", "right": "Definition / Function 2"}, ...], "rightOptions": ["Definition 1", "Definition 2", "Distractor (optional)"]}
-   - CRITICAL: NEVER format matching/pairing questions as ESSAY. ALWAYS use questionType: "MATCH".
 4. "CLOZE" (Moodle Embedded Cloze sentence):
-   questionText: "Sentence with embedded Moodle Cloze like {1:SHORTANSWER:=word} or {1:MULTICHOICE:=correct~wrong}"
-   dataJson: {"rawCloze": "..."}
-5. "SHORTANSWER" (Fill-in word / IPA / phonetic form):
-   dataJson: {"acceptedAnswers": ["word1", "word2"]}
-6. "TRUEFALSE" (True/False):
+   questionText: "Sentence with embedded Moodle Cloze like {1:SHORTANSWER:=word} (base_word) or {1:MULTICHOICE:=correct~wrong}"
+   dataJson: {"clozeText": "Sentence with {1:SHORTANSWER:=word} (base_word)", "answers": [{"position": 1, "acceptableAnswers": ["word"]}]}
+5. "TRUEFALSE" (True/False):
    dataJson: {"isTrue": true}
-7. "ESSAY" (Essay/Analytical question with rubric):
-   dataJson: {"rubric": {"totalPoints": 10, "criteria": [{"criterion": "Accuracy", "points": 5}, {"criterion": "Depth", "points": 5}]}}
 
 Return ONLY valid JSON format:
 \`\`\`json
@@ -2177,6 +3750,15 @@ Return ONLY valid JSON format:
                         dataJsonStr = JSON.stringify(parsedData);
                     }
                 }
+
+                // Strictly recover or reject ESSAY and SHORTANSWER
+                if (resolvedType === 'ESSAY' || resolvedType === 'SHORTANSWER' || resolvedType === 'SA') {
+                    if (Array.isArray(parsedData?.options) && parsedData.options.length >= 2) {
+                        resolvedType = 'MC';
+                    } else if (parsedData?.clozeText || parsedData?.rawCloze || /\{\d+:[A-Za-z_]+:/.test(questionText)) {
+                        resolvedType = 'CLOZE';
+                    }
+                }
             } catch {
                 // Keep dataJsonStr as is if not JSON
             }
@@ -2193,7 +3775,7 @@ Return ONLY valid JSON format:
                 explanation: cleanExplanation(q.explanation || ''),
                 points: Number(q.points) || 1,
             };
-        });
+        }).filter((q) => !['ESSAY', 'SHORTANSWER', 'SA'].includes(q.questionType));
 
         const current = await this.getSessionQuestions(sessionId);
         const finalEnglish = isAppend ? [...current.english, ...formatted] : formatted;

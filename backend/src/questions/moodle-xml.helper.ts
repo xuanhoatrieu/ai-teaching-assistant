@@ -428,15 +428,11 @@ function commentSafe(text: string): string {
 }
 
 /**
- * Exported as essay (manual grading) when the data cannot form a valid auto-graded
- * question. The known answer key (if any) is kept in the grader information.
+ * Returns empty string when the data cannot form a valid auto-graded question
+ * so Moodle XML export strictly contains 100% auto-gradable questions (never <question type="essay">).
  */
-function essayFallback(q: EnglishQuestionData, data: any, lessonCode: string, answerKey: string[]): string {
-    const keyText = answerKey.filter((k) => k && k.trim()).join(' | ');
-    const graderInfo = keyText
-        ? `Đáp án tham khảo: ${keyText}${q.explanation ? `\n${q.explanation}` : ''}`
-        : (data?.graderInfo || data?.rubric || q.explanation || '');
-    return buildEnglishEssayXml(q, { ...data, graderInfo }, lessonCode);
+function essayFallback(_q: EnglishQuestionData, _data: any, _lessonCode: string, _answerKey: string[]): string {
+    return '';
 }
 
 // ---------- Multiple choice ----------
@@ -958,12 +954,16 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: str
 
     rawContent = repairClozeTokens(rawContent);
 
-    // Moodle aborts the WHOLE import on an invalid Cloze question. If it still is not
-    // valid, degrade this single question instead: short answer (key known) or essay.
+    // Moodle aborts the WHOLE import on an invalid Cloze question.
+    // If no embedded answer token exists yet but an answer key is available, append embedded blank(s).
+    if (validateClozeText(rawContent).length > 0 && key.length > 0) {
+        rawContent = `${rawContent.trim()} ${key.map((variants) => buildEmbeddedShortAnswer(variants)).join(' ')}`;
+        rawContent = repairClozeTokens(rawContent);
+    }
+
+    // If still invalid, skip this question instead of degrading to shortanswer/essay.
     if (validateClozeText(rawContent).length > 0) {
-        return key.length > 0
-            ? buildEnglishShortAnswerXml(q, data, lessonCode)
-            : essayFallback(q, data, lessonCode, []);
+        return '';
     }
 
     // Extract instruction from questionText if present
@@ -1000,56 +1000,6 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: str
   </question>`;
 }
 
-/**
- * Build Moodle XML for Short Answer
- */
-function buildEnglishShortAnswerXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
-    const name = formatEnglishQuestionName(q, lessonCode, 'SA');
-    // Flatten all acceptable variants (dedupe, case-insensitive since usecase=0)
-    const seen = new Set<string>();
-    const answers = extractAnswerKey(data).flat().filter((a) => {
-        const k = a.toLowerCase();
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-    });
-
-    // Previously this fell back to the literal answer "correct", so students typing the real
-    // answer got 0 points. Without an answer key, export as essay (manual grading) instead.
-    if (answers.length === 0) {
-        return buildEnglishEssayXml(q, data, lessonCode);
-    }
-
-    const cleanedExplanation = cleanExplanation(q.explanation);
-    const feedbackHtml = cleanedExplanation ? `<p class="cell"><strong>Explanation: </strong>${escapeForCdata(cleanedExplanation)}</p>` : '';
-
-    const answersXml = answers.map((text) => {
-        // "*" is a wildcard in Moodle short answers; a literal asterisk must be escaped.
-        return `    <answer fraction="100" format="moodle_auto_format">
-      <text>${escapeXmlText(text.replace(/\*/g, '\\*'))}</text>
-      <feedback format="html"><text><![CDATA[<p>Correct!</p>]]></text></feedback>
-    </answer>`;
-    }).join('\n');
-
-    return `  <question type="shortanswer">
-    <name><text>${escapeXmlText(name)}</text></name>
-    <questiontext format="html">
-      <text>${cdataHtml(q.questionText)}</text>
-    </questiontext>
-    <generalfeedback format="html">
-      <text><![CDATA[${feedbackHtml}]]></text>
-    </generalfeedback>
-    <defaultgrade>${formatGrade(q.points, 1)}</defaultgrade>
-    <penalty>0.3333333</penalty>
-    <usecase>0</usecase>
-${answersXml}
-    <answer fraction="0" format="moodle_auto_format">
-      <text>*</text>
-      <feedback format="html"><text><![CDATA[<p>Incorrect answer.</p>]]></text></feedback>
-    </answer>
-  </question>`;
-}
-
 const TRUE_WORDS = new Set(['true', 't', '1', 'yes', 'đúng', 'dung', 'right', 'correct']);
 const FALSE_WORDS = new Set(['false', 'f', '0', 'no', 'sai', 'wrong', 'incorrect']);
 
@@ -1060,7 +1010,7 @@ function buildEnglishTrueFalseXml(q: EnglishQuestionData, data: any, lessonCode:
     const rawKey = data.correctAnswer ?? data.answer ?? data.correct ?? data.isTrue;
     const keyWord = typeof rawKey === 'boolean' ? String(rawKey) : String(rawKey ?? '').trim().toLowerCase();
     if (!TRUE_WORDS.has(keyWord) && !FALSE_WORDS.has(keyWord)) {
-        // Unknown key: previously exported as "false" silently (possibly wrong key).
+        // Unknown key: skip instead of exporting wrong answer key.
         return essayFallback(q, data, lessonCode, []);
     }
     const isTrue = TRUE_WORDS.has(keyWord);
@@ -1092,53 +1042,6 @@ function buildEnglishTrueFalseXml(q: EnglishQuestionData, data: any, lessonCode:
   </question>`;
 }
 
-const ESSAY_RESPONSE_FORMATS = new Set(['editor', 'editorfilepicker', 'plain', 'monospaced', 'noinline']);
-
-/**
- * Build Moodle XML for Essay / Analysis
- */
-function buildEnglishEssayXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
-    const name = formatEnglishQuestionName(q, lessonCode, 'ESSAY');
-    let graderInfoStr = '';
-    const rawGrader = data.graderInfo || data.rubric;
-    if (typeof rawGrader === 'object' && rawGrader !== null) {
-        const total = rawGrader.totalPoints ? `Total Points: ${rawGrader.totalPoints} pts\n` : '';
-        const criteria = Array.isArray(rawGrader.criteria)
-            ? rawGrader.criteria.map((c: any, i: number) => {
-                const cName = c.criterion || c.name || `Criterion ${i + 1}`;
-                const cPts = c.points !== undefined ? ` (${c.points} pts)` : '';
-                const cDesc = c.description || c.desc || '';
-                return `• ${cName}${cPts}${cDesc ? `: ${cDesc}` : ''}`;
-            }).join('\n')
-            : JSON.stringify(rawGrader);
-        graderInfoStr = `${total}${criteria}`;
-    } else if (rawGrader) {
-        graderInfoStr = String(rawGrader);
-    } else if (q.explanation) {
-        graderInfoStr = String(q.explanation);
-    }
-
-    // Integer DB column: a non-numeric value makes the insert (and the whole import) fail.
-    const parsedLines = parseInt(String(data.responseFieldLines ?? ''), 10);
-    const lines = Number.isFinite(parsedLines) ? Math.min(Math.max(parsedLines, 5), 40) : 15;
-    const responseFormat = ESSAY_RESPONSE_FORMATS.has(String(data.responseFormat)) ? String(data.responseFormat) : 'editor';
-
-    return `  <question type="essay">
-    <name><text>${escapeXmlText(name)}</text></name>
-    <questiontext format="html">
-      <text>${cdataHtml(q.questionText)}</text>
-    </questiontext>
-    <defaultgrade>${formatGrade(q.points, 2)}</defaultgrade>
-    <penalty>0.0000000</penalty>
-    <responseformat>${responseFormat}</responseformat>
-    <responserequired>1</responserequired>
-    <responsefieldlines>${lines}</responsefieldlines>
-    <graderinfo format="html">
-      <text><![CDATA[<p><strong>Scoring Guide / Answer Key:</strong><br/>${escapeForCdata(graderInfoStr).replace(/\n/g, '<br/>')}</p>]]></text>
-    </graderinfo>
-  </question>`;
-}
-
 /**
  * Polymorphic dispatcher for English questions
  */
@@ -1152,11 +1055,25 @@ export function buildEnglishQuestionXml(q: EnglishQuestionData, lessonCode: stri
 
     let type = (q.questionType || 'MC').toUpperCase();
 
-    // AUTO-RECOVERY: If marked as ESSAY/MC/other but intent is clearly matching AND valid pairs exist, route to MATCH
+    // AUTO-RECOVERY: If marked as ESSAY/SHORTANSWER/MC/other but intent is clearly matching AND valid pairs exist, route to MATCH
     const extracted = extractMatchPairs(data, q.questionText, q.explanation || '');
     if (type !== 'MATCH' && type !== 'MATCHING') {
-        if (isMatchingQuestionText(q.questionText) && extracted.pairs.length >= 2) {
+        if ((type === 'ESSAY' || isMatchingQuestionText(q.questionText)) && extracted.pairs.length >= 2) {
             type = 'MATCH';
+        }
+    }
+
+    // AUTO-RECOVERY: If marked as ESSAY/SHORTANSWER but actually has valid multiple-choice options, route to MC
+    if (type === 'ESSAY' || type === 'SHORTANSWER' || type === 'SA') {
+        const opts = normalizeOptions(data);
+        if (opts.length >= 2 && opts.some((o) => o.correct)) {
+            type = 'MC';
+        } else if ((type === 'SHORTANSWER' || type === 'SA') && RAW_BLANK_RE.test(q.questionText || '') && extractAnswerKey(data).length > 0) {
+            // Convert fill-in-the-blank sentence with "___" to CLOZE
+            type = 'CLOZE';
+        } else {
+            // Strictly exclude ESSAY and SHORTANSWER from Moodle XML so Quizzes are 100% auto-graded
+            return '';
         }
     }
 
@@ -1166,14 +1083,9 @@ export function buildEnglishQuestionXml(q: EnglishQuestionData, lessonCode: stri
             return buildEnglishMatchXml(q, data, lessonCode, extracted);
         case 'CLOZE':
             return buildEnglishClozeXml(q, data, lessonCode);
-        case 'SHORTANSWER':
-        case 'SA':
-            return buildEnglishShortAnswerXml(q, data, lessonCode);
         case 'TRUEFALSE':
         case 'TF':
             return buildEnglishTrueFalseXml(q, data, lessonCode);
-        case 'ESSAY':
-            return buildEnglishEssayXml(q, data, lessonCode);
         case 'MC':
         case 'MR':
         case 'MULTICHOICE':
@@ -1184,6 +1096,7 @@ export function buildEnglishQuestionXml(q: EnglishQuestionData, lessonCode: stri
 
 /**
  * Build complete Moodle XML from an array of EnglishQuestion records.
+ * Strictly exports only 100% auto-gradable Moodle question types (MC, MR, MATCH, CLOZE, TRUEFALSE).
  */
 export function buildEnglishMoodleXml(
     questions: EnglishQuestionData[],
@@ -1208,18 +1121,21 @@ export function buildEnglishMoodleXml(
   </question>`);
     parts.push('');
 
-    // Group by question type for clean structure
-    const grouped = new Map<string, EnglishQuestionData[]>();
+    // Group by question type for clean structure, keeping only valid auto-gradable XML blocks
+    const grouped = new Map<string, string[]>();
     for (const q of questions) {
+        const xmlBlock = buildEnglishQuestionXml(q, lessonCode);
+        if (!xmlBlock || !xmlBlock.trim()) continue;
         const type = (q.questionType || 'MC').toUpperCase();
         if (!grouped.has(type)) grouped.set(type, []);
-        grouped.get(type)!.push(q);
+        grouped.get(type)!.push(xmlBlock);
     }
 
-    for (const [type, list] of grouped.entries()) {
-        parts.push(`  <!-- Type: ${commentSafe(type)} (${list.length} questions) -->`);
-        for (const q of list) {
-            parts.push(buildEnglishQuestionXml(q, lessonCode));
+    for (const [type, xmlBlocks] of grouped.entries()) {
+        if (xmlBlocks.length === 0) continue;
+        parts.push(`  <!-- Type: ${commentSafe(type)} (${xmlBlocks.length} questions) -->`);
+        for (const block of xmlBlocks) {
+            parts.push(block);
             parts.push('');
         }
     }

@@ -5,6 +5,7 @@ import { filenameFromDisposition } from '../lib/download-filename';
 import { useJobPolling } from '../hooks/useJobPolling';
 import { TTSSelector } from '../components/TTSSelector';
 import { ModelSelector } from '../components/ModelSelector';
+import { ImageCropModal } from '../components/ImageCropModal';
 import './PptxAudioTool.css';
 import '../components/steps/Steps.css';
 
@@ -82,9 +83,7 @@ const QUESTION_TYPE_OPTIONS = [
     { id: 'MR', label: 'Multiple Response (Nhiều đáp án)', badge: 'MR', icon: '☑️' },
     { id: 'MATCH', label: 'Matching (Nối cột / Ghép đôi)', badge: 'MATCH', icon: '🔄' },
     { id: 'CLOZE', label: 'Cloze / Embedded (Điền khuyết)', badge: 'CLOZE', icon: '📝' },
-    { id: 'SHORTANSWER', label: 'Short Answer (Điền từ / IPA)', badge: 'SA', icon: '✍️' },
     { id: 'TRUEFALSE', label: 'True / False (Đúng / Sai)', badge: 'TF', icon: '⚖️' },
-    { id: 'ESSAY', label: 'Essay / Analysis (Tự luận / Phân tích)', badge: 'ESSAY', icon: '📄' },
 ];
 
 const SUB_DISCIPLINE_OPTIONS = [
@@ -207,22 +206,68 @@ function renderClozeVisual(rawText: string) {
     );
 }
 
+interface BulletItem {
+    emoji: string;
+    point: string;
+    description: string;
+}
+
 interface ParsedSlide {
     index: number;
+    originalSlideIndex?: number | null;
+    slideType?: string;
+    layoutType?: string;
     title: string;
     content: string[];
+    optimizedContent?: BulletItem[] | null;
+    interactiveData?: string | null;
     noteFull: string;
     noteEN: string;
     noteVN: string;
     hasDual: boolean;
+    imageUrl?: string | null;
     audioUrl: string | null;
     audioDuration: number | null;
     audioStatus: string;
     errorMessage: string | null;
+    extraAudioUrl?: string | null;
+    extraAudioName?: string | null;
+    extraAudioDuration?: number | null;
+}
+
+interface PptxSubject {
+    id: string;
+    name: string;
+    description?: string | null;
+    major?: string | null;
+    majorName?: string | null;
+    expertiseArea?: string | null;
+    courseName?: string | null;
+    targetAudience?: string | null;
+    institutionType?: string | null;
+    language: string;
+    additionalContext?: string | null;
+    sessionCount?: number;
+    createdAt?: string;
+}
+
+interface PptxTemplateItem {
+    id: string;
+    name: string;
+    description?: string | null;
+    titleBgUrl?: string | null;
+    contentBgUrl?: string | null;
+    isDefault?: boolean;
+    isSystem?: boolean;
 }
 
 interface SessionData {
     id: string;
+    pptxSubjectId?: string | null;
+    pptxSubject?: PptxSubject | null;
+    lessonTitle?: string | null;
+    contextText?: string | null;
+    contextFileName?: string | null;
     fileName: string;
     language: string;
     status: string;
@@ -231,13 +276,12 @@ interface SessionData {
     questionsJson?: string | null;
 }
 
-// Fixed: Only 1 icon per step
+// 4-step workflow (Step 3 combines Slide Workspace & Export matching Step 5 of Lesson Editor)
 const STEPS = [
-    { key: 'upload', label: 'Upload', icon: '📤' },
-    { key: 'audio', label: 'Audio', icon: '🎙️' },
-    { key: 'download', label: 'Download', icon: '📥' },
-    { key: 'content', label: 'Content', icon: '📋' },
-    { key: 'questions', label: 'Questions', icon: '❓' },
+    { key: 'upload', label: 'Môn học & Bài', icon: '📚' },
+    { key: 'audio', label: 'Lời giảng & Audio', icon: '🎙️' },
+    { key: 'download', label: 'Slide & Xuất học liệu', icon: '📊' },
+    { key: 'questions', label: 'Ngân hàng Câu hỏi', icon: '❓' },
 ];
 
 export function PptxAudioToolPage() {
@@ -313,7 +357,7 @@ export function PptxAudioToolPage() {
     const [englishLevelCounts, setEnglishLevelCounts] = useState({ level1: 20, level2: 20, level3: 10 });
     const [selectedSubDiscipline, setSelectedSubDiscipline] = useState('ALL');
     const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([
-        'MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY'
+        'MC', 'MR', 'MATCH', 'CLOZE', 'TRUEFALSE'
     ]);
     const [isGeneratingEnglish, setIsGeneratingEnglish] = useState(false);
     const [isAppendingEnglish, setIsAppendingEnglish] = useState(false);
@@ -554,9 +598,15 @@ export function PptxAudioToolPage() {
         }
     };
 
-    // Session history state
+    // Session history & Subject state
     interface SessionHistoryItem {
         id: string;
+        pptxSubjectId?: string | null;
+        pptxSubject?: { id: string; name: string; major?: string | null; language?: string } | null;
+        lessonTitle?: string;
+        hasContext?: boolean;
+        contextFileName?: string | null;
+        contextLength?: number;
         fileName: string;
         status: string;
         language: string;
@@ -568,13 +618,160 @@ export function PptxAudioToolPage() {
     const [sessionHistory, setSessionHistory] = useState<SessionHistoryItem[]>([]);
     const [isDeletingSession, setIsDeletingSession] = useState<string | null>(null);
 
-    // Load session on mount if sessionId exists, always load history
+    // Subjects state (Independent Subjects for PPTX Tool)
+    const [subjects, setSubjects] = useState<PptxSubject[]>([]);
+    const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL'); // 'ALL' | 'UNCATEGORIZED' | subjectId
+    const [showSubjectModal, setShowSubjectModal] = useState(false);
+    const [editingSubject, setEditingSubject] = useState<PptxSubject | null>(null);
+    const [subjectForm, setSubjectForm] = useState({
+        name: '',
+        major: '',
+        targetAudience: 'Sinh viên đại học',
+        institutionType: 'UNIVERSITY',
+        language: 'vi',
+        description: '',
+        additionalContext: '',
+    });
+    const [isSavingSubject, setIsSavingSubject] = useState(false);
+
+    // New Lesson creation state (Step 0)
+    const [newLessonSubjectId, setNewLessonSubjectId] = useState<string>('');
+    const [newLessonTitle, setNewLessonTitle] = useState<string>('');
+    const [newLessonContextText, setNewLessonContextText] = useState<string>('');
+    const [newLessonContextFileName, setNewLessonContextFileName] = useState<string>('');
+    const [isExtractingNewContext, setIsExtractingNewContext] = useState(false);
+    const [showNewLessonContextBox, setShowNewLessonContextBox] = useState(false);
+
+    // Active Session Context & Metadata Modal state
+    const [showContextModal, setShowContextModal] = useState(false);
+    const [metaLessonTitle, setMetaLessonTitle] = useState('');
+    const [metaSubjectId, setMetaSubjectId] = useState<string>('');
+    const [metaContextText, setMetaContextText] = useState('');
+    const [metaContextFileName, setMetaContextFileName] = useState<string | null>(null);
+    const [isSavingMeta, setIsSavingMeta] = useState(false);
+    const [isUploadingSessionContext, setIsUploadingSessionContext] = useState(false);
+    const sessionContextFileInputRef = useRef<HTMLInputElement>(null);
+
+    // SCORM 1.2, H5P & Slide Workspace state (Step 3 / activeStep === 2)
+    const [templates, setTemplates] = useState<PptxTemplateItem[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+    const [exportBgOption, setExportBgOption] = useState<'tuaf_clean' | 'tuaf_full' | 'custom' | 'minimal'>('tuaf_clean');
+    const [exportTheme, setExportTheme] = useState<'light' | 'dark'>('light');
+    const [isExportingScorm, setIsExportingScorm] = useState(false);
+    const [isExportingH5p, setIsExportingH5p] = useState(false);
+    const [isExportingMoodleXml, setIsExportingMoodleXml] = useState(false);
+    const [showMoodleGuide, setShowMoodleGuide] = useState(false);
+
+    // Slide Card Editing & AI Regeneration states (Step 3)
+    const [editingContentSlideIndex, setEditingContentSlideIndex] = useState<number | null>(null);
+    const [editingTitle, setEditingTitle] = useState('');
+    const [editingBullets, setEditingBullets] = useState<BulletItem[]>([]);
+    const [editingRawContent, setEditingRawContent] = useState('');
+    const [savingContent, setSavingContent] = useState(false);
+    const [regeneratingContentSlides, setRegeneratingContentSlides] = useState<Set<number>>(new Set());
+    const [regeneratingImageSlides, setRegeneratingImageSlides] = useState<Set<number>>(new Set());
+    const [cropModalImageSrc, setCropModalImageSrc] = useState<string | null>(null);
+    const [cropModalSlideIndex, setCropModalSlideIndex] = useState<number | null>(null);
+    const [uploadingSlideImage, setUploadingSlideImage] = useState<number | null>(null);
+    const [uploadingExtraAudioSlide, setUploadingExtraAudioSlide] = useState<number | null>(null);
+    const [deletingSlideIndex, setDeletingSlideIndex] = useState<number | null>(null);
+    const [movingSlideIndex, setMovingSlideIndex] = useState<number | null>(null);
+    const [generatingInteractionSlide, setGeneratingInteractionSlide] = useState<number | null>(null);
+    const [expandedInteractiveSlide, setExpandedInteractiveSlide] = useState<number | null>(null);
+    const [editingInteractiveSlide, setEditingInteractiveSlide] = useState<number | null>(null);
+    const [editingInteractiveForm, setEditingInteractiveForm] = useState<any | null>(null);
+    const [savingInteractiveSlide, setSavingInteractiveSlide] = useState(false);
+
+    // Add Theory Slide Modal state
+    const [showAddSlideModal, setShowAddSlideModal] = useState(false);
+    const [addSlideInsertAfter, setAddSlideInsertAfter] = useState<number>(-1);
+    const [newSlideTitle, setNewSlideTitle] = useState('');
+    const [newSlideContent, setNewSlideContent] = useState('');
+    const [newSlideSpeakerNote, setNewSlideSpeakerNote] = useState('');
+    const [creatingSlide, setCreatingSlide] = useState(false);
+
+    // Interactive Slide Configuration Modal state
+    const [interactiveConfigModal, setInteractiveConfigModal] = useState<{
+        isOpen: boolean;
+        mode: 'insert' | 'configure';
+        insertAfterIndex: number;
+        targetSlideIndex: number | null;
+        generationMode: 'generate_new' | 'extract_existing';
+        sourceType: 'slide_range' | 'custom_text' | 'audio' | 'image';
+        fromSlideIndex: number;
+        toSlideIndex: number;
+        customContent: string;
+        imageBase64: string;
+        imageFileName: string;
+        audioFile: File | null;
+        existingAudioUrl: string;
+        existingAudioName: string;
+        selectedQuestionTypes: string[];
+        questionCount: number;
+        passScore: number;
+        fallbackSlideIndex: number;
+        allowContinueWithoutPass: boolean;
+        slideTitle: string;
+    }>({
+        isOpen: false,
+        mode: 'insert',
+        insertAfterIndex: 1,
+        targetSlideIndex: null,
+        generationMode: 'generate_new',
+        sourceType: 'slide_range',
+        fromSlideIndex: 1,
+        toSlideIndex: 1,
+        customContent: '',
+        imageBase64: '',
+        imageFileName: '',
+        audioFile: null,
+        existingAudioUrl: '',
+        existingAudioName: '',
+        selectedQuestionTypes: ['MC', 'TF', 'MR'],
+        questionCount: 5,
+        passScore: 4,
+        fallbackSlideIndex: 1,
+        allowContinueWithoutPass: false,
+        slideTitle: 'Điểm kiểm tra kiến thức',
+    });
+    const [isSubmittingInteractiveModal, setIsSubmittingInteractiveModal] = useState(false);
+    const [isExtractingInteractiveFile, setIsExtractingInteractiveFile] = useState(false);
+    const [extractedInteractiveFileName, setExtractedInteractiveFileName] = useState<string>('');
+
+    // Load session on mount if sessionId exists, always load subjects, history, and templates
     useEffect(() => {
+        loadSubjects();
         loadSessionHistory();
+        loadTemplates();
         if (paramSessionId) {
             loadSession(paramSessionId);
         }
     }, [paramSessionId]);
+
+    const loadSubjects = async () => {
+        try {
+            const res = await api.get('/pptx-audio-tool/subjects');
+            const list: PptxSubject[] = res.data || [];
+            setSubjects(list);
+            if (!newLessonSubjectId && list.length > 0) {
+                setNewLessonSubjectId(list[0].id);
+            }
+        } catch (error) {
+            console.error('Error loading PPTX subjects:', error);
+        }
+    };
+
+    const loadTemplates = async () => {
+        try {
+            const res = await api.get('/pptx-audio-tool/templates/list');
+            const list: PptxTemplateItem[] = res.data || [];
+            setTemplates(list);
+            const def = list.find(t => t.isDefault) || list[0];
+            if (def) setSelectedTemplateId(def.id);
+        } catch (error) {
+            console.error('Error loading PPTX templates:', error);
+        }
+    };
 
     const loadSessionHistory = async () => {
         try {
@@ -592,6 +789,10 @@ export function PptxAudioToolPage() {
             setSlides(res.data.slides || []);
             setLanguage(res.data.language || 'vi');
             setSessionId(sid);
+            setMetaLessonTitle(res.data.lessonTitle || res.data.fileName?.replace(/\.pptx$/i, '') || '');
+            setMetaSubjectId(res.data.pptxSubjectId || '');
+            setMetaContextText(res.data.contextText || '');
+            setMetaContextFileName(res.data.contextFileName || null);
             await loadAllQuestions(sid);
             await checkActiveJobs(sid);
             // Auto-navigate to audio step if already uploaded
@@ -600,6 +801,158 @@ export function PptxAudioToolPage() {
             }
         } catch (error) {
             console.error('Error loading session:', error);
+        }
+    };
+
+    const openCreateSubjectModal = () => {
+        setEditingSubject(null);
+        setSubjectForm({
+            name: '',
+            major: '',
+            targetAudience: 'Sinh viên đại học',
+            institutionType: 'UNIVERSITY',
+            language: 'vi',
+            description: '',
+            additionalContext: '',
+        });
+        setShowSubjectModal(true);
+    };
+
+    const openEditSubjectModal = (sub: PptxSubject, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        setEditingSubject(sub);
+        setSubjectForm({
+            name: sub.name || '',
+            major: sub.major || sub.majorName || sub.expertiseArea || '',
+            targetAudience: sub.targetAudience || 'Sinh viên đại học',
+            institutionType: sub.institutionType || 'UNIVERSITY',
+            language: sub.language || 'vi',
+            description: sub.description || '',
+            additionalContext: sub.additionalContext || '',
+        });
+        setShowSubjectModal(true);
+    };
+
+    const handleSaveSubject = async () => {
+        if (!subjectForm.name.trim()) {
+            alert('Vui lòng nhập tên môn học.');
+            return;
+        }
+        try {
+            setIsSavingSubject(true);
+            if (editingSubject) {
+                await api.put(`/pptx-audio-tool/subjects/${editingSubject.id}`, subjectForm);
+            } else {
+                const res = await api.post('/pptx-audio-tool/subjects', subjectForm);
+                if (res.data?.id) {
+                    setSelectedSubjectFilter(res.data.id);
+                    setNewLessonSubjectId(res.data.id);
+                }
+            }
+            await loadSubjects();
+            await loadSessionHistory();
+            if (sessionId) await loadSession(sessionId);
+            setShowSubjectModal(false);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể lưu môn học.');
+        } finally {
+            setIsSavingSubject(false);
+        }
+    };
+
+    const handleDeleteSubject = async (sub: PptxSubject, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
+        if (!confirm(`Xóa môn học "${sub.name}"? Các bài học bên trong sẽ được giữ lại ở mục "Chưa phân loại".`)) return;
+        try {
+            await api.delete(`/pptx-audio-tool/subjects/${sub.id}`);
+            if (selectedSubjectFilter === sub.id) setSelectedSubjectFilter('ALL');
+            if (newLessonSubjectId === sub.id) setNewLessonSubjectId('');
+            await loadSubjects();
+            await loadSessionHistory();
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể xóa môn học.');
+        }
+    };
+
+    const handleExtractNewLessonContextFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+            setIsExtractingNewContext(true);
+            setShowNewLessonContextBox(true);
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await api.post('/pptx-audio-tool/extract-context-file', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const extractedText = res.data?.text || '';
+            const fName = res.data?.fileName || file.name;
+            setNewLessonContextText(prev =>
+                prev.trim()
+                    ? `${prev.trim()}\n\n--- [Tài liệu: ${fName}] ---\n${extractedText}`
+                    : extractedText
+            );
+            setNewLessonContextFileName(prev =>
+                prev ? `${prev}, ${fName}` : fName
+            );
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể trích xuất nội dung từ file tài liệu.');
+        } finally {
+            setIsExtractingNewContext(false);
+        }
+    };
+
+    const openSessionContextModal = () => {
+        if (!session) return;
+        setMetaLessonTitle(session.lessonTitle || session.fileName?.replace(/\.pptx$/i, '') || '');
+        setMetaSubjectId(session.pptxSubjectId || '');
+        setMetaContextText(session.contextText || '');
+        setMetaContextFileName(session.contextFileName || null);
+        setShowContextModal(true);
+    };
+
+    const handleUploadSessionContextFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file || !sessionId) return;
+        try {
+            setIsUploadingSessionContext(true);
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('mode', metaContextText.trim() ? 'append' : 'replace');
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/context-file`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            setMetaContextText(res.data?.contextText || '');
+            setMetaContextFileName(res.data?.contextFileName || file.name);
+            await loadSession(sessionId);
+            await loadSessionHistory();
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể tải lên file tài liệu ngữ cảnh.');
+        } finally {
+            setIsUploadingSessionContext(false);
+        }
+    };
+
+    const handleSaveSessionMeta = async () => {
+        if (!sessionId) return;
+        try {
+            setIsSavingMeta(true);
+            const res = await api.put(`/pptx-audio-tool/${sessionId}/meta`, {
+                lessonTitle: metaLessonTitle.trim() || undefined,
+                pptxSubjectId: metaSubjectId || null,
+                contextText: metaContextText,
+                contextFileName: metaContextText.trim() ? metaContextFileName : null,
+            });
+            setSession(res.data);
+            await loadSubjects();
+            await loadSessionHistory();
+            setShowContextModal(false);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể lưu thông tin bài học.');
+        } finally {
+            setIsSavingMeta(false);
         }
     };
 
@@ -629,6 +982,13 @@ export function PptxAudioToolPage() {
             return;
         }
 
+        const effectiveSubjectId =
+            newLessonSubjectId ||
+            (selectedSubjectFilter !== 'ALL' && selectedSubjectFilter !== 'UNCATEGORIZED'
+                ? selectedSubjectFilter
+                : '');
+        const effectiveLessonTitle = newLessonTitle.trim() || file.name.replace(/\.pptx$/i, '');
+
         try {
             setIsUploading(true);
             setUploadProgress(5);
@@ -640,6 +1000,10 @@ export function PptxAudioToolPage() {
                 setUploadStatusText('Đang tải file bài giảng lên...');
                 const formData = new FormData();
                 formData.append('file', file);
+                if (effectiveSubjectId) formData.append('pptxSubjectId', effectiveSubjectId);
+                if (effectiveLessonTitle) formData.append('lessonTitle', effectiveLessonTitle);
+                if (newLessonContextText.trim()) formData.append('contextText', newLessonContextText.trim());
+                if (newLessonContextFileName) formData.append('contextFileName', newLessonContextFileName);
 
                 const res = await api.post('/pptx-audio-tool/upload', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
@@ -710,12 +1074,20 @@ export function PptxAudioToolPage() {
                     uploadId,
                     fileName: file.name,
                     totalChunks,
+                    pptxSubjectId: effectiveSubjectId || undefined,
+                    lessonTitle: effectiveLessonTitle || undefined,
+                    contextText: newLessonContextText.trim() || undefined,
+                    contextFileName: newLessonContextFileName || undefined,
                 });
                 resData = completeRes.data;
             }
 
             setUploadProgress(100);
             setUploadStatusText('Hoàn tất!');
+            setNewLessonTitle('');
+            setNewLessonContextText('');
+            setNewLessonContextFileName('');
+            setShowNewLessonContextBox(false);
             setSessionId(resData.sessionId);
             setSlides(resData.slides || []);
             setSession(resData);
@@ -723,7 +1095,9 @@ export function PptxAudioToolPage() {
             setInteractiveQuestions([]);
             setEnglishQuestions([]);
             navigate(`/pptx-audio-tool/${resData.sessionId}`);
+            await loadSession(resData.sessionId);
             setActiveStep(1); // Auto-advance to audio step
+            loadSubjects();
             loadSessionHistory(); // Refresh history
         } catch (error: any) {
             console.error('Upload failed:', error);
@@ -1086,8 +1460,20 @@ export function PptxAudioToolPage() {
     };
 
     // ═══════════════════════════════════════════════════════════════
-    // STEP 3: DOWNLOAD
+    // STEP 3: DOWNLOAD & EXPORT (PPTX, SCORM 1.2, H5P)
     // ═══════════════════════════════════════════════════════════════
+    const triggerNativeDownload = (ticketPath: string) => {
+        const fullUrl = ticketPath.startsWith('http')
+            ? ticketPath
+            : `${API_BASE_URL}${ticketPath.replace(/^\/api/, '')}`;
+        const link = document.createElement('a');
+        link.href = fullUrl;
+        link.rel = 'noopener';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const downloadPptx = async () => {
         if (!sessionId) return;
         try {
@@ -1101,7 +1487,8 @@ export function PptxAudioToolPage() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = session?.fileName?.replace('.pptx', '_with_audio.pptx') || 'presentation_with_audio.pptx';
+            const baseTitle = session?.lessonTitle || session?.fileName?.replace(/\.pptx$/i, '') || 'presentation';
+            a.download = `${baseTitle}_with_audio.pptx`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -1111,6 +1498,597 @@ export function PptxAudioToolPage() {
             alert(`Tải thất bại: ${error.response?.data?.message || error.message}`);
         } finally {
             setIsDownloading(false);
+        }
+    };
+
+    const handleExportScorm = async () => {
+        if (!sessionId) return;
+        try {
+            setIsExportingScorm(true);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/export/scorm/ticket`, {
+                templateId: selectedTemplateId || undefined,
+                bgOption: exportBgOption,
+                theme: exportTheme,
+            });
+            if (res.data?.url) {
+                triggerNativeDownload(res.data.url);
+            }
+        } catch (error: any) {
+            console.error('Error exporting SCORM:', error);
+            alert(`Xuất SCORM thất bại: ${error.response?.data?.message || error.message}`);
+        } finally {
+            setIsExportingScorm(false);
+        }
+    };
+
+    const handleExportH5p = async () => {
+        if (!sessionId) return;
+        try {
+            setIsExportingH5p(true);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/export/h5p/ticket`, {
+                templateId: selectedTemplateId || undefined,
+                bgOption: exportBgOption,
+                theme: exportTheme,
+            });
+            if (res.data?.url) {
+                triggerNativeDownload(res.data.url);
+            }
+        } catch (error: any) {
+            console.error('Error exporting H5P:', error);
+            alert(`Xuất H5P thất bại: ${error.response?.data?.message || error.message}`);
+        } finally {
+            setIsExportingH5p(false);
+        }
+    };
+
+    const handleExportMoodleXml = async () => {
+        if (!sessionId) return;
+        try {
+            setIsExportingMoodleXml(true);
+            const res = await api.get(`/pptx-audio-tool/${sessionId}/export/moodle-xml`, {
+                responseType: 'blob',
+            });
+            const disposition = res.headers?.['content-disposition'] || res.headers?.['Content-Disposition'];
+            const baseTitle = session?.lessonTitle || session?.fileName?.replace(/\.pptx$/i, '') || 'lesson';
+            const filename = filenameFromDisposition(disposition, `${baseTitle}_moodle_quiz.xml`, '.xml');
+            const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/xml; charset=utf-8' }));
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error: any) {
+            console.error('Error exporting Moodle XML:', error);
+            alert(`Xuất Moodle Quiz XML thất bại: ${error.response?.data?.message || error.message}`);
+        } finally {
+            setIsExportingMoodleXml(false);
+        }
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // STEP 3: SLIDE WORKSPACE HANDLERS (MATCHING STEP 5 GENERATE PPTX)
+    // ═══════════════════════════════════════════════════════════════
+
+    const parseBulletsFromSlide = (slide: ParsedSlide): BulletItem[] => {
+        if (Array.isArray(slide.optimizedContent) && slide.optimizedContent.length > 0) {
+            return slide.optimizedContent;
+        }
+        if (Array.isArray(slide.content) && slide.content.length > 0) {
+            return slide.content.map(line => {
+                const str = String(line || '').trim();
+                const colonIdx = str.indexOf(':');
+                if (colonIdx > 0 && colonIdx < 60) {
+                    return {
+                        emoji: '•',
+                        point: str.substring(0, colonIdx).trim(),
+                        description: str.substring(colonIdx + 1).trim(),
+                    };
+                }
+                return {
+                    emoji: '•',
+                    point: str,
+                    description: '',
+                };
+            });
+        }
+        return [];
+    };
+
+    const parseInteractiveData = (slide: ParsedSlide): any | null => {
+        if (!slide.interactiveData) return null;
+        try {
+            return typeof slide.interactiveData === 'string'
+                ? JSON.parse(slide.interactiveData)
+                : slide.interactiveData;
+        } catch {
+            return null;
+        }
+    };
+
+    const startEditingSlideContent = (slide: ParsedSlide) => {
+        const bullets = parseBulletsFromSlide(slide);
+        setEditingContentSlideIndex(slide.index);
+        setEditingTitle(slide.title || '');
+        setEditingRawContent(Array.isArray(slide.content) ? slide.content.join('\n') : '');
+        setEditingBullets(
+            bullets.length > 0
+                ? bullets.map(b => ({ ...b }))
+                : [{ emoji: '📌', point: '', description: '' }],
+        );
+    };
+
+    const cancelEditingSlideContent = () => {
+        setEditingContentSlideIndex(null);
+        setEditingTitle('');
+        setEditingBullets([]);
+        setEditingRawContent('');
+    };
+
+    const updateEditingBullet = (index: number, field: keyof BulletItem, value: string) => {
+        setEditingBullets(prev => prev.map((b, i) => (i === index ? { ...b, [field]: value } : b)));
+    };
+
+    const addEditingBullet = () => {
+        setEditingBullets(prev => [...prev, { emoji: '📌', point: '', description: '' }]);
+    };
+
+    const removeEditingBullet = (index: number) => {
+        if (editingBullets.length <= 1) return;
+        setEditingBullets(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const saveSlideContent = async (slideIndex: number) => {
+        if (!sessionId) return;
+        try {
+            setSavingContent(true);
+            const validBullets = editingBullets.filter(b => b.point.trim() || b.description.trim());
+            const res = await api.put(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/content`, {
+                title: editingTitle,
+                content: editingRawContent,
+                optimizedContent: validBullets.length > 0 ? validBullets : null,
+            });
+            setSlides(prev => prev.map(s => (s.index === slideIndex ? { ...s, ...res.data } : s)));
+            setEditingContentSlideIndex(null);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể lưu nội dung slide.');
+        } finally {
+            setSavingContent(false);
+        }
+    };
+
+    const handleChangeSlideLayout = async (slideIndex: number, newLayout: string) => {
+        if (!sessionId) return;
+        const autoSlideType = newLayout === 'checkpoint_gate'
+            ? 'checkpoint_quiz'
+            : (newLayout === 'audio_lab' ? 'interactive_audio' : 'content');
+        setSlides(prev =>
+            prev.map(s => (s.index === slideIndex ? { ...s, layoutType: newLayout, slideType: autoSlideType } : s)),
+        );
+        try {
+            await api.put(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/content`, {
+                layoutType: newLayout,
+                slideType: autoSlideType,
+            });
+        } catch (err) {
+            console.error('Failed to update slide layout:', err);
+        }
+    };
+
+    const handleRegenerateSlideContent = async (slideIndex: number) => {
+        if (!sessionId) return;
+        try {
+            setRegeneratingContentSlides(prev => new Set(prev).add(slideIndex));
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/regenerate-content`);
+            setSlides(prev => prev.map(s => (s.index === slideIndex ? { ...s, ...res.data } : s)));
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể tạo nội dung slide bằng AI.');
+        } finally {
+            setRegeneratingContentSlides(prev => {
+                const next = new Set(prev);
+                next.delete(slideIndex);
+                return next;
+            });
+        }
+    };
+
+    const handleRegenerateSlideImage = async (slideIndex: number) => {
+        if (!sessionId) return;
+        try {
+            setRegeneratingImageSlides(prev => new Set(prev).add(slideIndex));
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/regenerate-image`);
+            setSlides(prev =>
+                prev.map(s =>
+                    s.index === slideIndex
+                        ? { ...s, ...res.data, imageUrl: res.data.imageUrl ? `${res.data.imageUrl}?t=${Date.now()}` : null }
+                        : s,
+                ),
+            );
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể tạo lại hình ảnh bằng AI.');
+        } finally {
+            setRegeneratingImageSlides(prev => {
+                const next = new Set(prev);
+                next.delete(slideIndex);
+                return next;
+            });
+        }
+    };
+
+    const handleSelectImageForCrop = (slideIndex: number, file: File) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+            setCropModalImageSrc(reader.result as string);
+            setCropModalSlideIndex(slideIndex);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleUploadCroppedImage = async (croppedBlob: Blob) => {
+        if (cropModalSlideIndex === null || !sessionId) return;
+        const slideIndex = cropModalSlideIndex;
+        setCropModalImageSrc(null);
+        setCropModalSlideIndex(null);
+
+        try {
+            setUploadingSlideImage(slideIndex);
+            const formData = new FormData();
+            formData.append('image', croppedBlob, `slide_${slideIndex + 1}_cropped.png`);
+            const res = await api.post(
+                `/pptx-audio-tool/${sessionId}/slides/${slideIndex}/upload-image`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' } },
+            );
+            setSlides(prev =>
+                prev.map(s =>
+                    s.index === slideIndex
+                        ? { ...s, imageUrl: `${res.data.imageUrl}?t=${Date.now()}` }
+                        : s,
+                ),
+            );
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể tải ảnh lên.');
+        } finally {
+            setUploadingSlideImage(null);
+        }
+    };
+
+    const handleUploadExtraAudio = async (slideIndex: number, file: File) => {
+        if (!sessionId) return;
+        try {
+            setUploadingExtraAudioSlide(slideIndex);
+            const formData = new FormData();
+            formData.append('audio', file);
+            const res = await api.post(
+                `/pptx-audio-tool/${sessionId}/slides/${slideIndex}/extra-audio`,
+                formData,
+                { headers: { 'Content-Type': 'multipart/form-data' } },
+            );
+            setSlides(prev =>
+                prev.map(s =>
+                    s.index === slideIndex
+                        ? {
+                              ...s,
+                              extraAudioUrl: `${res.data.extraAudioUrl}?t=${Date.now()}`,
+                              extraAudioName: res.data.extraAudioName || file.name,
+                          }
+                        : s,
+                ),
+            );
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể tải audio mẫu lên.');
+        } finally {
+            setUploadingExtraAudioSlide(null);
+        }
+    };
+
+    const handleDeleteExtraAudio = async (slideIndex: number) => {
+        if (!sessionId || !confirm('Xóa file âm thanh mẫu của slide này?')) return;
+        try {
+            await api.delete(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/extra-audio`);
+            setSlides(prev =>
+                prev.map(s =>
+                    s.index === slideIndex
+                        ? { ...s, extraAudioUrl: null, extraAudioName: null, extraAudioDuration: null }
+                        : s,
+                ),
+            );
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể xóa audio mẫu.');
+        }
+    };
+
+    const openAddSlideModal = (insertAfter: number = -1) => {
+        setAddSlideInsertAfter(insertAfter);
+        setNewSlideTitle('');
+        setNewSlideContent('');
+        setNewSlideSpeakerNote('');
+        setShowAddSlideModal(true);
+    };
+
+    const handleCreateSlide = async () => {
+        if (!sessionId) return;
+        try {
+            setCreatingSlide(true);
+            const payload: any = {
+                title: newSlideTitle.trim() || undefined,
+                content: newSlideContent.trim(),
+                speakerNote: newSlideSpeakerNote.trim(),
+                slideType: 'content',
+                layoutType: 'split_standard',
+            };
+            if (addSlideInsertAfter >= 0) {
+                payload.insertAfterIndex = addSlideInsertAfter;
+            }
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/slides`, payload);
+            if (res.data?.slides) {
+                setSlides(res.data.slides);
+            } else {
+                await reloadSlidesOnly(sessionId);
+            }
+            await loadSessionHistory();
+            setShowAddSlideModal(false);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể thêm slide mới.');
+        } finally {
+            setCreatingSlide(false);
+        }
+    };
+
+    const handleDeleteSlide = async (slideIndex: number) => {
+        if (!sessionId) return;
+        if (slides.length <= 1) {
+            alert('Không thể xóa slide duy nhất trong bài giảng.');
+            return;
+        }
+        if (!confirm(`Bạn có chắc chắn muốn xóa Slide ${slideIndex + 1}? Các slide phía sau sẽ tự động đánh lại số thứ tự.`)) {
+            return;
+        }
+        try {
+            setDeletingSlideIndex(slideIndex);
+            const res = await api.delete(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}`);
+            if (res.data?.slides) {
+                setSlides(res.data.slides);
+            } else {
+                await reloadSlidesOnly(sessionId);
+            }
+            await loadSessionHistory();
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể xóa slide.');
+        } finally {
+            setDeletingSlideIndex(null);
+        }
+    };
+
+    const handleMoveSlide = async (slideIndex: number, direction: 'up' | 'down') => {
+        if (!sessionId) return;
+        try {
+            setMovingSlideIndex(slideIndex);
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/move`, { direction });
+            if (Array.isArray(res.data)) {
+                setSlides(res.data);
+            } else {
+                await reloadSlidesOnly(sessionId);
+            }
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể di chuyển slide.');
+        } finally {
+            setMovingSlideIndex(null);
+        }
+    };
+
+    // Interactive Slide Config Modal Handlers
+    const openInteractiveModalForInsert = (insertAfterOneBased: number = -1) => {
+        const effectiveAfter = insertAfterOneBased >= 0 ? insertAfterOneBased : slides.length;
+        const defaultTo = Math.max(1, effectiveAfter);
+        const defaultFrom = Math.max(1, defaultTo - 2);
+        setExtractedInteractiveFileName('');
+        setInteractiveConfigModal({
+            isOpen: true,
+            mode: 'insert',
+            insertAfterIndex: insertAfterOneBased,
+            targetSlideIndex: null,
+            generationMode: 'generate_new',
+            sourceType: 'slide_range',
+            fromSlideIndex: defaultFrom,
+            toSlideIndex: defaultTo,
+            customContent: '',
+            imageBase64: '',
+            imageFileName: '',
+            audioFile: null,
+            existingAudioUrl: '',
+            existingAudioName: '',
+            selectedQuestionTypes: ['MC', 'TF', 'MR'],
+            questionCount: 5,
+            passScore: 4,
+            fallbackSlideIndex: defaultFrom,
+            allowContinueWithoutPass: false,
+            slideTitle: `Điểm kiểm tra kiến thức (Sau Slide ${defaultTo})`,
+        });
+    };
+
+    const openInteractiveModalForSlide = (slide: ParsedSlide) => {
+        const parsed = parseInteractiveData(slide);
+        const oneBased = slide.index + 1;
+        const defaultTo = Math.max(1, oneBased - 1);
+        const defaultFrom = Math.max(1, defaultTo - 2);
+        setExtractedInteractiveFileName('');
+        setInteractiveConfigModal({
+            isOpen: true,
+            mode: 'configure',
+            insertAfterIndex: slide.index,
+            targetSlideIndex: slide.index,
+            generationMode: 'generate_new',
+            sourceType: slide.extraAudioUrl ? 'audio' : 'slide_range',
+            fromSlideIndex: defaultFrom,
+            toSlideIndex: defaultTo,
+            customContent: Array.isArray(slide.content) ? slide.content.join('\n') : '',
+            imageBase64: '',
+            imageFileName: '',
+            audioFile: null,
+            existingAudioUrl: slide.extraAudioUrl || '',
+            existingAudioName: slide.extraAudioName || '',
+            selectedQuestionTypes: ['MC', 'TF', 'MR'],
+            questionCount: parsed?.totalQuestions || parsed?.questions?.length || 5,
+            passScore: parsed?.passScore ?? 4,
+            fallbackSlideIndex: parsed?.fallbackSlideIndex ?? defaultFrom,
+            allowContinueWithoutPass: parsed?.allowContinueWithoutPass === true,
+            slideTitle: slide.title || `Điểm kiểm tra kiến thức (Slide ${oneBased})`,
+        });
+    };
+
+    const handleExtractInteractiveDocFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+            setIsExtractingInteractiveFile(true);
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await api.post('/pptx-audio-tool/extract-context-file', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const text = res.data?.text || '';
+            setExtractedInteractiveFileName(res.data?.fileName || file.name);
+            setInteractiveConfigModal(prev => ({
+                ...prev,
+                customContent: prev.customContent.trim()
+                    ? `${prev.customContent.trim()}\n\n${text}`
+                    : text,
+            }));
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể đọc file tài liệu.');
+        } finally {
+            setIsExtractingInteractiveFile(false);
+        }
+    };
+
+    const handleSelectInteractiveImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            setInteractiveConfigModal(prev => ({
+                ...prev,
+                imageBase64: reader.result as string,
+                imageFileName: file.name,
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const toggleInteractiveQuestionType = (qType: string) => {
+        setInteractiveConfigModal(prev => {
+            const exists = prev.selectedQuestionTypes.includes(qType);
+            if (exists && prev.selectedQuestionTypes.length <= 1) return prev;
+            return {
+                ...prev,
+                selectedQuestionTypes: exists
+                    ? prev.selectedQuestionTypes.filter(t => t !== qType)
+                    : [...prev.selectedQuestionTypes, qType],
+            };
+        });
+    };
+
+    const handleSubmitInteractiveConfigModal = async () => {
+        if (!sessionId) return;
+        try {
+            setIsSubmittingInteractiveModal(true);
+            let targetIndex = interactiveConfigModal.targetSlideIndex;
+
+            // Step 1: If inserting a new slide, create it first
+            if (interactiveConfigModal.mode === 'insert') {
+                const isAudioSource = interactiveConfigModal.sourceType === 'audio' && (interactiveConfigModal.audioFile || interactiveConfigModal.existingAudioUrl);
+                const payload: any = {
+                    title: interactiveConfigModal.slideTitle.trim() || 'Điểm kiểm tra kiến thức',
+                    content: interactiveConfigModal.customContent.trim() || `Hoạt động tương tác kiểm tra kiến thức từ Slide ${interactiveConfigModal.fromSlideIndex} đến Slide ${interactiveConfigModal.toSlideIndex}.`,
+                    speakerNote: 'Hãy hoàn thành bài tập tương tác trên màn hình trước khi tiếp tục nội dung tiếp theo.',
+                    slideType: isAudioSource ? 'interactive_audio' : 'checkpoint_quiz',
+                    layoutType: isAudioSource ? 'audio_lab' : 'checkpoint_gate',
+                };
+                if (interactiveConfigModal.insertAfterIndex >= 0) {
+                    payload.insertAfterIndex = interactiveConfigModal.insertAfterIndex;
+                }
+                const createRes = await api.post(`/pptx-audio-tool/${sessionId}/slides`, payload);
+                targetIndex = createRes.data?.slide?.index ?? (slides.length);
+            }
+
+            if (targetIndex === null || targetIndex === undefined) {
+                throw new Error('Không xác định được slide đích.');
+            }
+
+            setGeneratingInteractionSlide(targetIndex);
+
+            // Step 2: Upload audio file if teacher selected one in the modal
+            if (interactiveConfigModal.audioFile) {
+                const formData = new FormData();
+                formData.append('audio', interactiveConfigModal.audioFile);
+                await api.post(
+                    `/pptx-audio-tool/${sessionId}/slides/${targetIndex}/extra-audio`,
+                    formData,
+                    { headers: { 'Content-Type': 'multipart/form-data' } },
+                );
+            }
+
+            // Step 3: Call AI to generate interactive questions
+            const isAudioActivity = interactiveConfigModal.sourceType === 'audio' || Boolean(interactiveConfigModal.audioFile || interactiveConfigModal.existingAudioUrl);
+            await api.post(`/pptx-audio-tool/${sessionId}/slides/${targetIndex}/generate-interactions`, {
+                activityType: isAudioActivity ? 'listening_comprehension' : 'checkpoint_quiz',
+                mode: interactiveConfigModal.generationMode,
+                sourceType: interactiveConfigModal.sourceType,
+                fromSlideIndex: interactiveConfigModal.fromSlideIndex,
+                toSlideIndex: interactiveConfigModal.toSlideIndex,
+                customContent: interactiveConfigModal.customContent,
+                imageBase64: interactiveConfigModal.imageBase64 || undefined,
+                selectedQuestionTypes: interactiveConfigModal.selectedQuestionTypes,
+                questionCount: interactiveConfigModal.questionCount,
+                passScore: interactiveConfigModal.passScore,
+                fallbackSlideIndex: interactiveConfigModal.fallbackSlideIndex,
+                allowContinueWithoutPass: interactiveConfigModal.allowContinueWithoutPass,
+            });
+
+            await reloadSlidesOnly(sessionId);
+            await loadSessionHistory();
+            setExpandedInteractiveSlide(targetIndex);
+            setInteractiveConfigModal(prev => ({ ...prev, isOpen: false }));
+        } catch (err: any) {
+            alert(err.response?.data?.message || err.message || 'Không thể tạo hoạt động tương tác.');
+        } finally {
+            setIsSubmittingInteractiveModal(false);
+            setGeneratingInteractionSlide(null);
+        }
+    };
+
+    const startEditingInteractiveQuestions = (slide: ParsedSlide) => {
+        const parsed = parseInteractiveData(slide);
+        if (!parsed) return;
+        setEditingInteractiveSlide(slide.index);
+        setEditingInteractiveForm(JSON.parse(JSON.stringify(parsed)));
+        setExpandedInteractiveSlide(slide.index);
+    };
+
+    const saveInteractiveQuestions = async (slideIndex: number) => {
+        if (!sessionId || !editingInteractiveForm) return;
+        try {
+            setSavingInteractiveSlide(true);
+            const updatedForm = {
+                ...editingInteractiveForm,
+                totalQuestions: Array.isArray(editingInteractiveForm.questions)
+                    ? editingInteractiveForm.questions.length
+                    : editingInteractiveForm.totalQuestions,
+            };
+            const res = await api.put(`/pptx-audio-tool/${sessionId}/slides/${slideIndex}/content`, {
+                interactiveData: updatedForm,
+            });
+            setSlides(prev => prev.map(s => (s.index === slideIndex ? { ...s, ...res.data } : s)));
+            setEditingInteractiveSlide(null);
+            setEditingInteractiveForm(null);
+        } catch (err: any) {
+            alert(err.response?.data?.message || 'Không thể lưu câu hỏi tương tác.');
+        } finally {
+            setSavingInteractiveSlide(false);
         }
     };
 
@@ -1530,7 +2508,7 @@ export function PptxAudioToolPage() {
     };
 
     const selectAllQuestionTypes = () => {
-        setSelectedQuestionTypes(['MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY']);
+        setSelectedQuestionTypes(['MC', 'MR', 'MATCH', 'CLOZE', 'TRUEFALSE']);
     };
 
     const deselectAllQuestionTypes = () => {
@@ -1549,19 +2527,87 @@ export function PptxAudioToolPage() {
     // ═══════════════════════════════════════════════════════════════
     const completedCount = slides.filter(s => s.audioStatus === 'done').length;
     const slidesWithNotes = slides.filter(s => getActiveNote(s)?.trim());
+    const slidesWithImagesCount = slides.filter(s => s.imageUrl).length;
     const hasDualLanguage = slides.some(s => s.hasDual);
     const filteredReviewQuestions = reviewQuestions.filter(q => {
         if (reviewFilter === 'ALL') return true;
         return q.level === reviewFilter;
     });
 
+    const uncategorizedCount = sessionHistory.filter(s => !s.pptxSubjectId).length;
+    const filteredHistory = sessionHistory.filter(s => {
+        if (selectedSubjectFilter === 'ALL') return true;
+        if (selectedSubjectFilter === 'UNCATEGORIZED') return !s.pptxSubjectId;
+        return s.pptxSubjectId === selectedSubjectFilter;
+    });
+    const activeFilterSubject = subjects.find(sub => sub.id === selectedSubjectFilter) || null;
+    const hasActiveContext = Boolean(session?.contextText && session.contextText.trim().length > 0);
+
     // ═══════════════════════════════════════════════════════════════
     // RENDER
     // ═══════════════════════════════════════════════════════════════
     return (
         <div className="pptx-audio-tool">
-            <h1 className="page-title">🎙️ PPTX Audio Tool</h1>
-            <p className="page-subtitle">Upload PPTX → Tạo Audio từ Speaker Notes → Tải PPTX có Audio</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                <div>
+                    <h1 className="page-title">🎙️ PPTX Audio & E-Learning Studio</h1>
+                    <p className="page-subtitle" style={{ marginBottom: 0 }}>
+                        Quản lý Môn học & Bài giảng PPTX → Nạp Context Giáo trình (Word/PDF/Text) → Tạo Lời giảng & Audio → Xuất PPTX, SCORM 1.2 & H5P
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    className="btn-create-subject-top"
+                    onClick={openCreateSubjectModal}
+                >
+                    ➕ Tạo Môn học mới
+                </button>
+            </div>
+
+            {/* Active Session Context Bar */}
+            {sessionId && session && (
+                <div className="active-lesson-banner">
+                    <div className="active-lesson-info">
+                        <span className="subject-pill">
+                            📚 {session.pptxSubject?.name || 'Chưa phân loại môn'}
+                        </span>
+                        <span className="banner-sep">›</span>
+                        <strong className="lesson-title-text">
+                            {session.lessonTitle || session.fileName.replace(/\.pptx$/i, '')}
+                        </strong>
+                        <span className="lesson-meta-tag">
+                            ({slides.length} slides · {completedCount} audio)
+                        </span>
+                        {hasActiveContext ? (
+                            <span className="context-status-badge attached" onClick={openSessionContextModal} title="Nhấn để xem hoặc sửa ngữ cảnh bài học">
+                                📄 Đã nạp Context ({session.contextFileName || `${Math.round((session.contextText?.length || 0) / 1000)}k ký tự`})
+                            </span>
+                        ) : (
+                            <span className="context-status-badge empty" onClick={openSessionContextModal} title="Nhấn để nạp file Word/PDF hoặc văn bản bổ sung context cho AI">
+                                ⚠️ Chưa có Context bổ sung
+                            </span>
+                        )}
+                    </div>
+                    <div className="active-lesson-actions">
+                        <button
+                            type="button"
+                            className="btn-context-Action"
+                            onClick={openSessionContextModal}
+                        >
+                            📚 {hasActiveContext ? 'Sửa Context / Thông tin bài' : '➕ Nạp Context (Word/PDF/Text)'}
+                        </button>
+                        {activeStep !== 0 && (
+                            <button
+                                type="button"
+                                className="btn-switch-lesson"
+                                onClick={() => setActiveStep(0)}
+                            >
+                                📂 Đổi bài / Môn học
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Stepper */}
             <div className="stepper">
@@ -1582,104 +2628,378 @@ export function PptxAudioToolPage() {
 
             {/* Step Content */}
             <div className="step-content">
-                {/* ════════════ STEP 1: UPLOAD ════════════ */}
+                {/* ════════════ STEP 1: SUBJECTS, LESSONS & UPLOAD ════════════ */}
                 {activeStep === 0 && (
                     <div className="step-upload">
-                        <div
-                            className={`drop-zone ${dragOver ? 'drag-over' : ''} ${isUploading ? 'uploading' : ''}`}
-                            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                            onDragLeave={() => setDragOver(false)}
-                            onDrop={handleDrop}
-                        >
-                            {isUploading ? (
-                                <>
-                                    <div className="upload-spinner"></div>
-                                    <p>{uploadStatusText || 'Đang upload và phân tích file...'}</p>
-                                    <div className="progress-bar-upload">
-                                        <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+                        {/* 1. SUBJECTS MANAGEMENT SECTION */}
+                        <div className="subjects-workspace-section">
+                            <div className="section-header-row">
+                                <div>
+                                    <h3 className="workspace-section-title">📚 1. Chọn Môn học (Độc lập cho PPTX Tool)</h3>
+                                    <p className="workspace-section-desc">
+                                        Tạo môn học để cung cấp bối cảnh chuyên ngành, đối tượng sinh viên và chuẩn đầu ra giúp AI soạn lời giảng & câu hỏi chính xác.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn-add-subject"
+                                    onClick={openCreateSubjectModal}
+                                >
+                                    ➕ Thêm Môn học
+                                </button>
+                            </div>
+
+                            <div className="pptx-subject-cards-grid">
+                                {/* All Lessons Card */}
+                                <div
+                                    className={`pptx-subject-card ${selectedSubjectFilter === 'ALL' ? 'selected' : ''}`}
+                                    onClick={() => setSelectedSubjectFilter('ALL')}
+                                >
+                                    <div className="subject-card-top">
+                                        <span className="subject-card-icon">🗂️</span>
+                                        <span className="subject-lesson-count">{sessionHistory.length} bài</span>
                                     </div>
-                                    <span style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '6px' }}>{uploadProgress}%</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="drop-icon">📤</span>
-                                    <h3>Kéo thả file PPTX vào đây</h3>
-                                    <p>hoặc nhấn để chọn file</p>
+                                    <div className="subject-card-name">Tất cả bài giảng</div>
+                                    <div className="subject-card-meta">Toàn bộ các bài PPTX đã tải lên</div>
+                                </div>
+
+                                {/* Subject Cards */}
+                                {subjects.map(sub => (
+                                    <div
+                                        key={sub.id}
+                                        className={`pptx-subject-card ${selectedSubjectFilter === sub.id ? 'selected' : ''}`}
+                                        onClick={() => {
+                                            setSelectedSubjectFilter(sub.id);
+                                            setNewLessonSubjectId(sub.id);
+                                        }}
+                                    >
+                                        <div className="subject-card-top">
+                                            <span className="subject-card-icon">📘</span>
+                                            <div className="subject-card-top-right">
+                                                <span className="subject-lesson-count">{sub.sessionCount ?? 0} bài</span>
+                                                <button
+                                                    type="button"
+                                                    className="subject-icon-btn"
+                                                    onClick={(e) => openEditSubjectModal(sub, e)}
+                                                    title="Chỉnh sửa môn học"
+                                                >
+                                                    ✏️
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="subject-icon-btn danger"
+                                                    onClick={(e) => handleDeleteSubject(sub, e)}
+                                                    title="Xóa môn học"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="subject-card-name">{sub.name}</div>
+                                        <div className="subject-card-meta">
+                                            {sub.major || sub.majorName || sub.expertiseArea || 'Chưa gắn chuyên ngành'}
+                                            {' · '}
+                                            {sub.language === 'en' ? '🇬🇧 EN' : '🇻🇳 VN'}
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Uncategorized Card */}
+                                {uncategorizedCount > 0 && (
+                                    <div
+                                        className={`pptx-subject-card ${selectedSubjectFilter === 'UNCATEGORIZED' ? 'selected' : ''}`}
+                                        onClick={() => {
+                                            setSelectedSubjectFilter('UNCATEGORIZED');
+                                            setNewLessonSubjectId('');
+                                        }}
+                                    >
+                                        <div className="subject-card-top">
+                                            <span className="subject-card-icon">📁</span>
+                                            <span className="subject-lesson-count">{uncategorizedCount} bài</span>
+                                        </div>
+                                        <div className="subject-card-name">Chưa phân loại</div>
+                                        <div className="subject-card-meta">Các file PPTX tải lên trước đây</div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 2. CREATE NEW LESSON + CONTEXT + UPLOAD PPTX */}
+                        <div className="create-lesson-upload-card">
+                            <div className="section-header-row" style={{ marginBottom: 14 }}>
+                                <div>
+                                    <h3 className="workspace-section-title">
+                                        📤 2. Tạo Bài học mới & Upload Slide PPTX
+                                        {activeFilterSubject && (
+                                            <span style={{ color: '#818cf8', fontWeight: 600, marginLeft: 8 }}>
+                                                (Môn: {activeFilterSubject.name})
+                                            </span>
+                                        )}
+                                    </h3>
+                                    <p className="workspace-section-desc">
+                                        Đặt tên bài học, đính kèm giáo trình Word/PDF hoặc tóm tắt ngữ cảnh (nếu slide ít chữ), sau đó chọn file PPTX.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Metadata & Context Form before PPTX dropzone */}
+                            <div className="lesson-prep-grid">
+                                <div className="prep-field">
+                                    <label className="prep-label">📚 Thuộc Môn học:</label>
+                                    <div style={{ display: 'flex', gap: 8 }}>
+                                        <select
+                                            className="prep-select"
+                                            value={newLessonSubjectId}
+                                            onChange={(e) => setNewLessonSubjectId(e.target.value)}
+                                        >
+                                            <option value="">-- Chưa phân loại môn học --</option>
+                                            {subjects.map(sub => (
+                                                <option key={sub.id} value={sub.id}>
+                                                    📘 {sub.name} {sub.major ? `(${sub.major})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <button
+                                            type="button"
+                                            className="btn-quick-subject"
+                                            onClick={openCreateSubjectModal}
+                                            title="Tạo môn học mới"
+                                        >
+                                            + Môn mới
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="prep-field">
+                                    <label className="prep-label">📝 Tên bài học (Tùy chọn - Tự lấy tên file nếu để trống):</label>
                                     <input
-                                        type="file"
-                                        accept=".pptx"
-                                        onChange={handleFileSelect}
-                                        className="file-input-hidden"
-                                        id="pptx-file-input"
+                                        type="text"
+                                        className="prep-input"
+                                        placeholder="VD: Bài 3 - Cấu trúc dữ liệu mảng & Ma trận trong NumPy..."
+                                        value={newLessonTitle}
+                                        onChange={(e) => setNewLessonTitle(e.target.value)}
                                     />
-                                    <label htmlFor="pptx-file-input" className="btn-choose-file">
-                                        📁 Chọn File
-                                    </label>
-                                </>
-                            )}
+                                </div>
+                            </div>
+
+                            {/* Context Enrichment Box (Word / PDF + Textbox) */}
+                            <div className="lesson-context-enrichment-box">
+                                <div className="context-box-header">
+                                    <div className="context-box-title-group">
+                                        <span style={{ fontSize: '1.15rem' }}>📖</span>
+                                        <div>
+                                            <strong>Ngữ cảnh bổ sung cho bài học (Word / PDF / Văn bản)</strong>
+                                            <span className="context-optional-tag">Khuyên dùng khi slide chỉ có sơ đồ / từ khóa</span>
+                                        </div>
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <input
+                                            type="file"
+                                            id="new-lesson-context-file"
+                                            accept=".docx,.pdf,.txt,.md"
+                                            onChange={handleExtractNewLessonContextFile}
+                                            style={{ display: 'none' }}
+                                            disabled={isExtractingNewContext}
+                                        />
+                                        <label htmlFor="new-lesson-context-file" className="btn-upload-context-doc">
+                                            {isExtractingNewContext ? '⏳ Đang đọc tài liệu...' : '📎 Đính kèm Word (.docx) / PDF (.pdf)'}
+                                        </label>
+                                        <button
+                                            type="button"
+                                            className="btn-toggle-context-text"
+                                            onClick={() => setShowNewLessonContextBox(prev => !prev)}
+                                        >
+                                            {showNewLessonContextBox || newLessonContextText ? '🔽 Ẩn ô văn bản' : '✍️ Nhập văn bản trực tiếp'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {newLessonContextFileName && (
+                                    <div className="context-attached-file-bar">
+                                        <span>✅ Đã trích xuất văn bản từ: <strong>{newLessonContextFileName}</strong> ({newLessonContextText.length.toLocaleString()} ký tự)</span>
+                                        <button
+                                            type="button"
+                                            className="btn-clear-context"
+                                            onClick={() => {
+                                                setNewLessonContextFileName('');
+                                                setNewLessonContextText('');
+                                            }}
+                                        >
+                                            ✕ Xóa
+                                        </button>
+                                    </div>
+                                )}
+
+                                {(showNewLessonContextBox || newLessonContextText.length > 0) && (
+                                    <div style={{ marginTop: 10 }}>
+                                        <textarea
+                                            className="context-textarea"
+                                            rows={4}
+                                            placeholder="Nhập đề cương bài giảng, nội dung giáo trình, giải thích công thức/bảng biểu hoặc nội dung trích xuất từ file Word/PDF sẽ hiển thị tại đây để bạn kiểm tra..."
+                                            value={newLessonContextText}
+                                            onChange={(e) => setNewLessonContextText(e.target.value)}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* PPTX Dropzone */}
+                            <div
+                                className={`drop-zone ${dragOver ? 'drag-over' : ''} ${isUploading ? 'uploading' : ''}`}
+                                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                                onDragLeave={() => setDragOver(false)}
+                                onDrop={handleDrop}
+                            >
+                                {isUploading ? (
+                                    <>
+                                        <div className="upload-spinner"></div>
+                                        <p>{uploadStatusText || 'Đang upload và phân tích sâu cấu trúc slide, bảng biểu & hình ảnh...'}</p>
+                                        <div className="progress-bar-upload">
+                                            <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
+                                        </div>
+                                        <span style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '6px' }}>{uploadProgress}%</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <span className="drop-icon">📤</span>
+                                        <h3>Kéo thả file PowerPoint (.pptx) vào đây để tạo bài giảng</h3>
+                                        <p>Hệ thống tự động bóc tách tiêu đề, nội dung, bảng biểu, nhóm hình (Group) và trích xuất ảnh slide</p>
+                                        <input
+                                            type="file"
+                                            accept=".pptx"
+                                            onChange={handleFileSelect}
+                                            className="file-input-hidden"
+                                            id="pptx-file-input"
+                                        />
+                                        <label htmlFor="pptx-file-input" className="btn-choose-file">
+                                            📁 Chọn File .PPTX & Bắt Đầu
+                                        </label>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {sessionId && session && (
                             <div className="upload-result">
-                                <p>✅ Đang làm việc: <strong>{session.fileName}</strong> ({slides.length} slides)</p>
-                                <button className="btn-next-step" onClick={() => setActiveStep(1)}>
-                                    ➡️ Tiếp tục: Notes & Audio
-                                </button>
+                                <p>
+                                    ✅ Bài học đang mở: <strong>{session.lessonTitle || session.fileName}</strong> ({slides.length} slides)
+                                    {session.pptxSubject?.name && <> · Môn: <strong>{session.pptxSubject.name}</strong></>}
+                                </p>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                                    <button className="btn-next-step" style={{ marginTop: 0 }} onClick={() => setActiveStep(1)}>
+                                        ➡️ Tiếp tục: Lời giảng & Audio
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn-context-Action"
+                                        onClick={openSessionContextModal}
+                                        style={{ padding: '10px 18px' }}
+                                    >
+                                        📚 Nạp / Sửa Context Bài Học
+                                    </button>
+                                </div>
                             </div>
                         )}
 
-                        {/* Session History */}
+                        {/* 3. LESSONS LIST IN SELECTED SUBJECT */}
                         {sessionHistory.length > 0 && (
                             <div className="session-history">
-                                <h3 className="history-title">📁 Lịch sử file đã upload</h3>
-                                <div className="history-list">
-                                    {sessionHistory.map(s => (
-                                        <div
-                                            key={s.id}
-                                            className={`history-item ${s.id === sessionId ? 'active' : ''}`}
-                                            onClick={() => {
-                                                navigate(`/pptx-audio-tool/${s.id}`);
-                                                loadSession(s.id);
-                                                setActiveStep(1);
-                                            }}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                                    <h3 className="history-title" style={{ margin: 0 }}>
+                                        📂 Danh sách bài giảng {activeFilterSubject ? `thuộc môn "${activeFilterSubject.name}"` : selectedSubjectFilter === 'UNCATEGORIZED' ? '(Chưa phân loại)' : `(${filteredHistory.length} bài)`}
+                                    </h3>
+                                    {selectedSubjectFilter !== 'ALL' && (
+                                        <button
+                                            type="button"
+                                            className="btn-show-all-lessons"
+                                            onClick={() => setSelectedSubjectFilter('ALL')}
                                         >
-                                            <div className="history-info">
-                                                <span className="history-name">{s.fileName}</span>
-                                                <span className="history-meta">
-                                                    {s.totalSlides} slides · {s.audioCount} audio · {new Date(s.createdAt).toLocaleDateString('vi-VN')}
-                                                </span>
-                                            </div>
-                                            <button
-                                                className="history-delete"
-                                                disabled={isDeletingSession === s.id}
-                                                onClick={async (e) => {
-                                                    e.stopPropagation();
-                                                    if (!confirm(`Xóa "${s.fileName}" và toàn bộ dữ liệu?`)) return;
-                                                    try {
-                                                        setIsDeletingSession(s.id);
-                                                        await api.delete(`/pptx-audio-tool/${s.id}`);
-                                                        setSessionHistory(prev => prev.filter(h => h.id !== s.id));
-                                                        if (sessionId === s.id) {
-                                                            setSessionId(null);
-                                                            setSession(null);
-                                                            setSlides([]);
-                                                            setReviewQuestions([]);
-                                                            setInteractiveQuestions([]);
-                                                            setEnglishQuestions([]);
-                                                            navigate('/pptx-audio-tool');
-                                                        }
-                                                    } catch (err) {
-                                                        console.error('Delete failed:', err);
-                                                    } finally {
-                                                        setIsDeletingSession(null);
-                                                    }
+                                            Xem tất cả ({sessionHistory.length})
+                                        </button>
+                                    )}
+                                </div>
+
+                                {filteredHistory.length === 0 ? (
+                                    <div className="empty-subject-lessons">
+                                        Chưa có bài học nào trong môn học này. Hãy tải file PPTX ở khung phía trên để tạo bài học đầu tiên!
+                                    </div>
+                                ) : (
+                                    <div className="history-list">
+                                        {filteredHistory.map(s => (
+                                            <div
+                                                key={s.id}
+                                                className={`history-item ${s.id === sessionId ? 'active' : ''}`}
+                                                onClick={() => {
+                                                    navigate(`/pptx-audio-tool/${s.id}`);
+                                                    loadSession(s.id);
+                                                    setActiveStep(1);
                                                 }}
                                             >
-                                                {isDeletingSession === s.id ? '⏳' : '🗑️'}
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
+                                                <div className="history-info">
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                                        <span className="history-name">{s.lessonTitle || s.fileName}</span>
+                                                        {s.pptxSubject?.name ? (
+                                                            <span className="history-subject-tag">📘 {s.pptxSubject.name}</span>
+                                                        ) : (
+                                                            <span className="history-subject-tag uncategorized">Chưa phân môn</span>
+                                                        )}
+                                                        {s.hasContext && (
+                                                            <span className="history-context-tag" title={s.contextFileName || 'Đã có văn bản ngữ cảnh'}>
+                                                                📄 Có Context {s.contextFileName ? `(${s.contextFileName})` : ''}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className="history-meta">
+                                                        File: {s.fileName} · {s.totalSlides} slides · {s.audioCount} audio · {new Date(s.createdAt).toLocaleDateString('vi-VN')}
+                                                    </span>
+                                                </div>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                    <button
+                                                        type="button"
+                                                        className="history-edit-btn"
+                                                        title="Đổi tên bài / Chuyển môn học / Nạp thêm Context Word/PDF"
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            await loadSession(s.id);
+                                                            setShowContextModal(true);
+                                                        }}
+                                                    >
+                                                        📚 Context / Sửa
+                                                    </button>
+                                                    <button
+                                                        className="history-delete"
+                                                        disabled={isDeletingSession === s.id}
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            if (!confirm(`Xóa bài "${s.lessonTitle || s.fileName}" và toàn bộ dữ liệu?`)) return;
+                                                            try {
+                                                                setIsDeletingSession(s.id);
+                                                                await api.delete(`/pptx-audio-tool/${s.id}`);
+                                                                setSessionHistory(prev => prev.filter(h => h.id !== s.id));
+                                                                loadSubjects();
+                                                                if (sessionId === s.id) {
+                                                                    setSessionId(null);
+                                                                    setSession(null);
+                                                                    setSlides([]);
+                                                                    setReviewQuestions([]);
+                                                                    setInteractiveQuestions([]);
+                                                                    setEnglishQuestions([]);
+                                                                    navigate('/pptx-audio-tool');
+                                                                }
+                                                            } catch (err) {
+                                                                console.error('Delete failed:', err);
+                                                            } finally {
+                                                                setIsDeletingSession(null);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isDeletingSession === s.id ? '⏳' : '🗑️'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -2090,9 +3410,62 @@ export function PptxAudioToolPage() {
                                     <h3 style={{ margin: '0 0 8px 0', color: '#f8fafc', fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: 8 }}>
                                         <span>✨</span> Tùy Chọn Tạo Lời Giảng Bằng AI
                                     </h3>
-                                    <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: '0 0 16px 0' }}>
+                                    <p style={{ color: '#94a3b8', fontSize: '0.88rem', margin: '0 0 12px 0' }}>
                                         Lựa chọn ngôn ngữ và phương thức soạn bài giảng phù hợp cho từng slide thuyết trình:
                                     </p>
+
+                                    {/* Context Enrichment Quick Banner inside Notes Modal */}
+                                    <div style={{
+                                        marginBottom: 16,
+                                        padding: '10px 14px',
+                                        borderRadius: 10,
+                                        background: hasActiveContext
+                                            ? 'rgba(16, 185, 129, 0.12)'
+                                            : 'rgba(245, 158, 11, 0.12)',
+                                        border: `1px solid ${hasActiveContext ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        gap: 10,
+                                    }}>
+                                        <div style={{ fontSize: '0.82rem', color: '#e2e8f0', lineHeight: 1.4 }}>
+                                            {hasActiveContext ? (
+                                                <>
+                                                    <strong style={{ color: '#34d399' }}>✅ Đã có tài liệu ngữ cảnh ({(session?.contextText?.length || 0).toLocaleString()} ký tự)</strong>
+                                                    <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                                                        AI sẽ kết hợp nội dung slide + mạch toàn bài + tài liệu bổ sung để soạn lời giảng sâu sắc.
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <strong style={{ color: '#fbbf24' }}>💡 Gợi ý: Slide ít chữ hoặc nhiều hình/bảng?</strong>
+                                                    <div style={{ color: '#94a3b8', fontSize: '0.78rem' }}>
+                                                        Nạp thêm file Word/PDF giáo trình hoặc ghi chú để AI hiểu sâu ngữ cảnh bài học.
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowNotesOptionsModal(false);
+                                                openSessionContextModal();
+                                            }}
+                                            style={{
+                                                padding: '6px 12px',
+                                                borderRadius: 8,
+                                                border: '1px solid rgba(148, 163, 184, 0.3)',
+                                                background: 'rgba(15, 23, 42, 0.7)',
+                                                color: '#f8fafc',
+                                                fontSize: '0.78rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                whiteSpace: 'nowrap',
+                                            }}
+                                        >
+                                            📎 {hasActiveContext ? 'Xem / Sửa Context' : 'Nạp Context'}
+                                        </button>
+                                    </div>
 
                                     {/* Language Selection */}
                                     <div style={{ marginBottom: 18 }}>
@@ -2333,95 +3706,1600 @@ export function PptxAudioToolPage() {
                     </div>
                 )}
 
-                {/* ════════════ STEP 3: DOWNLOAD ════════════ */}
+                {/* ════════════ STEP 3: SLIDE WORKSPACE & EXPORT (STEP 5 PARITY) ════════════ */}
                 {activeStep === 2 && sessionId && (
-                    <div className="step-download">
-                        <h2>📥 Download PPTX kèm Audio</h2>
-
-                        <div className="download-summary">
-                            <table className="summary-table">
-                                <thead>
-                                    <tr>
-                                        <th>Slide</th>
-                                        <th>Title</th>
-                                        <th>Audio</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {slides.map(s => (
-                                        <tr key={s.index}>
-                                            <td>{s.index + 1}</td>
-                                            <td>{s.title}</td>
-                                            <td>
-                                                {s.audioStatus === 'done' ? (
-                                                    <span className="status-done">✅ Có audio ({formatDuration(s.audioDuration)})</span>
-                                                ) : getActiveNote(s)?.trim() ? (
-                                                    <span className="status-pending">⏳ Chưa tạo</span>
-                                                ) : (
-                                                    <span className="status-skip">➖ Không có note</span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                    <div className="step5-generate-pptx">
+                        {/* Step Header */}
+                        <div className="step-header">
+                            <div className="step-title-group">
+                                <h2>📊 Nội Dung Slide & Xuất Học Liệu ({slides.length} slides)</h2>
+                                <p className="step-description">
+                                    Chỉnh sửa nội dung & hình ảnh từng slide, chèn slide lý thuyết / câu hỏi kiểm tra chặn bài (Mastery Gate) và xuất PPTX, SCORM 1.2, H5P, Moodle XML.
+                                </p>
+                            </div>
+                            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                                <ModelSelector taskType="SLIDES" compact />
+                                <ModelSelector taskType="IMAGE" compact />
+                                <span className="exp-stat-pill">🔊 {completedCount}/{slides.length} audio</span>
+                                <span className="exp-stat-pill">🖼️ {slidesWithImagesCount} ảnh</span>
+                                <button
+                                    type="button"
+                                    className="btn-secondary btn-sm"
+                                    onClick={openSessionContextModal}
+                                >
+                                    📎 {hasActiveContext ? `Context (${Math.round((session?.contextText?.length || 0) / 1000)}k ký tự)` : '+ Bổ sung Word/PDF Context'}
+                                </button>
+                            </div>
                         </div>
 
-                        <div className="download-actions">
+                        {/* Template Selector with Preview (Exact Step 5 structure) */}
+                        <div className="template-selector-section">
+                            <div className="template-selector-row">
+                                <div className="template-picker-group">
+                                    <label htmlFor="pptx-tool-template-select">🎨 Mẫu giao diện PowerPoint:</label>
+                                    <select
+                                        id="pptx-tool-template-select"
+                                        value={selectedTemplateId}
+                                        onChange={(e) => {
+                                            const newId = e.target.value;
+                                            setSelectedTemplateId(newId);
+                                            const tpl = templates.find(t => t.id === newId);
+                                            if (tpl && !tpl.isSystem) {
+                                                setExportBgOption('custom');
+                                            } else if (exportBgOption === 'custom') {
+                                                setExportBgOption('tuaf_clean');
+                                            }
+                                        }}
+                                        className="template-dropdown"
+                                    >
+                                        <option value="blank">-- Không dùng mẫu (Giữ nền PPTX gốc) --</option>
+                                        {templates.filter(t => t.isSystem).length > 0 && (
+                                            <optgroup label="Mẫu hệ thống">
+                                                {templates.filter(t => t.isSystem).map((template) => (
+                                                    <option key={template.id} value={template.id}>
+                                                        {template.name} {template.isDefault ? '⭐' : ''}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                        {templates.filter(t => !t.isSystem).length > 0 && (
+                                            <optgroup label="Mẫu của tôi">
+                                                {templates.filter(t => !t.isSystem).map((template) => (
+                                                    <option key={template.id} value={template.id}>
+                                                        {template.name}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        )}
+                                    </select>
+                                </div>
+
+                                <div className="template-picker-group">
+                                    <label htmlFor="pptx-tool-scorm-bg-select">🌐 Giao diện xuất SCORM & H5P:</label>
+                                    <select
+                                        id="pptx-tool-scorm-bg-select"
+                                        value={exportBgOption}
+                                        onChange={(e) => setExportBgOption(e.target.value as any)}
+                                        className="template-dropdown"
+                                        title="Tùy chọn hình nền và nhận diện thương hiệu khi xuất SCORM / H5P"
+                                    >
+                                        <option value="tuaf_clean">🌿 Nhận diện TUAF Tối ưu (Khuyên dùng - Logo Player, viền xanh, tối đa diện tích slide)</option>
+                                        <option value="tuaf_full">🖼️ Áp dụng ảnh nền gốc TUAF (Dùng cả 2 ảnh bìa & nội dung)</option>
+                                        <option value="minimal">📄 Nền tối giản (Nền phẳng, không ảnh & không logo)</option>
+                                        {(() => {
+                                            const tpl = templates.find(t => t.id === selectedTemplateId);
+                                            if (tpl && !tpl.isSystem) {
+                                                return <option value="custom">🎨 Đồng bộ theo mẫu đã chọn ({tpl.name})</option>;
+                                            }
+                                            return <option value="custom">🎨 Đồng bộ theo mẫu PPTX đã chọn ở trên</option>;
+                                        })()}
+                                    </select>
+                                </div>
+
+                                <div className="template-picker-group">
+                                    <label htmlFor="pptx-tool-theme-select">🌓 Chủ đề màu sắc (Theme):</label>
+                                    <select
+                                        id="pptx-tool-theme-select"
+                                        value={exportTheme}
+                                        onChange={(e) => setExportTheme(e.target.value as 'light' | 'dark')}
+                                        className="template-dropdown"
+                                        title="Lựa chọn tông màu sáng học thuật hoặc tông màu tối cho gói xuất"
+                                    >
+                                        <option value="light">☀️ Giao diện Sáng (Học thuật TUAF - Khuyên dùng cho LMS & Giảng đường)</option>
+                                        <option value="dark">🌙 Giao diện Tối (Modern Slate Dark - Tối ưu ban đêm)</option>
+                                    </select>
+                                </div>
+
+                                {selectedTemplateId && selectedTemplateId !== 'blank' && (() => {
+                                    const selectedTpl = templates.find(t => t.id === selectedTemplateId);
+                                    if (!selectedTpl) return null;
+                                    return (
+                                        <div className="template-preview-small" title={`Xem trước mẫu: ${selectedTpl.name}`}>
+                                            {selectedTpl.titleBgUrl && (
+                                                <img src={getFullAudioUrl(selectedTpl.titleBgUrl)} alt="Title" title="Ảnh bìa (Title)" />
+                                            )}
+                                            {selectedTpl.contentBgUrl && (
+                                                <img src={getFullAudioUrl(selectedTpl.contentBgUrl)} alt="Content" title="Ảnh nội dung (Content)" />
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        </div>
+
+                        {/* Main Export Action Buttons (Exact Step 5 classes) */}
+                        <div className="action-buttons-row">
                             <button
-                                className="btn-download-pptx"
+                                type="button"
                                 onClick={downloadPptx}
                                 disabled={isDownloading || completedCount === 0}
+                                className="btn-primary"
+                                title={completedCount === 0 ? 'Cần tạo ít nhất 1 audio ở Bước 2 để tải PPTX kèm Audio' : 'Tải file PowerPoint gốc đã nhúng Audio thuyết giảng'}
                             >
-                                {isDownloading ? (
-                                    <><span className="spinner"></span> Đang tạo file...</>
-                                ) : (
-                                    `📥 Tải PPTX kèm Audio (${completedCount} slides)`
-                                )}
+                                {isDownloading
+                                    ? '⏳ Đang ghép Audio vào PPTX...'
+                                    : `📥 Tải PPTX (có Audio · ${completedCount}/${slides.length})`}
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn-moodle-export btn-scorm"
+                                onClick={handleExportScorm}
+                                disabled={isExportingScorm || slides.length === 0}
+                                title="Đóng gói chuẩn SCORM 1.2: Tự động chạy audio, trình chiếu slide, chấm điểm tương tác trên Moodle"
+                            >
+                                {isExportingScorm ? '⏳ Đang đóng gói...' : '📦 Xuất SCORM (.zip)'}
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn-moodle-export btn-h5p"
+                                onClick={handleExportH5p}
+                                disabled={isExportingH5p || slides.length === 0}
+                                title="Đóng gói chuẩn H5P Course Presentation cho Moodle"
+                            >
+                                {isExportingH5p ? '⏳ Đang xuất...' : '🌟 Xuất H5P (.h5p)'}
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn-moodle-export btn-xml"
+                                onClick={handleExportMoodleXml}
+                                disabled={isExportingMoodleXml || slides.length === 0}
+                                title="Xuất ngân hàng câu hỏi tương tác & kiểm tra nhanh vào Ngân hàng câu hỏi Moodle"
+                            >
+                                {isExportingMoodleXml ? '⏳ Đang xuất...' : '📋 Xuất Moodle Quiz XML'}
+                            </button>
+
+                            <button
+                                type="button"
+                                className="btn-moodle-guide-trigger"
+                                onClick={() => setShowMoodleGuide(true)}
+                                title="Xem hướng dẫn đưa học liệu tương tác vào Moodle"
+                            >
+                                ❓ Hướng dẫn Moodle
                             </button>
                         </div>
 
-                        {completedCount === 0 && (
-                            <div className="empty-state">
-                                <p>⚠️ Cần tạo audio trước khi download.</p>
-                                <button className="btn-go-audio" onClick={() => setActiveStep(1)}>
-                                    ← Quay lại tạo Audio
-                                </button>
+                        {/* Slide Preview List (Exact Step 5 structure) */}
+                        <div className="slide-preview-section">
+                            <div className="slide-preview-header">
+                                <h4>📋 Nội dung slides ({slides.length})</h4>
+                                <div className="add-slide-btn-group">
+                                    <button
+                                        type="button"
+                                        className="btn-add-slide-theory"
+                                        onClick={() => openAddSlideModal(-1)}
+                                        title="Thêm slide lý thuyết (Nội dung, gạch đầu dòng, ảnh minh họa)"
+                                    >
+                                        📖 + Thêm slide lý thuyết
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="btn-add-slide-interactive"
+                                        onClick={() => openInteractiveModalForInsert(-1)}
+                                        title="Thêm slide tương tác độc lập (Kiểm tra nhanh hoặc Bài tập nghe hiểu)"
+                                    >
+                                        🎯 + Thêm slide tương tác
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="slide-preview-grid">
+                                {/* Insert divider before Slide 1 */}
+                                {slides.length > 0 && (
+                                    <div className="slide-insert-divider top" title="Chèn slide vào đầu bài giảng">
+                                        <div className="slide-insert-btn-pair">
+                                            <button
+                                                type="button"
+                                                className="btn-slide-insert-mini theory"
+                                                onClick={() => openAddSlideModal(0)}
+                                                title="Chèn slide lý thuyết trước Slide 1"
+                                            >
+                                                📖 + Lý thuyết
+                                            </button>
+                                            <button
+                                                type="button"
+                                                className="btn-slide-insert-mini interactive"
+                                                onClick={() => openInteractiveModalForInsert(0)}
+                                                title="Chèn slide tương tác trước Slide 1"
+                                            >
+                                                🎯 + Tương tác
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {slides.map((slide, arrIdx) => {
+                                    const oneBasedIdx = slide.index + 1;
+                                    const bullets = parseBulletsFromSlide(slide);
+                                    const hasOptimizedBullets = Array.isArray(slide.optimizedContent) && slide.optimizedContent.length > 0;
+                                    const hasAudio = slide.audioStatus === 'done' && Boolean(slide.audioUrl);
+                                    const isRegenContent = regeneratingContentSlides.has(slide.index);
+                                    const isRegenImage = regeneratingImageSlides.has(slide.index);
+                                    const isUploadingImg = uploadingSlideImage === slide.index;
+                                    const isEditingThisContent = editingContentSlideIndex === slide.index;
+                                    const interactiveObj = parseInteractiveData(slide);
+                                    const isCheckpointSlide = slide.slideType === 'checkpoint_quiz' || slide.layoutType === 'checkpoint_gate';
+                                    const isAudioLabSlide = slide.slideType === 'interactive_audio' || slide.layoutType === 'audio_lab';
+                                    const isInteractiveSlide = isCheckpointSlide || isAudioLabSlide || Boolean(interactiveObj);
+                                    const fullImageUrl = slide.imageUrl ? getFullAudioUrl(slide.imageUrl) : undefined;
+                                    const fullExtraAudioUrl = slide.extraAudioUrl ? getFullAudioUrl(slide.extraAudioUrl) : undefined;
+                                    const slidePhase = (isRegenContent || isRegenImage || isUploadingImg)
+                                        ? 'optimizing_content'
+                                        : (bullets.length > 0 || fullImageUrl || isInteractiveSlide ? 'complete' : 'pending');
+
+                                    return (
+                                        <div key={`slide-wrap-${slide.index}`} className="slide-item-wrapper">
+                                            <div className={`slide-card ${slidePhase} ${(isRegenContent || isRegenImage) ? 'regenerating' : ''} ${isEditingThisContent ? 'editing' : ''}`}>
+                                                {/* Slide Header */}
+                                                <div className="slide-card-header">
+                                                    <div className="slide-header-left">
+                                                        <span className="slide-number">Slide {oneBasedIdx}</span>
+                                                        {isAudioLabSlide ? (
+                                                            <span className="slide-type-badge badge-audio-interactive" title="Slide có âm thanh mẫu và bài tập tương tác">
+                                                                🎧 Nghe & Tương tác
+                                                            </span>
+                                                        ) : isCheckpointSlide ? (
+                                                            <span className="slide-type-badge badge-quiz-interactive" title="Slide câu hỏi củng cố kiến thức">
+                                                                🧩 Kiểm tra nhanh
+                                                            </span>
+                                                        ) : (
+                                                            <span className="slide-type-badge badge-content" title="Slide học lý thuyết">
+                                                                📘 Lý thuyết
+                                                            </span>
+                                                        )}
+
+                                                        <div className="slide-layout-selector-wrapper">
+                                                            <select
+                                                                className="slide-layout-select"
+                                                                value={slide.layoutType || 'split_standard'}
+                                                                onChange={(e) => handleChangeSlideLayout(slide.index, e.target.value)}
+                                                                title="Chọn bố cục hiển thị cho slide này"
+                                                            >
+                                                                <option value="split_standard">📐 Chuẩn (Text trái, Visual phải)</option>
+                                                                <option value="split_reversed">🔄 Bố cục đảo (Visual trái, Text phải)</option>
+                                                                <option value="comparison_3col">📊 So sánh 3 cột (Bảng/phân tích)</option>
+                                                                <option value="hero_infographic">🖼️ Infographic lớn (Trung tâm)</option>
+                                                                <option value="process_steps">📋 Quy trình tiến trình (Timeline)</option>
+                                                                <option value="audio_lab">🎧 Lab thực hành âm thanh</option>
+                                                                <option value="checkpoint_gate">🎯 Kiểm tra chặn bài (Mastery Gate)</option>
+                                                            </select>
+                                                        </div>
+
+                                                        {isEditingThisContent ? (
+                                                            <span className="slide-title-edit-badge">✏️ Đang chỉnh sửa nội dung</span>
+                                                        ) : (
+                                                            <span className="slide-title" title={slide.title}>{slide.title || '(Chưa có tiêu đề)'}</span>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="slide-header-actions">
+                                                        <button
+                                                            type="button"
+                                                            className="btn-header-action btn-header-move"
+                                                            disabled={arrIdx === 0 || movingSlideIndex !== null}
+                                                            onClick={() => handleMoveSlide(slide.index, 'up')}
+                                                            title="Di chuyển slide lên trên"
+                                                        >
+                                                            ⬆️
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-header-action btn-header-move"
+                                                            disabled={arrIdx === slides.length - 1 || movingSlideIndex !== null}
+                                                            onClick={() => handleMoveSlide(slide.index, 'down')}
+                                                            title="Di chuyển slide xuống dưới"
+                                                        >
+                                                            ⬇️
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            className="btn-header-action btn-header-delete"
+                                                            disabled={slides.length <= 1 || deletingSlideIndex === slide.index}
+                                                            onClick={() => handleDeleteSlide(slide.index)}
+                                                            title="Xóa slide này"
+                                                        >
+                                                            {deletingSlideIndex === slide.index ? '⏳' : '🗑️'}
+                                                        </button>
+                                                        <span
+                                                            className="slide-status"
+                                                            title={hasAudio ? 'Đã tạo audio thuyết giảng' : 'Nhấn để sang Bước 2 tạo Audio cho slide này'}
+                                                            style={{ cursor: hasAudio ? 'default' : 'pointer' }}
+                                                            onClick={() => !hasAudio && setActiveStep(1)}
+                                                        >
+                                                            {hasAudio ? '🔊' : '⏳'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Slide Body: Interactive Standalone OR 2-Column Theory Slide */}
+                                                {(() => {
+                                                    const questions: any[] = interactiveObj && Array.isArray(interactiveObj.questions) ? interactiveObj.questions : [];
+
+                                                    if (isInteractiveSlide && !isEditingThisContent && bullets.length === 0 && !fullImageUrl) {
+                                                        return (
+                                                            <div className="slide-interactive-standalone-container">
+                                                                {slide.extraAudioUrl && fullExtraAudioUrl && (
+                                                                    <div className="slide-extra-audio-bar">
+                                                                        <div className="extra-audio-info">
+                                                                            <span className="extra-audio-icon">🎧</span>
+                                                                            <span className="extra-audio-label">Audio mẫu bài giảng:</span>
+                                                                            <span className="extra-audio-name" title={slide.extraAudioName || 'Audio mẫu'}>
+                                                                                {slide.extraAudioName || 'Audio mẫu'}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="extra-audio-controls">
+                                                                            <audio controls src={fullExtraAudioUrl} className="extra-audio-player" preload="none" />
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn-extra-audio-delete"
+                                                                                onClick={() => handleDeleteExtraAudio(slide.index)}
+                                                                                title="Xóa file audio mẫu"
+                                                                            >
+                                                                                🗑️ Xóa
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {interactiveObj && questions.length > 0 ? (
+                                                                    <div className="slide-interactive-preview-box">
+                                                                        <div className="interactive-preview-header">
+                                                                            <div className="interactive-header-title">
+                                                                                <span className="interactive-icon">{isAudioLabSlide ? '🎧' : '🎯'}</span>
+                                                                                <strong>{interactiveObj.badgeLabel || (isAudioLabSlide ? 'Hoạt động Nghe & Tương tác' : 'Trạm Kiểm Soát Kiến Thức')}</strong>
+                                                                                <span className="interactive-count-pill">{questions.length} câu hỏi</span>
+                                                                            </div>
+                                                                            <div className="interactive-header-actions">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-text-reconfig"
+                                                                                    onClick={() => openInteractiveModalForSlide(slide)}
+                                                                                >
+                                                                                    ✨ Cấu hình / Tạo lại (AI)
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-text-reconfig"
+                                                                                    onClick={() => startEditingInteractiveQuestions(slide)}
+                                                                                >
+                                                                                    ✏️ Sửa câu hỏi
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="gate-config-card">
+                                                                            <div className="gate-config-header">
+                                                                                <span>🎯</span>
+                                                                                <strong>
+                                                                                    Chuẩn qua bài: Đúng {interactiveObj.passScore || 1}/{questions.length} câu · Trượt quay về Slide {interactiveObj.fallbackSlideIndex || 1} · {interactiveObj.allowContinueWithoutPass ? '🔓 Cho phép học tiếp nếu chưa đạt' : '🔒 Bắt buộc đạt mới mở khóa slide sau'}
+                                                                                </strong>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="interactive-questions-list">
+                                                                            {questions.map((q: any, qIdx: number) => {
+                                                                                const qType = (q.type || 'MC').toUpperCase();
+                                                                                const correctAnswersList: string[] = Array.isArray(q.correctAnswers)
+                                                                                    ? q.correctAnswers
+                                                                                    : [q.correctAnswer || ''];
+                                                                                return (
+                                                                                    <div key={q.id || qIdx} className="interactive-q-item">
+                                                                                        <div className="interactive-q-title">
+                                                                                            <strong>Câu {qIdx + 1}:</strong> {q.question}
+                                                                                            <span className={`qtype-badge qtype-${qType.toLowerCase()}`}>
+                                                                                                {qType}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        {Array.isArray(q.options) && q.options.length > 0 && (
+                                                                                            <div className="interactive-q-options">
+                                                                                                {q.options.map((opt: string, optIdx: number) => {
+                                                                                                    const isCorrect = correctAnswersList.some(ca => (ca || '').trim().toLowerCase() === opt.trim().toLowerCase());
+                                                                                                    return (
+                                                                                                        <div key={optIdx} className={`interactive-opt ${isCorrect ? 'opt-correct' : ''}`}>
+                                                                                                            <span className="opt-marker">{isCorrect ? '✅' : '⚪'}</span>
+                                                                                                            <span className="opt-text">{opt}</span>
+                                                                                                        </div>
+                                                                                                    );
+                                                                                                })}
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {q.explanation && (
+                                                                                            <div className="interactive-q-explanation">
+                                                                                                <strong>Giải thích:</strong> {q.explanation}
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="slide-interactive-empty-state">
+                                                                        <div className="empty-interactive-icon">{isAudioLabSlide ? '🎧' : '🎯'}</div>
+                                                                        <div className="empty-interactive-text">
+                                                                            <h5>{isAudioLabSlide ? 'Slide Bài Tập Nghe Hiểu (Độc lập)' : 'Slide Kiểm Tra Kiến Thức Độc Lập'}</h5>
+                                                                            <p>Hãy bấm nút dưới đây để chọn dạng câu hỏi, phạm vi slide và tạo bộ câu hỏi kiểm tra bằng AI.</p>
+                                                                        </div>
+                                                                        <div className="empty-interactive-actions">
+                                                                            <button
+                                                                                type="button"
+                                                                                className="btn-empty-interactive-ai"
+                                                                                onClick={() => openInteractiveModalForSlide(slide)}
+                                                                                disabled={generatingInteractionSlide === slide.index}
+                                                                            >
+                                                                                ✨ Tạo câu hỏi bằng AI (Chọn dạng & nguồn)
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    // Standard 2-Column Slide Card Body (Content Left + Image Right)
+                                                    return (
+                                                        <>
+                                                            <div className={`slide-card-body layout-${slide.layoutType || 'split_standard'}`}>
+                                                                {/* Content Column */}
+                                                                <div className="slide-content-col">
+                                                                    {isEditingThisContent ? (
+                                                                        <div className="slide-inline-edit-container">
+                                                                            <div className="inline-edit-field">
+                                                                                <label>📌 Tiêu đề Slide:</label>
+                                                                                <input
+                                                                                    type="text"
+                                                                                    className="inline-input-title"
+                                                                                    value={editingTitle}
+                                                                                    onChange={(e) => setEditingTitle(e.target.value)}
+                                                                                    placeholder="Nhập tiêu đề slide..."
+                                                                                />
+                                                                            </div>
+
+                                                                            <div className="inline-edit-field">
+                                                                                <label>📝 Ý chính / Văn bản thô (Mỗi dòng 1 ý):</label>
+                                                                                <textarea
+                                                                                    rows={3}
+                                                                                    className="inline-input-desc"
+                                                                                    value={editingRawContent}
+                                                                                    onChange={(e) => setEditingRawContent(e.target.value)}
+                                                                                    placeholder="Nội dung văn bản thô của slide..."
+                                                                                />
+                                                                            </div>
+
+                                                                            <div className="inline-edit-bullets-section">
+                                                                                <label>📋 Các ý hiển thị trên slide (bullet points):</label>
+                                                                                {editingBullets.map((b, bIdx) => (
+                                                                                    <div key={bIdx} className="inline-bullet-row">
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            className="inline-input-emoji"
+                                                                                            value={b.emoji}
+                                                                                            onChange={(e) => updateEditingBullet(bIdx, 'emoji', e.target.value)}
+                                                                                            title="Icon / Emoji"
+                                                                                            maxLength={4}
+                                                                                        />
+                                                                                        <div className="inline-bullet-fields">
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                className="inline-input-point"
+                                                                                                value={b.point}
+                                                                                                onChange={(e) => updateEditingBullet(bIdx, 'point', e.target.value)}
+                                                                                                placeholder="Ý chính..."
+                                                                                            />
+                                                                                            <textarea
+                                                                                                rows={2}
+                                                                                                className="inline-input-desc"
+                                                                                                value={b.description}
+                                                                                                onChange={(e) => updateEditingBullet(bIdx, 'description', e.target.value)}
+                                                                                                placeholder="Mô tả chi tiết..."
+                                                                                            />
+                                                                                        </div>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className="btn-inline-delete"
+                                                                                            onClick={() => removeEditingBullet(bIdx)}
+                                                                                            disabled={editingBullets.length <= 1}
+                                                                                            title="Xóa ý này"
+                                                                                        >
+                                                                                            🗑️
+                                                                                        </button>
+                                                                                    </div>
+                                                                                ))}
+
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-inline-add-bullet"
+                                                                                    onClick={addEditingBullet}
+                                                                                >
+                                                                                    ➕ Thêm ý mới
+                                                                                </button>
+                                                                            </div>
+
+                                                                            <div className="inline-edit-bottom-actions">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-save-inline"
+                                                                                    onClick={() => saveSlideContent(slide.index)}
+                                                                                    disabled={savingContent}
+                                                                                >
+                                                                                    {savingContent ? '⏳ Đang lưu...' : '💾 Lưu thay đổi'}
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-cancel-inline"
+                                                                                    onClick={cancelEditingSlideContent}
+                                                                                    disabled={savingContent}
+                                                                                >
+                                                                                    ❌ Hủy
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : bullets.length > 0 ? (
+                                                                        <div className="optimized-content-wrapper">
+                                                                            <ul className="bullet-list">
+                                                                                {bullets.map((b, bIdx) => (
+                                                                                    <li key={bIdx}>
+                                                                                        <span className="emoji">{b.emoji || '📌'}</span>
+                                                                                        <strong>{b.point}</strong>
+                                                                                        {b.description && (
+                                                                                            <span className="description"> - {b.description}</span>
+                                                                                        )}
+                                                                                    </li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        </div>
+                                                                    ) : slide.content ? (
+                                                                        <div className="slide-raw-content-box">
+                                                                            <div className="raw-content-header">
+                                                                                <span className="raw-content-label">📝 Nội dung bóc tách từ PPTX:</span>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-quick-ai"
+                                                                                    onClick={() => handleRegenerateSlideContent(slide.index)}
+                                                                                    disabled={isRegenContent}
+                                                                                >
+                                                                                    ✨ AI tối ưu nội dung
+                                                                                </button>
+                                                                            </div>
+                                                                            <p className="raw-content-text">{slide.content}</p>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="placeholder-content-box">
+                                                                            <p className="placeholder">Slide này chưa có nội dung văn bản chi tiết.</p>
+                                                                            <div className="placeholder-actions">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-small btn-action-edit"
+                                                                                    onClick={() => startEditingSlideContent(slide)}
+                                                                                >
+                                                                                    ✏️ Bổ sung ý chính
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-small btn-highlight-ai"
+                                                                                    onClick={() => handleRegenerateSlideContent(slide.index)}
+                                                                                    disabled={isRegenContent}
+                                                                                >
+                                                                                    ✨ AI tạo theo tiêu đề
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Image Column (Fixed 220px width via Steps.css + PptxAudioTool.css) */}
+                                                                <div className="slide-image-col">
+                                                                    <div className="slide-image-wrapper">
+                                                                        {fullImageUrl ? (
+                                                                            <img src={fullImageUrl} alt={`Slide ${oneBasedIdx}`} />
+                                                                        ) : (
+                                                                            <div className="image-placeholder">🖼️</div>
+                                                                        )}
+
+                                                                        <label
+                                                                            className="btn-image-overlay-upload"
+                                                                            title="Tải ảnh mới từ máy tính (tự động căn chỉnh & cắt tỷ lệ 1:1)"
+                                                                            style={{ cursor: (isUploadingImg || isRegenImage) ? 'not-allowed' : 'pointer', margin: 0 }}
+                                                                        >
+                                                                            📤 Đổi ảnh
+                                                                            <input
+                                                                                type="file"
+                                                                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                                                                style={{ display: 'none' }}
+                                                                                disabled={isUploadingImg || isRegenImage}
+                                                                                onChange={(e) => {
+                                                                                    const file = e.target.files?.[0];
+                                                                                    if (file) {
+                                                                                        handleSelectImageForCrop(slide.index, file);
+                                                                                        e.target.value = '';
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        </label>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Extra Audio Bar if attached */}
+                                                            {slide.extraAudioUrl && fullExtraAudioUrl && (
+                                                                <div className="slide-extra-audio-bar">
+                                                                    <div className="extra-audio-info">
+                                                                        <span className="extra-audio-icon">🎧</span>
+                                                                        <span className="extra-audio-label">Audio mẫu:</span>
+                                                                        <span className="extra-audio-name" title={slide.extraAudioName || 'Audio mẫu'}>
+                                                                            {slide.extraAudioName || 'Audio mẫu'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="extra-audio-controls">
+                                                                        <audio
+                                                                            controls
+                                                                            src={fullExtraAudioUrl}
+                                                                            className="extra-audio-player"
+                                                                            preload="none"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn-extra-audio-delete"
+                                                                            onClick={() => handleDeleteExtraAudio(slide.index)}
+                                                                            title="Xóa file audio mẫu"
+                                                                        >
+                                                                            🗑️ Xóa
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {/* Expanded Interactive Questions Preview & Inline Editor when attached to a theory slide */}
+                                                            {interactiveObj && expandedInteractiveSlide === slide.index && (
+                                                                <div className="slide-interactive-preview-box" style={{ margin: '0 16px 12px 16px' }}>
+                                                                    <div className="interactive-preview-header">
+                                                                        <div className="interactive-header-title">
+                                                                            <span className="interactive-icon">🎯</span>
+                                                                            <strong>{interactiveObj.badgeLabel || 'Hoạt động tương tác trên Slide'}</strong>
+                                                                            <span className="interactive-count-pill">{questions.length} câu hỏi</span>
+                                                                        </div>
+                                                                        <div className="interactive-header-actions">
+                                                                            {editingInteractiveSlide !== slide.index ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className="btn-text-reconfig"
+                                                                                    onClick={() => startEditingInteractiveQuestions(slide)}
+                                                                                >
+                                                                                    ✏️ Sửa bộ câu hỏi
+                                                                                </button>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className="btn-save-inline"
+                                                                                        onClick={() => saveInteractiveQuestions(slide.index)}
+                                                                                        disabled={savingInteractiveSlide}
+                                                                                    >
+                                                                                        {savingInteractiveSlide ? '⏳ Đang lưu...' : '💾 Lưu câu hỏi'}
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className="btn-cancel-inline"
+                                                                                        onClick={() => {
+                                                                                            setEditingInteractiveSlide(null);
+                                                                                            setEditingInteractiveForm(null);
+                                                                                        }}
+                                                                                    >
+                                                                                        Hủy
+                                                                                    </button>
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {editingInteractiveSlide === slide.index && editingInteractiveForm ? (
+                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                                                            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                                                                                <label style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                                                                                    Số câu đạt tối thiểu:{' '}
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        min={1}
+                                                                                        max={editingInteractiveForm.questions?.length || 10}
+                                                                                        value={editingInteractiveForm.passScore || 1}
+                                                                                        onChange={(e) => setEditingInteractiveForm({ ...editingInteractiveForm, passScore: Number(e.target.value) })}
+                                                                                        className="gate-config-input"
+                                                                                    />
+                                                                                </label>
+                                                                                <label style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                                                                                    Quay về Slide số:{' '}
+                                                                                    <input
+                                                                                        type="number"
+                                                                                        min={1}
+                                                                                        max={slides.length}
+                                                                                        value={editingInteractiveForm.fallbackSlideIndex || 1}
+                                                                                        onChange={(e) => setEditingInteractiveForm({ ...editingInteractiveForm, fallbackSlideIndex: Number(e.target.value) })}
+                                                                                        className="gate-config-input"
+                                                                                    />
+                                                                                </label>
+                                                                            </div>
+                                                                            {(editingInteractiveForm.questions || []).map((qItem: any, qIdx: number) => (
+                                                                                <div key={qIdx} className="interactive-q-item">
+                                                                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                                                                        <strong style={{ fontSize: '0.82rem', color: '#93c5fd' }}>Câu {qIdx + 1} ({qItem.type || 'MC'})</strong>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            className="btn-text-danger"
+                                                                                            onClick={() => {
+                                                                                                const nextQs = editingInteractiveForm.questions.filter((_: any, i: number) => i !== qIdx);
+                                                                                                setEditingInteractiveForm({ ...editingInteractiveForm, questions: nextQs });
+                                                                                            }}
+                                                                                        >
+                                                                                            🗑️ Xóa câu
+                                                                                        </button>
+                                                                                    </div>
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={qItem.question || ''}
+                                                                                        onChange={(e) => {
+                                                                                            const nextQs = [...editingInteractiveForm.questions];
+                                                                                            nextQs[qIdx] = { ...nextQs[qIdx], question: e.target.value };
+                                                                                            setEditingInteractiveForm({ ...editingInteractiveForm, questions: nextQs });
+                                                                                        }}
+                                                                                        placeholder="Nội dung câu hỏi..."
+                                                                                        className="inline-input-point"
+                                                                                        style={{ marginBottom: 6 }}
+                                                                                    />
+                                                                                    {Array.isArray(qItem.options) && (
+                                                                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
+                                                                                            {qItem.options.map((optVal: string, oIdx: number) => (
+                                                                                                <input
+                                                                                                    key={oIdx}
+                                                                                                    type="text"
+                                                                                                    value={optVal}
+                                                                                                    onChange={(e) => {
+                                                                                                        const nextQs = [...editingInteractiveForm.questions];
+                                                                                                        const nextOpts = [...nextQs[qIdx].options];
+                                                                                                        nextOpts[oIdx] = e.target.value;
+                                                                                                        nextQs[qIdx] = { ...nextQs[qIdx], options: nextOpts };
+                                                                                                        setEditingInteractiveForm({ ...editingInteractiveForm, questions: nextQs });
+                                                                                                    }}
+                                                                                                    className="inline-input-point"
+                                                                                                />
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={qItem.correctAnswer || ''}
+                                                                                            onChange={(e) => {
+                                                                                                const nextQs = [...editingInteractiveForm.questions];
+                                                                                                nextQs[qIdx] = { ...nextQs[qIdx], correctAnswer: e.target.value };
+                                                                                                setEditingInteractiveForm({ ...editingInteractiveForm, questions: nextQs });
+                                                                                            }}
+                                                                                            placeholder="Đáp án đúng..."
+                                                                                            className="inline-input-point"
+                                                                                            style={{ flex: 1 }}
+                                                                                        />
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={qItem.explanation || ''}
+                                                                                            onChange={(e) => {
+                                                                                                const nextQs = [...editingInteractiveForm.questions];
+                                                                                                nextQs[qIdx] = { ...nextQs[qIdx], explanation: e.target.value };
+                                                                                                setEditingInteractiveForm({ ...editingInteractiveForm, questions: nextQs });
+                                                                                            }}
+                                                                                            placeholder="Giải thích đáp án..."
+                                                                                            className="inline-input-point"
+                                                                                            style={{ flex: 2 }}
+                                                                                        />
+                                                                                    </div>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="interactive-questions-list">
+                                                                            {questions.map((qItem: any, qIdx: number) => (
+                                                                                <div key={qIdx} className="interactive-q-item">
+                                                                                    <div className="interactive-q-title">
+                                                                                        <strong>Câu {qIdx + 1}:</strong> {qItem.question}
+                                                                                        <span className="qtype-badge">{qItem.type || 'MC'}</span>
+                                                                                    </div>
+                                                                                    {Array.isArray(qItem.options) && qItem.options.length > 0 && (
+                                                                                        <div className="interactive-q-options">
+                                                                                            {qItem.options.map((opt: string, oIdx: number) => {
+                                                                                                const isCorr = opt === qItem.correctAnswer || (Array.isArray(qItem.correctAnswers) && qItem.correctAnswers.includes(opt));
+                                                                                                return (
+                                                                                                    <div key={oIdx} className={`interactive-opt ${isCorr ? 'opt-correct' : ''}`}>
+                                                                                                        <span className="opt-marker">{isCorr ? '✅' : '⚪'}</span>
+                                                                                                        <span className="opt-text">{opt}</span>
+                                                                                                    </div>
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {qItem.explanation && (
+                                                                                        <div className="interactive-q-explanation">
+                                                                                            <strong>Giải thích:</strong> {qItem.explanation}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
+
+                                                {/* Slide Card Footer Actions (Exact Step 5 classes) */}
+                                                {!isEditingThisContent && (
+                                                    <div className="slide-card-actions">
+                                                        <button
+                                                            type="button"
+                                                            className="btn-small btn-action-edit"
+                                                            onClick={() => startEditingSlideContent(slide)}
+                                                            disabled={isRegenContent}
+                                                            title="Chỉnh sửa trực tiếp tiêu đề, ý chính và các ý trong slide"
+                                                        >
+                                                            ✏️ Sửa nội dung
+                                                        </button>
+
+                                                        <label
+                                                            className="btn-small btn-action-upload"
+                                                            title="Tải ảnh từ máy tính (tự động căn chỉnh & resize 1:1)"
+                                                            style={{ cursor: (isUploadingImg || isRegenImage) ? 'not-allowed' : 'pointer', margin: 0 }}
+                                                        >
+                                                            {isUploadingImg ? '⏳ Đang tải...' : '📤 Đổi ảnh'}
+                                                            <input
+                                                                type="file"
+                                                                accept="image/png,image/jpeg,image/jpg,image/webp"
+                                                                style={{ display: 'none' }}
+                                                                disabled={isUploadingImg || isRegenImage}
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files?.[0];
+                                                                    if (file) {
+                                                                        handleSelectImageForCrop(slide.index, file);
+                                                                        e.target.value = '';
+                                                                    }
+                                                                }}
+                                                            />
+                                                        </label>
+
+                                                        {!slide.extraAudioUrl && (
+                                                            <label
+                                                                className="btn-small btn-action-audio"
+                                                                title="Tải audio mẫu bài giảng"
+                                                                style={{ cursor: uploadingExtraAudioSlide === slide.index ? 'not-allowed' : 'pointer', margin: 0 }}
+                                                            >
+                                                                {uploadingExtraAudioSlide === slide.index ? '⏳ Đang tải...' : '🎧 Tải audio mẫu'}
+                                                                <input
+                                                                    type="file"
+                                                                    accept="audio/*"
+                                                                    style={{ display: 'none' }}
+                                                                    disabled={uploadingExtraAudioSlide === slide.index}
+                                                                    onChange={(e) => {
+                                                                        const f = e.target.files?.[0];
+                                                                        if (f) {
+                                                                            handleUploadExtraAudio(slide.index, f);
+                                                                            e.target.value = '';
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </label>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            className={`btn-small ${!hasOptimizedBullets ? 'btn-highlight-ai' : ''}`}
+                                                            onClick={() => handleRegenerateSlideContent(slide.index)}
+                                                            disabled={isRegenContent}
+                                                            title="Dùng AI phân tích ý chính hoặc tiêu đề để tạo/viết lại nội dung slide"
+                                                        >
+                                                            {isRegenContent ? '⏳ Đang tối ưu...' : !hasOptimizedBullets ? '✨ AI tối ưu nội dung' : '🔄 Tạo lại nội dung'}
+                                                        </button>
+
+                                                        <button
+                                                            type="button"
+                                                            className="btn-small"
+                                                            onClick={() => handleRegenerateSlideImage(slide.index)}
+                                                            disabled={isRegenImage || isUploadingImg}
+                                                            title="Dùng AI vẽ hình minh họa mới cho slide này"
+                                                        >
+                                                            {isRegenImage ? '⏳ Đang vẽ...' : '🖼️ Tạo lại ảnh'}
+                                                        </button>
+
+                                                        {interactiveObj && Array.isArray(interactiveObj.questions) && interactiveObj.questions.length > 0 && (
+                                                            <button
+                                                                type="button"
+                                                                className="btn-small btn-action-interactive-active"
+                                                                onClick={() => setExpandedInteractiveSlide(expandedInteractiveSlide === slide.index ? null : slide.index)}
+                                                            >
+                                                                🎯 {interactiveObj.questions.length} câu hỏi ({expandedInteractiveSlide === slide.index ? 'Ẩn' : 'Xem'})
+                                                            </button>
+                                                        )}
+
+                                                        <button
+                                                            type="button"
+                                                            className="btn-small btn-action-interactive-active"
+                                                            onClick={() => openInteractiveModalForSlide(slide)}
+                                                            disabled={generatingInteractionSlide === slide.index}
+                                                            title="Tạo hoặc cấu hình bộ câu hỏi tương tác / kiểm tra chặn bài trên slide này"
+                                                        >
+                                                            {generatingInteractionSlide === slide.index
+                                                                ? '⏳ Đang tạo câu hỏi...'
+                                                                : interactiveObj
+                                                                    ? '⚙️ Cấu hình Tương tác'
+                                                                    : '🎯 + Gắn câu hỏi tương tác'}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Insert divider after this slide with 2 hover buttons (Exact Step 5 classes) */}
+                                            <div
+                                                className="slide-insert-divider"
+                                                title={`Chèn slide mới vào sau Slide ${oneBasedIdx}`}
+                                            >
+                                                <div className="slide-insert-btn-pair">
+                                                    <button
+                                                        type="button"
+                                                        className="btn-slide-insert-mini theory"
+                                                        onClick={() => openAddSlideModal(oneBasedIdx)}
+                                                        title={`Chèn slide lý thuyết sau Slide ${oneBasedIdx}`}
+                                                    >
+                                                        📖 + Lý thuyết
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className="btn-slide-insert-mini interactive"
+                                                        onClick={() => openInteractiveModalForInsert(oneBasedIdx)}
+                                                        title={`Chèn slide tương tác sau Slide ${oneBasedIdx}`}
+                                                    >
+                                                        🎯 + Tương tác
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {slides.length > 0 && (
+                                <div className="add-slide-bottom-bar">
+                                    <div className="add-slide-btn-group">
+                                        <button
+                                            type="button"
+                                            className="btn-add-slide-theory"
+                                            onClick={() => openAddSlideModal(-1)}
+                                        >
+                                            📖 + Thêm slide lý thuyết
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="btn-add-slide-interactive"
+                                            onClick={() => openInteractiveModalForInsert(-1)}
+                                        >
+                                            🎯 + Thêm slide tương tác
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ── MODALS FOR STEP 3 (SLIDE WORKSPACE) ── */}
+
+                        {/* 1. Image Crop 1:1 Modal */}
+                        {cropModalImageSrc && cropModalSlideIndex !== null && (
+                            <ImageCropModal
+                                isOpen={true}
+                                imageSrc={cropModalImageSrc}
+                                slideIndex={cropModalSlideIndex + 1}
+                                onClose={() => {
+                                    setCropModalImageSrc(null);
+                                    setCropModalSlideIndex(null);
+                                }}
+                                onCropComplete={handleUploadCroppedImage}
+                                isUploading={uploadingSlideImage !== null}
+                            />
+                        )}
+
+                        {/* 2. Add Theory Slide Modal */}
+                        {showAddSlideModal && (
+                            <div
+                                className="modal-backdrop"
+                                onClick={() => !creatingSlide && setShowAddSlideModal(false)}
+                                style={{
+                                    position: 'fixed',
+                                    inset: 0,
+                                    background: 'rgba(0, 0, 0, 0.72)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 9999,
+                                    padding: '20px',
+                                }}
+                            >
+                                <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                        background: '#1e293b',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '14px',
+                                        maxWidth: '580px',
+                                        width: '100%',
+                                        padding: '24px',
+                                        color: '#f1f5f9',
+                                        boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#60a5fa' }}>
+                                            ➕ {addSlideInsertAfter === 0
+                                                ? 'Chèn Slide Lý thuyết vào đầu bài giảng'
+                                                : addSlideInsertAfter > 0
+                                                    ? `Chèn Slide Lý thuyết vào sau Slide ${addSlideInsertAfter}`
+                                                    : 'Thêm Slide Lý thuyết vào cuối bài giảng'}
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => !creatingSlide && setShowAddSlideModal(false)}
+                                            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.25rem', cursor: 'pointer' }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: 600 }}>
+                                                Tiêu đề Slide:
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={newSlideTitle}
+                                                onChange={(e) => setNewSlideTitle(e.target.value)}
+                                                placeholder="Nhập tiêu đề slide mới..."
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '9px 12px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #334155',
+                                                    background: '#0f172a',
+                                                    color: '#f8fafc',
+                                                }}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: 600 }}>
+                                                Nội dung Slide (mỗi dòng 1 ý):
+                                            </label>
+                                            <textarea
+                                                value={newSlideContent}
+                                                onChange={(e) => setNewSlideContent(e.target.value)}
+                                                placeholder="Nhập các ý chính của slide (hoặc để trống rồi bấm 'AI tối ưu nội dung' sau khi tạo)..."
+                                                rows={4}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '9px 12px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #334155',
+                                                    background: '#0f172a',
+                                                    color: '#f8fafc',
+                                                }}
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '4px', fontWeight: 600 }}>
+                                                Lời giảng / Speaker Note (Tùy chọn):
+                                            </label>
+                                            <textarea
+                                                value={newSlideSpeakerNote}
+                                                onChange={(e) => setNewSlideSpeakerNote(e.target.value)}
+                                                placeholder="Nhập lời giảng thuyết minh cho slide này..."
+                                                rows={3}
+                                                style={{
+                                                    width: '100%',
+                                                    padding: '9px 12px',
+                                                    borderRadius: '8px',
+                                                    border: '1px solid #334155',
+                                                    background: '#0f172a',
+                                                    color: '#f8fafc',
+                                                }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAddSlideModal(false)}
+                                            disabled={creatingSlide}
+                                            className="btn-cancel-edit"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleCreateSlide}
+                                            disabled={creatingSlide}
+                                            className="btn-save-edit"
+                                        >
+                                            {creatingSlide ? '⏳ Đang tạo...' : '➕ Tạo Slide'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 3. Interactive Slide Configuration Modal (Mastery Gate / Audio Lab) */}
+                        {interactiveConfigModal.isOpen && (
+                            <div
+                                className="modal-backdrop"
+                                onClick={() => !isSubmittingInteractiveModal && setInteractiveConfigModal(prev => ({ ...prev, isOpen: false }))}
+                                style={{
+                                    position: 'fixed',
+                                    inset: 0,
+                                    background: 'rgba(0, 0, 0, 0.78)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 9999,
+                                    padding: '20px',
+                                }}
+                            >
+                                <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                        background: '#1e293b',
+                                        border: '1px solid rgba(245, 158, 11, 0.35)',
+                                        borderRadius: '16px',
+                                        maxWidth: '720px',
+                                        width: '100%',
+                                        maxHeight: '90vh',
+                                        overflowY: 'auto',
+                                        padding: '24px 28px',
+                                        color: '#f1f5f9',
+                                        boxShadow: '0 24px 60px rgba(0,0,0,0.65)',
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#fcd34d' }}>
+                                            🎯 {interactiveConfigModal.mode === 'insert'
+                                                ? 'Chèn Slide Câu Hỏi Kiểm Tra / Tương Tác (Mastery Gate)'
+                                                : `Cấu Hình Câu Hỏi Tương Tác (Slide ${(interactiveConfigModal.targetSlideIndex ?? 0) + 1})`}
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => !isSubmittingInteractiveModal && setInteractiveConfigModal(prev => ({ ...prev, isOpen: false }))}
+                                            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.3rem', cursor: 'pointer' }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    {/* Mode selector: Generate New vs Extract Existing */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '16px' }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setInteractiveConfigModal(prev => ({ ...prev, generationMode: 'generate_new', sourceType: 'slide_range' }))}
+                                            style={{
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: `2px solid ${interactiveConfigModal.generationMode === 'generate_new' ? '#f59e0b' : 'rgba(148,163,184,0.2)'}`,
+                                                background: interactiveConfigModal.generationMode === 'generate_new' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                                color: '#f8fafc',
+                                                cursor: 'pointer',
+                                                textAlign: 'left',
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>✨ AI Tự Sinh Câu Hỏi Mới</div>
+                                            <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: 2 }}>Từ nội dung các slide trước, văn bản hoặc file nghe</div>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setInteractiveConfigModal(prev => ({ ...prev, generationMode: 'extract_existing', sourceType: 'custom_text' }))}
+                                            style={{
+                                                padding: '10px 14px',
+                                                borderRadius: '10px',
+                                                border: `2px solid ${interactiveConfigModal.generationMode === 'extract_existing' ? '#f59e0b' : 'rgba(148,163,184,0.2)'}`,
+                                                background: interactiveConfigModal.generationMode === 'extract_existing' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                                                color: '#f8fafc',
+                                                cursor: 'pointer',
+                                                textAlign: 'left',
+                                            }}
+                                        >
+                                            <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>📄 Trích Xuất Đề Có Sẵn</div>
+                                            <div style={{ fontSize: '0.76rem', color: '#94a3b8', marginTop: 2 }}>Dán đề thi, tải file Word/PDF hoặc ảnh chụp bài tập</div>
+                                        </button>
+                                    </div>
+
+                                    {interactiveConfigModal.mode === 'insert' && (
+                                        <div style={{ marginBottom: '14px' }}>
+                                            <label style={{ display: 'block', fontSize: '0.84rem', color: '#cbd5e1', marginBottom: 4, fontWeight: 600 }}>
+                                                Tiêu đề Slide kiểm tra:
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={interactiveConfigModal.slideTitle}
+                                                onChange={(e) => setInteractiveConfigModal(prev => ({ ...prev, slideTitle: e.target.value }))}
+                                                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Source Type Selector */}
+                                    {interactiveConfigModal.generationMode === 'generate_new' && (
+                                        <div style={{ marginBottom: '14px' }}>
+                                            <label style={{ display: 'block', fontSize: '0.84rem', color: '#cbd5e1', marginBottom: 6, fontWeight: 600 }}>
+                                                Nguồn kiến thức để tạo câu hỏi:
+                                            </label>
+                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                                {[
+                                                    { id: 'slide_range', label: '📑 Khoảng Slide trước đó' },
+                                                    { id: 'custom_text', label: '📝 Văn bản / Tài liệu Word-PDF' },
+                                                    { id: 'audio', label: '🎧 File Nghe (Listening Lab)' },
+                                                    { id: 'image', label: '🖼️ Ảnh sơ đồ / Bài tập' },
+                                                ].map(src => (
+                                                    <button
+                                                        key={src.id}
+                                                        type="button"
+                                                        onClick={() => setInteractiveConfigModal(prev => ({ ...prev, sourceType: src.id as any }))}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            borderRadius: 8,
+                                                            border: `1px solid ${interactiveConfigModal.sourceType === src.id ? '#f59e0b' : '#334155'}`,
+                                                            background: interactiveConfigModal.sourceType === src.id ? 'rgba(245, 158, 11, 0.2)' : '#0f172a',
+                                                            color: interactiveConfigModal.sourceType === src.id ? '#fcd34d' : '#cbd5e1',
+                                                            fontSize: '0.82rem',
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        {src.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Source Details */}
+                                    {interactiveConfigModal.generationMode === 'generate_new' && interactiveConfigModal.sourceType === 'slide_range' && (
+                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14, padding: 12, borderRadius: 10, background: 'rgba(15, 23, 42, 0.6)' }}>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: 4 }}>Từ Slide số:</label>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={slides.length}
+                                                    value={interactiveConfigModal.fromSlideIndex}
+                                                    onChange={(e) => {
+                                                        const v = Math.max(1, Number(e.target.value));
+                                                        setInteractiveConfigModal(prev => ({ ...prev, fromSlideIndex: v, fallbackSlideIndex: v }));
+                                                    }}
+                                                    style={{ width: '100%', padding: '7px 10px', borderRadius: 6, background: '#1e293b', color: '#fff', border: '1px solid #475569' }}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: 4 }}>Đến Slide số:</label>
+                                                <input
+                                                    type="number"
+                                                    min={1}
+                                                    max={slides.length}
+                                                    value={interactiveConfigModal.toSlideIndex}
+                                                    onChange={(e) => setInteractiveConfigModal(prev => ({ ...prev, toSlideIndex: Math.max(1, Number(e.target.value)) }))}
+                                                    style={{ width: '100%', padding: '7px 10px', borderRadius: 6, background: '#1e293b', color: '#fff', border: '1px solid #475569' }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {(interactiveConfigModal.generationMode === 'extract_existing' || interactiveConfigModal.sourceType === 'custom_text' || interactiveConfigModal.sourceType === 'audio' || interactiveConfigModal.sourceType === 'image') && (
+                                        <div style={{ marginBottom: 14 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                                                <label style={{ fontSize: '0.84rem', color: '#cbd5e1', fontWeight: 600 }}>
+                                                    {interactiveConfigModal.generationMode === 'extract_existing'
+                                                        ? 'Nội dung đề bài có sẵn (Dán văn bản hoặc tải file Word/PDF/Ảnh):'
+                                                        : 'Nội dung / Kịch bản / Transcript bổ sung:'}
+                                                </label>
+                                                <div style={{ display: 'flex', gap: 8 }}>
+                                                    <label className="btn-regenerate-small" style={{ cursor: 'pointer', margin: 0 }}>
+                                                        {isExtractingInteractiveFile ? '⏳ Đang đọc...' : '📎 Tải Word / PDF'}
+                                                        <input
+                                                            type="file"
+                                                            accept=".docx,.pdf,.txt,.md"
+                                                            style={{ display: 'none' }}
+                                                            onChange={handleExtractInteractiveDocFile}
+                                                            disabled={isExtractingInteractiveFile}
+                                                        />
+                                                    </label>
+                                                    <label className="btn-regenerate-small" style={{ cursor: 'pointer', margin: 0 }}>
+                                                        🖼️ Đính kèm Ảnh đề bài
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            style={{ display: 'none' }}
+                                                            onChange={handleSelectInteractiveImage}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            {extractedInteractiveFileName && (
+                                                <div style={{ fontSize: '0.78rem', color: '#6ee7b7', marginBottom: 4 }}>
+                                                    ✅ Đã đọc nội dung từ: {extractedInteractiveFileName}
+                                                </div>
+                                            )}
+                                            {interactiveConfigModal.imageFileName && (
+                                                <div style={{ fontSize: '0.78rem', color: '#93c5fd', marginBottom: 4 }}>
+                                                    🖼️ Ảnh đính kèm: {interactiveConfigModal.imageFileName}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setInteractiveConfigModal(prev => ({ ...prev, imageBase64: '', imageFileName: '' }))}
+                                                        style={{ marginLeft: 8, background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer' }}
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <textarea
+                                                value={interactiveConfigModal.customContent}
+                                                onChange={(e) => setInteractiveConfigModal(prev => ({ ...prev, customContent: e.target.value }))}
+                                                rows={4}
+                                                placeholder="Dán nội dung tài liệu, transcript bài nghe hoặc đề bài trắc nghiệm có sẵn vào đây..."
+                                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #334155', background: '#0f172a', color: '#f8fafc' }}
+                                            />
+                                        </div>
+                                    )}
+
+                                    {interactiveConfigModal.sourceType === 'audio' && (
+                                        <div style={{ marginBottom: 14, padding: 12, borderRadius: 10, background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+                                            <label style={{ display: 'block', fontSize: '0.84rem', color: '#6ee7b7', marginBottom: 6, fontWeight: 600 }}>
+                                                🎧 Tệp âm thanh bài nghe (Audio Lab):
+                                            </label>
+                                            <input
+                                                type="file"
+                                                accept="audio/*"
+                                                onChange={(e) => {
+                                                    const f = e.target.files?.[0] || null;
+                                                    setInteractiveConfigModal(prev => ({ ...prev, audioFile: f }));
+                                                }}
+                                                style={{ fontSize: '0.82rem', color: '#cbd5e1' }}
+                                            />
+                                            {interactiveConfigModal.existingAudioName && !interactiveConfigModal.audioFile && (
+                                                <div style={{ fontSize: '0.78rem', color: '#a7f3d0', marginTop: 4 }}>
+                                                    Đang dùng audio mẫu: <strong>{interactiveConfigModal.existingAudioName}</strong>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Question Types Selection (7 Types) */}
+                                    <div style={{ marginBottom: 14 }}>
+                                        <label style={{ display: 'block', fontSize: '0.84rem', color: '#cbd5e1', marginBottom: 6, fontWeight: 600 }}>
+                                            Các dạng câu hỏi tương tác muốn tạo:
+                                        </label>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                            {[
+                                                { id: 'MC', label: '🔘 Trắc nghiệm 1 đáp án (MC)' },
+                                                { id: 'TF', label: '⚖️ Đúng / Sai (TF)' },
+                                                { id: 'MR', label: '☑️ Nhiều đáp án đúng (MR)' },
+                                                { id: 'FIB', label: '✍️ Điền từ (FIB)' },
+                                                { id: 'MATCH', label: '🔄 Nối cặp (MATCH)' },
+                                                { id: 'ORDER', label: '🔤 Sắp xếp câu (ORDER)' },
+                                                { id: 'CLOZE', label: '📝 Điền khuyết đoạn văn (CLOZE)' },
+                                            ].map(qt => {
+                                                const active = interactiveConfigModal.selectedQuestionTypes.includes(qt.id);
+                                                return (
+                                                    <button
+                                                        key={qt.id}
+                                                        type="button"
+                                                        onClick={() => toggleInteractiveQuestionType(qt.id)}
+                                                        style={{
+                                                            padding: '5px 10px',
+                                                            borderRadius: 6,
+                                                            border: `1px solid ${active ? '#8b5cf6' : '#334155'}`,
+                                                            background: active ? 'rgba(139, 92, 246, 0.22)' : '#0f172a',
+                                                            color: active ? '#ddd6fe' : '#94a3b8',
+                                                            fontSize: '0.78rem',
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        {qt.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Mastery Gate Settings: Question Count, Pass Score, Fallback Slide, Allow Continue */}
+                                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, padding: 14, borderRadius: 10, background: 'rgba(15, 23, 42, 0.65)', border: '1px solid rgba(148, 163, 184, 0.2)', marginBottom: 14 }}>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: 4 }}>Số lượng câu hỏi:</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={20}
+                                                value={interactiveConfigModal.questionCount}
+                                                onChange={(e) => {
+                                                    const cnt = Math.max(1, Number(e.target.value));
+                                                    setInteractiveConfigModal(prev => ({
+                                                        ...prev,
+                                                        questionCount: cnt,
+                                                        passScore: Math.min(prev.passScore, cnt),
+                                                    }));
+                                                }}
+                                                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, background: '#1e293b', color: '#fff', border: '1px solid #475569' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: 4 }}>Số câu đạt tối thiểu (Pass):</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={interactiveConfigModal.questionCount}
+                                                value={interactiveConfigModal.passScore}
+                                                onChange={(e) => setInteractiveConfigModal(prev => ({ ...prev, passScore: Math.max(1, Number(e.target.value)) }))}
+                                                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, background: '#1e293b', color: '#fff', border: '1px solid #475569' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: 4 }}>Trượt quay lại ôn từ Slide:</label>
+                                            <input
+                                                type="number"
+                                                min={1}
+                                                max={slides.length}
+                                                value={interactiveConfigModal.fallbackSlideIndex}
+                                                onChange={(e) => setInteractiveConfigModal(prev => ({ ...prev, fallbackSlideIndex: Math.max(1, Number(e.target.value)) }))}
+                                                style={{ width: '100%', padding: '6px 10px', borderRadius: 6, background: '#1e293b', color: '#fff', border: '1px solid #475569' }}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.84rem', color: '#cbd5e1', cursor: 'pointer', marginBottom: 18 }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={interactiveConfigModal.allowContinueWithoutPass}
+                                            onChange={(e) => setInteractiveConfigModal(prev => ({ ...prev, allowContinueWithoutPass: e.target.checked }))}
+                                        />
+                                        Cho phép sinh viên tiếp tục qua slide tiếp theo kể cả khi chưa đạt điểm chuẩn (Chế độ luyện tập không chặn bài)
+                                    </label>
+
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setInteractiveConfigModal(prev => ({ ...prev, isOpen: false }))}
+                                            disabled={isSubmittingInteractiveModal}
+                                            className="btn-cancel-edit"
+                                        >
+                                            Hủy
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleSubmitInteractiveConfigModal}
+                                            disabled={isSubmittingInteractiveModal}
+                                            className="btn-save-edit"
+                                            style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}
+                                        >
+                                            {isSubmittingInteractiveModal
+                                                ? '⏳ AI đang thiết kế hoạt động tương tác...'
+                                                : interactiveConfigModal.mode === 'insert'
+                                                    ? '🎯 Chèn Slide & Tạo Câu Hỏi Ngay'
+                                                    : '✨ Tạo Bộ Câu Hỏi Tương Tác'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 4. Moodle LMS Guide Modal */}
+                        {showMoodleGuide && (
+                            <div
+                                className="modal-backdrop"
+                                onClick={() => setShowMoodleGuide(false)}
+                                style={{
+                                    position: 'fixed',
+                                    inset: 0,
+                                    background: 'rgba(0, 0, 0, 0.72)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    zIndex: 9999,
+                                    padding: '20px',
+                                }}
+                            >
+                                <div
+                                    onClick={(e) => e.stopPropagation()}
+                                    style={{
+                                        background: '#1e293b',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: '14px',
+                                        maxWidth: '720px',
+                                        width: '100%',
+                                        maxHeight: '85vh',
+                                        overflowY: 'auto',
+                                        padding: '24px 28px',
+                                        color: '#f1f5f9',
+                                        boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                                    }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#60a5fa' }}>
+                                            🎓 Hướng dẫn Đưa Học Liệu Tương Tác lên LMS Moodle
+                                        </h3>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowMoodleGuide(false)}
+                                            style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.3rem', cursor: 'pointer' }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '0.92rem', lineHeight: 1.6 }}>
+                                        <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', padding: '14px 16px' }}>
+                                            <h4 style={{ margin: '0 0 8px 0', color: '#34d399' }}>
+                                                Cách 1: Dùng Gói SCORM 1.2 (.zip) — KHUYÊN DÙNG NHẤT ⭐
+                                            </h4>
+                                            <p style={{ margin: '0 0 8px 0', color: '#cbd5e1' }}>
+                                                Đóng gói toàn bộ <strong>Slide + Hình ảnh + Giọng đọc giảng bài + Audio mẫu + Bài tập tương tác chặn qua bài</strong> vào 1 file <code>.zip</code> duy nhất, tự động lưu điểm vào Sổ điểm (Gradebook) của Moodle:
+                                            </p>
+                                            <ol style={{ margin: 0, paddingLeft: '20px', color: '#e2e8f0' }}>
+                                                <li>Bấm nút <strong>📦 Xuất SCORM (.zip)</strong> trên thanh công cụ để tải gói học liệu về máy.</li>
+                                                <li>Mở khóa học trên <strong>Moodle</strong> → Bật <strong>Chế độ chỉnh sửa (Turn editing on)</strong>.</li>
+                                                <li>Bấm <strong>Thêm hoạt động hoặc tài nguyên (Add an activity or resource)</strong> → Chọn <strong>Gói SCORM (SCORM package)</strong>.</li>
+                                                <li>Đặt tên bài học và kéo thả file <code>_SCORM_1.2.zip</code> vừa tải vào ô <strong>Package file</strong>.</li>
+                                                <li>Bấm <strong>Lưu và hiển thị (Save and display)</strong>.</li>
+                                            </ol>
+                                        </div>
+
+                                        <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: '10px', padding: '14px 16px' }}>
+                                            <h4 style={{ margin: '0 0 8px 0', color: '#fbbf24' }}>
+                                                Cách 2: Dùng Gói H5P Tương tác (.h5p) — Tương thích H5P Moodle
+                                            </h4>
+                                            <ol style={{ margin: 0, paddingLeft: '20px', color: '#e2e8f0' }}>
+                                                <li>Bấm nút <strong>🌟 Xuất H5P (.h5p)</strong> để tải file <code>.h5p</code> về máy.</li>
+                                                <li>Trên <strong>Moodle</strong> → Chọn hoạt động <strong>H5P</strong> → Kéo thả file <code>_H5P.h5p</code> vào.</li>
+                                            </ol>
+                                        </div>
+
+                                        <div style={{ background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: '10px', padding: '14px 16px' }}>
+                                            <h4 style={{ margin: '0 0 8px 0', color: '#c4b5fd' }}>
+                                                Cách 3: Dùng Moodle Quiz XML (.xml) — Tạo đề kiểm tra độc lập
+                                            </h4>
+                                            <ol style={{ margin: 0, paddingLeft: '20px', color: '#e2e8f0' }}>
+                                                <li>Bấm nút <strong>📋 Xuất Moodle Quiz XML</strong> để tải file <code>_moodle_quiz.xml</code>.</li>
+                                                <li>Trên Moodle → Vào <strong>Ngân hàng câu hỏi (Question bank) → Nhập (Import)</strong> → Chọn <strong>Moodle XML format</strong>.</li>
+                                            </ol>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
                     </div>
                 )}
 
-                {/* ════════════ STEP 4: CONTENT ════════════ */}
+                {/* ════════════ STEP 4: QUESTION BANK ════════════ */}
                 {activeStep === 3 && sessionId && (
-                    <div className="step-content-view">
-                        <h2>📋 Nội dung Slides</h2>
-                        <div className="content-cards">
-                            {slides.map(slide => (
-                                <div key={slide.index} className="content-card">
-                                    <div className="content-card-header">
-                                        <span className="slide-badge">{slide.index + 1}</span>
-                                        <h3>{slide.title}</h3>
-                                    </div>
-                                    <div className="content-card-body">
-                                        {slide.content && slide.content.length > 0 ? (
-                                            <ul className="content-bullets">
-                                                {slide.content.map((item, i) => (
-                                                    <li key={i}>{item}</li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <p className="empty-content">Không có nội dung text</p>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* ════════════ STEP 5: QUESTIONS ════════════ */}
-                {activeStep === 4 && sessionId && (
                     <div className="step-questions">
                         {/* Hidden input for Excel Import */}
                         <input
@@ -3033,7 +5911,7 @@ export function PptxAudioToolPage() {
                                 <div className="question-config english-config-container">
                                     <h3>🇬🇧 Ngân Hàng Câu Hỏi Tiếng Anh (Ngành Ngôn Ngữ Anh)</h3>
                                     <p className="hint">
-                                        Tạo câu hỏi chuyên sâu ngành Ngôn ngữ Anh & Ngôn ngữ học, hỗ trợ đa dạng cấu trúc xuất chuẩn Moodle XML (Multiple Choice, Matching, Cloze, Short Answer, True/False, Essay).
+                                        Tạo câu hỏi chuyên sâu ngành Ngôn ngữ Anh & Ngôn ngữ học, hỗ trợ đa dạng cấu trúc chấm điểm tự động 100% chuẩn Moodle XML (Multiple Choice, Multiple Response, Matching, Cloze, True/False).
                                     </p>
 
                                     <div className="english-config-top-row">
@@ -3420,6 +6298,208 @@ export function PptxAudioToolPage() {
                     </div>
                 )}
             </div>
+
+            {/* ════════════ MODAL: TẠO / SỬA MÔN HỌC PPTX ════════════ */}
+            {showSubjectModal && (
+                <div className="pptx-modal-backdrop" onClick={() => !isSavingSubject && setShowSubjectModal(false)}>
+                    <div className="pptx-modal-dialog" onClick={(e) => e.stopPropagation()}>
+                        <div className="pptx-modal-header">
+                            <h3>{editingSubject ? '✏️ Chỉnh sửa Môn học (PPTX)' : '➕ Tạo Môn học Mới (PPTX)'}</h3>
+                            <button
+                                type="button"
+                                className="btn-close-modal"
+                                onClick={() => !isSavingSubject && setShowSubjectModal(false)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="pptx-modal-body">
+                            <p className="modal-desc-text">
+                                Môn học độc lập trong PPTX Tool giúp nhóm các bài giảng theo học phần và cung cấp ngữ cảnh chuyên ngành cho AI.
+                            </p>
+
+                            <div className="pptx-form-group">
+                                <label>📚 Tên môn học / Học phần <span style={{ color: '#f87171' }}>*</span></label>
+                                <input
+                                    type="text"
+                                    value={subjectForm.name}
+                                    onChange={(e) => setSubjectForm(prev => ({ ...prev, name: e.target.value }))}
+                                    placeholder="VD: Chăn nuôi đại cương, Bệnh truyền nhiễm thú y, Kinh tế nông nghiệp..."
+                                    className="form-input-dark"
+                                    autoFocus
+                                />
+                            </div>
+
+                            <div className="pptx-form-row-2">
+                                <div className="pptx-form-group">
+                                    <label>🎓 Ngành đào tạo (Major)</label>
+                                    <input
+                                        type="text"
+                                        value={subjectForm.major}
+                                        onChange={(e) => setSubjectForm(prev => ({ ...prev, major: e.target.value }))}
+                                        placeholder="VD: Thú y, Chăn nuôi, Nông học..."
+                                        className="form-input-dark"
+                                    />
+                                </div>
+                                <div className="pptx-form-group">
+                                    <label>🎯 Đối tượng người học</label>
+                                    <input
+                                        type="text"
+                                        value={subjectForm.targetAudience}
+                                        onChange={(e) => setSubjectForm(prev => ({ ...prev, targetAudience: e.target.value }))}
+                                        placeholder="VD: Sinh viên đại học, Học viên cao học..."
+                                        className="form-input-dark"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="pptx-form-group">
+                                <label>📝 Mô tả môn học & Mục tiêu học phần (Ngữ cảnh chung cho AI)</label>
+                                <textarea
+                                    rows={3}
+                                    value={subjectForm.description}
+                                    onChange={(e) => setSubjectForm(prev => ({ ...prev, description: e.target.value }))}
+                                    placeholder="Mô tả tóm tắt nội dung môn học, đối tượng sinh viên, chuẩn đầu ra hoặc định hướng thuật ngữ chuyên ngành..."
+                                    className="form-textarea-dark"
+                                />
+                            </div>
+                        </div>
+                        <div className="pptx-modal-footer">
+                            <button
+                                type="button"
+                                className="btn-modal-cancel"
+                                onClick={() => setShowSubjectModal(false)}
+                                disabled={isSavingSubject}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-modal-confirm"
+                                onClick={handleSaveSubject}
+                                disabled={isSavingSubject || !subjectForm.name.trim()}
+                            >
+                                {isSavingSubject ? 'Đang lưu...' : (editingSubject ? '💾 Cập nhật Môn học' : '✨ Tạo Môn học')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ════════════ MODAL: CẤU HÌNH BÀI HỌC & NẠP CONTEXT (WORD / PDF / TEXT) ════════════ */}
+            {showContextModal && sessionId && (
+                <div className="pptx-modal-backdrop" onClick={() => !isSavingMeta && setShowContextModal(false)}>
+                    <div className="pptx-modal-dialog modal-lg" onClick={(e) => e.stopPropagation()}>
+                        <div className="pptx-modal-header">
+                            <h3>📎 Cấu hình Bài học & Tài liệu Ngữ cảnh (Word / PDF / Text)</h3>
+                            <button
+                                type="button"
+                                className="btn-close-modal"
+                                onClick={() => !isSavingMeta && setShowContextModal(false)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className="pptx-modal-body">
+                            <p className="modal-desc-text">
+                                Gán bài học vào môn học và nạp thêm giáo trình / đề cương (.docx, .pdf) hoặc ghi chú để AI hiểu sâu nội dung khi các slide PowerPoint ít chữ hoặc chỉ có sơ đồ/hình ảnh.
+                            </p>
+
+                            <div className="pptx-form-row-2">
+                                <div className="pptx-form-group">
+                                    <label>📝 Tên bài giảng</label>
+                                    <input
+                                        type="text"
+                                        value={metaLessonTitle}
+                                        onChange={(e) => setMetaLessonTitle(e.target.value)}
+                                        placeholder="Nhập tên bài giảng..."
+                                        className="form-input-dark"
+                                    />
+                                </div>
+                                <div className="pptx-form-group">
+                                    <label>📚 Thuộc Môn học</label>
+                                    <select
+                                        value={metaSubjectId}
+                                        onChange={(e) => setMetaSubjectId(e.target.value)}
+                                        className="form-select-dark"
+                                    >
+                                        <option value="">-- Chưa phân loại --</option>
+                                        {subjects.map(sub => (
+                                            <option key={sub.id} value={sub.id}>
+                                                {sub.name} {sub.major ? `(${sub.major})` : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="pptx-form-group">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                                    <label style={{ margin: 0 }}>
+                                        📄 Tài liệu ngữ cảnh bổ sung cho bài học ({metaContextText.length.toLocaleString()} ký tự)
+                                    </label>
+                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                        <input
+                                            type="file"
+                                            ref={sessionContextFileInputRef}
+                                            accept=".docx,.pdf,.txt,.md"
+                                            onChange={handleUploadSessionContextFile}
+                                            style={{ display: 'none' }}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="btn-upload-context-doc"
+                                            onClick={() => sessionContextFileInputRef.current?.click()}
+                                            disabled={isUploadingSessionContext}
+                                        >
+                                            {isUploadingSessionContext ? '⏳ Đang trích xuất...' : '📤 Tải file Word (.docx) / PDF (.pdf)'}
+                                        </button>
+                                        {metaContextText && (
+                                            <button
+                                                type="button"
+                                                className="btn-clear-context-inline"
+                                                onClick={() => setMetaContextText('')}
+                                            >
+                                                Xóa nội dung
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                {metaContextFileName && (
+                                    <div className="context-file-badge" style={{ marginBottom: 8 }}>
+                                        📎 File đã nạp gần nhất: <strong>{metaContextFileName}</strong>
+                                    </div>
+                                )}
+                                <textarea
+                                    rows={9}
+                                    value={metaContextText}
+                                    onChange={(e) => setMetaContextText(e.target.value)}
+                                    placeholder="Dán nội dung giáo trình, đề cương bài giảng, giải thích các sơ đồ/bảng biểu trong slide hoặc tải file Word (.docx) / PDF (.pdf) ở nút phía trên..."
+                                    className="form-textarea-dark"
+                                />
+                            </div>
+                        </div>
+                        <div className="pptx-modal-footer">
+                            <button
+                                type="button"
+                                className="btn-modal-cancel"
+                                onClick={() => setShowContextModal(false)}
+                                disabled={isSavingMeta}
+                            >
+                                Đóng
+                            </button>
+                            <button
+                                type="button"
+                                className="btn-modal-confirm"
+                                onClick={handleSaveSessionMeta}
+                                disabled={isSavingMeta}
+                            >
+                                {isSavingMeta ? 'Đang lưu...' : '💾 Lưu Cấu hình & Ngữ cảnh'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

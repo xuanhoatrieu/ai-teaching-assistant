@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.6.14] - 2026-10-28 - 100% Auto-Gradable English Question Bank & PPTX Audio Tool Workspace Upgrade
+
+### Changed & Fixed
+- **100% Auto-Gradable English Question Generation & Moodle XML Export**:
+  - Removed non-auto-gradable `ESSAY` and `SHORTANSWER` question types from English question generation prompts, services (`EnglishQuestionService`, `PptxAudioToolService`, `PromptsService`), and UI selection panels (`Step6QuestionBank.tsx`, `PptxAudioTool.tsx`), standardizing on 5 auto-gradable types (`MC`, `MR`, `MATCH`, `CLOZE`, `TRUEFALSE`).
+  - Updated `buildEnglishQuestionXml()` in `moodle-xml.helper.ts` to skip standalone `ESSAY` and `SHORTANSWER` questions and skip unrecoverable broken questions instead of degrading them to `shortanswer`/`essay`, guaranteeing 100% auto-gradable Moodle XML exports (21/21 unit tests passing).
+- **PPTX Audio Tool & Subject Context Workspace**:
+  - Added Subject Management (`PptxSubject`) and workspace context integration in `PptxAudioTool` (`US-026`, `US-027`).
+
 ## [v1.6.13] - 2026-10-16 - Resilient Matching Question Moodle XML Export & PPTX Tool Integration
 
 ### Fixed

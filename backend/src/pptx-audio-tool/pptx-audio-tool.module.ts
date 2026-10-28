@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { PptxAudioToolController } from './pptx-audio-tool.controller';
+import { PptxAudioToolController, PptxAudioToolExportFileController } from './pptx-audio-tool.controller';
 import { PptxAudioToolService } from './pptx-audio-tool.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { TTSModule } from '../tts/tts.module';
@@ -10,7 +10,7 @@ import { GenerationJobModule } from '../generation-job/generation-job.module';
 
 @Module({
     imports: [PrismaModule, TTSModule, ModelConfigModule, AIModule, ApiKeysModule, GenerationJobModule],
-    controllers: [PptxAudioToolController],
+    controllers: [PptxAudioToolController, PptxAudioToolExportFileController],
     providers: [PptxAudioToolService],
 })
 export class PptxAudioToolModule {}

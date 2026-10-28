@@ -5,6 +5,7 @@ import {
     Put,
     Delete,
     Param,
+    Query,
     Body,
     Req,
     Res,
@@ -13,13 +14,17 @@ import {
     UseInterceptors,
     Logger,
     BadRequestException,
+    HttpException,
+    HttpStatus,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PptxAudioToolService } from './pptx-audio-tool.service';
+import type { PptxSubjectDto } from './pptx-audio-tool.service';
 import { GenerationJobService } from '../generation-job/generation-job.service';
+import { DownloadTicketService } from '../common/download-ticket/download-ticket.service';
 import type { Request, Response } from 'express';
-import { diskStorage } from 'multer';
+import { diskStorage, memoryStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as ExcelJS from 'exceljs';
@@ -55,6 +60,9 @@ const chunkStorage = diskStorage({
     },
 });
 
+// Configure multer for context document uploads (.docx / .pdf / .txt / .md)
+const contextDocStorage = memoryStorage();
+
 @Controller('pptx-audio-tool')
 @UseGuards(JwtAuthGuard)
 export class PptxAudioToolController {
@@ -63,6 +71,7 @@ export class PptxAudioToolController {
     constructor(
         private readonly service: PptxAudioToolService,
         private readonly jobService: GenerationJobService,
+        private readonly tickets: DownloadTicketService,
     ) {}
 
     // 0. List all sessions for current user
@@ -72,11 +81,64 @@ export class PptxAudioToolController {
         return this.service.listSessions(userId);
     }
 
+    // 0A. Subject CRUD for PPTX Tool (Independent Subjects)
+    @Get('subjects')
+    async listSubjects(@Req() req: Request) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.listSubjects(userId);
+    }
+
+    @Post('subjects')
+    async createSubject(
+        @Req() req: Request,
+        @Body() body: PptxSubjectDto,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.createSubject(userId, body);
+    }
+
+    @Put('subjects/:subjectId')
+    async updateSubject(
+        @Param('subjectId') subjectId: string,
+        @Req() req: Request,
+        @Body() body: Partial<PptxSubjectDto>,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.updateSubject(subjectId, userId, body);
+    }
+
+    @Delete('subjects/:subjectId')
+    async deleteSubject(
+        @Param('subjectId') subjectId: string,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.deleteSubject(subjectId, userId);
+    }
+
+    // 0B. Templates list for SCORM / H5P export
+    @Get('templates/list')
+    async getTemplates(@Req() req: Request) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.getTemplates(userId);
+    }
+
+    // 0C. Extract text from Word / PDF / TXT file (used in Create Lesson modal before session is created)
+    @Post('extract-context-file')
+    @UseInterceptors(FileInterceptor('file', {
+        storage: contextDocStorage,
+        limits: { fileSize: 30 * 1024 * 1024 },
+    }))
+    async extractContextFile(@UploadedFile() file: Express.Multer.File) {
+        return this.service.extractTextFromDocument(file);
+    }
+
     // 1. Upload PPTX (single request for small/medium files) → parse → create session
     @Post('upload')
     @UseInterceptors(FileInterceptor('file', { storage: pptxStorage }))
     async upload(
         @UploadedFile() file: Express.Multer.File,
+        @Body() body: { pptxSubjectId?: string; lessonTitle?: string; contextText?: string; contextFileName?: string },
         @Req() req: Request,
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
@@ -84,7 +146,12 @@ export class PptxAudioToolController {
             file.originalname = fixUtf8Filename(file.originalname);
         }
         this.logger.log(`Upload PPTX: ${file?.originalname} by user ${userId}`);
-        return this.service.uploadAndParse(file, userId);
+        return this.service.uploadAndParse(file, userId, {
+            pptxSubjectId: body?.pptxSubjectId || null,
+            lessonTitle: body?.lessonTitle,
+            contextText: body?.contextText,
+            contextFileName: body?.contextFileName || null,
+        });
     }
 
     // 1A. Init chunked upload (for large files to bypass Cloudflare 100MB limit)
@@ -121,14 +188,27 @@ export class PptxAudioToolController {
     // 1C. Complete chunked upload & merge chunks -> parse -> create session
     @Post('upload-chunk/complete')
     async completeChunkUpload(
-        @Body() body: { uploadId: string; fileName: string; totalChunks: number },
+        @Body() body: {
+            uploadId: string;
+            fileName: string;
+            totalChunks: number;
+            pptxSubjectId?: string;
+            lessonTitle?: string;
+            contextText?: string;
+            contextFileName?: string;
+        },
         @Req() req: Request,
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
         if (!body.uploadId || !body.fileName || !body.totalChunks) {
             throw new BadRequestException('Thiếu thông tin hoàn tất upload');
         }
-        return this.service.mergeChunksAndParse(body.uploadId, body.fileName, body.totalChunks, userId);
+        return this.service.mergeChunksAndParse(body.uploadId, body.fileName, body.totalChunks, userId, {
+            pptxSubjectId: body.pptxSubjectId || null,
+            lessonTitle: body.lessonTitle,
+            contextText: body.contextText,
+            contextFileName: body.contextFileName || null,
+        });
     }
 
     // 2. Get session info
@@ -137,10 +217,215 @@ export class PptxAudioToolController {
         return this.service.getSession(sessionId);
     }
 
+    // 2A. Update session metadata (lessonTitle, pptxSubjectId, contextText)
+    @Put(':sessionId/meta')
+    async updateSessionMeta(
+        @Param('sessionId') sessionId: string,
+        @Req() req: Request,
+        @Body() body: {
+            lessonTitle?: string;
+            pptxSubjectId?: string | null;
+            contextText?: string;
+            contextFileName?: string | null;
+        },
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.updateSessionMeta(sessionId, userId, body);
+    }
+
+    // 2B. Upload context document (.docx / .pdf / .txt / .md) to an existing session
+    @Post(':sessionId/context-file')
+    @UseInterceptors(FileInterceptor('file', {
+        storage: contextDocStorage,
+        limits: { fileSize: 30 * 1024 * 1024 },
+    }))
+    async uploadSessionContextFile(
+        @Param('sessionId') sessionId: string,
+        @UploadedFile() file: Express.Multer.File,
+        @Body('mode') mode: 'replace' | 'append' = 'append',
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.uploadSessionContextFile(sessionId, userId, file, mode || 'append');
+    }
+
     // 3. Get parsed slides with notes + audio status
     @Get(':sessionId/slides')
     async getSlides(@Param('sessionId') sessionId: string) {
         return this.service.getSlides(sessionId);
+    }
+
+    // 3A. Create / Insert a new slide (theory or interactive checkpoint)
+    @Post(':sessionId/slides')
+    async createSlide(
+        @Param('sessionId') sessionId: string,
+        @Req() req: Request,
+        @Body() body: {
+            title?: string;
+            content?: string | string[];
+            speakerNote?: string;
+            slideType?: string;
+            layoutType?: string;
+            interactiveData?: any;
+            insertAfterIndex?: number;
+        },
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.createSlide(sessionId, userId, body);
+    }
+
+    // 3B. Update slide content / optimized bullets / layout / interactiveData
+    @Put(':sessionId/slides/:index/content')
+    async updateSlideContent(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @Req() req: Request,
+        @Body() body: {
+            title?: string;
+            content?: string[] | string;
+            optimizedContent?: Array<{ emoji: string; point: string; description: string }> | null;
+            speakerNote?: string;
+            slideType?: string;
+            layoutType?: string;
+            interactiveData?: any;
+        },
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.updateSlideContent(sessionId, parseInt(index, 10), userId, body);
+    }
+
+    // 3C. Delete a slide
+    @Delete(':sessionId/slides/:index')
+    async deleteSlide(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.deleteSlide(sessionId, parseInt(index, 10), userId);
+    }
+
+    // 3D. Move slide up or down
+    @Post(':sessionId/slides/:index/move')
+    async moveSlide(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @Req() req: Request,
+        @Body('direction') direction: 'up' | 'down',
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        if (direction !== 'up' && direction !== 'down') {
+            throw new BadRequestException('Direction must be "up" or "down"');
+        }
+        return this.service.moveSlide(sessionId, parseInt(index, 10), userId, direction);
+    }
+
+    // 3E. Upload custom cropped slide image
+    @Post(':sessionId/slides/:index/upload-image')
+    @UseInterceptors(FileInterceptor('image', {
+        storage: memoryStorage(),
+        limits: { fileSize: 15 * 1024 * 1024 },
+    }))
+    async uploadSlideImage(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @UploadedFile() file: Express.Multer.File,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.uploadCustomSlideImage(sessionId, parseInt(index, 10), userId, file);
+    }
+
+    // 3F. Regenerate / optimize slide content with AI
+    @Post(':sessionId/slides/:index/regenerate-content')
+    async regenerateSlideContent(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.regenerateSlideContent(sessionId, parseInt(index, 10), userId);
+    }
+
+    // 3G. Regenerate slide illustration image with AI
+    @Post(':sessionId/slides/:index/regenerate-image')
+    async regenerateSlideImage(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.regenerateSlideImage(sessionId, parseInt(index, 10), userId);
+    }
+
+    // 3H. Upload extra sample audio for a slide
+    @Post(':sessionId/slides/:index/extra-audio')
+    @UseInterceptors(FileInterceptor('audio', {
+        storage: memoryStorage(),
+        limits: { fileSize: 30 * 1024 * 1024 },
+    }))
+    async uploadExtraAudio(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @UploadedFile() file: Express.Multer.File,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.uploadExtraAudio(sessionId, parseInt(index, 10), userId, file);
+    }
+
+    // 3I. Delete extra sample audio from a slide
+    @Delete(':sessionId/slides/:index/extra-audio')
+    async deleteExtraAudio(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @Req() req: Request,
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.deleteExtraAudio(sessionId, parseInt(index, 10), userId);
+    }
+
+    // 3J. Generate AI interactive activity / checkpoint quiz for a slide
+    @Post(':sessionId/slides/:index/generate-interactions')
+    async generateSlideInteractions(
+        @Param('sessionId') sessionId: string,
+        @Param('index') index: string,
+        @Req() req: Request,
+        @Body() body: {
+            activityType?: string;
+            mode?: 'generate_new' | 'extract_existing';
+            sourceType?: 'slide_range' | 'custom_text' | 'current_slide' | 'audio' | 'image';
+            fromSlideIndex?: number;
+            toSlideIndex?: number;
+            customContent?: string;
+            imageBase64?: string;
+            selectedQuestionTypes?: string[];
+            questionCount?: number;
+            passScore?: number;
+            fallbackSlideIndex?: number;
+            allowContinueWithoutPass?: boolean;
+        },
+    ) {
+        const userId = (req as any).user?.id || (req as any).user?.sub;
+        return this.service.generateSlideInteractions(
+            sessionId,
+            parseInt(index, 10),
+            userId,
+            body?.activityType,
+            {
+                mode: body?.mode,
+                sourceType: body?.sourceType,
+                fromSlideIndex: body?.fromSlideIndex,
+                toSlideIndex: body?.toSlideIndex,
+                customContent: body?.customContent,
+                imageBase64: body?.imageBase64,
+                selectedQuestionTypes: body?.selectedQuestionTypes,
+                questionCount: body?.questionCount,
+                passScore: body?.passScore,
+                fallbackSlideIndex: body?.fallbackSlideIndex,
+                allowContinueWithoutPass: body?.allowContinueWithoutPass,
+            },
+        );
     }
 
     // 4. Toggle language (EN/VN)
@@ -666,6 +951,107 @@ export class PptxAudioToolController {
         return this.service.exportReviewQuestionsExcel(sessionId, res);
     }
 
+    // 11. SCORM 1.2 & H5P Export (Ticket-based native download + direct fallback)
+    @Post(':sessionId/export/scorm/ticket')
+    async createScormTicket(
+        @Param('sessionId') sessionId: string,
+        @Body() body: { templateId?: string; bgOption?: string; theme?: string },
+        @Req() req: Request,
+    ) {
+        const user = (req as any).user;
+        const userId = user?.id || user?.sub;
+        await this.tickets.assertPptxSessionAccess(sessionId, { id: userId, role: user?.role });
+        const { ticket, expiresInSeconds } = this.tickets.issue({
+            kind: 'pptx-tool-scorm',
+            userId,
+            lessonId: sessionId,
+            params: {
+                templateId: body?.templateId,
+                bgOption: body?.bgOption,
+                theme: body?.theme,
+            },
+        });
+        return {
+            ticket,
+            expiresInSeconds,
+            url: `/api/pptx-audio-tool/${encodeURIComponent(sessionId)}/export/scorm/file?ticket=${encodeURIComponent(ticket)}`,
+        };
+    }
+
+    @Post(':sessionId/export/h5p/ticket')
+    async createH5pTicket(
+        @Param('sessionId') sessionId: string,
+        @Body() body: { templateId?: string; bgOption?: string; theme?: string },
+        @Req() req: Request,
+    ) {
+        const user = (req as any).user;
+        const userId = user?.id || user?.sub;
+        await this.tickets.assertPptxSessionAccess(sessionId, { id: userId, role: user?.role });
+        const { ticket, expiresInSeconds } = this.tickets.issue({
+            kind: 'pptx-tool-h5p',
+            userId,
+            lessonId: sessionId,
+            params: {
+                templateId: body?.templateId,
+                bgOption: body?.bgOption,
+                theme: body?.theme,
+            },
+        });
+        return {
+            ticket,
+            expiresInSeconds,
+            url: `/api/pptx-audio-tool/${encodeURIComponent(sessionId)}/export/h5p/file?ticket=${encodeURIComponent(ticket)}`,
+        };
+    }
+
+    @Get(':sessionId/export/scorm')
+    async exportScormDirect(
+        @Param('sessionId') sessionId: string,
+        @Query('templateId') templateId: string,
+        @Query('bgOption') bgOption: string,
+        @Query('theme') theme: string,
+        @Req() req: Request,
+        @Res() res: Response,
+    ) {
+        const user = (req as any).user;
+        const userId = user?.id || user?.sub;
+        await this.tickets.assertPptxSessionAccess(sessionId, { id: userId, role: user?.role });
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'no-store');
+        return this.service.exportScorm(sessionId, res, templateId, bgOption, theme);
+    }
+
+    @Get(':sessionId/export/h5p')
+    async exportH5pDirect(
+        @Param('sessionId') sessionId: string,
+        @Query('templateId') templateId: string,
+        @Query('bgOption') bgOption: string,
+        @Query('theme') theme: string,
+        @Req() req: Request,
+        @Res() res: Response,
+    ) {
+        const user = (req as any).user;
+        const userId = user?.id || user?.sub;
+        await this.tickets.assertPptxSessionAccess(sessionId, { id: userId, role: user?.role });
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'no-store');
+        return this.service.exportH5p(sessionId, res, templateId, bgOption, theme);
+    }
+
+    @Get(':sessionId/export/moodle-xml')
+    async exportMoodleXml(
+        @Param('sessionId') sessionId: string,
+        @Req() req: Request,
+        @Res() res: Response,
+    ) {
+        const user = (req as any).user;
+        const userId = user?.id || user?.sub;
+        await this.tickets.assertPptxSessionAccess(sessionId, { id: userId, role: user?.role });
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'no-store');
+        return this.service.exportMoodleXml(sessionId, res);
+    }
+
     // 12. Delete session and all its data
     @Delete(':sessionId')
     async deleteSession(
@@ -674,5 +1060,59 @@ export class PptxAudioToolController {
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
         return this.service.deleteSession(sessionId, userId);
+    }
+}
+
+/**
+ * Unguarded file download controller for PPTX Audio Tool SCORM 1.2 & H5P exports.
+ * Uses short-lived single-use tickets issued by PptxAudioToolController.
+ */
+@Controller('pptx-audio-tool/:sessionId/export')
+export class PptxAudioToolExportFileController {
+    constructor(
+        private readonly service: PptxAudioToolService,
+        private readonly tickets: DownloadTicketService,
+    ) {}
+
+    @Get('scorm/file')
+    async downloadScorm(
+        @Param('sessionId') sessionId: string,
+        @Query('ticket') ticket: string,
+        @Res() res: Response,
+    ) {
+        const payload = this.tickets.resolve(ticket, 'pptx-tool-scorm', sessionId);
+        if (!payload) {
+            throw new HttpException('Liên kết tải đã hết hạn. Vui lòng bấm xuất lại.', HttpStatus.UNAUTHORIZED);
+        }
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'no-store');
+        return this.service.exportScorm(
+            sessionId,
+            res,
+            payload.params.templateId,
+            payload.params.bgOption,
+            payload.params.theme,
+        );
+    }
+
+    @Get('h5p/file')
+    async downloadH5p(
+        @Param('sessionId') sessionId: string,
+        @Query('ticket') ticket: string,
+        @Res() res: Response,
+    ) {
+        const payload = this.tickets.resolve(ticket, 'pptx-tool-h5p', sessionId);
+        if (!payload) {
+            throw new HttpException('Liên kết tải đã hết hạn. Vui lòng bấm xuất lại.', HttpStatus.UNAUTHORIZED);
+        }
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'no-store');
+        return this.service.exportH5p(
+            sessionId,
+            res,
+            payload.params.templateId,
+            payload.params.bgOption,
+            payload.params.theme,
+        );
     }
 }

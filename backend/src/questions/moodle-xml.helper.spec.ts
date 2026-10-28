@@ -6,6 +6,7 @@ import {
     isMatchingQuestionText,
     extractMatchPairs,
     buildEnglishQuestionXml,
+    buildEnglishMoodleXml,
     EnglishQuestionData,
 } from './moodle-xml.helper';
 
@@ -245,6 +246,70 @@ describe('moodle-xml.helper', () => {
 
             // Negative proof: MUST NOT export as essay (no TinyMCE text area on Moodle!)
             expect(xml).not.toContain('<question type="essay">');
+        });
+
+        it('buildEnglishMoodleXml should strictly exclude ESSAY and open-ended SHORTANSWER questions so 100% of quiz questions are auto-graded', () => {
+            const questions: EnglishQuestionData[] = [
+                {
+                    id: '1',
+                    questionOrder: 1,
+                    questionType: 'MC',
+                    questionText: 'Which of the following is a voiceless bilabial plosive?',
+                    dataJson: JSON.stringify({
+                        options: [
+                            { text: '/p/', isCorrect: true },
+                            { text: '/b/', isCorrect: false },
+                            { text: '/t/', isCorrect: false },
+                            { text: '/d/', isCorrect: false },
+                        ],
+                    }),
+                    points: 1,
+                },
+                {
+                    id: '2',
+                    questionOrder: 2,
+                    questionType: 'ESSAY',
+                    questionText: 'Viết một đoạn ngắn từ 4 đến 6 câu về một nhân viên khách sạn.',
+                    dataJson: JSON.stringify({
+                        responseFormat: 'essay',
+                        graderInfo: { totalPoints: 5, criteria: [] },
+                    }),
+                    points: 5,
+                },
+                {
+                    id: '3',
+                    questionOrder: 3,
+                    questionType: 'SHORTANSWER',
+                    questionText: 'Tự đặt một câu tiếng Anh dùng quá khứ tiếp diễn với when.',
+                    dataJson: JSON.stringify({
+                        acceptableAnswers: ['I was cooking when the phone rang.'],
+                    }),
+                    points: 1,
+                },
+                {
+                    id: '4',
+                    questionOrder: 4,
+                    questionType: 'SHORTANSWER',
+                    questionText: 'Viết trợ động từ thích hợp: “___ you usually travel by train?”',
+                    dataJson: JSON.stringify({
+                        acceptableAnswers: ['Do'],
+                    }),
+                    points: 1,
+                },
+            ];
+
+            const xml = buildEnglishMoodleXml(questions, 'Unit 1');
+
+            // Positive proof: MC question and blank-upgraded CLOZE question are included
+            expect(xml).toContain('<question type="multichoice">');
+            expect(xml).toContain('<question type="cloze">');
+            expect(xml).toContain('{1:SHORTANSWER:=Do}');
+
+            // Negative proof: Zero essay or standalone shortanswer questions in XML
+            expect(xml).not.toContain('<question type="essay">');
+            expect(xml).not.toContain('<question type="shortanswer">');
+            expect(xml).not.toContain('Viết một đoạn ngắn từ 4 đến 6 câu');
+            expect(xml).not.toContain('Tự đặt một câu tiếng Anh');
         });
     });
 });

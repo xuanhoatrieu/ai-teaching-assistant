@@ -76,9 +76,7 @@ const QUESTION_TYPE_OPTIONS = [
     { id: 'MR', label: 'Multiple Response (Nhiều đáp án)', badge: 'MR', icon: '☑️' },
     { id: 'MATCH', label: 'Matching (Nối cột / Ghép đôi)', badge: 'MATCH', icon: '🔄' },
     { id: 'CLOZE', label: 'Cloze / Embedded (Điền khuyết)', badge: 'CLOZE', icon: '📝' },
-    { id: 'SHORTANSWER', label: 'Short Answer (Điền từ / IPA)', badge: 'SA', icon: '✍️' },
     { id: 'TRUEFALSE', label: 'True / False (Đúng / Sai)', badge: 'TF', icon: '⚖️' },
-    { id: 'ESSAY', label: 'Essay / Analysis (Tự luận / Phân tích)', badge: 'ESSAY', icon: '📄' },
 ];
 
 const SUB_DISCIPLINE_OPTIONS = [
@@ -221,7 +219,7 @@ export function Step6QuestionBank() {
     const [englishLevelCounts, setEnglishLevelCounts] = useState({ level1: 20, level2: 20, level3: 10 });
     const [selectedSubDiscipline, setSelectedSubDiscipline] = useState('ALL');
     const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([
-        'MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY'
+        'MC', 'MR', 'MATCH', 'CLOZE', 'TRUEFALSE'
     ]);
     const [isGeneratingEnglish, setIsGeneratingEnglish] = useState(false);
     const [isAppendingEnglish, setIsAppendingEnglish] = useState(false);
@@ -648,7 +646,7 @@ export function Step6QuestionBank() {
     };
 
     const selectAllQuestionTypes = () => {
-        setSelectedQuestionTypes(['MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY']);
+        setSelectedQuestionTypes(['MC', 'MR', 'MATCH', 'CLOZE', 'TRUEFALSE']);
     };
 
     const deselectAllQuestionTypes = () => {
@@ -1201,7 +1199,7 @@ export function Step6QuestionBank() {
                     <div className="question-config english-config-container">
                         <h3>🇬🇧 Ngân Hàng Câu Hỏi Tiếng Anh (Ngành Ngôn Ngữ Anh)</h3>
                         <p className="hint">
-                            Tạo câu hỏi chuyên sâu ngành Ngôn ngữ Anh & Ngôn ngữ học, hỗ trợ đa dạng cấu trúc xuất chuẩn Moodle XML (Multiple Choice, Matching, Cloze, Short Answer, True/False, Essay).
+                            Tạo câu hỏi chuyên sâu ngành Ngôn ngữ Anh & Ngôn ngữ học, hỗ trợ đa dạng cấu trúc chấm điểm tự động 100% chuẩn Moodle XML (Multiple Choice, Multiple Response, Matching, Cloze, True/False).
                         </p>
 
                         {/* Hàng 1: Số lượng câu hỏi 3 mức & Phân môn chuyên sâu (Thẳng hàng nhau) */}

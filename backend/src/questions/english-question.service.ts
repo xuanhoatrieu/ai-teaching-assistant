@@ -36,7 +36,7 @@ export class GenerateEnglishQuestionsDto {
     @IsOptional()
     @IsArray()
     @IsString({ each: true })
-    questionTypes?: string[]; // e.g. ['MC', 'MR', 'MATCH', 'CLOZE', 'SHORTANSWER', 'TRUEFALSE', 'ESSAY']
+    questionTypes?: string[]; // e.g. ['MC', 'MR', 'MATCH', 'CLOZE', 'TRUEFALSE']
 
     @IsOptional()
     @IsString()
@@ -298,9 +298,13 @@ export class EnglishQuestionService implements OnModuleInit {
         const level2 = dto.level2 ?? 20;
         const level3 = dto.level3 ?? 10;
         const totalCount = dto.totalCount || (level1 + level2 + level3);
-        const types = dto.questionTypes && dto.questionTypes.length > 0
-            ? dto.questionTypes.join(', ')
-            : 'MC, MATCH, CLOZE, SHORTANSWER, TRUEFALSE, ESSAY';
+        const allowedTypes = ['MC', 'MR', 'MATCH', 'CLOZE', 'TRUEFALSE'];
+        const requestedTypes = Array.isArray(dto.questionTypes)
+            ? dto.questionTypes.map((t) => String(t).toUpperCase()).filter((t) => allowedTypes.includes(t))
+            : [];
+        const types = requestedTypes.length > 0
+            ? requestedTypes.join(', ')
+            : 'MC, MR, MATCH, CLOZE, TRUEFALSE';
         const subDiscipline = dto.subDiscipline || 'ALL (Comprehensive English Studies & Linguistics)';
 
         this.logger.log(`Generating ${totalCount} English questions (L1:${level1}, L2:${level2}, L3:${level3}) for lesson ${lessonId}, types: ${types}, subDiscipline: ${subDiscipline}`);
@@ -381,6 +385,17 @@ export class EnglishQuestionService implements OnModuleInit {
                     }
                     if (qType === 'MATCH' && (!Array.isArray(parsedData.pairs) || parsedData.pairs.length === 0)) {
                         parsedData.pairs = matchCheck.pairs.map((p) => ({ left: p.sub, right: p.ans }));
+                    }
+                }
+
+                // Strictly reject ESSAY and SHORTANSWER (unless recoverable to MC/CLOZE)
+                if (qType === 'ESSAY' || qType === 'SHORTANSWER' || qType === 'SA') {
+                    if (Array.isArray(parsedData?.options) && parsedData.options.length >= 2) {
+                        qType = 'MC';
+                    } else if (parsedData?.clozeText || /\{\d+:[A-Za-z_]+:/.test(questionText)) {
+                        qType = 'CLOZE';
+                    } else {
+                        continue;
                     }
                 }
 

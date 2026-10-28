@@ -16,7 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service';
  * Tickets are reusable until expiry on purpose: IDM re-requests the same URL
  * after the browser request is cancelled.
  */
-export type DownloadTicketKind = 'pptx-temp' | 'scorm' | 'h5p';
+export type DownloadTicketKind = 'pptx-temp' | 'scorm' | 'h5p' | 'pptx-tool-scorm' | 'pptx-tool-h5p' | 'pptx-tool-pptx';
 
 export interface DownloadTicketPayload {
     kind: DownloadTicketKind;
@@ -54,6 +54,22 @@ export class DownloadTicketService {
         }
         if (lesson.subject.userId !== user.id && user.role !== 'ADMIN') {
             throw new ForbiddenException('Bạn không có quyền tải tài nguyên của bài giảng này');
+        }
+    }
+
+    /**
+     * Ensure the user owns the PPTX Audio Tool session (admins may access any session).
+     */
+    async assertPptxSessionAccess(sessionId: string, user: { id: string; role?: string }): Promise<void> {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            select: { userId: true },
+        });
+        if (!session) {
+            throw new NotFoundException('Không tìm thấy phiên làm việc PPTX');
+        }
+        if (session.userId !== user.id && user.role !== 'ADMIN') {
+            throw new ForbiddenException('Bạn không có quyền tải tài nguyên của bài giảng PPTX này');
         }
     }
 
