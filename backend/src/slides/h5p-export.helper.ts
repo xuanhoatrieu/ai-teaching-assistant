@@ -91,6 +91,8 @@ export function generateH5pJson(lessonTitle: string): string {
 
 export function generateH5pContentJson(lessonTitle: string, slides: any[], options?: H5pExportOptions): string {
     const isDarkTheme = options?.theme === 'dark';
+    const isMinimal = options?.bgOption === 'minimal';
+    const isTuafBranded = !options?.bgOption || options?.bgOption === 'tuaf_clean' || options?.bgOption === 'tuaf_full';
     const titleColor = isDarkTheme ? '#52b788' : '#005a36';
     const pointColor = isDarkTheme ? '#ffffff' : '#0f172a';
     const descColor = isDarkTheme ? '#cbd5e1' : '#334155';
@@ -401,6 +403,10 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 }).join('')}</div>`
                 : '';
 
+            const titleBadgeLabel = isMinimal
+                ? '🎓 HỌC LIỆU SỐ TƯƠNG TÁC • BÀI GIẢNG ĐIỆN TỬ'
+                : '🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN • BÀI GIẢNG ĐIỆN TỬ';
+
             // 1. Centered Title Card
             elements.push({
                 x: 6,
@@ -411,7 +417,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                     library: 'H5P.AdvancedText 1.1',
                     params: {
                         text: `<div style="text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                            <div style="display: inline-block; padding: 4px 16px; border-radius: 999px; background: ${badgeBg}; color: ${badgeColor}; font-size: 0.9em; font-weight: 700; margin-bottom: 18px;">🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN • BÀI GIẢNG ĐIỆN TỬ</div>
+                            <div style="display: inline-block; padding: 4px 16px; border-radius: 999px; background: ${badgeBg}; color: ${badgeColor}; font-size: 0.9em; font-weight: 700; margin-bottom: 18px;">${titleBadgeLabel}</div>
                             <h1 style="margin: 0; padding: 0; font-size: 2.4em; line-height: 1.35; color: ${titleColor}; font-weight: 800;">${escapeHtml(slideTitleText)}</h1>
                             ${subtitleHtml}
                         </div>`
@@ -735,7 +741,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 path: options.titleBgFilename,
                 mime: getImageMime(options.titleBgFilename),
                 copyright: {
-                    title: 'TUAF Title Background',
+                    title: isTuafBranded ? 'TUAF Title Background' : 'Slide Title Background',
                     license: 'U'
                 },
                 width: 1920,
@@ -774,7 +780,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 path: options.contentBgFilename,
                 mime: getImageMime(options.contentBgFilename),
                 copyright: {
-                    title: 'TUAF Background',
+                    title: isTuafBranded ? 'TUAF Background' : 'Slide Background',
                     license: 'U'
                 },
                 width: 1920,

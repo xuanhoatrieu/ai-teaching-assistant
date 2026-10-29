@@ -266,5 +266,51 @@ describe('SCORM 1.2 & H5P Full-Slide Canvas and Media Security Helpers', () => {
             expect(clozeQuizEl.action.params.answers.length).toBeGreaterThanOrEqual(2);
             expect(clozeQuizEl.action.params.answers.filter((a: any) => a.correct).length).toBe(1);
         });
+
+        it('completely removes Đại học Nông Lâm / TUAF branding text in minimal mode while keeping it in tuaf_clean mode', () => {
+            const sampleLessonSlides = [
+                {
+                    slideIndex: 1,
+                    slideType: 'title',
+                    title: 'Introduction to Artificial Intelligence',
+                    content: ['Module 1 — Fundamentals'],
+                },
+                {
+                    slideIndex: 2,
+                    slideType: 'content',
+                    title: 'Machine Learning Basics',
+                    content: ['Supervised learning', 'Unsupervised learning'],
+                },
+            ];
+
+            // Minimal mode (for external institutions): ZERO Nông Lâm / Thái Nguyên text in SCORM & H5P
+            const scormMinimal = generateScormPlayerHtml('Introduction to AI', sampleLessonSlides, {
+                bgOption: 'minimal',
+                theme: 'light',
+            });
+            expect(scormMinimal).not.toMatch(/đại học nông lâm|nông lâm|thái nguyên/i);
+            expect(scormMinimal).not.toContain('<div class="tuaf-header-brand">');
+            expect(scormMinimal).toContain('HỌC LIỆU SỐ TƯƠNG TÁC');
+
+            const h5pMinimalRaw = generateH5pContentJson('Introduction to AI', sampleLessonSlides, {
+                bgOption: 'minimal',
+                theme: 'light',
+            });
+            expect(h5pMinimalRaw).not.toMatch(/đại học nông lâm|nông lâm|thái nguyên|tuaf/i);
+            expect(h5pMinimalRaw).toContain('HỌC LIỆU SỐ TƯƠNG TÁC');
+
+            // Default TUAF Clean mode: keeps university branding
+            const scormTuaf = generateScormPlayerHtml('Introduction to AI', sampleLessonSlides, {
+                bgOption: 'tuaf_clean',
+                theme: 'light',
+            });
+            expect(scormTuaf).toContain('ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN');
+
+            const h5pTuafRaw = generateH5pContentJson('Introduction to AI', sampleLessonSlides, {
+                bgOption: 'tuaf_clean',
+                theme: 'light',
+            });
+            expect(h5pTuafRaw).toContain('ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN');
+        });
     });
 });

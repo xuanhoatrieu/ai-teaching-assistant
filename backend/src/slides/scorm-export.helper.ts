@@ -2861,7 +2861,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         slideCard.innerHTML = \`
           <div class="slide-top-header title-slide-top">
             <div class="title-slide-badge">
-              <span>🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN</span>
+              ${isMinimal ? '<span>🎓 HỌC LIỆU SỐ TƯƠNG TÁC</span>' : '<span>🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN</span>'}
               <span class="badge-sub">BÀI GIẢNG ĐIỆN TỬ</span>
             </div>
             \${speakerBtnHtml}

@@ -1356,7 +1356,7 @@ export function Step5GeneratePPTX() {
                             >
                                 <option value="tuaf_clean">🌿 Nhận diện TUAF Tối ưu (Khuyên dùng - Logo Player, viền xanh, tối đa diện tích slide)</option>
                                 <option value="tuaf_full">🖼️ Áp dụng ảnh nền gốc TUAF (Dùng cả 2 ảnh bìa & nội dung)</option>
-                                <option value="minimal">📄 Nền tối giản (Nền phẳng, không ảnh & không logo)</option>
+                                <option value="minimal">📄 Nền tối giản (Không ảnh, không logo & không tên trường)</option>
                                 <option value="custom">🎨 Đồng bộ theo mẫu PPTX đã chọn ở trên</option>
                             </select>
                         </div>
@@ -1371,7 +1371,7 @@ export function Step5GeneratePPTX() {
                                 className="template-dropdown"
                                 title="Lựa chọn tông màu sáng học thuật (độ tương phản cao) hoặc tông màu tối cho gói xuất"
                             >
-                                <option value="light">☀️ Giao diện Sáng (Học thuật TUAF - Khuyên dùng cho LMS & Giảng đường)</option>
+                                <option value="light">{scormH5pBgOption === 'minimal' ? '☀️ Giao diện Sáng (Học thuật - Khuyên dùng cho LMS & Giảng đường)' : '☀️ Giao diện Sáng (Học thuật TUAF - Khuyên dùng cho LMS & Giảng đường)'}</option>
                                 <option value="dark">🌙 Giao diện Tối (Modern Slate Dark - Tối ưu ban đêm)</option>
                             </select>
                         </div>

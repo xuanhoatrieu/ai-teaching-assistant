@@ -3887,7 +3887,7 @@ export function PptxAudioToolPage() {
                                     >
                                         <option value="tuaf_clean">🌿 Nhận diện TUAF Tối ưu (Khuyên dùng - Logo Player, viền xanh, tối đa diện tích slide)</option>
                                         <option value="tuaf_full">🖼️ Áp dụng ảnh nền gốc TUAF (Dùng cả 2 ảnh bìa & nội dung)</option>
-                                        <option value="minimal">📄 Nền tối giản (Nền phẳng, không ảnh & không logo)</option>
+                                        <option value="minimal">📄 Nền tối giản (Không ảnh, không logo & không tên trường)</option>
                                         {(() => {
                                             const tpl = templates.find(t => t.id === selectedTemplateId);
                                             if (tpl && !tpl.isSystem) {
@@ -3907,7 +3907,7 @@ export function PptxAudioToolPage() {
                                         className="template-dropdown"
                                         title="Lựa chọn tông màu sáng học thuật hoặc tông màu tối cho gói xuất"
                                     >
-                                        <option value="light">☀️ Giao diện Sáng (Học thuật TUAF - Khuyên dùng cho LMS & Giảng đường)</option>
+                                        <option value="light">{exportBgOption === 'minimal' ? '☀️ Giao diện Sáng (Học thuật - Khuyên dùng cho LMS & Giảng đường)' : '☀️ Giao diện Sáng (Học thuật TUAF - Khuyên dùng cho LMS & Giảng đường)'}</option>
                                         <option value="dark">🌙 Giao diện Tối (Modern Slate Dark - Tối ưu ban đêm)</option>
                                     </select>
                                 </div>

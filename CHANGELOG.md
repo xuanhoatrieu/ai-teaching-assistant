@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.6.17] - 2026-10-30 - Institution-Neutral Minimal Theme for SCORM 1.2 & H5P Exports
+
+### Changed
+- **Unbranded Minimal Theme (`bgOption = 'minimal'`) for External Institutions**:
+  - Removed all remaining `"ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN"` / `"TUAF"` branding badges and metadata from Title Slides and background descriptors in SCORM 1.2 (`scorm-export.helper.ts`) and H5P (`h5p-export.helper.ts`) when `minimal` mode is selected, replacing them with institution-neutral labels (`🎓 HỌC LIỆU SỐ TƯƠNG TÁC • BÀI GIẢNG ĐIỆN TỬ`) while preserving full TUAF branding in `tuaf_clean` and `tuaf_full` modes (31/31 Jest unit tests passing).
+  - Updated SCORM & H5P export UI labels in `Step5GeneratePPTX.tsx` and `PptxAudioTool.tsx` to clarify neutral/no-institution branding when `Nền tối giản` is selected.
+
 ## [v1.6.16] - 2026-10-29 - Selectable CLOZE/FIB (`MULTICHOICE_S`) & Full-Slide SCORM/H5P + PPTX Audio Auto-Play (US-029, US-030)
 
 ### Added & Changed
