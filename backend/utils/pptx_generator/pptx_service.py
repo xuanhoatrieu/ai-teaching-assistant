@@ -1223,11 +1223,152 @@ class PPTXGeneratorService:
     
     def _set_audio_autoplay_xml(self, slide, shape_id: int):
         """
-        Set audio to auto-play when slide appears using XML timing
+        Set audio to auto-play ("Start: Automatically") when slide appears using PowerPoint-compliant OOXML timing.
+        Matches PowerPoint / iSpring autoplay structure:
+          1. mediacall playFrom(0.0) with nodeType="afterEffect"
+          2. Outer click-group cTn stCondLst with delay="indefinite" + evt="onBegin" referencing mainSeq id
+          3. prevCondLst (onPrev) and nextCondLst (onNext) on <p:seq>
+          4. Background <p:audio><p:cMediaNode> under tmRoot/childTnLst with onStopAudio
+        Preserves existing slide animations when injecting into an uploaded PPTX that already has <p:timing>.
         """
         try:
+            NS_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
+            P = f"{{{NS_P}}}"
+            spid_str = str(shape_id)
+            slide_elem = slide._element
+            existing_timing = slide_elem.find(qn('p:timing'))
+
+            def max_ctn_id(root_el) -> int:
+                m = 0
+                for el in root_el.findall(f".//{P}cTn"):
+                    try:
+                        m = max(m, int(el.get("id", "0")))
+                    except Exception:
+                        pass
+                return m
+
+            tm_root = None
+            main_seq = None
+            if existing_timing is not None:
+                tm_root = next(
+                    (e for e in existing_timing.findall(f".//{P}cTn") if e.get("nodeType") == "tmRoot"),
+                    None,
+                )
+                main_seq = next(
+                    (e for e in existing_timing.findall(f".//{P}cTn") if e.get("nodeType") == "mainSeq"),
+                    None,
+                )
+
+            if existing_timing is not None and tm_root is not None and main_seq is not None:
+                mid = main_seq.get("id", "2")
+                seq_el = main_seq.getparent()
+                clist = main_seq.find(f"{P}childTnLst")
+                if clist is None:
+                    clist = etree.SubElement(main_seq, f"{P}childTnLst")
+
+                base_id = max_ctn_id(existing_timing) + 1
+                par_xml = f'''
+                <p:par xmlns:p="{NS_P}">
+                    <p:cTn id="{base_id}" fill="hold">
+                        <p:stCondLst>
+                            <p:cond delay="indefinite"/>
+                            <p:cond evt="onBegin" delay="0">
+                                <p:tn val="{mid}"/>
+                            </p:cond>
+                        </p:stCondLst>
+                        <p:childTnLst>
+                            <p:par>
+                                <p:cTn id="{base_id + 1}" fill="hold">
+                                    <p:stCondLst>
+                                        <p:cond delay="0"/>
+                                    </p:stCondLst>
+                                    <p:childTnLst>
+                                        <p:par>
+                                            <p:cTn id="{base_id + 2}" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="afterEffect">
+                                                <p:stCondLst>
+                                                    <p:cond delay="0"/>
+                                                </p:stCondLst>
+                                                <p:childTnLst>
+                                                    <p:cmd type="call" cmd="playFrom(0.0)">
+                                                        <p:cBhvr>
+                                                            <p:cTn id="{base_id + 3}" dur="1" fill="hold"/>
+                                                            <p:tgtEl>
+                                                                <p:spTgt spid="{spid_str}"/>
+                                                            </p:tgtEl>
+                                                        </p:cBhvr>
+                                                    </p:cmd>
+                                                </p:childTnLst>
+                                            </p:cTn>
+                                        </p:par>
+                                    </p:childTnLst>
+                                </p:cTn>
+                            </p:par>
+                        </p:childTnLst>
+                    </p:cTn>
+                </p:par>
+                '''
+                clist.insert(0, parse_xml(par_xml))
+
+                if seq_el is not None:
+                    next_el = seq_el.find(f"{P}nextCondLst")
+                    if seq_el.find(f"{P}prevCondLst") is None:
+                        prev_el = parse_xml(f'''
+                        <p:prevCondLst xmlns:p="{NS_P}">
+                            <p:cond evt="onPrev" delay="0">
+                                <p:tgtEl><p:sldTgt/></p:tgtEl>
+                            </p:cond>
+                        </p:prevCondLst>
+                        ''')
+                        if next_el is not None:
+                            next_el.addprevious(prev_el)
+                        else:
+                            seq_el.append(prev_el)
+                    if next_el is None:
+                        seq_el.append(parse_xml(f'''
+                        <p:nextCondLst xmlns:p="{NS_P}">
+                            <p:cond evt="onNext" delay="0">
+                                <p:tgtEl><p:sldTgt/></p:tgtEl>
+                            </p:cond>
+                        </p:nextCondLst>
+                        '''))
+
+                tm_child_lst = tm_root.find(f"{P}childTnLst")
+                if tm_child_lst is None:
+                    tm_child_lst = etree.SubElement(tm_root, f"{P}childTnLst")
+
+                has_this_audio_node = any(
+                    s.get("spid") == spid_str
+                    for a in tm_child_lst.findall(f"{P}audio")
+                    for s in a.findall(f".//{P}spTgt")
+                )
+                if not has_this_audio_node:
+                    audio_node_id = max_ctn_id(existing_timing) + 1
+                    tm_child_lst.append(parse_xml(f'''
+                    <p:audio xmlns:p="{NS_P}">
+                        <p:cMediaNode>
+                            <p:cTn id="{audio_node_id}" fill="hold" display="0">
+                                <p:stCondLst>
+                                    <p:cond delay="indefinite"/>
+                                </p:stCondLst>
+                                <p:endCondLst>
+                                    <p:cond evt="onStopAudio" delay="0">
+                                        <p:tgtEl><p:sldTgt/></p:tgtEl>
+                                    </p:cond>
+                                </p:endCondLst>
+                            </p:cTn>
+                            <p:tgtEl>
+                                <p:spTgt spid="{spid_str}"/>
+                            </p:tgtEl>
+                        </p:cMediaNode>
+                    </p:audio>
+                    '''))
+                return
+
+            if existing_timing is not None:
+                slide_elem.remove(existing_timing)
+
             timing_xml = f'''
-            <p:timing xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+            <p:timing xmlns:p="{NS_P}">
                 <p:tnLst>
                     <p:par>
                         <p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot">
@@ -1238,7 +1379,10 @@ class PPTXGeneratorService:
                                             <p:par>
                                                 <p:cTn id="3" fill="hold">
                                                     <p:stCondLst>
-                                                        <p:cond delay="0"/>
+                                                        <p:cond delay="indefinite"/>
+                                                        <p:cond evt="onBegin" delay="0">
+                                                            <p:tn val="2"/>
+                                                        </p:cond>
                                                     </p:stCondLst>
                                                     <p:childTnLst>
                                                         <p:par>
@@ -1257,7 +1401,7 @@ class PPTXGeneratorService:
                                                                                     <p:cBhvr>
                                                                                         <p:cTn id="6" dur="1" fill="hold"/>
                                                                                         <p:tgtEl>
-                                                                                            <p:spTgt spid="{shape_id}"/>
+                                                                                            <p:spTgt spid="{spid_str}"/>
                                                                                         </p:tgtEl>
                                                                                     </p:cBhvr>
                                                                                 </p:cmd>
@@ -1272,24 +1416,54 @@ class PPTXGeneratorService:
                                             </p:par>
                                         </p:childTnLst>
                                     </p:cTn>
+                                    <p:prevCondLst>
+                                        <p:cond evt="onPrev" delay="0">
+                                            <p:tgtEl>
+                                                <p:sldTgt/>
+                                            </p:tgtEl>
+                                        </p:cond>
+                                    </p:prevCondLst>
+                                    <p:nextCondLst>
+                                        <p:cond evt="onNext" delay="0">
+                                            <p:tgtEl>
+                                                <p:sldTgt/>
+                                            </p:tgtEl>
+                                        </p:cond>
+                                    </p:nextCondLst>
                                 </p:seq>
+                                <p:audio>
+                                    <p:cMediaNode>
+                                        <p:cTn id="7" fill="hold" display="0">
+                                            <p:stCondLst>
+                                                <p:cond delay="indefinite"/>
+                                            </p:stCondLst>
+                                            <p:endCondLst>
+                                                <p:cond evt="onStopAudio" delay="0">
+                                                    <p:tgtEl>
+                                                        <p:sldTgt/>
+                                                    </p:tgtEl>
+                                                </p:cond>
+                                            </p:endCondLst>
+                                        </p:cTn>
+                                        <p:tgtEl>
+                                            <p:spTgt spid="{spid_str}"/>
+                                        </p:tgtEl>
+                                    </p:cMediaNode>
+                                </p:audio>
                             </p:childTnLst>
                         </p:cTn>
                     </p:par>
                 </p:tnLst>
             </p:timing>
             '''
-            
+
             timing_elem = parse_xml(timing_xml)
-            
-            slide_elem = slide._element
-            existing_timing = slide_elem.find(qn('p:timing'))
-            
-            if existing_timing is not None:
-                slide_elem.remove(existing_timing)
-            
-            slide_elem.append(timing_elem)
-            
+            ext_lst = slide_elem.find(qn('p:extLst'))
+            if ext_lst is not None:
+                ext_lst.addprevious(timing_elem)
+            else:
+                slide_elem.append(timing_elem)
+
         except Exception as e:
             print(f"Warning: Could not set auto-play for audio: {e}")
 

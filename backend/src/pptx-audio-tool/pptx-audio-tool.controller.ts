@@ -961,6 +961,7 @@ export class PptxAudioToolController {
         const user = (req as any).user;
         const userId = user?.id || user?.sub;
         await this.tickets.assertPptxSessionAccess(sessionId, { id: userId, role: user?.role });
+        await this.service.ensureRenderedSlidesForSession(sessionId);
         const { ticket, expiresInSeconds } = this.tickets.issue({
             kind: 'pptx-tool-scorm',
             userId,
@@ -987,6 +988,7 @@ export class PptxAudioToolController {
         const user = (req as any).user;
         const userId = user?.id || user?.sub;
         await this.tickets.assertPptxSessionAccess(sessionId, { id: userId, role: user?.role });
+        await this.service.ensureRenderedSlidesForSession(sessionId);
         const { ticket, expiresInSeconds } = this.tickets.issue({
             kind: 'pptx-tool-h5p',
             userId,

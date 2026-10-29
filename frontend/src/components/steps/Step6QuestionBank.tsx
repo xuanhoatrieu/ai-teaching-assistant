@@ -133,13 +133,21 @@ function renderEssayRubric(data: any) {
 
 function formatClozePrompt(text: string): string {
     if (!text) return '';
-    return text.replace(/\{(\d+):[A-Z_]+:[^}]+\}/g, '[ ______ ]');
+    return text.replace(/\{(\d+):[A-Za-z_]+:[^}]+\}/g, '[ ______ ▾ ]');
 }
 
-function renderClozeVisual(rawText: string) {
+export function renderClozeVisual(rawText: string) {
     if (!rawText) return null;
-    const regex = /\{(\d+):([A-Z_]+):([^}]+)\}/g;
-    const parts: Array<{ type: 'text' | 'blank'; content?: string; points?: string; qType?: string; answers?: string[] }> = [];
+    const regex = /\{(\d+):([A-Za-z_]+):([^}]+)\}/g;
+    const parts: Array<{
+        type: 'text' | 'blank';
+        content?: string;
+        points?: string;
+        qType?: string;
+        isChoiceMode?: boolean;
+        correctAnswers?: string[];
+        distractors?: string[];
+    }> = [];
 
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -148,16 +156,39 @@ function renderClozeVisual(rawText: string) {
         if (match.index > lastIndex) {
             parts.push({ type: 'text', content: rawText.substring(lastIndex, match.index) });
         }
-        const points = match[1];
-        const qType = match[2];
-        const rawAnswers = match[3];
-        const answers = rawAnswers.split('~').map(a => a.replace(/^=/, '').trim()).filter(Boolean);
+        const points = match[1] || '1';
+        const qType = (match[2] || '').toUpperCase();
+        const rawAnswers = match[3] || '';
+        const isChoiceMode = /^(MULTICHOICE|MC|MCS|MCH|MCHS|MCV|MCVS|MULTIRESPONSE|MR)/i.test(qType);
+
+        const rawItems = rawAnswers.split(/(?<!\\)~/).map(s => s.trim()).filter(Boolean);
+        const parsedItems = rawItems.map(item => {
+            const withoutFb = item.replace(/(?<!\\)#.*$/s, '').trim();
+            const markMatch = withoutFb.match(/^(=|%(-?[0-9]+(?:[.,][0-9]*)?)%)(.*)$/s);
+            let isCorrect = false;
+            let textPart = withoutFb;
+            if (markMatch) {
+                const pct = markMatch[1] === '=' ? 100 : parseFloat((markMatch[2] || '0').replace(',', '.'));
+                isCorrect = pct > 0;
+                textPart = markMatch[3];
+            } else if (!isChoiceMode) {
+                isCorrect = true;
+            }
+            const cleanText = textPart.replace(/\\([}#~/"\\])/g, '$1').trim();
+            return { text: cleanText, isCorrect };
+        }).filter(x => x.text.length > 0);
+
+        if (isChoiceMode && parsedItems.length > 0 && !parsedItems.some(x => x.isCorrect)) {
+            parsedItems[0].isCorrect = true;
+        }
 
         parts.push({
             type: 'blank',
             points,
             qType,
-            answers,
+            isChoiceMode,
+            correctAnswers: parsedItems.filter(x => x.isCorrect).map(x => x.text),
+            distractors: parsedItems.filter(x => !x.isCorrect).map(x => x.text),
         });
         lastIndex = regex.lastIndex;
     }
@@ -178,14 +209,23 @@ function renderClozeVisual(rawText: string) {
                     const currentNum = blankCount;
                     return (
                         <span key={idx} className="cloze-interactive-blank">
-                            <span className="cloze-blank-badge">#{currentNum}</span>
+                            <span className="cloze-blank-badge">#{currentNum}{p.isChoiceMode ? ' ▾' : ''}</span>
                             <span className="cloze-answers-list">
-                                {p.answers?.map((ans, aIdx) => (
-                                    <span key={aIdx} className="cloze-single-answer">
+                                {p.correctAnswers?.map((ans, aIdx) => (
+                                    <span key={`c-${aIdx}`} className="cloze-single-answer">
                                         {aIdx > 0 && <span className="cloze-or-sep">hoặc</span>}
-                                        <span className="cloze-ans-text">{ans}</span>
+                                        <span className="cloze-ans-text">✓ {ans}</span>
                                     </span>
                                 ))}
+                                {p.isChoiceMode && p.distractors && p.distractors.length > 0 && (
+                                    <span
+                                        className="cloze-distractors-hint"
+                                        style={{ marginLeft: 6, fontSize: '0.78rem', color: '#64748b', fontWeight: 500 }}
+                                        title={`Phương án nhiễu: ${p.distractors.join(', ')}`}
+                                    >
+                                        (nhiễu: {p.distractors.join(' | ')})
+                                    </span>
+                                )}
                             </span>
                             <span className="cloze-points-badge">{p.points}đ</span>
                         </span>
@@ -1412,13 +1452,31 @@ export function Step6QuestionBank() {
                                                 </div>
 
                                                 {isEditing ? (
-                                                    <textarea
-                                                        value={q.questionText}
-                                                        onChange={(e) => setEnglishQuestions(prev =>
-                                                            prev.map(p => p.id === q.id ? { ...p, questionText: e.target.value } : p)
+                                                    <div>
+                                                        <textarea
+                                                            value={q.questionType === 'CLOZE' ? String(parsedData.clozeText || parsedData.rawCloze || q.questionText || '') : q.questionText}
+                                                            onChange={(e) => {
+                                                                const nextVal = e.target.value;
+                                                                setEnglishQuestions(prev =>
+                                                                    prev.map(p => {
+                                                                        if (p.id !== q.id) return p;
+                                                                        if (p.questionType === 'CLOZE') {
+                                                                            const nextData = { ...parsedData, clozeText: nextVal };
+                                                                            if (nextData.rawCloze) nextData.rawCloze = nextVal;
+                                                                            return { ...p, questionText: nextVal, dataJson: JSON.stringify(nextData) };
+                                                                        }
+                                                                        return { ...p, questionText: nextVal };
+                                                                    })
+                                                                );
+                                                            }}
+                                                            className="edit-textarea"
+                                                        />
+                                                        {q.questionType === 'CLOZE' && (
+                                                            <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 4 }}>
+                                                                💡 Cú pháp Moodle Dropdown tự xáo trộn: <code>{'{1:MULTICHOICE_S:=Đáp án đúng~Nhiễu 1~Nhiễu 2~Nhiễu 3}'}</code>
+                                                            </div>
                                                         )}
-                                                        className="edit-textarea"
-                                                    />
+                                                    </div>
                                                 ) : (
                                                     <p className="question-text">
                                                         <strong>{q.title ? `${typeof q.title === 'object' ? JSON.stringify(q.title) : q.title}: ` : ''}</strong>
@@ -1494,8 +1552,8 @@ export function Step6QuestionBank() {
                                                 {/* Cloze Text */}
                                                 {q.questionType === 'CLOZE' && (
                                                     <div className="cloze-preview-box">
-                                                        <div className="cloze-tag">📝 Mô phỏng câu hỏi điền khuyết (Cloze):</div>
-                                                        {renderClozeVisual(typeof (parsedData.clozeText || q.questionText) === 'object' ? JSON.stringify(parsedData.clozeText || q.questionText) : String(parsedData.clozeText || q.questionText))}
+                                                        <div className="cloze-tag">📝 Mô phỏng câu hỏi chọn từ điền khuyết (Cloze Dropdown):</div>
+                                                        {renderClozeVisual(typeof (parsedData.clozeText || parsedData.rawCloze || q.questionText) === 'object' ? JSON.stringify(parsedData.clozeText || parsedData.rawCloze || q.questionText) : String(parsedData.clozeText || parsedData.rawCloze || q.questionText))}
                                                     </div>
                                                 )}
 

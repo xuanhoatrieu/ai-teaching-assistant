@@ -378,7 +378,7 @@ export function formatEnglishQuestionName(
 
     // Clean question preview (strip cloze brackets/HTML/excess whitespace, limit to 80 chars)
     let preview = (q.questionText || '')
-        .replace(/\{1:(?:SHORTANSWER|MULTICHOICE)[^}]*\}/gi, '___')
+        .replace(/\{\d+:[A-Za-z_]+:[^}]*\}/gi, '___')
         .replace(/<[^>]+>/g, '')
         .replace(/\s+/g, ' ')
         .trim();
@@ -391,11 +391,6 @@ export function formatEnglishQuestionName(
     }
 
     return `${lessonCode}-${qCode}: ${preview}`;
-}
-
-/** Escape Moodle Cloze special characters inside an embedded answer. */
-function escapeClozeAnswer(text: string): string {
-    return text.replace(/([}#~\/"\\])/g, '\\$1');
 }
 
 function toCleanStringList(value: any): string[] {
@@ -817,10 +812,6 @@ const CLOZE_ALT_SRC =
 const CLOZE_ANSWER_SRC =
     String.raw`\{([0-9]*):(` + CLOZE_TYPE_DEF + String.raw`):(` +
     CLOZE_ALT_SRC + '(~' + CLOZE_ALT_SRC + String.raw`)*)\}`;
-const CLOZE_VALID_TYPES = new Set(
-    CLOZE_TYPE_DEF.replace(/[()]/g, '').split('|'),
-);
-const CLOZE_SA_TYPES = new Set(['SHORTANSWER', 'SA', 'MW', 'SHORTANSWER_C', 'SAC', 'MWC']);
 const CLOZE_NUMBER_RE = /^-?(([0-9]+[.,]?[0-9]*|[.,][0-9]+)([eE][-+]?[0-9]+)?)(:-?(([0-9]+[.,]?[0-9]*|[.,][0-9]+)([eE][-+]?[0-9]+)?))?$/;
 /** Anything that looks like an embedded answer, even malformed: {1:shortanswer:word} */
 const CLOZE_LOOSE_TOKEN_RE = /\{(\d*):([A-Za-z_]+):([^{}]*)\}/g;
@@ -868,27 +859,394 @@ function splitClozeAlternatives(body: string): string[] {
     return body.split(/(?<!\\)~/);
 }
 
-/**
- * Repair common AI mistakes in embedded answers before validation:
- *  - lowercase / unknown type ({1:shortanswer:...}, {1:FILL:...}) -> SHORTANSWER
- *  - short answer without "=" ({1:SHORTANSWER:word}) -> every alternative is accepted
- *  - multichoice with a single (correct) option -> SHORTANSWER
- *  - weights other than 1 -> 1 (Moodle sums weights: 1+2 = 3.00 marks)
- */
-function repairClozeTokens(text: string): string {
-    return text.replace(CLOZE_LOOSE_TOKEN_RE, (_full, _weight: string, rawType: string, body: string) => {
-        let type = rawType.toUpperCase();
-        if (!CLOZE_VALID_TYPES.has(type)) type = 'SHORTANSWER';
-        let alts = splitClozeAlternatives(body).map((a) => a.trim()).filter((a) => a !== '' && a !== '=');
-        const hasMark = (a: string) => /^(=|%-?[0-9]+(?:[.,][0-9]*)?%)/.test(a);
+/** Unescape Moodle Cloze escaped characters for clean text comparison / distractor generation. */
+function unescapeClozeOption(text: string): string {
+    return text.replace(/\\([}#~\/"\\])/g, '$1').trim();
+}
 
-        if (!CLOZE_SA_TYPES.has(type) && type !== 'NUMERICAL' && type !== 'NM' && alts.length === 1) {
-            type = 'SHORTANSWER';
+/**
+ * Escape Moodle Cloze option delimiters (~, #, }) without mangling IPA slashes (/tʃ/).
+ * Also strips trailing unescaped backslashes that would escape the closing "}" or "~".
+ */
+function escapeClozeOption(text: string): string {
+    const cleaned = String(text ?? '').trim().replace(/\\+$/, '');
+    return cleaned.replace(/([}#~])/g, '\\$1');
+}
+
+const IRREGULAR_VERBS: Record<string, { v3s: string; past: string; pp: string; ing: string }> = {
+    be: { v3s: 'is', past: 'was', pp: 'been', ing: 'being' },
+    do: { v3s: 'does', past: 'did', pp: 'done', ing: 'doing' },
+    go: { v3s: 'goes', past: 'went', pp: 'gone', ing: 'going' },
+    have: { v3s: 'has', past: 'had', pp: 'had', ing: 'having' },
+    leave: { v3s: 'leaves', past: 'left', pp: 'left', ing: 'leaving' },
+    drive: { v3s: 'drives', past: 'drove', pp: 'driven', ing: 'driving' },
+    sleep: { v3s: 'sleeps', past: 'slept', pp: 'slept', ing: 'sleeping' },
+    write: { v3s: 'writes', past: 'wrote', pp: 'written', ing: 'writing' },
+    take: { v3s: 'takes', past: 'took', pp: 'taken', ing: 'taking' },
+    make: { v3s: 'makes', past: 'made', pp: 'made', ing: 'making' },
+    see: { v3s: 'sees', past: 'saw', pp: 'seen', ing: 'seeing' },
+    come: { v3s: 'comes', past: 'came', pp: 'come', ing: 'coming' },
+    eat: { v3s: 'eats', past: 'ate', pp: 'eaten', ing: 'eating' },
+    drink: { v3s: 'drinks', past: 'drank', pp: 'drunk', ing: 'drinking' },
+    speak: { v3s: 'speaks', past: 'spoke', pp: 'spoken', ing: 'speaking' },
+    buy: { v3s: 'buys', past: 'bought', pp: 'bought', ing: 'buying' },
+    teach: { v3s: 'teaches', past: 'taught', pp: 'taught', ing: 'teaching' },
+    think: { v3s: 'thinks', past: 'thought', pp: 'thought', ing: 'thinking' },
+    run: { v3s: 'runs', past: 'ran', pp: 'run', ing: 'running' },
+    begin: { v3s: 'begins', past: 'began', pp: 'begun', ing: 'beginning' },
+    give: { v3s: 'gives', past: 'gave', pp: 'given', ing: 'giving' },
+    know: { v3s: 'knows', past: 'knew', pp: 'known', ing: 'knowing' },
+    read: { v3s: 'reads', past: 'read', pp: 'read', ing: 'reading' },
+    find: { v3s: 'finds', past: 'found', pp: 'found', ing: 'finding' },
+    tell: { v3s: 'tells', past: 'told', pp: 'told', ing: 'telling' },
+    feel: { v3s: 'feels', past: 'felt', pp: 'felt', ing: 'feeling' },
+    keep: { v3s: 'keeps', past: 'kept', pp: 'kept', ing: 'keeping' },
+    meet: { v3s: 'meets', past: 'met', pp: 'met', ing: 'meeting' },
+    send: { v3s: 'sends', past: 'sent', pp: 'sent', ing: 'sending' },
+    spend: { v3s: 'spends', past: 'spent', pp: 'spent', ing: 'spending' },
+    build: { v3s: 'builds', past: 'built', pp: 'built', ing: 'building' },
+};
+
+const CLOSED_CLASS_DISTRACTORS: Record<string, string[]> = {
+    do: ['does', 'did', 'are'],
+    does: ['do', 'did', 'is'],
+    did: ['do', 'does', 'was'],
+    am: ['is', 'are', 'was'],
+    is: ['are', 'am', 'was'],
+    are: ['is', 'am', 'were'],
+    was: ['were', 'is', 'are'],
+    were: ['was', 'are', 'is'],
+    have: ['has', 'had', 'are'],
+    has: ['have', 'had', 'is'],
+    had: ['have', 'has', 'was'],
+    will: ['would', 'can', 'shall'],
+    would: ['will', 'could', 'should'],
+    can: ['could', 'must', 'may'],
+    could: ['can', 'should', 'might'],
+    should: ['must', 'would', 'could'],
+    must: ['should', 'can', 'may'],
+    a: ['an', 'the', 'some'],
+    an: ['a', 'the', 'any'],
+    the: ['a', 'an', 'some'],
+    in: ['on', 'at', 'by'],
+    on: ['in', 'at', 'to'],
+    at: ['in', 'on', 'for'],
+    to: ['for', 'at', 'in'],
+    for: ['since', 'to', 'by'],
+    since: ['for', 'from', 'during'],
+    from: ['to', 'by', 'with'],
+    with: ['by', 'from', 'for'],
+    by: ['with', 'at', 'on'],
+    and: ['but', 'or', 'so'],
+    but: ['and', 'so', 'because'],
+    because: ['although', 'so', 'unless'],
+    although: ['because', 'despite', 'unless'],
+    while: ['when', 'during', 'until'],
+    when: ['while', 'since', 'until'],
+    right: ['left', 'top', 'center'],
+    left: ['right', 'bottom', 'center'],
+    true: ['false', 'none', 'null'],
+    false: ['true', 'none', 'null'],
+    who: ['which', 'whom', 'whose'],
+    which: ['who', 'where', 'whose'],
+    where: ['when', 'which', 'who'],
+    whose: ['who', 'whom', 'which'],
+};
+
+function matchAnswerCasing(candidate: string, reference: string): string {
+    if (!candidate || !reference) return candidate;
+    if (reference === reference.toUpperCase() && /[A-Z]/.test(reference)) {
+        return candidate.toUpperCase();
+    }
+    if (/^[A-Z]/.test(reference) && reference.slice(1) === reference.slice(1).toLowerCase()) {
+        return candidate.charAt(0).toUpperCase() + candidate.slice(1);
+    }
+    return candidate;
+}
+
+function buildSpellingEquivalents(word: string): string[] {
+    const low = word.trim().toLowerCase();
+    const eq = new Set<string>([low]);
+    eq.add(low.replace(/lling\b/g, 'ling').replace(/lled\b/g, 'led'));
+    eq.add(low.replace(/([^l])ling\b/g, '$1lling').replace(/([^l])led\b/g, '$1lled'));
+    eq.add(low.replace(/our\b/g, 'or'));
+    eq.add(low.replace(/ise\b/g, 'ize'));
+    eq.add(low.replace(/ize\b/g, 'ise'));
+    return Array.from(eq);
+}
+
+function conjugateVerbForms(rawBase: string): { base: string; v3s: string; past: string; ing: string; pp: string } {
+    const clean = rawBase.trim().toLowerCase().replace(/^to\s+/, '');
+    const parts = clean.split(/\s+/);
+    const head = parts[0] || clean;
+    const tail = parts.length > 1 ? ' ' + parts.slice(1).join(' ') : '';
+
+    if (IRREGULAR_VERBS[head]) {
+        const irr = IRREGULAR_VERBS[head];
+        return {
+            base: head + tail,
+            v3s: irr.v3s + tail,
+            past: irr.past + tail,
+            ing: irr.ing + tail,
+            pp: irr.pp + tail,
+        };
+    }
+
+    let v3s = `${head}s`;
+    if (/(?:s|sh|ch|x|z|o)$/.test(head)) v3s = `${head}es`;
+    else if (/[^aeiou]y$/.test(head)) v3s = `${head.slice(0, -1)}ies`;
+
+    let past = `${head}ed`;
+    if (head.endsWith('e')) past = `${head}d`;
+    else if (/[^aeiou]y$/.test(head)) past = `${head.slice(0, -1)}ied`;
+
+    let ing = `${head}ing`;
+    if (head.endsWith('ie')) ing = `${head.slice(0, -2)}ying`;
+    else if (head.endsWith('e') && !head.endsWith('ee')) ing = `${head.slice(0, -1)}ing`;
+
+    return {
+        base: head + tail,
+        v3s: v3s + tail,
+        past: past + tail,
+        ing: ing + tail,
+        pp: past + tail,
+    };
+}
+
+/**
+ * Generates 3 plausible, distinct distractors for a fill-in-the-blank answer
+ * so legacy SHORTANSWER/FIB items upgrade cleanly into fair selectable choices.
+ */
+export function generateContextualDistractors(
+    correctAnswer: string,
+    afterText: string = '',
+    fullText: string = '',
+    extraExclude: string[] = [],
+): string[] {
+    const cleanCorrect = String(correctAnswer ?? '').trim();
+    if (!cleanCorrect) return ['Option B', 'Option C', 'Option D'];
+
+    const exclude = new Set<string>();
+    for (const item of [cleanCorrect, ...extraExclude]) {
+        for (const eq of buildSpellingEquivalents(item)) {
+            exclude.add(eq);
         }
-        if ((CLOZE_SA_TYPES.has(type) || type === 'NUMERICAL' || type === 'NM') && !alts.some((a) => a.startsWith('=') || /^%100%/.test(a))) {
-            alts = alts.map((a) => (hasMark(a) ? a : `=${a}`));
+    }
+
+    const picked: string[] = [];
+    const tryAdd = (cand: string, preserveExactCase: boolean = false) => {
+        const formatted = preserveExactCase ? cand.trim() : matchAnswerCasing(cand.trim(), cleanCorrect);
+        if (!formatted) return;
+        const eqs = buildSpellingEquivalents(formatted);
+        if (eqs.some((e) => exclude.has(e))) return;
+        picked.push(formatted);
+        eqs.forEach((e) => exclude.add(e));
+    };
+
+    // 1. Numeric answers (e.g. 3, 96, 1, 0.5)
+    if (/^-?\d+(?:[.,]\d+)?$/.test(cleanCorrect)) {
+        const num = Number(cleanCorrect.replace(',', '.'));
+        if (Number.isInteger(num)) {
+            if (num === 0) ['1', '2', '-1', '4'].forEach((c) => tryAdd(c, true));
+            else if (num === 1) ['0', '2', '3', '-1'].forEach((c) => tryAdd(c, true));
+            else if (num > 12) {
+                [
+                    String(Math.max(1, Math.floor(num / 2))),
+                    String(num * 2),
+                    String(num + 4),
+                    String(Math.max(1, num - 4)),
+                ].forEach((c) => tryAdd(c, true));
+            } else {
+                [String(Math.max(0, num - 1)), String(num + 1), String(num + 2), String(num * 2)].forEach((c) =>
+                    tryAdd(c, true),
+                );
+            }
+        } else {
+            [String(Number((num * 2).toFixed(2))), String(Number((num + 1).toFixed(2))), '0', '1'].forEach((c) =>
+                tryAdd(c, true),
+            );
         }
-        return `{1:${type}:${alts.join('~')}}`;
+        if (picked.length >= 3) return picked.slice(0, 3);
+    }
+
+    // 2. Parenthesized base-word hint immediately after the blank, e.g. "(visit)", "(check in)", "(do)"
+    const parenMatch = afterText.match(/^\s*\(([^()]{1,35})\)/);
+    if (parenMatch) {
+        const baseHint = parenMatch[1].trim();
+        const notPrefix = /^not\s+/i.test(baseHint);
+        const coreVerb = baseHint.replace(/^not\s+/i, '').trim();
+        const forms = conjugateVerbForms(coreVerb);
+
+        // Inverted question pattern: e.g. "are you doing" with "(do)"
+        const invMatch = cleanCorrect.match(/^(am|is|are|was|were|do|does|did|have|has|had)\s+(i|you|we|they|he|she|it)\s+(.+)$/i);
+        if (invMatch) {
+            const subj = invMatch[2].toLowerCase();
+            [
+                `do ${subj} ${forms.base}`,
+                `does ${subj} ${forms.base}`,
+                `did ${subj} ${forms.base}`,
+                `are ${subj} ${forms.ing}`,
+                `were ${subj} ${forms.ing}`,
+                `have ${subj} ${forms.pp}`,
+            ].forEach((c) => tryAdd(c));
+        } else if (notPrefix) {
+            [
+                `do not ${forms.base}`,
+                `does not ${forms.base}`,
+                `did not ${forms.base}`,
+                `is not ${forms.ing}`,
+                `was not ${forms.ing}`,
+            ].forEach((c) => tryAdd(c));
+        } else {
+            [
+                forms.base,
+                forms.v3s,
+                forms.past,
+                `is ${forms.ing}`,
+                `are ${forms.ing}`,
+                `am ${forms.ing}`,
+                `was ${forms.ing}`,
+                `were ${forms.ing}`,
+                forms.ing,
+                `has ${forms.pp}`,
+            ].forEach((c) => tryAdd(c));
+        }
+        if (picked.length >= 3) return picked.slice(0, 3);
+    }
+
+    // 3. Closed-class grammar word lookup (auxiliaries, prepositions, articles, pronouns, etc.)
+    const lowerCorrect = cleanCorrect.toLowerCase();
+    if (CLOSED_CLASS_DISTRACTORS[lowerCorrect]) {
+        CLOSED_CLASS_DISTRACTORS[lowerCorrect].forEach((c) => tryAdd(c));
+        if (picked.length >= 3) return picked.slice(0, 3);
+    }
+
+    // 4. Multi-word auxiliary + participle / gerund phrases without parenthesized hint (e.g. "was driving", "is travelling")
+    const auxPhrase = cleanCorrect.match(/^(am|is|are|was|were|has|have|had|will)\s+([a-z]+(?:\s+[a-z]+)?)$/i);
+    if (auxPhrase) {
+        const aux = auxPhrase[1].toLowerCase();
+        const rest = auxPhrase[2];
+        const stemGuess = rest
+            .replace(/([bcdfghjklmnpqrstvwxyz])\1ing\b/i, '$1')
+            .replace(/ing\b/i, '')
+            .replace(/ed\b/i, '');
+        const forms = conjugateVerbForms(stemGuess || rest);
+        const swapAux = aux === 'is' ? 'was' : aux === 'was' ? 'is' : aux === 'are' ? 'were' : aux === 'am' ? 'was' : 'is';
+        [`${swapAux} ${rest}`, forms.base, forms.v3s, forms.past, `has ${forms.pp}`].forEach((c) => tryAdd(c));
+        if (picked.length >= 3) return picked.slice(0, 3);
+    }
+
+    // 5. Single inflected English word heuristic (-ed, -ing, -s) or contextual content words
+    if (/^[A-Za-z]+$/.test(cleanCorrect)) {
+        if (lowerCorrect.endsWith('ed') && lowerCorrect.length > 4) {
+            const stem = lowerCorrect.replace(/ied$/, 'y').replace(/ed$/, '');
+            const forms = conjugateVerbForms(stem);
+            [forms.base, forms.v3s, forms.ing, `is ${forms.ing}`].forEach((c) => tryAdd(c));
+        } else if (lowerCorrect.endsWith('ing') && lowerCorrect.length > 5) {
+            const stem = lowerCorrect.replace(/([bcdfghjklmnpqrstvwxyz])\1ing$/, '$1').replace(/ing$/, '');
+            const forms = conjugateVerbForms(stem);
+            [forms.base, forms.v3s, forms.past].forEach((c) => tryAdd(c));
+        } else if (lowerCorrect.endsWith('s') && lowerCorrect.length > 3 && !lowerCorrect.endsWith('ss')) {
+            const stem = lowerCorrect.replace(/ies$/, 'y').replace(/es$/, '').replace(/s$/, '');
+            const forms = conjugateVerbForms(stem);
+            [forms.base, forms.past, forms.ing].forEach((c) => tryAdd(c));
+        }
+    }
+
+    // 6. Extract plausible distinct words from surrounding passage if still short
+    if (picked.length < 3 && fullText) {
+        const stripped = fullText
+            .replace(/\{\d+:[A-Za-z_]+:[^}]*\}/g, ' ')
+            .replace(/<[^>]+>/g, ' ');
+        const tokens = stripped.match(/[A-Za-zÀ-ỹ][A-Za-zÀ-ỹ-]{2,20}/g) || [];
+        for (const tok of tokens) {
+            if (picked.length >= 3) break;
+            tryAdd(tok);
+        }
+    }
+
+    // 7. Guaranteed fallback so MULTICHOICE_S always has >= 4 distinct choices
+    const genericFallbacks = ['none of these', 'not applicable', 'other form', 'alternative'];
+    for (const fb of genericFallbacks) {
+        if (picked.length >= 3) break;
+        tryAdd(fb);
+    }
+
+    return picked.slice(0, 3);
+}
+
+/**
+ * Normalizes Interactive Slide Quiz questions (FIB & CLOZE) so every FIB question
+ * has selectable word-chip `options` (4 choices) and every CLOZE passage has `distractors`.
+ */
+export function normalizeInteractiveQuestions(questions: any[]): any[] {
+    if (!Array.isArray(questions)) return [];
+    return questions.map((rawQ, qIdx) => {
+        if (!rawQ || typeof rawQ !== 'object') return rawQ;
+        const q = { ...rawQ };
+        const qType = String(q.type || 'MC').toUpperCase();
+
+        if (qType === 'FIB') {
+            const correct = String(
+                q.correctAnswer ?? (Array.isArray(q.correctAnswers) ? q.correctAnswers[0] : '') ?? '',
+            ).trim();
+            const existingOpts = Array.isArray(q.options)
+                ? q.options.map((o: any) => String(o ?? '').trim()).filter(Boolean)
+                : [];
+
+            if (correct && existingOpts.length < 2) {
+                const qText = String(q.question || '');
+                const blankMatch = qText.match(/\[\.{2,}\]|_{2,}/);
+                const afterBlank = blankMatch && blankMatch.index !== undefined
+                    ? qText.slice(blankMatch.index + blankMatch[0].length)
+                    : '';
+                const distractors = generateContextualDistractors(
+                    correct,
+                    afterBlank,
+                    qText,
+                    Array.isArray(q.correctAnswers) ? q.correctAnswers : [correct],
+                );
+                const combined = [correct, ...distractors];
+                // Deterministic rotation by question index so correct answer is not always first
+                const shift = (qIdx + combined[0].length) % combined.length;
+                q.options = [...combined.slice(shift), ...combined.slice(0, shift)];
+                q.correctAnswer = correct;
+            } else if (correct && existingOpts.length >= 2) {
+                if (!existingOpts.some((o: string) => o.toLowerCase() === correct.toLowerCase())) {
+                    q.options = [correct, ...existingOpts.slice(0, 3)];
+                } else {
+                    q.options = existingOpts;
+                }
+            }
+        } else if (qType === 'CLOZE') {
+            const rawPassage = String(q.passage || q.questionText || q.question || '');
+            const blankMatches = [...rawPassage.matchAll(/\[([^\]]+)\]/g)];
+            const allCorrectWords: string[] = [];
+            for (const m of blankMatches) {
+                m[1].split('|').map((s) => s.trim()).filter(Boolean).forEach((w) => {
+                    if (!allCorrectWords.includes(w)) allCorrectWords.push(w);
+                });
+            }
+            const existingDistractors = Array.isArray(q.distractors)
+                ? q.distractors.map((d: any) => String(d ?? '').trim()).filter(Boolean)
+                : [];
+            if (existingDistractors.length === 0 && allCorrectWords.length > 0) {
+                const collected: string[] = [];
+                for (const cw of allCorrectWords) {
+                    const cands = generateContextualDistractors(cw, '', rawPassage, [...allCorrectWords, ...collected]);
+                    for (const c of cands) {
+                        if (collected.length >= 3) break;
+                        if (!collected.some((x) => x.toLowerCase() === c.toLowerCase())) {
+                            collected.push(c);
+                        }
+                    }
+                    if (collected.length >= 3) break;
+                }
+                q.distractors = collected;
+            }
+        }
+
+        return q;
     });
 }
 
@@ -919,16 +1277,179 @@ function extractAnswerKey(data: any): string[][] {
     return variants.length > 0 ? [variants] : [];
 }
 
-function buildEmbeddedShortAnswer(variants: string[]): string {
-    return `{1:SHORTANSWER:${variants.map((v) => `=${escapeClozeAnswer(v)}`).join('~')}}`;
+/** Extract per-blank explicit distractors if provided in dataJson. */
+function extractPerBlankDistractors(data: any, blankIdx: number): string[] {
+    const perBlank = Array.isArray(data?.answers) ? data.answers : (Array.isArray(data?.blanks) ? data.blanks : null);
+    if (perBlank && perBlank[blankIdx] && typeof perBlank[blankIdx] === 'object') {
+        const item = perBlank[blankIdx];
+        const explicit = toCleanStringList(item.distractors ?? item.wrongAnswers ?? item.options);
+        if (explicit.length > 0) return explicit;
+    }
+    return toCleanStringList(data?.distractors);
+}
+
+function buildEmbeddedMultichoice(variants: string[], distractors: string[]): string {
+    const primary = variants[0] || '';
+    const cleanDistractors = distractors.filter((d) => d && d.trim().toLowerCase() !== primary.trim().toLowerCase());
+    const allParts = [`=${escapeClozeOption(primary)}`, ...cleanDistractors.map((d) => escapeClozeOption(d))];
+    return `{1:MULTICHOICE_S:${allParts.join('~')}}`;
 }
 
 /**
- * Build Moodle XML for Cloze (Embedded Answers)
+ * Upgrades and repairs Cloze embedded tokens so 100% of blanks use Moodle's
+ * shuffled selectable dropdown `{1:MULTICHOICE_S:=Correct~Wrong1~Wrong2~Wrong3}`
+ * (or preserves explicit radio/multi-response choice tokens) — NEVER forcing
+ * students into unfair free-text `{1:SHORTANSWER:...}` typing.
+ */
+export function upgradeClozeToMultichoice(text: string, data?: any): string {
+    let working = String(text ?? '');
+    const key = extractAnswerKey(data);
+
+    // 1. If there are no {1:TYPE:...} tokens yet, fill raw "___" blanks first
+    if (!new RegExp(CLOZE_LOOSE_TOKEN_RE.source).test(working)) {
+        const blankCount = (working.match(RAW_BLANK_RE) || []).length;
+        if (blankCount > 0 && key.length >= blankCount) {
+            let rawIdx = 0;
+            working = working.replace(RAW_BLANK_RE, (_m, offset: number) => {
+                const bIdx = rawIdx++;
+                const variants = key[bIdx] || [''];
+                const afterText = working.slice(offset + _m.length);
+                const explicit = extractPerBlankDistractors(data, bIdx);
+                const distractors =
+                    explicit.length >= 2
+                        ? explicit
+                        : generateContextualDistractors(variants[0], afterText, working, variants);
+                return buildEmbeddedMultichoice(variants, distractors);
+            });
+        }
+    }
+
+    // 2. Normalize and upgrade every Cloze token to selectable choices
+    let blankIdx = 0;
+    return working.replace(CLOZE_LOOSE_TOKEN_RE, (fullMatch, _weight: string, rawType: string, body: string, offset: number) => {
+        const currentIdx = blankIdx++;
+        const afterText = working.slice(offset + fullMatch.length);
+        const upperType = rawType.toUpperCase();
+
+        // Preserve explicit MULTIRESPONSE or horizontal/vertical radio buttons if valid; otherwise use shuffled dropdown MULTICHOICE_S
+        const isMultiResponse = /^(MULTIRESPONSE|MR|MRH|MRS|MRHS)$/.test(upperType);
+        const isHorizontalRadio = /^(MULTICHOICE_H|MCH|MULTICHOICE_HS|MCHS)$/.test(upperType);
+        const isVerticalRadio = /^(MULTICHOICE_V|MCV|MULTICHOICE_VS|MCVS)$/.test(upperType);
+        const isChoiceToken =
+            isMultiResponse ||
+            isHorizontalRadio ||
+            isVerticalRadio ||
+            /^(MULTICHOICE|MC|MULTICHOICE_S|MCS)$/.test(upperType);
+
+        const rawAlts = splitClozeAlternatives(body)
+            .map((a) => a.trim())
+            .filter((a) => a !== '' && a !== '=');
+
+        if (rawAlts.length === 0) return fullMatch;
+
+        // Keep multiresponse intact after fixing weight to 1
+        if (isMultiResponse && rawAlts.length >= 2) {
+            return `{1:${upperType}:${rawAlts.join('~')}}`;
+        }
+
+        const parsedAlts = rawAlts.map((alt) => {
+            // Strip optional feedback "#..." when inspecting answer text, preserve feedback if present on choice tokens
+            const fbMatch = alt.match(/^(.*?)(?<!\\)(#.*)$/s);
+            const core = fbMatch ? fbMatch[1] : alt;
+            const feedback = fbMatch ? fbMatch[2] : '';
+
+            let isCorrect = false;
+            let answerPart = core;
+            const markMatch = core.match(/^(=|%(-?[0-9]+(?:[.,][0-9]*)?)%)(.*)$/s);
+            if (markMatch) {
+                const pct = markMatch[1] === '=' ? 100 : parseFloat((markMatch[2] || '0').replace(',', '.'));
+                isCorrect = pct >= 100;
+                answerPart = markMatch[3];
+            } else if (!isChoiceToken) {
+                // In SHORTANSWER without explicit "=", every listed variant was intended as correct
+                isCorrect = true;
+            }
+            return {
+                text: unescapeClozeOption(answerPart),
+                isCorrect,
+                feedback,
+            };
+        }).filter((item) => item.text !== '');
+
+        if (parsedAlts.length === 0) return fullMatch;
+
+        // Ensure at least one correct choice exists
+        if (!parsedAlts.some((a) => a.isCorrect)) {
+            parsedAlts[0].isCorrect = true;
+        }
+
+        const primaryCorrect = parsedAlts.find((a) => a.isCorrect)!;
+        const allAcceptableVariants = [
+            ...parsedAlts.filter((a) => a.isCorrect).map((a) => a.text),
+            ...(key[currentIdx] || []),
+        ];
+
+        const excludeEquivs = new Set<string>();
+        for (const v of allAcceptableVariants) {
+            buildSpellingEquivalents(v).forEach((eq) => excludeEquivs.add(eq));
+        }
+
+        const distractors: Array<{ text: string; feedback: string }> = [];
+        for (const alt of parsedAlts) {
+            if (alt.isCorrect) continue;
+            const eqs = buildSpellingEquivalents(alt.text);
+            if (eqs.some((e) => excludeEquivs.has(e))) continue;
+            distractors.push({ text: alt.text, feedback: alt.feedback });
+            eqs.forEach((e) => excludeEquivs.add(e));
+        }
+
+        // Supplement explicit distractors from dataJson if token had none (e.g. upgraded from SHORTANSWER)
+        if (distractors.length === 0) {
+            for (const d of extractPerBlankDistractors(data, currentIdx)) {
+                const eqs = buildSpellingEquivalents(d);
+                if (eqs.some((e) => excludeEquivs.has(e))) continue;
+                distractors.push({ text: d, feedback: '' });
+                eqs.forEach((e) => excludeEquivs.add(e));
+            }
+        }
+
+        // Supplement contextual distractors so MULTICHOICE_S always has >= 2 (typically 4) choices
+        if (distractors.length === 0) {
+            const generated = generateContextualDistractors(
+                primaryCorrect.text,
+                afterText,
+                working,
+                allAcceptableVariants,
+            );
+            for (const g of generated) {
+                const eqs = buildSpellingEquivalents(g);
+                if (eqs.some((e) => excludeEquivs.has(e))) continue;
+                distractors.push({ text: g, feedback: '' });
+                eqs.forEach((e) => excludeEquivs.add(e));
+            }
+        }
+
+        const targetType = isHorizontalRadio
+            ? 'MULTICHOICE_HS'
+            : isVerticalRadio
+              ? 'MULTICHOICE_VS'
+              : 'MULTICHOICE_S';
+
+        const formattedCorrect = `=${escapeClozeOption(primaryCorrect.text)}${primaryCorrect.feedback}`;
+        const formattedDistractors = distractors.map(
+            (d) => `${escapeClozeOption(d.text)}${d.feedback}`,
+        );
+
+        return `{1:${targetType}:${[formattedCorrect, ...formattedDistractors].join('~')}}`;
+    });
+}
+
+/**
+ * Build Moodle XML for Cloze (Embedded Answers — 100% Shuffled Dropdown Choices)
  */
 function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: string = 'B01'): string {
     const name = formatEnglishQuestionName(q, lessonCode, 'CLOZE');
-    let rawContent: string = stripInvalidXmlChars(String(data.clozeText || q.questionText || ''));
+    let rawContent: string = stripInvalidXmlChars(String(data.clozeText || data.rawCloze || q.questionText || ''));
     const key = (() => {
         let k = extractAnswerKey(data);
         const blankCount = (rawContent.match(RAW_BLANK_RE) || []).length;
@@ -943,22 +1464,21 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: str
         return k;
     })();
 
-    // No embedded answers at all: fill raw "___" blanks from the answer key.
-    if (!new RegExp(CLOZE_LOOSE_TOKEN_RE.source).test(rawContent)) {
-        const blankCount = (rawContent.match(RAW_BLANK_RE) || []).length;
-        if (blankCount > 0 && key.length >= blankCount) {
-            let idx = 0;
-            rawContent = rawContent.replace(RAW_BLANK_RE, () => buildEmbeddedShortAnswer(key[idx++]));
-        }
-    }
+    const enrichedData = key.length > 0 && !data?.answers && !data?.blanks
+        ? { ...data, answers: key.map((acceptableAnswers, idx) => ({ position: idx + 1, acceptableAnswers })) }
+        : data;
 
-    rawContent = repairClozeTokens(rawContent);
+    rawContent = upgradeClozeToMultichoice(rawContent, enrichedData);
 
     // Moodle aborts the WHOLE import on an invalid Cloze question.
     // If no embedded answer token exists yet but an answer key is available, append embedded blank(s).
     if (validateClozeText(rawContent).length > 0 && key.length > 0) {
-        rawContent = `${rawContent.trim()} ${key.map((variants) => buildEmbeddedShortAnswer(variants)).join(' ')}`;
-        rawContent = repairClozeTokens(rawContent);
+        const appendedTokens = key.map((variants, idx) => {
+            const distractors = generateContextualDistractors(variants[0], '', rawContent, variants);
+            return buildEmbeddedMultichoice(variants, extractPerBlankDistractors(enrichedData, idx).length >= 2 ? extractPerBlankDistractors(enrichedData, idx) : distractors);
+        });
+        rawContent = `${rawContent.trim()} ${appendedTokens.join(' ')}`;
+        rawContent = upgradeClozeToMultichoice(rawContent, enrichedData);
     }
 
     // If still invalid, skip this question instead of degrading to shortanswer/essay.
@@ -966,21 +1486,26 @@ function buildEnglishClozeXml(q: EnglishQuestionData, data: any, lessonCode: str
         return '';
     }
 
-    // Extract instruction from questionText if present
+    // Extract instruction from questionText if present, avoiding duplicate prefix inside rawContent
     let instruction = '';
-    if (q.questionText && q.questionText.includes('“')) {
-        const parts = q.questionText.split('“');
-        if (parts[0] && parts[0].trim()) {
-            instruction = parts[0].replace(/^GRAM-\d+[^:]*:\s*/, '').trim();
-        }
-    } else if (q.questionText && q.questionText.includes('"')) {
-        const parts = q.questionText.split('"');
-        if (parts[0] && parts[0].trim()) {
-            instruction = parts[0].replace(/^GRAM-\d+[^:]*:\s*/, '').trim();
+    const qTextStr = String(q.questionText || '');
+    for (const quoteChar of ['“', '"']) {
+        if (qTextStr.includes(quoteChar)) {
+            const parts = qTextStr.split(quoteChar);
+            const prefix = (parts[0] || '').replace(/^GRAM-\d+[^:]*:\s*/, '').trim();
+            if (prefix && !prefix.includes('{1:')) {
+                instruction = prefix;
+                // Strip duplicate prefix if rawContent also started with the exact same instruction
+                if (rawContent.startsWith(parts[0])) {
+                    rawContent = rawContent.slice(parts[0].length).replace(/^[“"]\s*/, '').replace(/\s*[”"]$/, '');
+                }
+                break;
+            }
         }
     }
-    if (!instruction) {
-        instruction = 'Hoàn thành câu/đoạn văn sau bằng cách chia dạng đúng của từ:';
+    // Upgrade legacy free-text wording ("Viết...", "chia động từ...") to selection wording
+    if (!instruction || /^(?:Viết|Điền|Hoàn thành.*chia)/i.test(instruction)) {
+        instruction = 'Chọn phương án đúng cho mỗi chỗ trống để hoàn thành câu/đoạn văn sau:';
     }
 
     const contentHtml = `<p><strong>${escapeForCdata(instruction)}</strong></p>\n<p class="cell">${escapeForCdata(rawContent)}</p>`;

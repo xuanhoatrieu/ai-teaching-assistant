@@ -9,6 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
 
 const archiver = require('archiver');
 
@@ -33,55 +34,85 @@ export interface ScormExportOptions {
     hasContentBg?: boolean;
 }
 
-export function resolveLocalMediaFile(publicUrl: string): string | null {
-    if (!publicUrl) return null;
-    const cleanUrl = publicUrl.split('?')[0];
+function isWithinDirectory(candidatePath: string, rootDir: string): boolean {
+    const resolvedRoot = path.resolve(rootDir);
+    const resolvedCandidate = path.resolve(candidatePath);
+    return resolvedCandidate.startsWith(resolvedRoot + path.sep);
+}
 
-    // Handle /uploads/... path
-    if (cleanUrl.startsWith('/uploads')) {
-        const p = path.join(process.cwd(), cleanUrl);
-        if (fs.existsSync(p)) return p;
+export function resolveLocalMediaFile(publicUrl: string): string | null {
+    if (!publicUrl || typeof publicUrl !== 'string') return null;
+    if (publicUrl.includes('\0')) return null;
+
+    let cleanUrl = publicUrl.split('?')[0].split('#')[0].trim();
+    try {
+        cleanUrl = decodeURIComponent(cleanUrl);
+    } catch {
+        // Keep raw cleanUrl if percent-decoding fails
+    }
+    if (!cleanUrl || cleanUrl.includes('\0')) return null;
+
+    const cwd = process.cwd();
+    const uploadsRoot = path.resolve(cwd, 'uploads');
+    const datauserRoot = path.resolve(cwd, 'datauser');
+    const publicTemplatesRoot = path.resolve(cwd, 'public', 'templates');
+
+    // Handle /uploads/... path with strict directory boundary validation
+    if (cleanUrl === '/uploads' || cleanUrl.startsWith('/uploads/')) {
+        const rel = cleanUrl.replace(/^\/+/, '');
+        const p = path.resolve(cwd, rel);
+        if (isWithinDirectory(p, uploadsRoot) && fs.existsSync(p) && fs.statSync(p).isFile()) {
+            return p;
+        }
+        return null;
     }
 
     // Handle /files/public/system/templates/{uuid}/{filename}
     const systemTemplateMatch = cleanUrl.match(/^\/files\/public\/system\/templates\/([^/]+)\/(.+)$/);
     if (systemTemplateMatch) {
         const [, templateUuid, filename] = systemTemplateMatch;
-        const p = path.join(process.cwd(), 'datauser', 'system', 'templates', templateUuid, filename);
-        if (fs.existsSync(p)) return p;
+        const p = path.resolve(datauserRoot, 'system', 'templates', templateUuid, filename);
+        if (isWithinDirectory(p, datauserRoot) && fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+        return null;
     }
 
     // Handle /files/public/{userId}/templates/{uuid}/{filename}
     const userTemplateMatch = cleanUrl.match(/^\/files\/public\/([^/]+)\/templates\/([^/]+)\/(.+)$/);
     if (userTemplateMatch) {
         const [, userId, templateUuid, filename] = userTemplateMatch;
-        const p = path.join(process.cwd(), 'datauser', userId, 'templates', templateUuid, filename);
-        if (fs.existsSync(p)) return p;
+        const p = path.resolve(datauserRoot, userId, 'templates', templateUuid, filename);
+        if (isWithinDirectory(p, datauserRoot) && fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+        return null;
     }
 
     // Handle /files/public/{userId}/{lessonId}/images/{filename}
     const publicMatch = cleanUrl.match(/^\/files\/public\/([^/]+)\/([^/]+)\/images\/(.+)$/);
     if (publicMatch) {
         const [, userId, lessonId, filename] = publicMatch;
-        const p = path.join(process.cwd(), 'datauser', userId, 'lessons', lessonId, 'images', filename);
-        if (fs.existsSync(p)) return p;
+        const p = path.resolve(datauserRoot, userId, 'lessons', lessonId, 'images', filename);
+        if (isWithinDirectory(p, datauserRoot) && fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+        return null;
     }
 
     // Handle /files/{userId}/{lessonId}/audio/{filename}
     const authMatch = cleanUrl.match(/^\/files\/([^/]+)\/([^/]+)\/audio\/(.+)$/);
     if (authMatch) {
         const [, userId, lessonId, filename] = authMatch;
-        const p = path.join(process.cwd(), 'datauser', userId, 'lessons', lessonId, 'audio', filename);
-        if (fs.existsSync(p)) return p;
+        const p = path.resolve(datauserRoot, userId, 'lessons', lessonId, 'audio', filename);
+        if (isWithinDirectory(p, datauserRoot) && fs.existsSync(p) && fs.statSync(p).isFile()) return p;
+        return null;
     }
 
     // Handle /templates/...
-    if (cleanUrl.startsWith('/templates')) {
-        const p = path.join(process.cwd(), 'public', cleanUrl);
-        if (fs.existsSync(p)) return p;
+    if (cleanUrl === '/templates' || cleanUrl.startsWith('/templates/')) {
+        const rel = cleanUrl.replace(/^\/+/, '');
+        const p = path.resolve(cwd, 'public', rel);
+        if (isWithinDirectory(p, publicTemplatesRoot) && fs.existsSync(p) && fs.statSync(p).isFile()) {
+            return p;
+        }
 
         // Fallback: check in datauser/system/templates
-        const sysDir = path.join(process.cwd(), 'datauser', 'system', 'templates');
+        const sysDir = path.resolve(datauserRoot, 'system', 'templates');
         if (fs.existsSync(sysDir)) {
             try {
                 const dirs = fs.readdirSync(sysDir);
@@ -89,17 +120,26 @@ export function resolveLocalMediaFile(publicUrl: string): string | null {
                     const subPath = path.join(sysDir, d);
                     if (fs.statSync(subPath).isDirectory()) {
                         const isTitle = cleanUrl.includes('1.png') || cleanUrl.includes('title');
-                        const candidate = path.join(subPath, isTitle ? 'title_bg.png' : 'content_bg.png');
-                        if (fs.existsSync(candidate)) return candidate;
+                        const candidate = path.resolve(subPath, isTitle ? 'title_bg.png' : 'content_bg.png');
+                        if (isWithinDirectory(candidate, sysDir) && fs.existsSync(candidate)) return candidate;
                     }
                 }
             } catch {}
         }
+        return null;
     }
 
-    // Fallback: absolute path
-    if (path.isAbsolute(cleanUrl) && fs.existsSync(cleanUrl)) {
-        return cleanUrl;
+    // Fallback: absolute path restricted strictly to sanctioned media directories
+    if (path.isAbsolute(cleanUrl)) {
+        const resolvedAbs = path.resolve(cleanUrl);
+        const isAllowedRoot =
+            isWithinDirectory(resolvedAbs, uploadsRoot) ||
+            isWithinDirectory(resolvedAbs, datauserRoot) ||
+            isWithinDirectory(resolvedAbs, publicTemplatesRoot);
+        if (isAllowedRoot && fs.existsSync(resolvedAbs) && fs.statSync(resolvedAbs).isFile()) {
+            return resolvedAbs;
+        }
+        return null;
     }
 
     return null;
@@ -169,7 +209,15 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         let interaction: any = null;
         if (s.interactiveData) {
             try {
-                interaction = typeof s.interactiveData === 'string' ? JSON.parse(s.interactiveData) : s.interactiveData;
+                const rawInteraction = typeof s.interactiveData === 'string' ? JSON.parse(s.interactiveData) : s.interactiveData;
+                if (rawInteraction && typeof rawInteraction === 'object') {
+                    interaction = {
+                        ...rawInteraction,
+                        questions: Array.isArray(rawInteraction.questions)
+                            ? normalizeInteractiveQuestions(rawInteraction.questions)
+                            : [],
+                    };
+                }
             } catch (e) {}
         }
 
@@ -1211,6 +1259,41 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       background: rgba(239, 68, 68, 0.15) !important;
       color: #fca5a5 !important;
     }
+    .fib-selected-preview {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      color: #cbd5e1;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px dashed rgba(99, 102, 241, 0.35);
+      align-self: flex-start;
+    }
+    .fib-selected-slot {
+      font-weight: 700;
+      color: #6ee7b7;
+      padding: 2px 10px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    body.theme-light .fib-selected-preview {
+      color: #334155;
+      background: #f1f5f9;
+      border-color: #94a3b8;
+    }
+    body.theme-light .fib-selected-slot {
+      color: #005a36;
+      background: #dcfce7;
+      border-color: #86efac;
+    }
+    .cloze-inline-select {
+      max-width: 240px !important;
+      cursor: pointer;
+      text-align: left !important;
+    }
 
     /* ORDER Interactive (Put words in correct order) */
     .order-interactive-wrapper {
@@ -1774,6 +1857,126 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
     }
     body.theme-light .slide-counter { color: #475569; }
 
+    /* Full-Slide Canvas Mode (100% faithful original PowerPoint visual rendering) */
+    .slide-card.is-full-canvas-slide {
+      padding: 16px 20px 20px 20px;
+      gap: 14px;
+    }
+    .full-canvas-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--card-border);
+      flex-wrap: wrap;
+    }
+    .full-canvas-meta {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+    }
+    .full-canvas-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      background: rgba(0, 90, 54, 0.12);
+      color: #065f46;
+      border: 1px solid rgba(0, 90, 54, 0.25);
+    }
+    body.theme-dark .full-canvas-badge {
+      background: rgba(82, 183, 136, 0.16);
+      color: #95d5b2;
+      border-color: rgba(82, 183, 136, 0.35);
+    }
+    .full-canvas-caption {
+      font-size: 0.96rem;
+      font-weight: 600;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .full-canvas-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .fullscreen-stage-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--btn-sec-bg);
+      color: var(--btn-sec-color);
+      border: 1px solid var(--btn-sec-border);
+      transition: all 0.2s ease;
+    }
+    .fullscreen-stage-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    body.theme-dark .fullscreen-stage-btn:hover {
+      border-color: #52b788;
+      color: #95d5b2;
+    }
+    .full-slide-canvas-stage {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      max-height: 74vh;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #f1f5f9;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 8px 26px rgba(15, 23, 42, 0.1);
+      position: relative;
+    }
+    body.theme-dark .full-slide-canvas-stage {
+      background: #0f172a;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+    }
+    .full-slide-canvas-stage:fullscreen,
+    .full-slide-canvas-stage:-webkit-full-screen {
+      max-height: 100vh;
+      width: 100vw;
+      height: 100vh;
+      border-radius: 0;
+      border: none;
+      background: #000000;
+    }
+    .full-slide-canvas-img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      user-select: none;
+    }
+    .title-slide-subtitles {
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-width: 780px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
     /* Suppress duplicate TUAF LMS floating chatbot when injected inside SCORM iframe */
     #tuaf-widget-bubble, #tuaf-widget-popup, [id*="tuaf-widget"] {
       display: none !important;
@@ -1993,6 +2196,16 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       }
     }
 
+    function toggleFullSlideStage() {
+      const stage = document.getElementById('fullSlideStage');
+      if (!stage) return;
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      } else if (stage.requestFullscreen) {
+        stage.requestFullscreen().catch(() => {});
+      }
+    }
+
     // Render Current Slide
     function renderSlide(idx) {
       if (idx < 0 || idx >= SLIDES.length) return;
@@ -2163,17 +2376,48 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             \`;
 
           } else if (qType === 'FIB') {
-            // Fill-in-the-blank format
+            // Fill-in-the-blank format: Word Chips (4 choices) when options exist, legacy text input fallback otherwise
             const inputVal = typeof selectedVal === 'string' ? selectedVal : '';
             const correctJson = encodeURIComponent(JSON.stringify(q.correctAnswer || (q.correctAnswers ? q.correctAnswers[0] : '')));
+            const fibOptions = Array.isArray(q.options) ? q.options.filter(Boolean) : [];
 
-            if (isGated) {
+            if (fibOptions.length >= 2) {
+              const chipsHtml = fibOptions.map((opt, optIndex) => {
+                const letter = String.fromCharCode(65 + optIndex);
+                const safeOpt = escapeScormHtml(opt);
+                const encOpt = encodeURIComponent(opt);
+                if (isGated) {
+                  const isSelected = inputVal && inputVal.trim().toLowerCase() === String(opt).trim().toLowerCase();
+                  return \`
+                    <button type="button" class="option-btn fib-word-chip \${isSelected ? 'selected' : ''}" data-opt="\${encOpt}" onclick="selectGateFIBChip('\${qKey}', '\${encOpt}', this, \${idx})">
+                      <strong>\${letter}.</strong> <span>\${safeOpt}</span>
+                    </button>
+                  \`;
+                } else {
+                  return \`
+                    <button type="button" class="option-btn fib-word-chip" data-opt="\${encOpt}" onclick="checkFIBChipPractice('\${qKey}', '\${encOpt}', '\${correctJson}', this, 'expl_\${qKey}')">
+                      <strong>\${letter}.</strong> <span>\${safeOpt}</span>
+                    </button>
+                  \`;
+                }
+              }).join('');
+
+              bodyHtml = \`
+                <div class="fib-container" id="fib_wrap_\${qKey}">
+                  <div class="fib-selected-preview">
+                    <span>✍️ Phương án chọn điền vào chỗ trống:</span>
+                    <span class="fib-selected-slot" id="fib_slot_\${qKey}">\${inputVal ? escapeScormHtml(inputVal) : '[ ..... ]'}</span>
+                  </div>
+                  <div class="options-grid fib-chip-grid">\${chipsHtml}</div>
+                </div>
+              \`;
+            } else if (isGated) {
               bodyHtml = \`
                 <div class="fib-container">
                   <div class="fib-input-row">
                     <input type="text" class="fib-input" id="input_\${qKey}" 
                       placeholder="Gõ từ hoặc cụm từ cần điền vào đây..." 
-                      value="\${inputVal}"
+                      value="\${escapeScormHtml(inputVal)}"
                       oninput="recordGateFIB('\${qKey}', this.value, \${idx})" />
                   </div>
                 </div>
@@ -2306,11 +2550,33 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             \`;
 
           } else if (qType === 'CLOZE') {
-            // Dialogue or passage with inline blanks [answer]
+            // Dialogue or passage with inline selectable dropdowns [answer] + Word Bank
             const rawPassage = q.passage || q.questionText || q.question || '';
             const passageLines = rawPassage.split(/\\r?\\n/);
             let blankCounter = 0;
             const hintWords = [];
+            const seenLower = new Set();
+            const addPoolWord = (w) => {
+              const trimmedW = String(w || '').trim();
+              if (!trimmedW) return;
+              const lowW = trimmedW.toLowerCase();
+              if (!seenLower.has(lowW)) {
+                seenLower.add(lowW);
+                hintWords.push(trimmedW);
+              }
+            };
+
+            // First pass: collect primary answers from all blanks + distractors
+            const preMatches = [...rawPassage.matchAll(/\\[([^\\]]+)\\]/g)];
+            preMatches.forEach(m => {
+              const primaryWord = (m[1].split('|')[0] || '').trim();
+              addPoolWord(primaryWord);
+            });
+            if (Array.isArray(q.distractors)) {
+              q.distractors.forEach(d => addPoolWord(d));
+            }
+            const shuffledHints = [...hintWords].sort((a, b) => a.localeCompare(b));
+
             const userAnswersObj = (typeof selectedVal === 'object' && selectedVal !== null) ? selectedVal : {};
 
             const passageHtml = passageLines.map(line => {
@@ -2321,23 +2587,27 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
               let lineContent = line;
               const speakerMatch = line.match(/^([A-Za-z0-9_\\sÀ-ỹ]{1,20}):\\s*(.*)$/);
               if (speakerMatch) {
-                speakerPrefix = \`<span class="cloze-speaker">\${speakerMatch[1]}:</span>\`;
+                speakerPrefix = \`<span class="cloze-speaker">\${escapeScormHtml(speakerMatch[1])}:</span>\`;
                 lineContent = speakerMatch[2];
               }
 
               const formattedLine = lineContent.replace(/\\[([^\\]]+)\\]/g, (match, p1) => {
                 const bIdx = blankCounter++;
-                const acceptable = p1.split('|').map(s => s.trim());
-                acceptable.forEach(w => {
-                  if (!hintWords.includes(w)) hintWords.push(w);
-                });
-                const userVal = userAnswersObj[bIdx] || '';
+                const acceptable = p1.split('|').map(s => s.trim()).filter(Boolean);
+                const userVal = String(userAnswersObj[bIdx] || '');
                 const correctAttr = encodeURIComponent(JSON.stringify(acceptable));
+                const optionsHtml = ['<option value="">-- (' + (bIdx + 1) + ') Chọn từ --</option>']
+                  .concat(shuffledHints.map(choice => {
+                    const isSel = userVal && userVal.trim().toLowerCase() === choice.trim().toLowerCase();
+                    const safeChoice = escapeScormHtml(choice);
+                    return \`<option value="\${safeChoice}" \${isSel ? 'selected' : ''}>\${safeChoice}</option>\`;
+                  }))
+                  .join('');
 
                 if (isGated) {
-                  return \`<input type="text" class="cloze-inline-input" data-blank-idx="\${bIdx}" value="\${userVal}" oninput="recordGateCloze('\${qKey}', \${bIdx}, this.value, \${idx})" placeholder="(\${bIdx + 1})" />\`;
+                  return \`<select class="cloze-inline-input cloze-inline-select" data-blank-idx="\${bIdx}" onchange="recordGateCloze('\${qKey}', \${bIdx}, this.value, \${idx})">\${optionsHtml}</select>\`;
                 } else {
-                  return \`<input type="text" class="cloze-inline-input" data-blank-idx="\${bIdx}" data-correct="\${correctAttr}" placeholder="(\${bIdx + 1})" />\`;
+                  return \`<select class="cloze-inline-input cloze-inline-select" data-blank-idx="\${bIdx}" data-correct="\${correctAttr}">\${optionsHtml}</select>\`;
                 }
               });
 
@@ -2349,11 +2619,10 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
               \`;
             }).join('');
 
-            const shuffledHints = [...hintWords].sort(() => 0.5 - Math.random());
             const wordBankHtml = shuffledHints.length > 0 ? \`
               <div class="cloze-word-bank">
-                <span class="cloze-bank-title">🔤 Từ gợi ý (Word Bank):</span>
-                \${shuffledHints.map(h => \`<span class="cloze-bank-pill">\${h}</span>\`).join('')}
+                <span class="cloze-bank-title">🔤 Kho từ lựa chọn (Word Bank):</span>
+                \${shuffledHints.map(h => \`<span class="cloze-bank-pill">\${escapeScormHtml(h)}</span>\`).join('')}
               </div>
             \` : '';
 
@@ -2535,6 +2804,14 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             \${interactionHtml}
           </div>
         \`;
+      } else if (layoutType === 'full_slide_canvas' && slide.imageUrl) {
+        layoutBodyHtml = \`
+          <div class="full-slide-canvas-stage" id="fullSlideStage">
+            <img src="\${slide.imageUrl}" alt="\${slide.title}" class="full-slide-canvas-img" />
+          </div>
+          \${sampleAudioHtml}
+          \${interactionHtml}
+        \`;
       } else {
         // split_standard (Default)
         layoutBodyHtml = \`
@@ -2549,9 +2826,38 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
 
       // Construct Slide HTML
       const slideCard = document.getElementById('slideCard');
-      slideCard.className = 'slide-card ' + (idx === 0 ? 'is-title-slide' : 'is-content-slide');
+      const isFullCanvasSlide = layoutType === 'full_slide_canvas' && Boolean(slide.imageUrl);
 
-      if (idx === 0) {
+      if (isFullCanvasSlide) {
+        slideCard.className = 'slide-card is-full-canvas-slide';
+        slideCard.innerHTML = \`
+          <div class="full-canvas-toolbar">
+            <div class="full-canvas-meta">
+              <span class="full-canvas-badge">📑 Slide \${idx + 1} / \${SLIDES.length}</span>
+              <span class="full-canvas-caption">\${slide.title}</span>
+            </div>
+            <div class="full-canvas-actions">
+              <button type="button" class="fullscreen-stage-btn" onclick="toggleFullSlideStage()" title="Phóng to toàn màn hình slide">
+                <span>⛶</span>
+                <span>Toàn màn hình</span>
+              </button>
+              \${speakerBtnHtml}
+            </div>
+          </div>
+          <div class="slide-body-container">
+            \${layoutBodyHtml}
+          </div>
+        \`;
+      } else if (idx === 0) {
+        slideCard.className = 'slide-card is-title-slide';
+        const coverSubtitlesHtml = (slide.bullets && slide.bullets.length > 0)
+          ? \`<div class="title-slide-subtitles">\${slide.bullets.map(b => {
+              const pt = (b.point || '').trim();
+              const ds = (b.description || '').trim();
+              const line = (ds && ds.toLowerCase() !== pt.toLowerCase()) ? (pt ? pt + ' — ' + ds : ds) : pt;
+              return line ? \`<p class="title-slide-desc">\${line}</p>\` : '';
+            }).join('')}</div>\`
+          : '';
         slideCard.innerHTML = \`
           <div class="slide-top-header title-slide-top">
             <div class="title-slide-badge">
@@ -2563,10 +2869,15 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
           <div class="slide-body-container title-slide-body">
             <div class="title-slide-hero">
               <h1 class="title-slide-main-heading">\${slide.title}</h1>
+              \${coverSubtitlesHtml}
             </div>
+            \${mediaHtml}
+            \${sampleAudioHtml}
+            \${interactionHtml}
           </div>
         \`;
       } else {
+        slideCard.className = 'slide-card is-content-slide';
         slideCard.innerHTML = \`
           <div class="slide-top-header">
             <h2 class="slide-title">\${slide.title}</h2>
@@ -2670,10 +2981,68 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       userGateAnswers[slideIdx][qKey] = arr;
     }
 
+    function escapeScormHtml(raw) {
+      return String(raw === null || raw === undefined ? '' : raw)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function recordGateFIB(qKey, val, slideIdx) {
       if (slidePassed[slideIdx]) return;
       if (!userGateAnswers[slideIdx]) userGateAnswers[slideIdx] = {};
       userGateAnswers[slideIdx][qKey] = val;
+    }
+
+    function selectGateFIBChip(qKey, optEncoded, btnEl, slideIdx) {
+      if (slidePassed[slideIdx]) return;
+      const chosen = decodeURIComponent(optEncoded);
+      if (!userGateAnswers[slideIdx]) userGateAnswers[slideIdx] = {};
+      userGateAnswers[slideIdx][qKey] = chosen;
+
+      const wrap = document.getElementById('fib_wrap_' + qKey);
+      if (wrap) {
+        wrap.querySelectorAll('.fib-word-chip').forEach(b => b.classList.remove('selected'));
+      }
+      btnEl.classList.add('selected');
+      const slot = document.getElementById('fib_slot_' + qKey);
+      if (slot) slot.textContent = chosen;
+    }
+
+    function checkFIBChipPractice(qKey, optEncoded, correctJson, btnEl, explId) {
+      const chosen = decodeURIComponent(optEncoded);
+      const correctVal = JSON.parse(decodeURIComponent(correctJson));
+      const acceptable = Array.isArray(correctVal)
+        ? correctVal.map(c => String(c || '').trim().toLowerCase())
+        : [String(correctVal || '').trim().toLowerCase()];
+
+      const isCorrect = acceptable.includes(chosen.trim().toLowerCase());
+      studentScores[qKey] = isCorrect;
+
+      const slot = document.getElementById('fib_slot_' + qKey);
+      if (slot) slot.textContent = chosen;
+
+      const wrap = document.getElementById('fib_wrap_' + qKey);
+      if (wrap) {
+        wrap.querySelectorAll('.fib-word-chip').forEach(b => {
+          b.classList.remove('correct', 'wrong', 'selected');
+          const bVal = decodeURIComponent(b.getAttribute('data-opt') || '').trim().toLowerCase();
+          if (acceptable.includes(bVal)) {
+            b.classList.add('correct');
+          }
+        });
+      }
+      if (!isCorrect) {
+        btnEl.classList.add('wrong');
+      } else {
+        btnEl.classList.add('correct');
+      }
+
+      const expl = document.getElementById(explId);
+      if (expl) expl.classList.add('show');
+      updateSCORMScore();
     }
 
     function togglePracticeCheckbox(btnEl) {

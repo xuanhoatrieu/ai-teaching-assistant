@@ -45,9 +45,11 @@ import {
     extractMatchPairs,
     escapeForCdata,
     escapeXmlText,
+    upgradeClozeToMultichoice,
+    normalizeInteractiveQuestions,
 } from '../questions/moodle-xml.helper';
 import { fixUtf8Filename } from '../common/string.util';
-import { packageScormZip } from '../slides/scorm-export.helper';
+import { packageScormZip, resolveLocalMediaFile } from '../slides/scorm-export.helper';
 import { packageH5pZip } from '../slides/h5p-export.helper';
 
 const execFileAsync = promisify(execFile);
@@ -66,6 +68,8 @@ export interface ParsedSlide {
     noteVN: string;
     hasDual: boolean;
     imageUrl?: string | null;
+    renderedSlideUrl?: string | null;
+    hasCustomImage?: boolean;
     audioUrl: string | null;
     audioDuration: number | null;
     audioStatus: string; // pending | generating | done | error
@@ -533,37 +537,51 @@ export class PptxAudioToolService {
 
             const result = await response.json() as { slides: any[]; totalSlides: number };
 
-            // Build slides JSON with audio status + extracted imageUrl
-            const slides: ParsedSlide[] = result.slides.map((s: any, idx: number) => ({
-                index: s.index,
-                originalSlideIndex: s.index,
-                slideType: idx === 0 ? 'title' : 'content',
-                layoutType: 'split_standard',
-                title: s.title || `Slide ${s.index + 1}`,
-                content: s.content || [],
-                optimizedContent: null,
-                interactiveData: null,
-                noteFull: s.noteFull || '',
-                noteEN: s.noteEN || '',
-                noteVN: s.noteVN || '',
-                hasDual: s.hasDual || false,
-                imageUrl: s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null,
-                audioUrl: null,
-                audioDuration: null,
-                audioStatus: 'pending',
-                errorMessage: null,
-                extraAudioUrl: null,
-                extraAudioName: null,
-                extraAudioDuration: null,
-            }));
+            // Build slides JSON with audio status + rendered full-slide PNG + extracted imageUrl
+            const slides: ParsedSlide[] = result.slides.map((s: any, idx: number) => {
+                const extractedImgUrl = s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null;
+                const renderedSlideUrl = s.renderedSlideFileName
+                    ? `/uploads/pptx-tool/${session.id}/rendered_slides/${s.renderedSlideFileName}`
+                    : null;
+                return {
+                    index: s.index,
+                    originalSlideIndex: s.index,
+                    slideType: idx === 0 ? 'title' : 'content',
+                    layoutType: renderedSlideUrl ? 'full_slide_canvas' : 'split_standard',
+                    title: s.title || `Slide ${s.index + 1}`,
+                    content: s.content || [],
+                    optimizedContent: null,
+                    interactiveData: null,
+                    noteFull: s.noteFull || '',
+                    noteEN: s.noteEN || '',
+                    noteVN: s.noteVN || '',
+                    hasDual: s.hasDual || false,
+                    imageUrl: renderedSlideUrl || extractedImgUrl,
+                    renderedSlideUrl,
+                    hasCustomImage: false,
+                    audioUrl: null,
+                    audioDuration: null,
+                    audioStatus: 'pending',
+                    errorMessage: null,
+                    extraAudioUrl: null,
+                    extraAudioName: null,
+                    extraAudioDuration: null,
+                };
+            });
 
             // Build content JSON
-            const content = result.slides.map((s: any) => ({
-                index: s.index,
-                title: s.title || `Slide ${s.index + 1}`,
-                content: s.content || [],
-                imageUrl: s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null,
-            }));
+            const content = result.slides.map((s: any) => {
+                const extractedImgUrl = s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null;
+                const renderedSlideUrl = s.renderedSlideFileName
+                    ? `/uploads/pptx-tool/${session.id}/rendered_slides/${s.renderedSlideFileName}`
+                    : null;
+                return {
+                    index: s.index,
+                    title: s.title || `Slide ${s.index + 1}`,
+                    content: s.content || [],
+                    imageUrl: renderedSlideUrl || extractedImgUrl,
+                };
+            });
 
             // Update session
             await this.prisma.pptxAudioSession.update({
@@ -2131,6 +2149,10 @@ Return JSON only.`;
         }
 
         slide.imageUrl = `/uploads/pptx-tool/${sessionId}/images/${fileName}`;
+        slide.hasCustomImage = true;
+        if (slide.layoutType === 'full_slide_canvas') {
+            slide.layoutType = 'split_standard';
+        }
         await this.saveSlidesAndSyncContent(sessionId, slides);
 
         return slide;
@@ -2225,6 +2247,9 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
 
         slide.optimizedContent = bullets;
         slide.content = bullets.map(b => `${b.point}${b.description ? `: ${b.description}` : ''}`.trim());
+        if (slide.layoutType === 'full_slide_canvas') {
+            slide.layoutType = 'split_standard';
+        }
         await this.saveSlidesAndSyncContent(sessionId, slides);
 
         return {
@@ -2324,6 +2349,10 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
         fs.writeFileSync(filePath, Buffer.from(generatedImage.base64, 'base64'));
 
         slide.imageUrl = `/uploads/pptx-tool/${sessionId}/images/${fileName}`;
+        slide.hasCustomImage = true;
+        if (slide.layoutType === 'full_slide_canvas') {
+            slide.layoutType = 'split_standard';
+        }
         await this.saveSlidesAndSyncContent(sessionId, slides);
 
         return slide;
@@ -2474,10 +2503,10 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
             MC: 'Trắc nghiệm đơn 1 đáp án đúng (type: "MC", options: 4 lựa chọn A, B, C, D, correctAnswer: "chuỗi đáp án đúng")',
             TF: 'Đúng hay Sai (type: "TF", options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai")',
             MR: 'Nhiều lựa chọn đúng (type: "MR", options: 4 lựa chọn, correctAnswers: [mảng chứa các đáp án đúng])',
-            FIB: 'Điền khuyết thuật ngữ vào chỗ trống (type: "FIB", question: câu hỏi chứa ký hiệu [.....], correctAnswer: "từ hoặc thuật ngữ cần điền")',
+            FIB: 'Điền khuyết từ/thuật ngữ có phương án lựa chọn (type: "FIB", question: câu hỏi chứa ký hiệu [.....], options: [mảng 4 từ/cụm từ gồm 1 đáp án đúng và 3 phương án nhiễu hợp lý để sinh viên chọn], correctAnswer: "từ hoặc cụm từ đúng nằm trong options")',
             MATCH: 'Nối cặp tương ứng hai vế A và B (type: "MATCH", question: "Yêu cầu nối...", pairs: [ { "left": "Khái niệm/Thuật ngữ vế A", "right": "Định nghĩa/Ý nghĩa vế B tương ứng" }, ... ])',
             ORDER: 'Sắp xếp thứ tự từ trong câu (type: "ORDER", question: "Sắp xếp các từ sau thành câu hoàn chỉnh:", words: ["mảng", "từ", "bị", "xáo", "trộn"], correctSentence: "Câu hoàn chỉnh đúng chuẩn ngữ pháp")',
-            CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại (type: "CLOZE", question: "Điền từ thích hợp vào các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", explanation: "Giải thích ngữ cảnh...")',
+            CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại bằng menu lựa chọn (type: "CLOZE", question: "Chọn từ/cụm từ thích hợp cho các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", distractors: ["từ nhiễu 1", "từ nhiễu 2", "từ nhiễu 3"], explanation: "Giải thích ngữ cảnh...")',
         };
 
         const typesRequirementText = selectedTypes.map(t => `- ${typeLabels[t] || t}`).join('\n');
@@ -2614,6 +2643,9 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             };
         }
 
+        if (Array.isArray(parsedInteractive.questions)) {
+            parsedInteractive.questions = normalizeInteractiveQuestions(parsedInteractive.questions);
+        }
         parsedInteractive.passScore = passScore;
         parsedInteractive.fallbackSlideIndex = fallbackSlideIndex;
         parsedInteractive.allowContinueWithoutPass = options?.allowContinueWithoutPass === true;
@@ -2769,7 +2801,190 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         });
     }
 
+    private async renderPptxSlidesLocallyFallback(pptxPath: string, renderedDir: string): Promise<boolean> {
+        let tmpWorkDir: string | null = null;
+        try {
+            fs.mkdirSync(renderedDir, { recursive: true });
+            tmpWorkDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pptx-render-ts-'));
+            const loProfileDir = path.join(tmpWorkDir, 'lo_profile');
+            const pdfDir = path.join(tmpWorkDir, 'pdf_out');
+            const ppmDir = path.join(tmpWorkDir, 'ppm_out');
+            fs.mkdirSync(loProfileDir, { recursive: true });
+            fs.mkdirSync(pdfDir, { recursive: true });
+            fs.mkdirSync(ppmDir, { recursive: true });
+
+            await execFileAsync(
+                'soffice',
+                [
+                    `-env:UserInstallation=file://${loProfileDir}`,
+                    '--headless',
+                    '--nologo',
+                    '--nofirststartwizard',
+                    '--norestore',
+                    '--convert-to',
+                    'pdf',
+                    '--outdir',
+                    pdfDir,
+                    pptxPath,
+                ],
+                { timeout: 120000 },
+            );
+
+            const pdfFiles = fs.readdirSync(pdfDir).filter(f => f.toLowerCase().endsWith('.pdf'));
+            if (pdfFiles.length === 0) {
+                return false;
+            }
+            const pdfPath = path.join(pdfDir, pdfFiles[0]);
+            const pagePrefix = path.join(ppmDir, 'slide_page');
+
+            await execFileAsync(
+                'pdftoppm',
+                ['-png', '-r', '150', pdfPath, pagePrefix],
+                { timeout: 120000 },
+            );
+
+            const pngPages = fs
+                .readdirSync(ppmDir)
+                .filter(f => f.startsWith('slide_page') && f.toLowerCase().endsWith('.png'))
+                .sort((a, b) => {
+                    const numA = parseInt((a.match(/(\d+)\.png$/i) || [])[1] || '0', 10);
+                    const numB = parseInt((b.match(/(\d+)\.png$/i) || [])[1] || '0', 10);
+                    return numA - numB;
+                });
+
+            pngPages.forEach((pageFile, idx) => {
+                const destName = `full_slide_${String(idx).padStart(2, '0')}.png`;
+                fs.copyFileSync(path.join(ppmDir, pageFile), path.join(renderedDir, destName));
+            });
+
+            return pngPages.length > 0;
+        } catch (err: any) {
+            this.logger.warn(`Local LibreOffice slide render fallback skipped: ${err?.message || err}`);
+            return false;
+        } finally {
+            if (tmpWorkDir && fs.existsSync(tmpWorkDir)) {
+                try {
+                    fs.rmSync(tmpWorkDir, { recursive: true, force: true });
+                } catch { /* ignore */ }
+            }
+        }
+    }
+
+    async ensureRenderedSlidesForSession(sessionId: string): Promise<ParsedSlide[]> {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+        });
+        if (!session) {
+            throw new NotFoundException(`Session ${sessionId} not found`);
+        }
+
+        const slides: ParsedSlide[] = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        if (slides.length === 0) {
+            return slides;
+        }
+
+        const origSlides = slides.filter(s => {
+            const origIdx = s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index;
+            return origIdx !== null && origIdx >= 0;
+        });
+        if (origSlides.length === 0) {
+            return slides;
+        }
+
+        const allAlreadyRendered = origSlides.every(s => {
+            if (!s.renderedSlideUrl) return false;
+            const localFile = resolveLocalMediaFile(s.renderedSlideUrl);
+            return Boolean(localFile && fs.existsSync(localFile));
+        });
+        if (allAlreadyRendered) {
+            return slides;
+        }
+
+        const sessionDir = this.getSessionDir(sessionId);
+        const renderedDir = path.join(sessionDir, 'rendered_slides');
+        const candidatePptxPath = (session.filePath && fs.existsSync(session.filePath))
+            ? session.filePath
+            : path.join(sessionDir, 'original.pptx');
+
+        const missingOnDisk = origSlides.some(s => {
+            const origIdx = (s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index) as number;
+            const expectedPath = path.join(renderedDir, `full_slide_${String(origIdx).padStart(2, '0')}.png`);
+            return !fs.existsSync(expectedPath);
+        });
+
+        if (missingOnDisk && fs.existsSync(candidatePptxPath)) {
+            let renderedByPython = false;
+            try {
+                const resp = await fetch(`${this.pythonServiceUrl}/render-pptx-slides`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ file_path: candidatePptxPath }),
+                });
+                if (resp.ok) {
+                    const data = await resp.json() as { renderedCount?: number };
+                    renderedByPython = (data?.renderedCount || 0) > 0;
+                } else {
+                    this.logger.warn(`Python /render-pptx-slides returned HTTP ${resp.status}`);
+                }
+            } catch (err: any) {
+                this.logger.warn(`Python /render-pptx-slides unreachable (${err?.message || err}); trying local fallback`);
+            }
+
+            if (!renderedByPython) {
+                await this.renderPptxSlidesLocallyFallback(candidatePptxPath, renderedDir);
+            }
+        }
+
+        let updated = false;
+        for (const s of slides) {
+            const origIdx = s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index;
+            if (origIdx === null || origIdx < 0) continue;
+
+            const fileName = `full_slide_${String(origIdx).padStart(2, '0')}.png`;
+            const diskPath = path.join(renderedDir, fileName);
+            if (fs.existsSync(diskPath)) {
+                const publicRenderedUrl = `/uploads/pptx-tool/${sessionId}/rendered_slides/${fileName}`;
+                const wasUnrenderedLegacySlide = !s.renderedSlideUrl;
+                if (s.renderedSlideUrl !== publicRenderedUrl) {
+                    s.renderedSlideUrl = publicRenderedUrl;
+                    updated = true;
+                }
+                const hasCustomOrAiImg =
+                    s.hasCustomImage === true ||
+                    String(s.imageUrl || '').includes('_custom_') ||
+                    String(s.imageUrl || '').includes('_ai_');
+                const hasOptBullets = Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0;
+                const isSpecialInteractive =
+                    s.slideType === 'interactive' ||
+                    s.slideType === 'checkpoint_quiz' ||
+                    s.slideType === 'interactive_audio';
+                if (!hasCustomOrAiImg && s.imageUrl !== publicRenderedUrl) {
+                    s.imageUrl = publicRenderedUrl;
+                    updated = true;
+                }
+                if (
+                    wasUnrenderedLegacySlide &&
+                    !hasCustomOrAiImg &&
+                    !hasOptBullets &&
+                    !isSpecialInteractive &&
+                    (!s.layoutType || s.layoutType === 'split_standard')
+                ) {
+                    s.layoutType = 'full_slide_canvas';
+                    updated = true;
+                }
+            }
+        }
+
+        if (updated) {
+            await this.saveSlidesAndSyncContent(sessionId, slides);
+        }
+
+        return slides;
+    }
+
     private async buildExportSlidesForSession(sessionId: string, forH5p = false) {
+        await this.ensureRenderedSlidesForSession(sessionId);
+
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
             include: { pptxSubject: true },
@@ -2792,17 +3007,45 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             if (s.interactiveData) {
                 hasInlineInteractiveSlide = true;
             }
+
+            const origIdx = s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index;
+            const hasCustomOrAiImage =
+                s.hasCustomImage === true ||
+                String(s.imageUrl || '').includes('_custom_') ||
+                String(s.imageUrl || '').includes('_ai_');
+            const hasOptimizedBullets = Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0;
+            const isSpecialInteractiveSlide =
+                s.slideType === 'interactive' ||
+                s.slideType === 'checkpoint_quiz' ||
+                s.slideType === 'interactive_audio';
+            const effectiveRenderedUrl =
+                s.renderedSlideUrl ||
+                (String(s.imageUrl || '').includes('/rendered_slides/full_slide_') ? s.imageUrl : null);
+
+            const useFullSlideCanvas =
+                Boolean(effectiveRenderedUrl) && (
+                    s.layoutType === 'full_slide_canvas' ||
+                    (
+                        !s.layoutType &&
+                        origIdx !== null &&
+                        origIdx >= 0 &&
+                        !hasCustomOrAiImage &&
+                        !hasOptimizedBullets &&
+                        !isSpecialInteractiveSlide
+                    )
+                );
+
             return {
                 slideIndex: idx + 1,
                 slideType: s.slideType || (idx === 0 ? 'title' : 'content'),
-                layoutType: s.layoutType || 'split_standard',
+                layoutType: useFullSlideCanvas ? 'full_slide_canvas' : (s.layoutType || 'split_standard'),
                 title: s.title || `Slide ${idx + 1}`,
                 content: Array.isArray(s.content) ? s.content : [],
-                optimizedContentJson: Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0
+                optimizedContentJson: hasOptimizedBullets
                     ? JSON.stringify(s.optimizedContent)
                     : null,
                 speakerNote,
-                imageUrl: s.imageUrl || '',
+                imageUrl: useFullSlideCanvas ? (effectiveRenderedUrl || '') : (s.imageUrl || ''),
                 audioUrl: (s.audioStatus === 'done' && s.audioUrl) ? s.audioUrl : '',
                 extraAudioUrl: s.extraAudioUrl || null,
                 extraAudioName: s.extraAudioName || null,
@@ -3677,9 +3920,10 @@ SUPPORTED TYPES & dataJson STRUCTURE:
 3. "MATCH" (Matching pairs):
    - MUST have 3 to 5 matching pairs.
    - dataJson: {"pairs": [{"left": "Term / Component 1", "right": "Definition / Function 1"}, {"left": "Term / Component 2", "right": "Definition / Function 2"}, ...], "rightOptions": ["Definition 1", "Definition 2", "Distractor (optional)"]}
-4. "CLOZE" (Moodle Embedded Cloze sentence):
-   questionText: "Sentence with embedded Moodle Cloze like {1:SHORTANSWER:=word} (base_word) or {1:MULTICHOICE:=correct~wrong}"
-   dataJson: {"clozeText": "Sentence with {1:SHORTANSWER:=word} (base_word)", "answers": [{"position": 1, "acceptableAnswers": ["word"]}]}
+4. "CLOZE" (Moodle Embedded Cloze sentence with 4-choice shuffled dropdowns — NEVER use SHORTANSWER):
+   questionText: "Sentence with embedded Moodle Cloze dropdown like {1:MULTICHOICE_S:=correct~wrong1~wrong2~wrong3} (base_word)"
+   dataJson: {"clozeText": "Sentence with {1:MULTICHOICE_S:=correct~wrong1~wrong2~wrong3} (base_word)", "answers": [{"position": 1, "acceptableAnswers": ["correct"], "distractors": ["wrong1", "wrong2", "wrong3"]}]}
+   (STRICT RULE FOR CLOZE: NEVER use {1:SHORTANSWER:...} or bare ___! Every blank MUST be {1:MULTICHOICE_S:=Correct~Wrong1~Wrong2~Wrong3} with 1 canonical correct answer and 3 distinct wrong distractors.)
 5. "TRUEFALSE" (True/False):
    dataJson: {"isTrue": true}
 
@@ -3727,7 +3971,7 @@ Return ONLY valid JSON format:
                     : JSON.stringify(q.dataJson ?? q.data ?? {}));
 
             let resolvedType = (q.questionType || 'MC').toUpperCase();
-            const questionText = (q.questionText || '').trim();
+            let questionText = (q.questionText || '').trim();
 
             try {
                 const parsedData = JSON.parse(dataJsonStr);
@@ -3758,6 +4002,18 @@ Return ONLY valid JSON format:
                     } else if (parsedData?.clozeText || parsedData?.rawCloze || /\{\d+:[A-Za-z_]+:/.test(questionText)) {
                         resolvedType = 'CLOZE';
                     }
+                }
+
+                // Guarantee CLOZE always uses shuffled selectable choices {1:MULTICHOICE_S:=...}
+                if (resolvedType === 'CLOZE') {
+                    const sourceCloze = String(parsedData?.clozeText || parsedData?.rawCloze || questionText || '');
+                    const upgradedCloze = upgradeClozeToMultichoice(sourceCloze, parsedData);
+                    parsedData.clozeText = upgradedCloze;
+                    if (parsedData.rawCloze) parsedData.rawCloze = upgradedCloze;
+                    if (/\{\d+:[A-Za-z_]+:/.test(questionText) || /_{2,}/.test(questionText)) {
+                        questionText = upgradeClozeToMultichoice(questionText, parsedData);
+                    }
+                    dataJsonStr = JSON.stringify(parsedData);
                 }
             } catch {
                 // Keep dataJsonStr as is if not JSON

@@ -13,7 +13,7 @@ import { FileStorageService } from '../file-storage/file-storage.service';
 import { Lesson } from '@prisma/client';
 import { packageScormZip } from './scorm-export.helper';
 import { packageH5pZip } from './h5p-export.helper';
-import { escapeForCdata, escapeXmlText } from '../questions/moodle-xml.helper';
+import { escapeForCdata, escapeXmlText, normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
 
 export interface GenerateSlideResult {
     content: string;
@@ -1246,10 +1246,10 @@ export class SlidesService {
             MC: 'Trắc nghiệm đơn 1 đáp án đúng (type: "MC", options: 4 lựa chọn A, B, C, D, correctAnswer: "chuỗi đáp án đúng")',
             TF: 'Đúng hay Sai (type: "TF", options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai")',
             MR: 'Nhiều lựa chọn đúng (type: "MR", options: 4 lựa chọn, correctAnswers: [mảng chứa các đáp án đúng])',
-            FIB: 'Điền khuyết thuật ngữ vào chỗ trống (type: "FIB", question: câu hỏi chứa ký hiệu [.....], correctAnswer: "từ hoặc thuật ngữ cần điền")',
+            FIB: 'Điền khuyết từ/thuật ngữ có phương án lựa chọn (type: "FIB", question: câu hỏi chứa ký hiệu [.....], options: [mảng 4 từ/cụm từ gồm 1 đáp án đúng và 3 phương án nhiễu hợp lý để sinh viên chọn], correctAnswer: "từ hoặc cụm từ đúng nằm trong options")',
             MATCH: 'Nối cặp tương ứng hai vế A và B (type: "MATCH", question: "Yêu cầu nối...", pairs: [ { "left": "Khái niệm/Thuật ngữ vế A", "right": "Định nghĩa/Ý nghĩa vế B tương ứng" }, ... ])',
             ORDER: 'Sắp xếp thứ tự từ trong câu (type: "ORDER", question: "Sắp xếp các từ sau thành câu hoàn chỉnh:", words: ["mảng", "từ", "bị", "xáo", "trộn"], correctSentence: "Câu hoàn chỉnh đúng chuẩn ngữ pháp")',
-            CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại (type: "CLOZE", question: "Điền từ thích hợp vào các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", explanation: "Giải thích ngữ cảnh...")',
+            CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại bằng menu lựa chọn (type: "CLOZE", question: "Chọn từ/cụm từ thích hợp cho các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", distractors: ["từ nhiễu 1", "từ nhiễu 2", "từ nhiễu 3"], explanation: "Giải thích ngữ cảnh...")',
         };
 
         const typesRequirementText = selectedTypes.map(t => `- ${typeLabels[t] || t}`).join('\n');
@@ -1273,10 +1273,10 @@ QUY TẮC TRÍCH XUẤT BẮT BUỘC:
    - "MC": Trắc nghiệm 1 đáp án đúng (Single Choice, options: danh sách lựa chọn, correctAnswer: "đáp án đúng").
    - "TF": Đúng hay Sai (True/False, options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai").
    - "MR": Trắc nghiệm nhiều đáp án đúng (Multiple Response, options: danh sách lựa chọn, correctAnswers: mảng các đáp án đúng).
-   - "FIB": Điền khuyết từ vào chỗ trống (Fill in the Blank, question có ký hiệu [.....], correctAnswer: từ cần điền).
+   - "FIB": Điền khuyết từ vào chỗ trống có phương án chọn (Fill in the Blank, question có ký hiệu [.....], options: mảng 4 lựa chọn gồm từ đúng và 3 phương án nhiễu hợp lý, correctAnswer: từ cần điền).
    - "MATCH": Nối cặp tương ứng hai vế A và B (Matching Pairs, pairs: mảng các cặp đối xứng [ { "left": "vế A", "right": "vế B tương ứng" } ]).
    - "ORDER": Sắp xếp các từ thành câu hoàn chỉnh (words: mảng từ xáo trộn, correctSentence: câu chuẩn hoàn chỉnh).
-   - "CLOZE": Điền khuyết đoạn văn hoặc hội thoại (passage: đoạn văn hoặc kịch bản hội thoại có các từ cần điền đặt trong ngoặc vuông [từ]).
+   - "CLOZE": Điền khuyết đoạn văn hoặc hội thoại bằng lựa chọn (passage: đoạn văn hoặc kịch bản hội thoại có các từ cần điền đặt trong ngoặc vuông [từ], distractors: mảng 3 từ nhiễu hợp lý).
 3. XÁC ĐỊNH ĐÁP ÁN ĐÚNG:
    - Nếu trong văn bản đề bài có ghi rõ đáp án (ví dụ: dòng "Đáp án: A", hoặc có dấu *, gạch chân, in đậm, [x]), hãy lấy đúng đáp án đó.
    - Nếu đề bài chưa ghi đáp án, bạn hãy giải và xác định đáp án chính xác 100%, kèm giải thích ngắn gọn (explanation).
@@ -1316,8 +1316,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
     {
       "id": "q3",
       "type": "CLOZE",
-      "question": "Điền từ thích hợp vào chỗ trống trong đoạn hội thoại sau:",
+      "question": "Chọn từ thích hợp cho chỗ trống trong đoạn hội thoại sau:",
       "passage": "A: Good morning, how are [you]?\\nB: I am [fine], thank you.",
+      "distractors": ["your", "well-known", "hello"],
       "explanation": "Đoạn hội thoại giao tiếp cơ bản."
     }
   ]
@@ -1382,8 +1383,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
     {
       "id": "q3",
       "type": "CLOZE",
-      "question": "Điền từ thích hợp vào chỗ trống trong đoạn văn / hội thoại sau:",
+      "question": "Chọn từ thích hợp cho chỗ trống trong đoạn văn / hội thoại sau:",
       "passage": "A: Good morning, how are [you]?\\nB: I am [fine], thank you.",
+      "distractors": ["your", "well-known", "hello"],
       "explanation": "Đoạn văn / kịch bản hội thoại chuẩn ngữ cảnh."
     }
   ]
@@ -1432,6 +1434,9 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
             };
         }
 
+        if (Array.isArray(parsedInteractive.questions)) {
+            parsedInteractive.questions = normalizeInteractiveQuestions(parsedInteractive.questions);
+        }
         parsedInteractive.passScore = passScore;
         parsedInteractive.fallbackSlideIndex = fallbackSlideIndex;
         parsedInteractive.allowContinueWithoutPass = options?.allowContinueWithoutPass === true;

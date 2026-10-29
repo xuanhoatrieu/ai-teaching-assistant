@@ -20,6 +20,7 @@ import {
     buildSingleCategoryExamMoodleXml,
     ReviewQuestionData,
     EnglishQuestionData,
+    upgradeClozeToMultichoice,
 } from './moodle-xml.helper';
 import { fixUtf8Filename } from '../common/string.util';
 
@@ -1053,8 +1054,8 @@ STRICT ASSESSMENT & GROUNDING RULES (100% MANDATORY):
        "data": { "options": [ { "text": "Correct 1", "fraction": 50 }, { "text": "Correct 2", "fraction": 50 }, { "text": "Wrong 1", "fraction": -25 }, { "text": "Wrong 2", "fraction": -25 } ] }
      * "MATCH" (Matching, MUST have at least 4 distinct left-right pairs; both "left" and "right" MUST be non-empty strings):
        "data": { "pairs": [ { "left": "Term / Clause / Item 1", "right": "Matching Function / Definition 1" }, { "left": "Term 2", "right": "Match 2" }, { "left": "Term 3", "right": "Match 3" }, { "left": "Term 4", "right": "Match 4" } ] }
-     * "CLOZE" (Embedded Cloze passage using valid Moodle syntax {1:MULTICHOICE:=Correct~Wrong1~Wrong2} or {1:SHORTANSWER:=word}):
-       "data": { "clozeText": "Passage with {1:MULTICHOICE:=correct~wrong1~wrong2} embedded." }
+     * "CLOZE" (Embedded Cloze passage using ONLY Moodle shuffled dropdown syntax {1:MULTICHOICE_S:=Correct~Wrong1~Wrong2~Wrong3}; NEVER use SHORTANSWER or bare underscores ___):
+       "data": { "clozeText": "Passage with {1:MULTICHOICE_S:=correct~wrong1~wrong2~wrong3} embedded.", "answers": [ { "position": 1, "acceptableAnswers": ["correct"], "distractors": ["wrong1", "wrong2", "wrong3"] } ] }
      * "TRUEFALSE":
        "data": { "correctAnswer": true } (or false)
 ${quota.customInstructions ? `5. ADDITIONAL INSTRUCTOR INSTRUCTIONS:\n   ${quota.customInstructions}` : ''}
@@ -1147,6 +1148,19 @@ Respond ONLY with valid JSON in the exact format below:
                 }));
             }
 
+            let finalQuestionText = questionText;
+            if (qType === 'CLOZE') {
+                const sourceCloze = String(parsedData?.clozeText || parsedData?.rawCloze || questionText || '');
+                const upgradedCloze = upgradeClozeToMultichoice(sourceCloze, parsedData);
+                parsedData = {
+                    ...(typeof parsedData === 'object' && parsedData !== null ? parsedData : {}),
+                    clozeText: upgradedCloze,
+                };
+                if (/\{\d+:[A-Za-z_]+:/.test(finalQuestionText) || /_{2,}/.test(finalQuestionText)) {
+                    finalQuestionText = upgradeClozeToMultichoice(finalQuestionText, parsedData);
+                }
+            }
+
             const difficulty = [1, 2, 3].includes(Number(item.difficulty || item.level))
                 ? Number(item.difficulty || item.level)
                 : 1;
@@ -1159,7 +1173,7 @@ Respond ONLY with valid JSON in the exact format below:
                 subDiscipline: String(item.subDiscipline || quota.subDiscipline || 'GENERAL'),
                 difficulty,
                 title: `B${ctx.order}-${qType}-C${seq}${item.title ? ` (${item.title})` : ''}`,
-                questionText,
+                questionText: finalQuestionText,
                 dataJson: JSON.stringify(parsedData),
                 explanation: cleanExplanation(explanation),
                 points: Number(item.points) || 1,

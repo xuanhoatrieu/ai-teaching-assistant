@@ -12,6 +12,7 @@ import {
     EnglishQuestionData,
     isMatchingQuestionText,
     extractMatchPairs,
+    upgradeClozeToMultichoice,
 } from './moodle-xml.helper';
 
 import { IsOptional, IsNumber, IsArray, IsString } from 'class-validator';
@@ -399,6 +400,20 @@ export class EnglishQuestionService implements OnModuleInit {
                     }
                 }
 
+                // Upgrade any CLOZE question to Moodle shuffled dropdown MULTICHOICE_S (never free-text SHORTANSWER)
+                let finalQuestionText = questionText;
+                if (qType === 'CLOZE') {
+                    const sourceCloze = String(parsedData?.clozeText || parsedData?.rawCloze || questionText || '');
+                    const upgradedCloze = upgradeClozeToMultichoice(sourceCloze, parsedData);
+                    parsedData = {
+                        ...(typeof parsedData === 'object' && parsedData !== null ? parsedData : {}),
+                        clozeText: upgradedCloze,
+                    };
+                    if (/\{\d+:[A-Za-z_]+:/.test(finalQuestionText) || /_{2,}/.test(finalQuestionText)) {
+                        finalQuestionText = upgradeClozeToMultichoice(finalQuestionText, parsedData);
+                    }
+                }
+
                 const dataJson = JSON.stringify(parsedData);
 
                 const created = await this.createQuestion(lessonId, {
@@ -406,7 +421,7 @@ export class EnglishQuestionService implements OnModuleInit {
                     subDiscipline: item.subDiscipline || dto.subDiscipline || 'GENERAL',
                     difficulty: item.difficulty || 1,
                     title: item.title || `ENG-${i + 1}`,
-                    questionText: questionText,
+                    questionText: finalQuestionText,
                     dataJson: dataJson,
                     explanation: item.explanation || item.feedback || null,
                     points: item.points || 1,

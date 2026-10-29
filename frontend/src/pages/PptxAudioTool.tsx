@@ -140,13 +140,21 @@ function renderEssayRubric(data: any) {
 
 function formatClozePrompt(text: string): string {
     if (!text) return '';
-    return text.replace(/\{(\d+):[A-Z_]+:[^}]+\}/g, '[ ______ ]');
+    return text.replace(/\{(\d+):[A-Za-z_]+:[^}]+\}/g, '[ ______ ▾ ]');
 }
 
 function renderClozeVisual(rawText: string) {
     if (!rawText) return null;
-    const regex = /\{(\d+):([A-Z_]+):([^}]+)\}/g;
-    const parts: Array<{ type: 'text' | 'blank'; content?: string; points?: string; qType?: string; answers?: string[] }> = [];
+    const regex = /\{(\d+):([A-Za-z_]+):([^}]+)\}/g;
+    const parts: Array<{
+        type: 'text' | 'blank';
+        content?: string;
+        points?: string;
+        qType?: string;
+        isChoiceMode?: boolean;
+        correctAnswers?: string[];
+        distractors?: string[];
+    }> = [];
 
     let lastIndex = 0;
     let match: RegExpExecArray | null;
@@ -155,16 +163,39 @@ function renderClozeVisual(rawText: string) {
         if (match.index > lastIndex) {
             parts.push({ type: 'text', content: rawText.substring(lastIndex, match.index) });
         }
-        const points = match[1];
-        const qType = match[2];
-        const rawAnswers = match[3];
-        const answers = rawAnswers.split('~').map(a => a.replace(/^=/, '').trim()).filter(Boolean);
+        const points = match[1] || '1';
+        const qType = (match[2] || '').toUpperCase();
+        const rawAnswers = match[3] || '';
+        const isChoiceMode = /^(MULTICHOICE|MC|MCS|MCH|MCHS|MCV|MCVS|MULTIRESPONSE|MR)/i.test(qType);
+
+        const rawItems = rawAnswers.split(/(?<!\\)~/).map(s => s.trim()).filter(Boolean);
+        const parsedItems = rawItems.map(item => {
+            const withoutFb = item.replace(/(?<!\\)#.*$/s, '').trim();
+            const markMatch = withoutFb.match(/^(=|%(-?[0-9]+(?:[.,][0-9]*)?)%)(.*)$/s);
+            let isCorrect = false;
+            let textPart = withoutFb;
+            if (markMatch) {
+                const pct = markMatch[1] === '=' ? 100 : parseFloat((markMatch[2] || '0').replace(',', '.'));
+                isCorrect = pct > 0;
+                textPart = markMatch[3];
+            } else if (!isChoiceMode) {
+                isCorrect = true;
+            }
+            const cleanText = textPart.replace(/\\([}#~/"\\])/g, '$1').trim();
+            return { text: cleanText, isCorrect };
+        }).filter(x => x.text.length > 0);
+
+        if (isChoiceMode && parsedItems.length > 0 && !parsedItems.some(x => x.isCorrect)) {
+            parsedItems[0].isCorrect = true;
+        }
 
         parts.push({
             type: 'blank',
             points,
             qType,
-            answers,
+            isChoiceMode,
+            correctAnswers: parsedItems.filter(x => x.isCorrect).map(x => x.text),
+            distractors: parsedItems.filter(x => !x.isCorrect).map(x => x.text),
         });
         lastIndex = regex.lastIndex;
     }
@@ -185,14 +216,23 @@ function renderClozeVisual(rawText: string) {
                     const currentNum = blankCount;
                     return (
                         <span key={idx} className="cloze-interactive-blank">
-                            <span className="cloze-blank-badge">#{currentNum}</span>
+                            <span className="cloze-blank-badge">#{currentNum}{p.isChoiceMode ? ' ▾' : ''}</span>
                             <span className="cloze-answers-list">
-                                {p.answers?.map((ans, aIdx) => (
-                                    <span key={aIdx} className="cloze-single-answer">
+                                {p.correctAnswers?.map((ans, aIdx) => (
+                                    <span key={`c-${aIdx}`} className="cloze-single-answer">
                                         {aIdx > 0 && <span className="cloze-or-sep">hoặc</span>}
-                                        <span className="cloze-ans-text">{ans}</span>
+                                        <span className="cloze-ans-text">✓ {ans}</span>
                                     </span>
                                 ))}
+                                {p.isChoiceMode && p.distractors && p.distractors.length > 0 && (
+                                    <span
+                                        className="cloze-distractors-hint"
+                                        style={{ marginLeft: 6, fontSize: '0.78rem', color: '#94a3b8', fontWeight: 500 }}
+                                        title={`Phương án nhiễu: ${p.distractors.join(', ')}`}
+                                    >
+                                        (nhiễu: {p.distractors.join(' | ')})
+                                    </span>
+                                )}
                             </span>
                             <span className="cloze-points-badge">{p.points}đ</span>
                         </span>
@@ -227,6 +267,8 @@ interface ParsedSlide {
     noteVN: string;
     hasDual: boolean;
     imageUrl?: string | null;
+    renderedSlideUrl?: string | null;
+    hasCustomImage?: boolean;
     audioUrl: string | null;
     audioDuration: number | null;
     audioStatus: string;
@@ -1470,10 +1512,22 @@ export function PptxAudioToolPage() {
             : `${API_BASE_URL}${ticketPath.replace(/^\/api/, '')}`;
         const link = document.createElement('a');
         link.href = fullUrl;
+        link.download = '';
         link.rel = 'noopener';
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+    };
+
+    const refreshSlidesSilently = async (sid: string) => {
+        try {
+            const refreshed = await api.get(`/pptx-audio-tool/${sid}`);
+            if (Array.isArray(refreshed.data?.slides)) {
+                setSlides(refreshed.data.slides);
+            }
+        } catch {
+            // Non-blocking refresh
+        }
     };
 
     const downloadPptx = async () => {
@@ -1514,6 +1568,9 @@ export function PptxAudioToolPage() {
             });
             if (res.data?.url) {
                 triggerNativeDownload(res.data.url);
+                if (slides.some(s => !s.renderedSlideUrl && (s.originalSlideIndex === undefined || (s.originalSlideIndex !== null && s.originalSlideIndex >= 0)))) {
+                    void refreshSlidesSilently(sessionId);
+                }
             }
         } catch (error: any) {
             console.error('Error exporting SCORM:', error);
@@ -1534,6 +1591,9 @@ export function PptxAudioToolPage() {
             });
             if (res.data?.url) {
                 triggerNativeDownload(res.data.url);
+                if (slides.some(s => !s.renderedSlideUrl && (s.originalSlideIndex === undefined || (s.originalSlideIndex !== null && s.originalSlideIndex >= 0)))) {
+                    void refreshSlidesSilently(sessionId);
+                }
             }
         } catch (error: any) {
             console.error('Error exporting H5P:', error);
@@ -4019,6 +4079,7 @@ export function PptxAudioToolPage() {
                                                                 onChange={(e) => handleChangeSlideLayout(slide.index, e.target.value)}
                                                                 title="Chọn bố cục hiển thị cho slide này"
                                                             >
+                                                                <option value="full_slide_canvas">🖥️ Slide PowerPoint gốc (Giữ 100% bố cục 16:9)</option>
                                                                 <option value="split_standard">📐 Chuẩn (Text trái, Visual phải)</option>
                                                                 <option value="split_reversed">🔄 Bố cục đảo (Visual trái, Text phải)</option>
                                                                 <option value="comparison_3col">📊 So sánh 3 cột (Bảng/phân tích)</option>
@@ -4509,6 +4570,33 @@ export function PptxAudioToolPage() {
                                                                                         className="inline-input-point"
                                                                                         style={{ marginBottom: 6 }}
                                                                                     />
+                                                                                    {(qItem.type || '').toUpperCase() === 'CLOZE' && (
+                                                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+                                                                                            <textarea
+                                                                                                rows={3}
+                                                                                                value={qItem.passage || ''}
+                                                                                                onChange={(e) => {
+                                                                                                    const nextQs = [...editingInteractiveForm.questions];
+                                                                                                    nextQs[qIdx] = { ...nextQs[qIdx], passage: e.target.value };
+                                                                                                    setEditingInteractiveForm({ ...editingInteractiveForm, questions: nextQs });
+                                                                                                }}
+                                                                                                placeholder="Đoạn văn / hội thoại (đặt từ cần điền trong ngoặc vuông [từ_đúng])..."
+                                                                                                className="inline-input-point"
+                                                                                            />
+                                                                                            <input
+                                                                                                type="text"
+                                                                                                value={Array.isArray(qItem.distractors) ? qItem.distractors.join(', ') : ''}
+                                                                                                onChange={(e) => {
+                                                                                                    const nextQs = [...editingInteractiveForm.questions];
+                                                                                                    const dists = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                                                                                                    nextQs[qIdx] = { ...nextQs[qIdx], distractors: dists };
+                                                                                                    setEditingInteractiveForm({ ...editingInteractiveForm, questions: nextQs });
+                                                                                                }}
+                                                                                                placeholder="Các từ nhiễu (ngăn cách bằng dấu phẩy, ví dụ: nhiễu 1, nhiễu 2, nhiễu 3)..."
+                                                                                                className="inline-input-point"
+                                                                                            />
+                                                                                        </div>
+                                                                                    )}
                                                                                     {Array.isArray(qItem.options) && (
                                                                                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 6 }}>
                                                                                             {qItem.options.map((optVal: string, oIdx: number) => (
@@ -4576,6 +4664,16 @@ export function PptxAudioToolPage() {
                                                                                                     </div>
                                                                                                 );
                                                                                             })}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {(qItem.type || '').toUpperCase() === 'CLOZE' && qItem.passage && (
+                                                                                        <div style={{ marginTop: 6, padding: '8px 12px', borderRadius: 8, background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', fontSize: '0.84rem', whiteSpace: 'pre-line' }}>
+                                                                                            <div>{qItem.passage}</div>
+                                                                                            {Array.isArray(qItem.distractors) && qItem.distractors.length > 0 && (
+                                                                                                <div style={{ marginTop: 6, fontSize: '0.78rem', color: '#94a3b8' }}>
+                                                                                                    🎯 Phương án nhiễu: {qItem.distractors.join(' · ')}
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
                                                                                     )}
                                                                                     {qItem.explanation && (
@@ -6170,13 +6268,31 @@ export function PptxAudioToolPage() {
                                                             </div>
 
                                                             {isEditing ? (
-                                                                <textarea
-                                                                    value={q.questionText}
-                                                                    onChange={(e) => setEnglishQuestions(prev =>
-                                                                        prev.map(p => p.id === q.id ? { ...p, questionText: e.target.value } : p)
+                                                                <div>
+                                                                    <textarea
+                                                                        value={q.questionType === 'CLOZE' ? String(parsedData.clozeText || parsedData.rawCloze || q.questionText || '') : q.questionText}
+                                                                        onChange={(e) => {
+                                                                            const nextVal = e.target.value;
+                                                                            setEnglishQuestions(prev =>
+                                                                                prev.map(p => {
+                                                                                    if (p.id !== q.id) return p;
+                                                                                    if (p.questionType === 'CLOZE') {
+                                                                                        const nextData = { ...parsedData, clozeText: nextVal };
+                                                                                        if (nextData.rawCloze) nextData.rawCloze = nextVal;
+                                                                                        return { ...p, questionText: nextVal, dataJson: JSON.stringify(nextData) };
+                                                                                    }
+                                                                                    return { ...p, questionText: nextVal };
+                                                                                })
+                                                                            );
+                                                                        }}
+                                                                        className="edit-textarea"
+                                                                    />
+                                                                    {q.questionType === 'CLOZE' && (
+                                                                        <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 4 }}>
+                                                                            💡 Cú pháp Moodle Dropdown tự xáo trộn: <code>{'{1:MULTICHOICE_S:=Đáp án đúng~Nhiễu 1~Nhiễu 2~Nhiễu 3}'}</code>
+                                                                        </div>
                                                                     )}
-                                                                    className="edit-textarea"
-                                                                />
+                                                                </div>
                                                             ) : (
                                                                 <p className="question-text">
                                                                     <strong>{q.title ? `${typeof q.title === 'object' ? JSON.stringify(q.title) : q.title}: ` : ''}</strong>
@@ -6252,8 +6368,8 @@ export function PptxAudioToolPage() {
                                                             {/* Cloze Text */}
                                                             {q.questionType === 'CLOZE' && (
                                                                 <div className="cloze-preview-box">
-                                                                    <div className="cloze-tag">📝 Mô phỏng câu hỏi điền khuyết (Cloze):</div>
-                                                                    {renderClozeVisual(typeof (parsedData.clozeText || q.questionText) === 'object' ? JSON.stringify(parsedData.clozeText || q.questionText) : String(parsedData.clozeText || q.questionText))}
+                                                                    <div className="cloze-tag">📝 Mô phỏng câu hỏi chọn từ điền khuyết (Cloze Dropdown):</div>
+                                                                    {renderClozeVisual(typeof (parsedData.clozeText || parsedData.rawCloze || q.questionText) === 'object' ? JSON.stringify(parsedData.clozeText || parsedData.rawCloze || q.questionText) : String(parsedData.clozeText || parsedData.rawCloze || q.questionText))}
                                                                 </div>
                                                             )}
 

@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { resolveLocalMediaFile } from './scorm-export.helper';
+import { normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
 
 const archiver = require('archiver');
 
@@ -32,6 +33,40 @@ function escapeHtml(str: string): string {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+export function getAudioMime(filePath?: string): string {
+    const ext = path.extname(filePath || '').toLowerCase();
+    switch (ext) {
+        case '.wav':
+            return 'audio/wav';
+        case '.ogg':
+            return 'audio/ogg';
+        case '.m4a':
+        case '.mp4':
+            return 'audio/mp4';
+        case '.webm':
+            return 'audio/webm';
+        default:
+            return 'audio/mpeg';
+    }
+}
+
+export function getImageMime(filePath?: string): string {
+    const ext = path.extname(filePath || '').toLowerCase();
+    switch (ext) {
+        case '.jpg':
+        case '.jpeg':
+            return 'image/jpeg';
+        case '.webp':
+            return 'image/webp';
+        case '.gif':
+            return 'image/gif';
+        case '.svg':
+            return 'image/svg+xml';
+        default:
+            return 'image/png';
+    }
 }
 
 export function generateH5pJson(lessonTitle: string): string {
@@ -70,7 +105,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         if (s.interactiveData) {
             try {
                 interaction = typeof s.interactiveData === 'string' ? JSON.parse(s.interactiveData) : s.interactiveData;
-                if (Array.isArray(interaction.questions)) questions = interaction.questions;
+                if (Array.isArray(interaction.questions)) {
+                    questions = normalizeInteractiveQuestions(interaction.questions);
+                }
             } catch (e) {}
         }
         const hasQuiz = questions.length > 0;
@@ -111,80 +148,34 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         const hasImage = !!s.h5pImagePath;
         const hasAudio = !!s.h5pAudioPath;
         const hasSampleAudio = !!s.h5pSampleAudioPath;
+        const slideTitleText = s.title || `Slide ${s.slideIndex}`;
 
-        // Special Layout for Slide 1 (idx === 0: Cover / Title Slide)
-        if (idx === 0) {
-            const slideTitleText = s.title || `Slide ${s.slideIndex}`;
-            const badgeBg = isDarkTheme ? 'rgba(45, 106, 79, 0.35)' : 'rgba(0, 90, 54, 0.12)';
-            const badgeColor = isDarkTheme ? '#95d5b2' : '#005a36';
-
-            // 1. Centered Title Card
+        // Helper: Image Element (dynamic MIME)
+        const addImageElement = (x: number, y: number, width: number, height: number) => {
+            if (!hasImage) return;
             elements.push({
-                x: 6,
-                y: 30,
-                width: 88,
-                height: 40,
+                x, y, width, height,
                 action: {
-                    library: 'H5P.AdvancedText 1.1',
+                    library: 'H5P.Image 1.1',
                     params: {
-                        text: `<div style="text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-                            <div style="display: inline-block; padding: 4px 16px; border-radius: 999px; background: ${badgeBg}; color: ${badgeColor}; font-size: 0.9em; font-weight: 700; margin-bottom: 18px;">🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN • BÀI GIẢNG ĐIỆN TỬ</div>
-                            <h1 style="margin: 0; padding: 0; font-size: 2.4em; line-height: 1.35; color: ${titleColor}; font-weight: 800;">${escapeHtml(slideTitleText)}</h1>
-                        </div>`
+                        contentName: 'Slide Visual',
+                        file: {
+                            path: s.h5pImagePath,
+                            mime: getImageMime(s.h5pImagePath),
+                            copyright: { license: 'U' },
+                            width: 1920,
+                            height: 1080
+                        },
+                        alt: slideTitleText
                     },
-                    subContentId: `title_${idx}`
+                    subContentId: `img_${idx}`
                 }
             });
+        };
 
-            // 2. Narration Audio Button (plays audio for slide 1!)
-            if (hasAudio) {
-                elements.push({
-                    x: 93.5,
-                    y: 2.5,
-                    width: 4,
-                    height: 6,
-                    action: {
-                        library: 'H5P.Audio 1.5',
-                        params: {
-                            playerMode: 'minimalistic',
-                            fitToWrapper: false,
-                            controls: false,
-                            autoplay: false,
-                            title: 'Nghe lời giảng',
-                            files: [
-                                {
-                                    path: s.h5pAudioPath,
-                                    mime: 'audio/mpeg',
-                                    copyright: { license: 'U' }
-                                }
-                            ]
-                        },
-                        subContentId: `audio_narration_${idx}`
-                    }
-                });
-            }
-
-            return { elements };
-        }
-
-        // 3. Slide Title (Single-line clean header for content slides)
-        const slideTitleText = s.title || `Slide ${s.slideIndex}`;
-        elements.push({
-            x: 3,
-            y: 3,
-            width: hasAudio ? 89 : 94,
-            height: 8,
-            action: {
-                library: 'H5P.AdvancedText 1.1',
-                params: {
-                    text: `<h2 style="margin: 0; padding: 0; font-size: 1.3em; line-height: 1.25; color: ${titleColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700;">${escapeHtml(slideTitleText)}</h2>`
-                },
-                subContentId: `title_${idx}`
-            }
-        });
-
-        // 4. Narration Audio Button (Compact top-right icon, not stretched)
-        if (hasAudio) {
+        // Helper: Compact top-right Narration Audio Button (dynamic MIME)
+        const addNarrationAudioButton = () => {
+            if (!hasAudio) return;
             elements.push({
                 x: 93.5,
                 y: 2.5,
@@ -201,64 +192,12 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                         files: [
                             {
                                 path: s.h5pAudioPath,
-                                mime: 'audio/mpeg',
+                                mime: getAudioMime(s.h5pAudioPath),
                                 copyright: { license: 'U' }
                             }
                         ]
                     },
                     subContentId: `audio_narration_${idx}`
-                }
-            });
-        }
-
-        // 5. Build Content Text HTML without <ul>/<li> to avoid browser bullet circles,
-        // and avoid printing duplicate description when identical to point
-        let contentHtml = '';
-        if (hasBullets) {
-            const bulletGap = bullets.length <= 3 ? '22px' : '14px';
-            const itemsHtml = bullets.map(b => {
-                const point = (b.point || '').trim();
-                const desc = (b.description || '').trim();
-                const isDistinct = desc && desc.toLowerCase() !== point.toLowerCase();
-                const emoji = b.emoji || '📌';
-
-                return `
-                    <div style="margin-bottom: ${bulletGap}; line-height: 1.5; color: ${textColor};">
-                        <p style="margin: 0 0 4px 0; font-size: 1.05em; line-height: 1.35;">
-                            <span style="font-size: 1.15em; margin-right: 6px;">${emoji}</span>
-                            <strong style="color: ${pointColor};">${escapeHtml(point)}</strong>
-                        </p>
-                        ${isDistinct ? `<p style="margin: 0 0 0 26px; font-size: 0.9em; color: ${descColor}; line-height: 1.45;">${escapeHtml(desc)}</p>` : ''}
-                    </div>
-                `;
-            }).join('');
-
-            contentHtml = `
-                <div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; padding-top: 4px;">
-                    ${itemsHtml}
-                </div>
-            `;
-        }
-
-        // Helper: Image Element
-        const addImageElement = (x: number, y: number, width: number, height: number) => {
-            if (!hasImage) return;
-            elements.push({
-                x, y, width, height,
-                action: {
-                    library: 'H5P.Image 1.1',
-                    params: {
-                        contentName: 'Slide Visual',
-                        file: {
-                            path: s.h5pImagePath,
-                            mime: 'image/png',
-                            copyright: { license: 'U' },
-                            width: 1920,
-                            height: 1080
-                        },
-                        alt: slideTitleText
-                    },
-                    subContentId: `img_${idx}`
                 }
             });
         };
@@ -270,7 +209,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             const qType = (firstQ.type || 'MC').toUpperCase();
             let typeBadgeHtml = '';
             let isMultipleResponse = false;
-            let optionsToUse: string[] = firstQ.options || [];
+            let optionsToUse: string[] = Array.isArray(firstQ.options) ? [...firstQ.options] : [];
+            let displayQuestionText = String(firstQ.question || '');
+            let overrideCorrectAnswers: string[] | null = null;
 
             if (qType === 'TF') {
                 typeBadgeHtml = '<span style="background: rgba(14, 165, 233, 0.15); color: #0369a1; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Đúng / Sai</span>';
@@ -281,7 +222,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 isMultipleResponse = true;
                 typeBadgeHtml = '<span style="background: rgba(168, 85, 247, 0.15); color: #7e22ce; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn nhiều đáp án</span>';
             } else if (qType === 'FIB') {
-                typeBadgeHtml = '<span style="background: rgba(245, 158, 11, 0.15); color: #b45309; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Điền khuyết</span>';
+                typeBadgeHtml = '<span style="background: rgba(245, 158, 11, 0.15); color: #b45309; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn từ điền khuyết</span>';
             } else if (qType === 'MATCH') {
                 typeBadgeHtml = '<span style="background: rgba(236, 72, 153, 0.15); color: #be185d; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Nối cặp</span>';
             } else if (qType === 'ORDER') {
@@ -290,14 +231,51 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                     optionsToUse = [firstQ.correctSentence];
                 }
             } else if (qType === 'CLOZE') {
-                typeBadgeHtml = '<span style="background: rgba(217, 70, 239, 0.15); color: #a21caf; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Điền khuyết hội thoại</span>';
+                typeBadgeHtml = '<span style="background: rgba(217, 70, 239, 0.15); color: #a21caf; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn từ điền hội thoại</span>';
+                const rawPassage = String(firstQ.passage || firstQ.questionText || '');
+                if (rawPassage) {
+                    let bNum = 0;
+                    const blankAnswers: string[] = [];
+                    const maskedPassage = rawPassage.replace(/\[([^\]]+)\]/g, (_m, inner) => {
+                        bNum++;
+                        const primary = String(inner).split('|')[0].trim();
+                        blankAnswers.push(primary);
+                        return `(${bNum}) [.....]`;
+                    });
+                    displayQuestionText = `${displayQuestionText ? displayQuestionText + ' — ' : ''}${maskedPassage.replace(/\r?\n/g, ' / ')}`;
+
+                    if (optionsToUse.length === 0 && blankAnswers.length > 0) {
+                        const distractors: string[] = Array.isArray(firstQ.distractors) ? firstQ.distractors : [];
+                        if (blankAnswers.length === 1) {
+                            const corr = blankAnswers[0];
+                            optionsToUse = [corr, ...distractors.filter((d) => d.toLowerCase() !== corr.toLowerCase()).slice(0, 3)];
+                            overrideCorrectAnswers = [corr];
+                        } else {
+                            const formatTuple = (arr: string[]) => arr.map((w, i) => `(${i + 1}) ${w}`).join(' — ');
+                            const corrTuple = formatTuple(blankAnswers);
+                            const pool = [...blankAnswers, ...distractors];
+                            const wrongTuples: string[] = [];
+                            for (let shift = 1; shift <= 3 && pool.length >= blankAnswers.length; shift++) {
+                                const candidate = blankAnswers.map((_, i) => pool[(i + shift) % pool.length]);
+                                const tup = formatTuple(candidate);
+                                if (tup.toLowerCase() !== corrTuple.toLowerCase() && !wrongTuples.includes(tup)) {
+                                    wrongTuples.push(tup);
+                                }
+                            }
+                            optionsToUse = [corrTuple, ...wrongTuples];
+                            overrideCorrectAnswers = [corrTuple];
+                        }
+                    }
+                }
             } else {
                 typeBadgeHtml = '<span style="background: rgba(99, 102, 241, 0.15); color: #4338ca; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn 1 đáp án</span>';
             }
 
-            const correctAnswersList: string[] = isMultipleResponse
-                ? (firstQ.correctAnswers || [firstQ.correctAnswer || ''])
-                : [firstQ.correctAnswer || ''];
+            const correctAnswersList: string[] = overrideCorrectAnswers
+                ? overrideCorrectAnswers
+                : (isMultipleResponse
+                    ? (firstQ.correctAnswers || [firstQ.correctAnswer || ''])
+                    : [firstQ.correctAnswer || '']);
 
             elements.push({
                 x: quizX,
@@ -307,7 +285,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 action: {
                     library: 'H5P.MultiChoice 1.16',
                     params: {
-                        question: `<p style="font-size: 1.05em; font-weight: 700; color: #0f172a; margin: 0 0 10px 0;">${escapeHtml(firstQ.question)} ${typeBadgeHtml}</p>`,
+                        question: `<p style="font-size: 1.05em; font-weight: 700; color: #0f172a; margin: 0 0 10px 0;">${escapeHtml(displayQuestionText)} ${typeBadgeHtml}</p>`,
                         answers: optionsToUse.map((opt: string) => {
                             const cleanOpt = opt.trim().toLowerCase();
                             const isCorrect = correctAnswersList.some(ca => (ca || '').trim().toLowerCase() === cleanOpt);
@@ -341,6 +319,159 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 }
             });
         };
+
+        // Full-Slide Canvas Layout (100% faithful original PowerPoint visual rendering, including Slide 1 cover)
+        if (layoutType === 'full_slide_canvas' && hasImage) {
+            if (hasQuiz) {
+                elements.push({
+                    x: 3,
+                    y: 3,
+                    width: hasAudio ? 89 : 94,
+                    height: 8,
+                    action: {
+                        library: 'H5P.AdvancedText 1.1',
+                        params: {
+                            text: `<h2 style="margin: 0; padding: 0; font-size: 1.3em; line-height: 1.25; color: ${titleColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700;">${escapeHtml(slideTitleText)}</h2>`
+                        },
+                        subContentId: `title_${idx}`
+                    }
+                });
+                addImageElement(2, 13, 47, hasSampleAudio ? 73 : 83);
+                if (hasSampleAudio) {
+                    elements.push({
+                        x: 2,
+                        y: 87,
+                        width: 47,
+                        height: 10,
+                        action: {
+                            library: 'H5P.Audio 1.5',
+                            params: {
+                                playerMode: 'full',
+                                fitToWrapper: true,
+                                controls: true,
+                                autoplay: false,
+                                title: s.extraAudioName || 'Đoạn audio mẫu thực hành',
+                                files: [{ path: s.h5pSampleAudioPath, mime: getAudioMime(s.h5pSampleAudioPath), copyright: { license: 'U' } }]
+                            },
+                            subContentId: `sample_audio_${idx}`
+                        }
+                    });
+                }
+                addQuizElement(51, 13, 47, 83);
+            } else {
+                addImageElement(0, 0, 100, hasSampleAudio ? 86 : 100);
+                if (hasSampleAudio) {
+                    elements.push({
+                        x: 8,
+                        y: 88,
+                        width: 84,
+                        height: 10,
+                        action: {
+                            library: 'H5P.Audio 1.5',
+                            params: {
+                                playerMode: 'full',
+                                fitToWrapper: true,
+                                controls: true,
+                                autoplay: false,
+                                title: s.extraAudioName || 'Đoạn audio mẫu thực hành',
+                                files: [{ path: s.h5pSampleAudioPath, mime: getAudioMime(s.h5pSampleAudioPath), copyright: { license: 'U' } }]
+                            },
+                            subContentId: `sample_audio_${idx}`
+                        }
+                    });
+                }
+            }
+            addNarrationAudioButton();
+            return {
+                elements,
+                keywords: [{ main: slideTitleText }]
+            };
+        }
+
+        // Special Layout for Slide 1 (idx === 0: Traditional Cover / Title Slide when no quiz is attached)
+        if (idx === 0 && !hasQuiz) {
+            const badgeBg = isDarkTheme ? 'rgba(45, 106, 79, 0.35)' : 'rgba(0, 90, 54, 0.12)';
+            const badgeColor = isDarkTheme ? '#95d5b2' : '#005a36';
+            const subtitleHtml = hasBullets
+                ? `<div style="margin-top: 14px;">${bullets.map(b => {
+                    const pt = (b.point || '').trim();
+                    const ds = (b.description || '').trim();
+                    const line = (ds && ds.toLowerCase() !== pt.toLowerCase()) ? (pt ? `${pt} — ${ds}` : ds) : pt;
+                    return line ? `<p style="margin: 6px 0 0 0; font-size: 1.05em; color: ${descColor}; line-height: 1.45;">${escapeHtml(line)}</p>` : '';
+                }).join('')}</div>`
+                : '';
+
+            // 1. Centered Title Card
+            elements.push({
+                x: 6,
+                y: hasBullets ? 22 : 30,
+                width: 88,
+                height: hasBullets ? 56 : 40,
+                action: {
+                    library: 'H5P.AdvancedText 1.1',
+                    params: {
+                        text: `<div style="text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            <div style="display: inline-block; padding: 4px 16px; border-radius: 999px; background: ${badgeBg}; color: ${badgeColor}; font-size: 0.9em; font-weight: 700; margin-bottom: 18px;">🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN • BÀI GIẢNG ĐIỆN TỬ</div>
+                            <h1 style="margin: 0; padding: 0; font-size: 2.4em; line-height: 1.35; color: ${titleColor}; font-weight: 800;">${escapeHtml(slideTitleText)}</h1>
+                            ${subtitleHtml}
+                        </div>`
+                    },
+                    subContentId: `title_${idx}`
+                }
+            });
+
+            // 2. Narration Audio Button (plays audio for slide 1!)
+            addNarrationAudioButton();
+
+            return { elements, keywords: [{ main: slideTitleText }] };
+        }
+
+        // 3. Slide Title (Single-line clean header for content slides)
+        elements.push({
+            x: 3,
+            y: 3,
+            width: hasAudio ? 89 : 94,
+            height: 8,
+            action: {
+                library: 'H5P.AdvancedText 1.1',
+                params: {
+                    text: `<h2 style="margin: 0; padding: 0; font-size: 1.3em; line-height: 1.25; color: ${titleColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700;">${escapeHtml(slideTitleText)}</h2>`
+                },
+                subContentId: `title_${idx}`
+            }
+        });
+
+        // 4. Narration Audio Button (Compact top-right icon, not stretched)
+        addNarrationAudioButton();
+
+        // 5. Build Content Text HTML without <ul>/<li> to avoid browser bullet circles,
+        // and avoid printing duplicate description when identical to point
+        let contentHtml = '';
+        if (hasBullets) {
+            const bulletGap = bullets.length <= 3 ? '22px' : '14px';
+            const itemsHtml = bullets.map(b => {
+                const point = (b.point || '').trim();
+                const desc = (b.description || '').trim();
+                const isDistinct = desc && desc.toLowerCase() !== point.toLowerCase();
+                const emoji = b.emoji || '📌';
+
+                return `
+                    <div style="margin-bottom: ${bulletGap}; line-height: 1.5; color: ${textColor};">
+                        <p style="margin: 0 0 4px 0; font-size: 1.05em; line-height: 1.35;">
+                            <span style="font-size: 1.15em; margin-right: 6px;">${emoji}</span>
+                            <strong style="color: ${pointColor};">${escapeHtml(point)}</strong>
+                        </p>
+                        ${isDistinct ? `<p style="margin: 0 0 0 26px; font-size: 0.9em; color: ${descColor}; line-height: 1.45;">${escapeHtml(desc)}</p>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            contentHtml = `
+                <div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; padding-top: 4px;">
+                    ${itemsHtml}
+                </div>
+            `;
+        }
 
         // 6. Layout Routing based on layoutType:
         if (layoutType === 'checkpoint_gate' || (hasQuiz && isCheckpoint)) {
@@ -379,7 +510,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                         controls: true,
                         autoplay: false,
                         title: s.extraAudioName || 'Đoạn audio mẫu thực hành',
-                        files: [{ path: s.h5pSampleAudioPath, mime: 'audio/mpeg', copyright: { license: 'U' } }]
+                        files: [{ path: s.h5pSampleAudioPath, mime: getAudioMime(s.h5pSampleAudioPath), copyright: { license: 'U' } }]
                     },
                     subContentId: `sample_audio_${idx}`
                 }
@@ -530,8 +661,28 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             }
 
         } else {
-            // Layout 7: Split Standard (Text on Left, Image on Right) - Default
-            if (hasBullets && hasImage) {
+            // Layout 7: Split Standard (Text on Left, Image/Quiz on Right) - Default
+            if (hasQuiz) {
+                if (hasBullets) {
+                    elements.push({
+                        x: 4,
+                        y: 14,
+                        width: 46,
+                        height: 82,
+                        action: {
+                            library: 'H5P.AdvancedText 1.1',
+                            params: { text: contentHtml },
+                            subContentId: `content_${idx}`
+                        }
+                    });
+                    addQuizElement(52, 14, 44, 82);
+                } else if (hasImage) {
+                    addImageElement(4, 14, 46, 82);
+                    addQuizElement(52, 14, 44, 82);
+                } else {
+                    addQuizElement(6, 14, 88, 82);
+                }
+            } else if (hasBullets && hasImage) {
                 elements.push({
                     x: 4,
                     y: 14,
@@ -561,19 +712,28 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             }
         }
 
+        if (hasQuiz && !elements.some((el: any) => String(el?.action?.library || '').startsWith('H5P.MultiChoice'))) {
+            addQuizElement(52, 18, 44, 76);
+        }
+
         return {
             elements,
             keywords: [{ main: slideTitleText }]
         };
     });
 
+    const firstSlideIsFullCanvas =
+        slides.length > 0 &&
+        slides[0]?.layoutType === 'full_slide_canvas' &&
+        Boolean(slides[0]?.h5pImagePath);
+
     // Check if title slide has custom title background
-    if (options?.hasTitleBg && options.titleBgFilename && h5pSlides.length > 0) {
+    if (!firstSlideIsFullCanvas && options?.hasTitleBg && options.titleBgFilename && h5pSlides.length > 0) {
         (h5pSlides[0] as any).slideBackgroundSelector = {
             fillType: 'image',
             imageSlideBackground: {
                 path: options.titleBgFilename,
-                mime: 'image/png',
+                mime: getImageMime(options.titleBgFilename),
                 copyright: {
                     title: 'TUAF Title Background',
                     license: 'U'
@@ -584,8 +744,8 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         };
     }
 
-    // Add subtle TUAF branding header to title slide in clean mode
-    if ((!options?.bgOption || options?.bgOption === 'tuaf_clean') && h5pSlides.length > 0) {
+    // Add subtle TUAF branding header to title slide in clean mode (skip if Slide 1 is already a full-bleed PowerPoint cover canvas)
+    if (!firstSlideIsFullCanvas && (!options?.bgOption || options?.bgOption === 'tuaf_clean') && h5pSlides.length > 0) {
         h5pSlides[0].elements.unshift({
             x: 4,
             y: 3,
@@ -612,7 +772,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             fillType: 'image',
             imageGlobalBackground: {
                 path: options.contentBgFilename,
-                mime: 'image/png',
+                mime: getImageMime(options.contentBgFilename),
                 copyright: {
                     title: 'TUAF Background',
                     license: 'U'
@@ -655,17 +815,19 @@ export async function packageH5pZip(
         if (opts.titleBgUrl) {
             const resolvedTitleBg = resolveLocalMediaFile(opts.titleBgUrl);
             if (resolvedTitleBg && fs.existsSync(resolvedTitleBg)) {
-                archive.file(resolvedTitleBg, { name: 'content/images/h5p_title_bg.png' });
+                const ext = path.extname(resolvedTitleBg) || '.png';
+                archive.file(resolvedTitleBg, { name: `content/images/h5p_title_bg${ext}` });
                 opts.hasTitleBg = true;
-                opts.titleBgFilename = 'images/h5p_title_bg.png';
+                opts.titleBgFilename = `images/h5p_title_bg${ext}`;
             }
         }
         if (opts.contentBgUrl) {
             const resolvedContentBg = resolveLocalMediaFile(opts.contentBgUrl);
             if (resolvedContentBg && fs.existsSync(resolvedContentBg)) {
-                archive.file(resolvedContentBg, { name: 'content/images/h5p_content_bg.png' });
+                const ext = path.extname(resolvedContentBg) || '.png';
+                archive.file(resolvedContentBg, { name: `content/images/h5p_content_bg${ext}` });
                 opts.hasContentBg = true;
-                opts.contentBgFilename = 'images/h5p_content_bg.png';
+                opts.contentBgFilename = `images/h5p_content_bg${ext}`;
             }
         }
     }

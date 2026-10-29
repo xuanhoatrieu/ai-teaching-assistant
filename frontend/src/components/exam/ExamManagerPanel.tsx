@@ -7,6 +7,7 @@ import {
 } from '../../lib/exam-sets-api';
 import { useJobPolling } from '../../hooks/useJobPolling';
 import { ModelSelector } from '../ModelSelector';
+import { renderClozeVisual } from '../steps/Step6QuestionBank';
 import './ExamManagerPanel.css';
 
 interface ExamManagerPanelProps {
@@ -1386,9 +1387,9 @@ export function ExamManagerPanel({
                                                             )}
                                                         </div>
                                                     )}
-                                                    {parsedEngData.clozeText && (
-                                                        <div className="exam-q-opt correct">
-                                                            {parsedEngData.clozeText}
+                                                    {(parsedEngData.clozeText || parsedEngData.rawCloze || q.questionType === 'CLOZE') && (
+                                                        <div className="cloze-preview-box" style={{ marginTop: 6 }}>
+                                                            {renderClozeVisual(String(parsedEngData.clozeText || parsedEngData.rawCloze || q.questionText || ''))}
                                                         </div>
                                                     )}
                                                     {parsedEngData.correctAnswer !== undefined && (

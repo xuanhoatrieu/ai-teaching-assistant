@@ -1,5 +1,7 @@
 import {
   Injectable,
+  Logger,
+  OnModuleInit,
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
@@ -8,8 +10,48 @@ import { CreatePromptDto } from './dto/create-prompt.dto';
 import { UpdatePromptDto } from './dto/update-prompt.dto';
 
 @Injectable()
-export class PromptsService {
+export class PromptsService implements OnModuleInit {
+  private readonly logger = new Logger(PromptsService.name);
+
   constructor(private prisma: PrismaService) { }
+
+  async onModuleInit() {
+    try {
+      const engPrompt = await this.prisma.prompt.findUnique({
+        where: { slug: 'questions.english' },
+      });
+      if (engPrompt && engPrompt.content.includes('SHORTANSWER:=')) {
+        await this.syncEnglishQuestionsPrompt();
+        this.logger.log('✅ Synced questions.english prompt to Moodle MULTICHOICE_S Cloze specification');
+      }
+    } catch (error: any) {
+      this.logger.warn(`⚠️ Could not auto-sync prompts on startup: ${error.message}`);
+    }
+  }
+
+  /**
+   * Updates only `questions.english` without touching any other customized prompts in DB.
+   */
+  async syncEnglishQuestionsPrompt() {
+    const v2List = this.getSeedV2Definitions();
+    const engDef = v2List.find((p) => p.slug === 'questions.english');
+    if (!engDef) return null;
+    return this.prisma.prompt.upsert({
+      where: { slug: engDef.slug },
+      update: {
+        name: engDef.name,
+        content: engDef.content,
+        variables: engDef.variables,
+        version: { increment: 1 },
+      },
+      create: {
+        slug: engDef.slug,
+        name: engDef.name,
+        content: engDef.content,
+        variables: engDef.variables,
+      },
+    });
+  }
 
   // ==================== ADMIN CRUD ====================
 
@@ -139,8 +181,8 @@ export class PromptsService {
    * Seed v2 prompts with JSON output format
    * Call via POST /admin/prompts/seed
    */
-  async seedV2() {
-    const prompts = [
+  getSeedV2Definitions() {
+    return [
       {
         slug: 'system.role',
         name: 'System Role Template',
@@ -679,15 +721,16 @@ Chỉ trả về JSON.`,
    - "MR" (Multiple Response): single: false, 4-5 options with 2+ correct answers (sum of correct fractions = 100, distractors fraction = -50).
    - "MATCH" (Matching): 3-5 subquestion-answer pairs (e.g. term ⇄ definition, component ⇄ function, concept ⇄ description, sentence ⇄ translation technique).
      * Required data shape: "data": {"pairs": [{"left": "Term / Component / Statement", "right": "Definition / Function / Corresponding element"}], "rightOptions": ["Definition 1", "Definition 2", "Distractor (optional)"]}
-   - "CLOZE": Text with embedded answers using Moodle Cloze syntax.
-     CRITICAL CLOZE RULES:
-     * EVERY blank MUST be written as an embedded answer '{1:SHORTANSWER:=word}'. NEVER write bare underscores like "___" or "_____" in a CLOZE question — Moodle rejects the entire import file if a Cloze question has no embedded answer.
-     * ALWAYS use weight 1 for every blank: '{1:SHORTANSWER:=word}' (do NOT use 2, 3 as blank numbering!).
-     * For verb conjugation / word transformation exercises, ALWAYS provide the base word in brackets right after the blank (e.g., 'She usually {1:SHORTANSWER:=travels} (travel) by train, but today she {1:SHORTANSWER:=is travelling~=is traveling} (travel) by bus.') so students know what word to conjugate!
-     * Include both UK and US spelling variations separated by '~=' where applicable.
-     * Required data shape: "data": {"clozeText": "... {1:SHORTANSWER:=word} ...", "answers": [{"position": 1, "acceptableAnswers": ["word"]}]}
+   - "CLOZE": Text with embedded selectable dropdown choices using Moodle Cloze MULTICHOICE_S syntax.
+     CRITICAL CLOZE RULES (100% MANDATORY — NO FREE-TEXT TYPING):
+     * EVERY blank MUST be written as a shuffled 4-option dropdown '{1:MULTICHOICE_S:=Correct~Distractor1~Distractor2~Distractor3}' where '=Correct' is the 100% correct choice and 'Distractor1..3' are 3 plausible, distinct wrong choices of the same grammatical category / context.
+     * STRICTLY FORBIDDEN: NEVER use '{1:SHORTANSWER:...}' (do not force students to type free text!) and NEVER write bare underscores like "___" or "_____".
+     * ALWAYS use weight 1 for every blank: '{1:MULTICHOICE_S:=...}' (do NOT use 2, 3 as blank numbering!).
+     * Do NOT include '~', '}', or '#' characters inside any option text. Do NOT list two valid spelling variants (e.g. UK and US) in the same dropdown — include ONLY ONE canonical '=Correct' answer and 3 genuinely incorrect distractors!
+     * For verb conjugation / word transformation exercises, you may provide the base word in brackets right after the dropdown (e.g., 'She usually {1:MULTICHOICE_S:=travels~travel~travelled~is travelling} (travel) by train, but today she {1:MULTICHOICE_S:=is travelling~travels~travel~was travelling} (travel) by bus.').
+     * Required data shape: "data": {"clozeText": "... {1:MULTICHOICE_S:=Correct~Wrong1~Wrong2~Wrong3} ...", "answers": [{"position": 1, "acceptableAnswers": ["Correct"], "distractors": ["Wrong1", "Wrong2", "Wrong3"]}]}
    - "TRUEFALSE": Theoretical proposition with correctAnswer: true or false.
-   - STRICT PROHIBITION: NEVER generate "ESSAY" or standalone "SHORTANSWER" questions. All fill-in-the-blank exercises MUST use "CLOZE" with embedded '{1:SHORTANSWER:=word}' syntax.
+   - STRICT PROHIBITION: NEVER generate "ESSAY" or standalone "SHORTANSWER" questions. All fill-in-the-blank exercises MUST use "CLOZE" with embedded '{1:MULTICHOICE_S:=Correct~Wrong1~Wrong2~Wrong3}' dropdown syntax.
 
 ---
 
@@ -837,7 +880,10 @@ Chỉ trả về JSON.`,
         variables: ['{title}', '{detailed_outline}'],
       },
     ];
+  }
 
+  async seedV2() {
+    const prompts = this.getSeedV2Definitions();
     const results: { slug: string; id: string }[] = [];
     for (const p of prompts) {
       const result = await this.prisma.prompt.upsert({

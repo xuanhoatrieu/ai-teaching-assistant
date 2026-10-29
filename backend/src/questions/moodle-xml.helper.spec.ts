@@ -10,6 +10,9 @@ import {
     EnglishQuestionData,
     toMoodleCategorySlug,
     buildSingleCategoryExamMoodleXml,
+    validateClozeText,
+    upgradeClozeToMultichoice,
+    normalizeInteractiveQuestions,
 } from './moodle-xml.helper';
 
 describe('moodle-xml.helper', () => {
@@ -302,16 +305,62 @@ describe('moodle-xml.helper', () => {
 
             const xml = buildEnglishMoodleXml(questions, 'Unit 1');
 
-            // Positive proof: MC question and blank-upgraded CLOZE question are included
+            // Positive proof: MC question and blank-upgraded CLOZE question are included using shuffled dropdown MULTICHOICE_S (never free-text SHORTANSWER)
             expect(xml).toContain('<question type="multichoice">');
             expect(xml).toContain('<question type="cloze">');
-            expect(xml).toContain('{1:SHORTANSWER:=Do}');
+            expect(xml).toContain('{1:MULTICHOICE_S:=Do~Does~Did~Are}');
 
-            // Negative proof: Zero essay or standalone shortanswer questions in XML
+            // Negative proof: Zero essay, standalone shortanswer, or embedded SHORTANSWER tokens in XML
             expect(xml).not.toContain('<question type="essay">');
             expect(xml).not.toContain('<question type="shortanswer">');
+            expect(xml).not.toContain('SHORTANSWER:');
             expect(xml).not.toContain('Viết một đoạn ngắn từ 4 đến 6 câu');
             expect(xml).not.toContain('Tự đặt một câu tiếng Anh');
+        });
+
+        it('upgradeClozeToMultichoice & buildEnglishQuestionXml should guarantee 100% Moodle-valid MULTICHOICE_S tokens without leaking spelling variants as distractors', () => {
+            // 1. Verb conjugation with UK/US spelling variants: US variant "is traveling" MUST NOT become a wrong distractor!
+            const rawVerbCloze =
+                'She usually {1:SHORTANSWER:=travels} (travel) by train, but today she {1:SHORTANSWER:=is travelling~=is traveling} (travel) by bus.';
+            const upgradedVerb = upgradeClozeToMultichoice(rawVerbCloze);
+            expect(validateClozeText(upgradedVerb)).toEqual([]);
+            expect(upgradedVerb).toContain('{1:MULTICHOICE_S:=travels~');
+            expect(upgradedVerb).toContain('{1:MULTICHOICE_S:=is travelling~');
+            const secondClause = upgradedVerb.split('today she ')[1] || '';
+            expect(secondClause).not.toContain('is traveling');
+            expect(upgradedVerb).not.toContain('SHORTANSWER');
+
+            // 2. Phonetics IPA symbols with slashes (/tʃ/) must not be mangled into \/tʃ\/ and must pass Moodle validator
+            const ipaCloze = 'The voiceless post-alveolar affricate is {1:MULTICHOICE_S:=/tʃ/~/ʃ/~/dʒ/~/θ/}.';
+            const upgradedIpa = upgradeClozeToMultichoice(ipaCloze);
+            expect(validateClozeText(upgradedIpa)).toEqual([]);
+            expect(upgradedIpa).toContain('=/tʃ/~/ʃ/~/dʒ/~/θ/');
+
+            // 3. Numeric blanks (e.g. NumPy / technical lessons) upgrade cleanly to 4-option MULTICHOICE_S
+            const numCloze = 'For a float32 array with shape (2, 3, 4), ndim is {1:SHORTANSWER:=3} and nbytes is {1:SHORTANSWER:=96}.';
+            const upgradedNum = upgradeClozeToMultichoice(numCloze);
+            expect(validateClozeText(upgradedNum)).toEqual([]);
+            expect(upgradedNum).toContain('{1:MULTICHOICE_S:=3~');
+            expect(upgradedNum).toContain('{1:MULTICHOICE_S:=96~');
+
+            // 4. Interactive slide FIB & CLOZE normalization guarantees 4 options and distractors
+            const normalizedInteractive = normalizeInteractiveQuestions([
+                {
+                    id: 'q1',
+                    type: 'FIB',
+                    question: 'Yesterday, I _____ (go) to the library.',
+                    correctAnswer: 'went',
+                },
+                {
+                    id: 'q2',
+                    type: 'CLOZE',
+                    question: 'Chọn từ thích hợp:',
+                    passage: 'A: Hello, how are [you]?\nB: I am [fine], thanks.',
+                },
+            ]);
+            expect(normalizedInteractive[0].options).toHaveLength(4);
+            expect(normalizedInteractive[0].options).toContain('went');
+            expect(normalizedInteractive[1].distractors.length).toBeGreaterThanOrEqual(3);
         });
 
         it('buildSingleCategoryExamMoodleXml should place all exam questions into a single Moodle category', () => {

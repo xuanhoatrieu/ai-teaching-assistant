@@ -1958,11 +1958,19 @@ export function Step5GeneratePPTX() {
                                                                                     {qType === 'CLOZE' && (
                                                                                         <div className="cloze-passage-display" style={{ marginTop: 8, padding: '12px 14px', background: 'rgba(217, 70, 239, 0.06)', borderRadius: 8, border: '1px solid rgba(217, 70, 239, 0.25)' }}>
                                                                                             <div style={{ fontSize: '0.85rem', color: '#a21caf', fontWeight: 600, marginBottom: 6 }}>
-                                                                                                💬 Đoạn hội thoại / ngữ cảnh điền khuyết:
+                                                                                                💬 Đoạn hội thoại / ngữ cảnh chọn từ điền khuyết:
                                                                                             </div>
                                                                                             <div style={{ whiteSpace: 'pre-line', fontSize: '0.9rem', color: '#334155', lineHeight: 1.8, fontStyle: 'italic', background: '#f8fafc', padding: '8px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
                                                                                                 {q.passage || q.questionText || ''}
                                                                                             </div>
+                                                                                            {Array.isArray(q.distractors) && q.distractors.length > 0 && (
+                                                                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 8 }}>
+                                                                                                    <span style={{ fontSize: '0.8rem', color: '#64748b' }}>🎯 Phương án nhiễu:</span>
+                                                                                                    {q.distractors.map((d: string, dIdx: number) => (
+                                                                                                        <span key={dIdx} style={{ background: '#fae8ff', color: '#86198f', padding: '2px 8px', borderRadius: 12, fontSize: '0.8rem', fontWeight: 600 }}>{d}</span>
+                                                                                                    ))}
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
                                                                                     )}
 

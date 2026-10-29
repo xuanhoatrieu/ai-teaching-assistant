@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.6.16] - 2026-10-29 - Selectable CLOZE/FIB (`MULTICHOICE_S`) & Full-Slide SCORM/H5P + PPTX Audio Auto-Play (US-029, US-030)
+
+### Added & Changed
+- **Selectable CLOZE & Fill-in-Blank (`US-030`)**:
+  - Upgraded all `CLOZE` question generation prompts (`PromptsService`, `EnglishQuestionService`, `PptxAudioToolService`, `ExamSetService`) and Moodle XML export (`buildEnglishQuestionXml` in `moodle-xml.helper.ts`) from free-typing `SHORTANSWER` to shuffled dropdown `{1:MULTICHOICE_S:=Correct~Wrong1~Wrong2~Wrong3}` with automatic fallback distractor synthesis so 100% of blanks export cleanly to Moodle 4.x.
+  - Upgraded interactive slide `FIB` and `CLOZE` activities (`SlidesService`, `scorm-export.helper.ts`, `h5p-export.helper.ts`) to selectable Word Chips and inline `<select>` dropdowns + Word Bank instead of free text inputs (30/30 Jest unit tests passing).
+  - Updated Question Bank UI previews (`Step6QuestionBank.tsx`, `PptxAudioTool.tsx`, `ExamManagerPanel.tsx`, `Step5GeneratePPTX.tsx`) to display selectable choices per blank.
+- **Full-Slide SCORM 1.2 / H5P Export & OOXML PPTX Audio Auto-Play (`US-029`)**:
+  - Standardized OOXML `<p:timing>` (`delay="0"` auto-play upon slide transition + click-to-replay icon) across `pptx_service.py` and added LibreOffice headless full-slide PNG rendering (`/render-slides`, `Dockerfile`) so exported SCORM 1.2 and H5P packages render full visual slides with synchronized audio across both Step 5 and PPTX Audio Tool.
+
 ## [v1.6.15] - 2026-10-29 - Multi-Lesson Grounded Exam Generator (US-028)
 
 ### Added & Changed
