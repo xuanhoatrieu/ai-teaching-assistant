@@ -9,6 +9,7 @@ import {
     buildEnglishMoodleXml,
     EnglishQuestionData,
     toMoodleCategorySlug,
+    buildExamMoodleXml,
     buildSingleCategoryExamMoodleXml,
     validateClozeText,
     upgradeClozeToMultichoice,
@@ -417,6 +418,105 @@ describe('moodle-xml.helper', () => {
             expect(xmlEng).toContain('<text>$course$/top/Giua_Ky_Bai_1_6</text>');
             expect(xmlEng).toContain('<question type="truefalse">');
             expect(xmlEng).not.toContain('<question type="essay">');
+        });
+
+        it('buildExamMoodleXml supports bloom and lesson category modes and prevents English exam title collision (B1-MC-C01 -> B01-MC-01)', () => {
+            const reviewQs = [
+                {
+                    questionId: 'B1-1-01',
+                    level: 1,
+                    sourceLessonTitle: 'Bài 01: Tổng quan CSDL',
+                    question: 'CSDL là gì?',
+                    correctAnswer: 'A. Tập hợp dữ liệu có tổ chức',
+                    optionB: 'B. Một phần cứng',
+                    optionC: 'C. Một trình duyệt',
+                    optionD: 'D. Một cáp mạng',
+                },
+                {
+                    questionId: 'B2-2-02',
+                    level: 2,
+                    sourceLessonTitle: 'Bài 02: Mô hình Quan hệ',
+                    question: 'Khóa chính dùng để làm gì?',
+                    correctAnswer: 'Định danh duy nhất mỗi bộ',
+                    optionB: 'Tăng dung lượng ổ cứng',
+                    optionC: 'Xóa bảng tự động',
+                    optionD: 'Tắt máy chủ',
+                },
+                {
+                    questionId: 'EMPTY-INVALID',
+                    level: 3,
+                    sourceLessonTitle: 'Bài 02: Mô hình Quan hệ',
+                    question: '   ',
+                    correctAnswer: '',
+                    optionB: '',
+                },
+            ];
+
+            // 1. Bloom mode: inherits muc_1_biet & muc_2_hieu subcategories and skips empty invalid question
+            const bloomXml = buildExamMoodleXml(reviewQs, 'Giua_Ky_CSDL', 'REVIEW', 'bloom');
+            expect(bloomXml).toContain('<text>$course$/top/Giua_Ky_CSDL/muc_1_biet</text>');
+            expect(bloomXml).toContain('<text>$course$/top/Giua_Ky_CSDL/muc_2_hieu</text>');
+            expect(bloomXml).not.toContain('muc_3_van_dung'); // empty invalid level-3 question skipped
+            expect(bloomXml).not.toContain('<p class="cell">A. Tập hợp dữ liệu có tổ chức</p>');
+            expect(bloomXml).toContain('<p class="cell">Tập hợp dữ liệu có tổ chức</p>');
+
+            // 2. Lesson mode: groups under $course$/top/{slug}/{lessonSlug}
+            const lessonXml = buildExamMoodleXml(reviewQs, 'Giua_Ky_CSDL', 'REVIEW', 'lesson');
+            expect(lessonXml).toContain('<text>$course$/top/Giua_Ky_CSDL/Bai_01_Tong_quan_CSDL</text>');
+            expect(lessonXml).toContain('<text>$course$/top/Giua_Ky_CSDL/Bai_02_Mo_hinh_Quan_he</text>');
+
+            // 3. English exam titles B1-MC-C01, B1-CLOZE-C02, B2-MATCH-C03 MUST NOT collide on B-01
+            const englishExamQs = [
+                {
+                    id: 'ex-1',
+                    questionOrder: 1,
+                    questionType: 'MC',
+                    difficulty: 1,
+                    title: 'B1-MC-C01 (Present Simple)',
+                    sourceLessonTitle: 'Bài 01: Daily Routines',
+                    questionText: 'She ___ to school every day.',
+                    dataJson: JSON.stringify({
+                        options: [
+                            { text: 'goes', isCorrect: true },
+                            { text: 'go', isCorrect: false },
+                        ],
+                    }),
+                },
+                {
+                    id: 'ex-2',
+                    questionOrder: 2,
+                    questionType: 'TRUEFALSE',
+                    difficulty: 2,
+                    title: 'B1-TRUEFALSE-C02 (Adverbs)',
+                    sourceLessonTitle: 'Bài 01: Daily Routines',
+                    questionText: '"Always" is an adverb of frequency.',
+                    dataJson: JSON.stringify({ correctAnswer: true }),
+                },
+                {
+                    id: 'ex-3',
+                    questionOrder: 3,
+                    questionType: 'MATCH',
+                    difficulty: 3,
+                    title: 'B2-MATCH-C03 (Vocabulary)',
+                    sourceLessonTitle: 'Bài 02: Leisure Activities',
+                    questionText: 'Match each verb with a noun.',
+                    dataJson: JSON.stringify({
+                        pairs: [
+                            { left: 'play', right: 'chess' },
+                            { left: 'read', right: 'books' },
+                        ],
+                    }),
+                },
+            ];
+
+            const engExamXml = buildExamMoodleXml(englishExamQs, 'Midterm_EN', 'ENGLISH', 'bloom');
+            expect(engExamXml).toContain('<text>$course$/top/Midterm_EN/muc_1_biet</text>');
+            expect(engExamXml).toContain('<text>$course$/top/Midterm_EN/muc_2_hieu</text>');
+            expect(engExamXml).toContain('<text>$course$/top/Midterm_EN/muc_3_van_dung</text>');
+            expect(engExamXml).toContain('<name><text>B01-MC-01: ');
+            expect(engExamXml).toContain('<name><text>B01-TRUEFALSE-02: ');
+            expect(engExamXml).toContain('<name><text>B02-MATCH-03: ');
+            expect(engExamXml).not.toContain('Midterm_EN-B-01');
         });
     });
 });

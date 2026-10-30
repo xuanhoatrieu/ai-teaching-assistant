@@ -3123,11 +3123,19 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         return { session, lessonTitle, exportSlides };
     }
 
-    async exportScorm(sessionId: string, res: Response, templateId?: string, bgOption?: string, theme?: string) {
-        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, false);
-
+    private async resolveTemplateForExport(templateId?: string, effectiveBgOption?: string) {
         let selectedTemplate: any = null;
-        if (templateId && templateId !== 'blank') {
+        if (effectiveBgOption === 'tuaf_full') {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isDefault: true, isActive: true },
+            });
+            if (!selectedTemplate || (!selectedTemplate.titleBgUrl && !selectedTemplate.contentBgUrl)) {
+                selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                    where: { isSystem: true, isActive: true, titleBgUrl: { not: '' } },
+                });
+            }
+        }
+        if (!selectedTemplate && templateId && templateId !== 'blank') {
             selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
                 where: { id: templateId },
             });
@@ -3137,8 +3145,13 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 where: { isDefault: true, isActive: true },
             });
         }
+        return selectedTemplate;
+    }
 
+    async exportScorm(sessionId: string, res: Response, templateId?: string, bgOption?: string, theme?: string) {
+        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, false);
         const effectiveBgOption = bgOption || 'tuaf_clean';
+        const selectedTemplate = await this.resolveTemplateForExport(templateId, effectiveBgOption);
         const safeTitle = (lessonTitle || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
             .replace(/\s+/g, '_');
@@ -3159,20 +3172,8 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
 
     async exportH5p(sessionId: string, res: Response, templateId?: string, bgOption?: string, theme?: string) {
         const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, true);
-
-        let selectedTemplate: any = null;
-        if (templateId && templateId !== 'blank') {
-            selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
-                where: { id: templateId },
-            });
-        }
-        if (!selectedTemplate) {
-            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
-                where: { isDefault: true, isActive: true },
-            });
-        }
-
         const effectiveBgOption = bgOption || 'tuaf_clean';
+        const selectedTemplate = await this.resolveTemplateForExport(templateId, effectiveBgOption);
         const safeTitle = (lessonTitle || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
             .replace(/\s+/g, '_');

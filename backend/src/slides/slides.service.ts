@@ -1892,9 +1892,21 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
             audioUrl: s.audioUrl || audioMap.get(s.slideIndex) || '',
         }));
 
-        // Retrieve template info
+        const effectiveBgOption = bgOption || 'tuaf_clean';
+
+        // Retrieve template info (when tuaf_full is explicitly requested, always prefer system default TUAF template)
         let selectedTemplate: any = null;
-        if (templateId && templateId !== 'blank') {
+        if (effectiveBgOption === 'tuaf_full') {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isDefault: true, isActive: true },
+            });
+            if (!selectedTemplate || (!selectedTemplate.titleBgUrl && !selectedTemplate.contentBgUrl)) {
+                selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                    where: { isSystem: true, isActive: true, titleBgUrl: { not: '' } },
+                });
+            }
+        }
+        if (!selectedTemplate && templateId && templateId !== 'blank') {
             selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
                 where: { id: templateId },
             });
@@ -1904,8 +1916,6 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
                 where: { isDefault: true, isActive: true },
             });
         }
-
-        const effectiveBgOption = bgOption || 'tuaf_clean';
 
         const safeTitle = (lesson.title || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
@@ -1952,8 +1962,20 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
             audioUrl: s.audioUrl || audioMap.get(s.slideIndex) || '',
         }));
 
+        const effectiveBgOption = bgOption || 'tuaf_clean';
+
         let selectedTemplate: any = null;
-        if (templateId && templateId !== 'blank') {
+        if (effectiveBgOption === 'tuaf_full') {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isDefault: true, isActive: true },
+            });
+            if (!selectedTemplate || (!selectedTemplate.titleBgUrl && !selectedTemplate.contentBgUrl)) {
+                selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                    where: { isSystem: true, isActive: true, titleBgUrl: { not: '' } },
+                });
+            }
+        }
+        if (!selectedTemplate && templateId && templateId !== 'blank') {
             selectedTemplate = await this.prisma.pPTXTemplate.findUnique({
                 where: { id: templateId },
             });
@@ -1963,8 +1985,6 @@ Trả về DUY NHẤT một chuỗi JSON hợp lệ (không kèm markdown ngoài
                 where: { isDefault: true, isActive: true },
             });
         }
-
-        const effectiveBgOption = bgOption || 'tuaf_clean';
 
         const safeTitle = (lesson.title || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')

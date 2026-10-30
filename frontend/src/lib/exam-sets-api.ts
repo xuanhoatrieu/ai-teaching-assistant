@@ -62,6 +62,19 @@ export interface ExamSetDetail extends ExamSetSummary {
     questions: any[];
 }
 
+export type ExamMoodleCategoryMode = 'single' | 'bloom' | 'lesson';
+
+export interface ExportExamMoodleParams {
+    categoryMode?: ExamMoodleCategoryMode;
+    lessonId?: string;
+    level?: string;
+}
+
+export interface ExportExamExcelParams {
+    lessonId?: string;
+    level?: string;
+}
+
 export const examSetsApi = {
     getLessonsOverview: (params: { subjectId?: string; pptxSubjectId?: string }) =>
         api.get<ExamLessonsOverviewResponse>('/exam-sets/lessons-overview', { params }),
@@ -84,9 +97,9 @@ export const examSetsApi = {
     delete: (id: string) =>
         api.delete<{ deleted: boolean }>(`/exam-sets/${id}`),
 
-    exportMoodleXml: (id: string) =>
-        api.get(`/exam-sets/${id}/export/moodle-xml`, { responseType: 'blob' }),
+    exportMoodleXml: (id: string, params?: ExportExamMoodleParams) =>
+        api.get(`/exam-sets/${id}/export/moodle-xml`, { params, responseType: 'blob' }),
 
-    exportExcel: (id: string) =>
-        api.get(`/exam-sets/${id}/export/excel`, { responseType: 'blob' }),
+    exportExcel: (id: string, params?: ExportExamExcelParams) =>
+        api.get(`/exam-sets/${id}/export/excel`, { params, responseType: 'blob' }),
 };

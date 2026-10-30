@@ -312,5 +312,209 @@ describe('SCORM 1.2 & H5P Full-Slide Canvas and Media Security Helpers', () => {
             });
             expect(h5pTuafRaw).toContain('ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN');
         });
+
+        it('enforces TUAF original background (tuaf_full) PPTX parity: Slide 1 suppresses AI image/subtitles & centers white title; Slide 2+ renders transparent white centered title aligned to top green banner', () => {
+            const tuafSlides = [
+                {
+                    slideIndex: 1,
+                    slideType: 'title',
+                    layoutType: 'split_standard',
+                    title: 'BÀI 1: TỔNG QUAN VỀ KHOA HỌC CÂY TRỒNG',
+                    content: ['Mục tiêu 1', 'Mục tiêu 2'],
+                    imageUrl: 'images/ai_cover_01.png',
+                    h5pImagePath: 'images/ai_cover_01.png',
+                    audioUrl: 'audio/slide_01.mp3',
+                    h5pAudioPath: 'audios/narration_01.mp3',
+                },
+                {
+                    slideIndex: 2,
+                    slideType: 'content',
+                    layoutType: 'split_standard',
+                    title: '1. Đặc điểm sinh thái học',
+                    content: ['Ánh sáng và quang hợp', 'Nhiệt độ và độ ẩm đất'],
+                    imageUrl: 'images/slide_02.png',
+                    h5pImagePath: 'images/slide_02.png',
+                    audioUrl: 'audio/slide_02.mp3',
+                    h5pAudioPath: 'audios/narration_02.mp3',
+                },
+            ];
+
+            // 1. SCORM 1.2 tuaf_full verification
+            const scormHtml = generateScormPlayerHtml('Bài 1: Tổng quan về Khoa học Cây trồng', tuafSlides, {
+                bgOption: 'tuaf_full',
+                theme: 'light',
+                hasTitleBg: true,
+                hasContentBg: true,
+            });
+
+            // Body flags & Slide 1 AI cover image suppression
+            expect(scormHtml).toContain('mode-tuaf-full');
+            expect(scormHtml).toContain('has-tuaf-title-bg');
+            expect(scormHtml).toContain('has-tuaf-content-bg');
+            expect(scormHtml).toContain('const IS_TUAF_FULL_TITLE = true;');
+            expect(scormHtml).not.toContain('images/ai_cover_01.png'); // AI image completely stripped from Slide 1
+            expect(scormHtml).toContain('images/slide_02.png'); // Slide 2 image preserved
+
+            // Slide 2+ header CSS: transparent background (no white card) + white centered text inside 1920/167 top green band
+            expect(scormHtml).toContain('aspect-ratio: 1920 / 167;');
+            expect(scormHtml).toContain('background: transparent !important;');
+            expect(scormHtml).toContain('tuaf-cover-heading');
+
+            // 2. H5P tuaf_full verification
+            const h5pJson = JSON.parse(
+                generateH5pContentJson('Bài 1: Tổng quan về Khoa học Cây trồng', tuafSlides, {
+                    bgOption: 'tuaf_full',
+                    theme: 'light',
+                    hasTitleBg: true,
+                    hasContentBg: true,
+                    titleBgFilename: 'images/h5p_title_bg.png',
+                    contentBgFilename: 'images/h5p_content_bg.png',
+                }),
+            );
+
+            const slide0 = h5pJson.presentation.slides[0];
+            expect(slide0.slideBackgroundSelector.imageSlideBackground.path).toBe('images/h5p_title_bg.png');
+            // Slide 1 MUST NOT have H5P.Image, badge pill, or subtitle bullets — ONLY centered white title + narration audio
+            expect(slide0.elements.some((el: any) => el.action?.library === 'H5P.Image 1.1')).toBe(false);
+            const coverTitleEl = slide0.elements.find((el: any) => el.action?.subContentId === 'title_0');
+            expect(coverTitleEl).toBeDefined();
+            expect(coverTitleEl.y).toBe(34);
+            expect(coverTitleEl.height).toBe(32);
+            expect(coverTitleEl.action.params.text).toContain('color: #ffffff');
+            expect(coverTitleEl.action.params.text).toContain('BÀI 1: TỔNG QUAN VỀ KHOA HỌC CÂY TRỒNG');
+            expect(coverTitleEl.action.params.text).not.toContain('Mục tiêu 1');
+            expect(coverTitleEl.action.params.text).not.toContain('BÀI GIẢNG ĐIỆN TỬ');
+
+            // Slide 2 MUST have transparent centered white title inside top green band (y=2.2, h=11 -> midpoint 7.7% inside 0..15.46% band)
+            const slide1 = h5pJson.presentation.slides[1];
+            const contentTitleEl = slide1.elements.find((el: any) => el.action?.subContentId === 'title_1');
+            expect(contentTitleEl).toBeDefined();
+            expect(contentTitleEl.x).toBe(9);
+            expect(contentTitleEl.y).toBe(2.2);
+            expect(contentTitleEl.width).toBe(82);
+            expect(contentTitleEl.height).toBe(11);
+            expect(contentTitleEl.action.params.text).toContain('background: transparent');
+            expect(contentTitleEl.action.params.text).toContain('color: #ffffff');
+            expect(contentTitleEl.action.params.text).toContain('text-align: center');
+            // Body content pushed cleanly below 15.46% green band (y = 17)
+            const slide1BodyEl = slide1.elements.find((el: any) => el.action?.subContentId === 'content_1');
+            expect(slide1BodyEl.y).toBe(17);
+        });
+
+        it('updates learner progress dynamically from 3% up to 100% across a 33-slide deck and syncs SCORM completion/resume state', () => {
+            const vm = require('vm');
+            const deck33 = Array.from({ length: 33 }, (_, i) => ({
+                slideIndex: i + 1,
+                slideType: i === 0 ? 'title' : 'content',
+                title: `Slide ${i + 1}`,
+                content: [`Nội dung slide ${i + 1}`],
+            }));
+
+            const html = generateScormPlayerHtml('Bài giảng 33 trang', deck33, {
+                bgOption: 'tuaf_full',
+                hasTitleBg: true,
+                hasContentBg: true,
+            });
+
+            const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+            expect(scriptMatch).not.toBeNull();
+
+            // Mock minimal DOM + SCORM 1.2 LMS API
+            const elements: Record<string, any> = {};
+            const getEl = (id: string) => {
+                if (id === 'tuaf-widget-bubble' || id === 'tuaf-widget-popup') return null;
+                if (!elements[id]) {
+                    elements[id] = {
+                        id,
+                        innerText: '',
+                        innerHTML: '',
+                        className: '',
+                        disabled: false,
+                        checked: false,
+                        src: '',
+                        title: '',
+                        style: { width: '0%', display: '' },
+                        classList: { add: () => {}, remove: () => {} },
+                        addEventListener: () => {},
+                        remove: () => {},
+                        pause: () => {},
+                        play: () => Promise.resolve(),
+                    };
+                }
+                return elements[id];
+            };
+
+            const cmiStore: Record<string, string> = {};
+            const mockAPI = {
+                LMSInitialize: () => 'true',
+                LMSGetValue: (k: string) => cmiStore[k] || '',
+                LMSSetValue: (k: string, v: string) => {
+                    cmiStore[k] = String(v);
+                    return 'true';
+                },
+                LMSCommit: () => 'true',
+                LMSFinish: () => 'true',
+            };
+
+            let domReadyCb: (() => void) | null = null;
+            const sandbox: any = {
+                console: { log: () => {}, warn: () => {} },
+                encodeURIComponent,
+                decodeURIComponent,
+                parseInt,
+                Math,
+                Number,
+                String,
+                Object,
+                Array,
+                JSON,
+                setInterval: () => 1,
+                clearInterval: () => {},
+                alert: () => {},
+                sessionStorage: { getItem: () => null, setItem: () => {} },
+                document: {
+                    getElementById: getEl,
+                    body: { classList: { add: () => {}, remove: () => {} } },
+                },
+                window: null as any,
+            };
+            sandbox.window = {
+                API: mockAPI,
+                addEventListener: (evt: string, cb: () => void) => {
+                    if (evt === 'DOMContentLoaded') domReadyCb = cb;
+                },
+            };
+
+            vm.runInNewContext(scriptMatch![1], sandbox);
+            expect(domReadyCb).not.toBeNull();
+            domReadyCb!();
+
+            // On Slide 1 of 33: 1/33 = 3%
+            expect(getEl('scoreBadge').innerText).toBe('Đã xem: 3%');
+            expect(getEl('progressFill').style.width).toBe('3%');
+            expect(cmiStore['cmi.core.score.raw']).toBe('3');
+            expect(cmiStore['cmi.core.lesson_status']).toBe('incomplete');
+
+            // Navigate to Slide 2 -> MUST immediately advance to 6% (NOT stay frozen at 3%!)
+            sandbox.navigateSlide(1);
+            expect(getEl('scoreBadge').innerText).toBe('Đã xem: 6%');
+            expect(getEl('progressFill').style.width).toBe('6%');
+            expect(cmiStore['cmi.core.score.raw']).toBe('6');
+
+            // Navigate through all remaining slides up to Slide 33
+            for (let step = 2; step < 33; step++) {
+                sandbox.navigateSlide(1);
+            }
+            expect(getEl('scoreBadge').innerText).toBe('Đã xem: 100%');
+            expect(getEl('progressFill').style.width).toBe('100%');
+            expect(cmiStore['cmi.core.score.raw']).toBe('100');
+            expect(cmiStore['cmi.core.lesson_status']).toBe('completed');
+
+            // Going back to review Slide 1 MUST keep accumulated progress at 100% (never regress to 3%!)
+            sandbox.renderSlide(0);
+            expect(getEl('scoreBadge').innerText).toBe('Đã xem: 100%');
+            expect(getEl('progressFill').style.width).toBe('100%');
+            expect(cmiStore['cmi.core.lesson_status']).toBe('completed');
+        });
     });
 });

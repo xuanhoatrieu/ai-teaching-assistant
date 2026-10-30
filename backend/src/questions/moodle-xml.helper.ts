@@ -1691,74 +1691,186 @@ export function toMoodleCategorySlug(rawName: string): string {
     );
 }
 
+export type ExamMoodleCategoryMode = 'single' | 'bloom' | 'lesson';
+
+function renderSingleExamQuestionXml(
+    q: any,
+    index: number,
+    mode: 'REVIEW' | 'ENGLISH',
+    categorySlug: string,
+): string {
+    if (String(mode).toUpperCase() === 'ENGLISH') {
+        const rawTitle = String(q.title || q.questionId || '').trim();
+        let lessonCode = q.sourceLessonTitle
+            ? extractAndNormalizeLesson(String(q.sourceLessonTitle)).lessonCode
+            : 'EX';
+        let cleanTitle = rawTitle || `${q.questionType || 'ENG'}-${String(index + 1).padStart(2, '0')}`;
+
+        // Normalize exam generator titles like "B1-MC-C01 (Topic)" so formatEnglishQuestionName
+        // produces unique "B01-MC-01: ..." instead of colliding on "B-01"
+        const examTitleMatch = rawTitle.match(/^B0*(\d+)[-_]+([A-Za-z]+)[-_]+C?0*(\d+)/i);
+        if (examTitleMatch) {
+            lessonCode = `B${String(parseInt(examTitleMatch[1], 10) || 1).padStart(2, '0')}`;
+            const qTypeCode = examTitleMatch[2].toUpperCase();
+            const seqCode = String(parseInt(examTitleMatch[3], 10) || index + 1).padStart(2, '0');
+            cleanTitle = `${qTypeCode}-${seqCode}`;
+        }
+
+        const engQ: EnglishQuestionData = {
+            id: q.id || `EX-${index + 1}`,
+            questionOrder: q.questionOrder ?? index + 1,
+            questionType: q.questionType || 'MC',
+            subDiscipline: q.subDiscipline || 'GENERAL',
+            difficulty: q.difficulty || q.level || 1,
+            title: cleanTitle,
+            questionText: q.questionText || q.question || '',
+            dataJson:
+                typeof q.dataJson === 'string'
+                    ? q.dataJson
+                    : JSON.stringify(q.data || q.dataJson || {}),
+            explanation: q.explanation || '',
+            points: q.points || 1,
+        };
+        return buildEnglishQuestionXml(engQ, lessonCode);
+    }
+
+    const questionStem = String(q.question || q.questionText || '').trim();
+    const correctAnswer = String(q.correctAnswer || '').trim();
+    const optionB = String(q.optionB || '').trim();
+    if (!plainText(questionStem) || !plainText(correctAnswer) || !plainText(optionB)) {
+        return '';
+    }
+
+    const revQ: ReviewQuestionData = {
+        questionId:
+            q.questionId || q.title || `${categorySlug}-${String(index + 1).padStart(2, '0')}`,
+        level: q.level || q.difficulty || 1,
+        question: questionStem,
+        correctAnswer,
+        optionB,
+        optionC: String(q.optionC || '-').trim() || '-',
+        optionD: String(q.optionD || '-').trim() || '-',
+        explanation: q.explanation || '',
+    };
+    return buildQuestionXml(revQ);
+}
+
 /**
- * Build Moodle XML for a Multi-Lesson Exam Set where 100% of questions are placed
- * inside ONE single category ($course$/top/{categorySlug}), inheriting buildQuestionXml()
- * and buildEnglishQuestionXml() without duplicating XML generation logic.
+ * Build Moodle XML for a Multi-Lesson Exam Set, inheriting 100% of buildQuestionXml(),
+ * buildEnglishQuestionXml(), LEVEL_CONFIG (muc_1_biet / muc_2_hieu / muc_3_van_dung),
+ * and Moodle 4.x import-safety checks.
+ *
+ * Supports 3 category organization modes:
+ * - 'single': 1 unified category `$course$/top/{categorySlug}`
+ * - 'bloom': grouped into 3 Bloom subcategories `$course$/top/{categorySlug}/muc_1_biet|muc_2_hieu|muc_3_van_dung` (same as buildMoodleXml)
+ * - 'lesson': grouped by source lesson `$course$/top/{categorySlug}/{lessonSlug}`
  */
-export function buildSingleCategoryExamMoodleXml(
+export function buildExamMoodleXml(
     questions: any[],
     categoryName: string,
     mode: 'REVIEW' | 'ENGLISH' = 'REVIEW',
+    categoryMode: ExamMoodleCategoryMode = 'single',
 ): string {
     const categorySlug = toMoodleCategorySlug(categoryName);
-    const parts: string[] = [
-        '<?xml version="1.0" encoding="UTF-8"?>',
-        '<quiz>',
-        '',
-        `  <!-- Exam Category: ${commentSafe(categorySlug)} (${questions.length} questions) -->`,
-        `  <question type="category">`,
-        `    <category>`,
-        `      <text>$course$/top/${escapeXmlText(categorySlug)}</text>`,
-        `    </category>`,
-        `  </question>`,
-        '',
-    ];
+    const parts: string[] = ['<?xml version="1.0" encoding="UTF-8"?>', '<quiz>', ''];
 
-    if (String(mode).toUpperCase() === 'ENGLISH') {
+    if (categoryMode === 'bloom') {
+        const grouped = new Map<number, string[]>();
         for (let i = 0; i < questions.length; i++) {
             const q = questions[i];
-            const engQ: EnglishQuestionData = {
-                id: q.id || `EX-${i + 1}`,
-                questionOrder: q.questionOrder ?? i + 1,
-                questionType: q.questionType || 'MC',
-                subDiscipline: q.subDiscipline || 'GENERAL',
-                difficulty: q.difficulty || q.level || 1,
-                title: q.title || q.questionId || `${categorySlug}-${String(i + 1).padStart(2, '0')}`,
-                questionText: q.questionText || q.question || '',
-                dataJson: typeof q.dataJson === 'string' ? q.dataJson : JSON.stringify(q.data || q.dataJson || {}),
-                explanation: q.explanation || '',
-                points: q.points || 1,
-            };
-            const xmlBlock = buildEnglishQuestionXml(engQ, categorySlug);
-            if (xmlBlock && xmlBlock.trim()) {
-                parts.push(xmlBlock);
+            const xmlBlock = renderSingleExamQuestionXml(q, i, mode, categorySlug);
+            if (!xmlBlock || !xmlBlock.trim()) continue;
+            const rawLvl = Number(q.level || q.difficulty || 1);
+            const level = [1, 2, 3].includes(rawLvl) ? rawLvl : 1;
+            if (!grouped.has(level)) grouped.set(level, []);
+            grouped.get(level)!.push(xmlBlock);
+        }
+
+        for (const level of [1, 2, 3]) {
+            const blocks = grouped.get(level);
+            if (!blocks || blocks.length === 0) continue;
+            const config = LEVEL_CONFIG[level] || LEVEL_CONFIG[1];
+            parts.push(`  <!-- ${commentSafe(config.label)} (${blocks.length} câu) -->`);
+            parts.push(`  <question type="category">`);
+            parts.push(`    <category>`);
+            parts.push(
+                `      <text>$course$/top/${escapeXmlText(categorySlug)}/${escapeXmlText(config.slug)}</text>`,
+            );
+            parts.push(`    </category>`);
+            parts.push(`  </question>`);
+            parts.push('');
+            for (const block of blocks) {
+                parts.push(block);
+                parts.push('');
+            }
+        }
+    } else if (categoryMode === 'lesson') {
+        const grouped = new Map<string, { label: string; slug: string; blocks: string[] }>();
+        for (let i = 0; i < questions.length; i++) {
+            const q = questions[i];
+            const xmlBlock = renderSingleExamQuestionXml(q, i, mode, categorySlug);
+            if (!xmlBlock || !xmlBlock.trim()) continue;
+            const rawLesson = String(q.sourceLessonTitle || 'Bai_hoc').trim();
+            const lessonSlug = toMoodleCategorySlug(rawLesson);
+            if (!grouped.has(lessonSlug)) {
+                grouped.set(lessonSlug, { label: rawLesson, slug: lessonSlug, blocks: [] });
+            }
+            grouped.get(lessonSlug)!.blocks.push(xmlBlock);
+        }
+
+        for (const group of grouped.values()) {
+            if (group.blocks.length === 0) continue;
+            parts.push(`  <!-- Lesson: ${commentSafe(group.label)} (${group.blocks.length} câu) -->`);
+            parts.push(`  <question type="category">`);
+            parts.push(`    <category>`);
+            parts.push(
+                `      <text>$course$/top/${escapeXmlText(categorySlug)}/${escapeXmlText(group.slug)}</text>`,
+            );
+            parts.push(`    </category>`);
+            parts.push(`  </question>`);
+            parts.push('');
+            for (const block of group.blocks) {
+                parts.push(block);
                 parts.push('');
             }
         }
     } else {
+        const validBlocks: string[] = [];
         for (let i = 0; i < questions.length; i++) {
-            const q = questions[i];
-            const revQ: ReviewQuestionData = {
-                questionId: q.questionId || q.title || `${categorySlug}-${String(i + 1).padStart(2, '0')}`,
-                level: q.level || q.difficulty || 1,
-                question: q.question || q.questionText || '',
-                correctAnswer: q.correctAnswer || '',
-                optionB: q.optionB || '',
-                optionC: q.optionC || '',
-                optionD: q.optionD || '',
-                explanation: q.explanation || '',
-            };
-            const xmlBlock = buildQuestionXml(revQ);
+            const xmlBlock = renderSingleExamQuestionXml(questions[i], i, mode, categorySlug);
             if (xmlBlock && xmlBlock.trim()) {
-                parts.push(xmlBlock);
-                parts.push('');
+                validBlocks.push(xmlBlock);
             }
+        }
+
+        parts.push(`  <!-- Exam Category: ${commentSafe(categorySlug)} (${validBlocks.length} questions) -->`);
+        parts.push(`  <question type="category">`);
+        parts.push(`    <category>`);
+        parts.push(`      <text>$course$/top/${escapeXmlText(categorySlug)}</text>`);
+        parts.push(`    </category>`);
+        parts.push(`  </question>`);
+        parts.push('');
+
+        for (const block of validBlocks) {
+            parts.push(block);
+            parts.push('');
         }
     }
 
     parts.push('</quiz>');
     return parts.join('\n');
+}
+
+/**
+ * Backward-compatible alias for single-category exam Moodle XML export
+ */
+export function buildSingleCategoryExamMoodleXml(
+    questions: any[],
+    categoryName: string,
+    mode: 'REVIEW' | 'ENGLISH' = 'REVIEW',
+    categoryMode: ExamMoodleCategoryMode = 'single',
+): string {
+    return buildExamMoodleXml(questions, categoryName, mode, categoryMode);
 }
 
 

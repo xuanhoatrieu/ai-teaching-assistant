@@ -184,9 +184,12 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
     const initialTheme = (options?.theme === 'dark') ? 'dark' : 'light';
     const isMinimal = bgOption === 'minimal';
     const isImageBg = (bgOption === 'tuaf_full' || bgOption === 'custom') && (options?.hasTitleBg || options?.hasContentBg);
+    const isTuafFullTitle = bgOption === 'tuaf_full' && Boolean(options?.hasTitleBg);
+    const isTuafFullContent = bgOption === 'tuaf_full' && Boolean(options?.hasContentBg);
+    const isTuafFull = isTuafFullTitle || isTuafFullContent;
     const isTuafClean = !isMinimal && !isImageBg;
 
-    const slidesJson = JSON.stringify(slides.map(s => {
+    const slidesJson = JSON.stringify(slides.map((s, idx) => {
         let bullets: any[] = [];
         if (Array.isArray(s.bullets)) {
             bullets = s.bullets;
@@ -233,6 +236,8 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
 
         const layoutType = s.layoutType || (isCheckpoint ? 'checkpoint_gate' : (s.extraAudioUrl ? 'audio_lab' : 'split_standard'));
 
+        const suppressCoverAiImage = isTuafFullTitle && idx === 0 && layoutType !== 'full_slide_canvas';
+
         return {
             slideIndex: s.slideIndex,
             slideType: s.slideType || 'content',
@@ -240,7 +245,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             title: s.title || `Slide ${s.slideIndex}`,
             bullets,
             speakerNote: s.speakerNote || '',
-            imageUrl: s.imageUrl || '',
+            imageUrl: suppressCoverAiImage ? '' : (s.imageUrl || ''),
             audioUrl: s.audioUrl || '',
             extraAudioUrl: s.extraAudioUrl || '',
             extraAudioName: s.extraAudioName || '',
@@ -251,7 +256,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             allowContinueWithoutPass: interaction?.allowContinueWithoutPass === true,
             hideSolutions,
         };
-    }));
+    })).replace(/<\//g, '<\\/');
 
     return `<!DOCTYPE html>
 <html lang="vi">
@@ -1986,9 +1991,142 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       width: 0 !important;
       height: 0 !important;
     }
+
+    /* ========================================================
+       TUAF ORIGINAL BACKGROUND PARITY WITH PPTX (tuaf_full)
+       - Image #1 (bg_title.png 1920x1080): centered white lesson title only, no AI image, no card box
+       - Image #2 (bg_content.png 1920x1080): top green band 0..167px (15.46%), transparent title box, white centered text
+       ======================================================== */
+    body.has-tuaf-title-bg .slide-card.is-title-slide {
+      aspect-ratio: 16 / 9;
+      min-height: 0;
+      padding: 0;
+      gap: 0;
+      background: url('images/bg_title.png') center / 100% 100% no-repeat !important;
+      border: 1px solid rgba(0, 90, 54, 0.25) !important;
+    }
+    .tuaf-cover-speaker-wrap {
+      position: absolute;
+      top: 23.5%;
+      right: 2.5%;
+      z-index: 6;
+    }
+    body.has-tuaf-title-bg .tuaf-cover-speaker-wrap .speaker-btn {
+      background: rgba(255, 255, 255, 0.2) !important;
+      border: 1px solid rgba(255, 255, 255, 0.5) !important;
+      color: #ffffff !important;
+      backdrop-filter: blur(4px);
+    }
+    body.has-tuaf-title-bg .tuaf-cover-speaker-wrap .speaker-btn:hover {
+      background: rgba(255, 255, 255, 0.32) !important;
+    }
+    .tuaf-cover-stage {
+      position: absolute;
+      top: 21.5%;
+      bottom: 21.2%;
+      left: 10%;
+      right: 15%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0 18px;
+      z-index: 4;
+    }
+    .tuaf-cover-heading {
+      color: #ffffff !important;
+      font-family: Arial, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: clamp(1.35rem, 3.1vw, 2.55rem);
+      font-weight: 700;
+      line-height: 1.3;
+      margin: 0;
+      padding: 0;
+      background: transparent !important;
+      border: none !important;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+    }
+
+    body.has-tuaf-content-bg .slide-card.is-content-slide {
+      background-color: #ffffff !important;
+      background-image: url('images/bg_content.png') !important;
+      background-position: top center !important;
+      background-size: 100% auto !important;
+      background-repeat: no-repeat !important;
+      aspect-ratio: 16 / 9;
+      min-height: 0;
+      padding: 0;
+      gap: 0;
+      border: 1px solid #cbd5e1 !important;
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-top-header {
+      width: 100%;
+      aspect-ratio: 1920 / 167;
+      min-height: 52px;
+      padding: 0 12.5% 0 9.5%;
+      margin: 0;
+      background: transparent !important;
+      border: none !important;
+      border-bottom: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      flex-shrink: 0;
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-top-header .slide-title {
+      color: #ffffff !important;
+      font-family: Arial, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: clamp(0.98rem, 2.05vw, 1.55rem);
+      font-weight: 700;
+      line-height: 1.25;
+      text-align: center;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+      background: transparent !important;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.16);
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-top-header .speaker-btn {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: rgba(255, 255, 255, 0.2) !important;
+      border: 1px solid rgba(255, 255, 255, 0.48) !important;
+      color: #ffffff !important;
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-top-header .speaker-btn:hover {
+      background: rgba(255, 255, 255, 0.32) !important;
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-body-container {
+      padding: 18px 28px 26px 28px;
+    }
+    /* Keep content readable on bg_content.png's white body even when outer chrome is in dark theme */
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .bullet-item,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .comparison-card,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .process-step-item,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .interaction-card {
+      background: rgba(255, 255, 255, 0.96);
+      border-color: #cbd5e1;
+    }
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .bullet-point,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .comparison-card-header,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .process-step-title,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .question-prompt {
+      color: #0f172a;
+    }
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .bullet-desc,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .comparison-card-desc,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .process-step-desc {
+      color: #334155;
+    }
   </style>
 </head>
-<body class="theme-${initialTheme} ${isTuafClean ? 'mode-tuaf-clean' : ''} ${isImageBg ? 'mode-has-image-bg' : ''} ${isMinimal ? 'mode-minimal' : ''}">
+<body class="theme-${initialTheme} ${isTuafClean ? 'mode-tuaf-clean' : ''} ${isImageBg ? 'mode-has-image-bg' : ''} ${isTuafFull ? 'mode-tuaf-full' : ''} ${isTuafFullTitle ? 'has-tuaf-title-bg' : ''} ${isTuafFullContent ? 'has-tuaf-content-bg' : ''} ${isMinimal ? 'mode-minimal' : ''}">
 
   <!-- Header -->
   <header>
@@ -2072,12 +2210,32 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
   <script>
     // Embedded Slide Data
     const SLIDES = ${slidesJson};
+    const LESSON_TITLE = ${JSON.stringify(lessonTitle || '').replace(/<\//g, '<\\/')};
+    const IS_TUAF_FULL_TITLE = ${isTuafFullTitle ? 'true' : 'false'};
+    const STORAGE_KEY = 'scorm_progress_' + ${JSON.stringify((options?.templateId || '') + '_' + (lessonTitle || 'lesson')).replace(/<\//g, '<\\/')};
     let currentSlideIdx = 0;
+    let visitedSlides = {}; // slideIdx -> true
     let studentScores = {}; // questionKey -> boolean
     let totalQuestionsCount = 0;
     let slidePassed = {}; // slideIdx -> boolean
     let userGateAnswers = {}; // slideIdx -> { qKey: chosenOption }
     let gateCountdownTimer = null;
+
+    function escapeHtmlClient(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function getViewedProgressPercent() {
+      if (!SLIDES || SLIDES.length === 0) return 100;
+      const visitedCount = Object.keys(visitedSlides).length;
+      return Math.min(100, Math.round((visitedCount / SLIDES.length) * 100));
+    }
 
     // Count total questions
     SLIDES.forEach(s => {
@@ -2100,14 +2258,70 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       return null;
     }
 
+    function restoreProgressPayload(rawJson) {
+      if (!rawJson || typeof rawJson !== 'string') return;
+      try {
+        const parsed = JSON.parse(rawJson);
+        if (parsed && Array.isArray(parsed.v)) {
+          parsed.v.forEach(idx => {
+            const n = Number(idx);
+            if (!Number.isNaN(n) && n >= 0 && n < SLIDES.length) {
+              visitedSlides[n] = true;
+            }
+          });
+        }
+        if (parsed && parsed.s && typeof parsed.s === 'object') {
+          studentScores = Object.assign({}, studentScores, parsed.s);
+        }
+        if (parsed && parsed.p && typeof parsed.p === 'object') {
+          slidePassed = Object.assign({}, slidePassed, parsed.p);
+        }
+      } catch (e) {}
+    }
+
+    function persistSCORMProgress(idx) {
+      const payload = JSON.stringify({
+        v: Object.keys(visitedSlides).map(Number),
+        s: studentScores,
+        p: slidePassed,
+      });
+      if (scormAPI) {
+        try {
+          scormAPI.LMSSetValue("cmi.core.lesson_location", (idx + 1).toString());
+          if (payload.length <= 4000) {
+            scormAPI.LMSSetValue("cmi.suspend_data", payload);
+          }
+          scormAPI.LMSCommit("");
+        } catch (e) {}
+      } else {
+        try {
+          sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ loc: idx + 1, data: payload }));
+        } catch (e) {}
+      }
+    }
+
     function initSCORM() {
+      let resumeIdx = 0;
       scormAPI = findSCORMAPI(window);
       if (scormAPI) {
         try {
           scormAPI.LMSInitialize("");
-          scormAPI.LMSSetValue("cmi.core.lesson_status", "incomplete");
+          const existingStatus = String(scormAPI.LMSGetValue("cmi.core.lesson_status") || "").toLowerCase();
+          if (existingStatus !== "completed" && existingStatus !== "passed") {
+            scormAPI.LMSSetValue("cmi.core.lesson_status", "incomplete");
+          }
           scormAPI.LMSSetValue("cmi.core.score.min", "0");
           scormAPI.LMSSetValue("cmi.core.score.max", "100");
+
+          const suspendRaw = scormAPI.LMSGetValue("cmi.suspend_data");
+          if (suspendRaw) {
+            restoreProgressPayload(suspendRaw);
+          }
+          const savedLoc = parseInt(String(scormAPI.LMSGetValue("cmi.core.lesson_location") || ""), 10);
+          if (!Number.isNaN(savedLoc) && savedLoc >= 1 && savedLoc <= SLIDES.length) {
+            resumeIdx = savedLoc - 1;
+          }
+
           scormAPI.LMSCommit("");
           console.log("SCORM 1.2 Initialized successfully");
         } catch (e) {
@@ -2115,12 +2329,42 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         }
       } else {
         console.log("Running in standalone preview mode (No LMS detected)");
+        try {
+          const cached = sessionStorage.getItem(STORAGE_KEY);
+          if (cached) {
+            const parsedCache = JSON.parse(cached);
+            if (parsedCache && parsedCache.data) restoreProgressPayload(parsedCache.data);
+            const loc = parseInt(String(parsedCache?.loc || ""), 10);
+            if (!Number.isNaN(loc) && loc >= 1 && loc <= SLIDES.length) {
+              resumeIdx = loc - 1;
+            }
+          }
+        } catch (e) {}
       }
+      return resumeIdx;
     }
 
     function updateSCORMScore() {
+      const viewedPercent = getViewedProgressPercent();
+      const progressEl = document.getElementById('progressFill');
+      if (progressEl) {
+        progressEl.style.width = viewedPercent + '%';
+      }
+
       if (totalQuestionsCount === 0) {
-        document.getElementById('scoreBadge').innerText = "Đã xem: " + Math.round(((currentSlideIdx + 1) / SLIDES.length) * 100) + "%";
+        document.getElementById('scoreBadge').innerText = "Đã xem: " + viewedPercent + "%";
+        if (scormAPI) {
+          try {
+            scormAPI.LMSSetValue("cmi.core.score.raw", viewedPercent.toString());
+            if (viewedPercent >= 100) {
+              const curStatus = String(scormAPI.LMSGetValue("cmi.core.lesson_status") || "").toLowerCase();
+              if (curStatus !== "passed") {
+                scormAPI.LMSSetValue("cmi.core.lesson_status", "completed");
+              }
+            }
+            scormAPI.LMSCommit("");
+          } catch (e) {}
+        }
         return;
       }
 
@@ -2129,12 +2373,14 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         if (studentScores[key] === true) correctCount++;
       }
       const scorePercent = Math.round((correctCount / totalQuestionsCount) * 100);
-      document.getElementById('scoreBadge').innerText = 'Điểm: ' + scorePercent + '% (' + correctCount + '/' + totalQuestionsCount + ')';
+      document.getElementById('scoreBadge').innerText = 'Đã xem: ' + viewedPercent + '% • Điểm: ' + scorePercent + '% (' + correctCount + '/' + totalQuestionsCount + ')';
 
       if (scormAPI) {
         try {
           scormAPI.LMSSetValue("cmi.core.score.raw", scorePercent.toString());
-          if (scorePercent >= 80) {
+          if (scorePercent >= 80 && viewedPercent >= 100) {
+            scormAPI.LMSSetValue("cmi.core.lesson_status", "passed");
+          } else if (scorePercent >= 80) {
             scormAPI.LMSSetValue("cmi.core.lesson_status", "passed");
           }
           scormAPI.LMSCommit("");
@@ -2216,11 +2462,12 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       closeGateModal();
 
       currentSlideIdx = idx;
+      visitedSlides[idx] = true;
       const slide = SLIDES[idx];
 
-      // Update progress
-      const percent = Math.round(((idx + 1) / SLIDES.length) * 100);
-      document.getElementById('progressFill').style.width = percent + '%';
+      // Update slide counter & accumulated viewed progress
+      const viewedPercent = getViewedProgressPercent();
+      document.getElementById('progressFill').style.width = viewedPercent + '%';
       document.getElementById('slideCounter').innerText = 'Slide ' + (idx + 1) + ' / ' + SLIDES.length;
 
       // Update nav buttons
@@ -2848,6 +3095,17 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             \${layoutBodyHtml}
           </div>
         \`;
+      } else if (idx === 0 && IS_TUAF_FULL_TITLE) {
+        slideCard.className = 'slide-card is-title-slide is-tuaf-full-cover';
+        const coverTitleText = (slide.title && !/^slide\s*1$/i.test(String(slide.title).trim()))
+          ? slide.title
+          : (LESSON_TITLE || slide.title || '');
+        slideCard.innerHTML = \`
+          \${speakerBtnHtml ? \`<div class="tuaf-cover-speaker-wrap">\${speakerBtnHtml}</div>\` : ''}
+          <div class="tuaf-cover-stage">
+            <h1 class="tuaf-cover-heading">\${escapeHtmlClient(coverTitleText)}</h1>
+          </div>
+        \`;
       } else if (idx === 0) {
         slideCard.className = 'slide-card is-title-slide';
         const coverSubtitlesHtml = (slide.bullets && slide.bullets.length > 0)
@@ -2909,13 +3167,9 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         narrationAudio.src = '';
       }
 
-      // SCORM location update
-      if (scormAPI) {
-        try {
-          scormAPI.LMSSetValue("cmi.core.lesson_location", (idx + 1).toString());
-          scormAPI.LMSCommit("");
-        } catch (e) {}
-      }
+      // Persist SCORM progress & refresh live progress badge on every slide navigation
+      persistSCORMProgress(idx);
+      updateSCORMScore();
     }
 
     function checkAnswer(qKey, chosenEncoded, correctEncoded, btnEl, explId) {
@@ -3486,9 +3740,8 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
 
     // Start
     window.addEventListener('DOMContentLoaded', () => {
-      initSCORM();
-      renderSlide(0);
-      updateSCORMScore();
+      const initialSlideIdx = initSCORM();
+      renderSlide(initialSlideIdx);
 
       const narrationAudio = document.getElementById('narrationAudio');
       if (narrationAudio) {
@@ -3588,9 +3841,18 @@ export async function packageScormZip(
         }
     }
 
-    for (const slide of packagedSlides) {
-        // 1. Pack Slide Image into images/
-        if (slide.imageUrl) {
+    for (let sIdx = 0; sIdx < packagedSlides.length; sIdx++) {
+        const slide = packagedSlides[sIdx];
+        const isTuafFullCoverSlide =
+            opts.bgOption === 'tuaf_full' &&
+            opts.hasTitleBg &&
+            sIdx === 0 &&
+            slide.layoutType !== 'full_slide_canvas';
+
+        // 1. Pack Slide Image into images/ (suppress AI cover image on Slide 1 when using TUAF original cover #1)
+        if (isTuafFullCoverSlide) {
+            slide.imageUrl = '';
+        } else if (slide.imageUrl) {
             const localImgPath = resolveLocalMediaFile(slide.imageUrl);
             if (localImgPath) {
                 const ext = path.extname(localImgPath) || '.png';

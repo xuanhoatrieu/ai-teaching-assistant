@@ -17,7 +17,8 @@ import {
     isMatchingQuestionText,
     extractMatchPairs,
     toMoodleCategorySlug,
-    buildSingleCategoryExamMoodleXml,
+    buildExamMoodleXml,
+    type ExamMoodleCategoryMode,
     ReviewQuestionData,
     EnglishQuestionData,
     upgradeClozeToMultichoice,
@@ -2215,10 +2216,34 @@ Respond ONLY with valid JSON in the exact format below:
         return results;
     }
 
+    private filterQuestionsForExport(
+        questions: any[],
+        options?: { lessonId?: string; level?: string },
+    ): any[] {
+        let filtered = Array.isArray(questions) ? questions : [];
+        const lessonFilter = options?.lessonId?.trim();
+        if (lessonFilter && lessonFilter !== 'ALL') {
+            filtered = filtered.filter((q) => q.sourceLessonId === lessonFilter);
+        }
+        const levelFilter = options?.level?.trim();
+        if (levelFilter && ['1', '2', '3'].includes(levelFilter)) {
+            filtered = filtered.filter(
+                (q) => String(q.level || q.difficulty || 1) === levelFilter,
+            );
+        }
+        return filtered;
+    }
+
     /**
-     * Export ExamQuestionSet to Moodle XML (All questions inside 1 single Moodle Category!)
+     * Export ExamQuestionSet to Moodle XML (inheriting buildQuestionXml, buildEnglishQuestionXml,
+     * and Bloom category structure from moodle-xml.helper.ts)
      */
-    async exportMoodleXml(userId: string, id: string, res: Response): Promise<void> {
+    async exportMoodleXml(
+        userId: string,
+        id: string,
+        res: Response,
+        options?: { categoryMode?: string; lessonId?: string; level?: string },
+    ): Promise<void> {
         const examSet = await this.prisma.examQuestionSet.findUnique({
             where: { id },
         });
@@ -2226,12 +2251,25 @@ Respond ONLY with valid JSON in the exact format below:
             throw new NotFoundException('Không tìm thấy bộ đề kiểm tra.');
         }
 
-        const questions = this.safeJsonParse<any[]>(examSet.questionsJson, []);
+        const rawQuestions = this.safeJsonParse<any[]>(examSet.questionsJson, []);
+        const questions = this.filterQuestionsForExport(rawQuestions, options);
         const categorySlug = toMoodleCategorySlug(examSet.categoryName || examSet.title);
         const mode = (examSet.mode === 'ENGLISH' ? 'ENGLISH' : 'REVIEW') as 'REVIEW' | 'ENGLISH';
+        const validCategoryMode: ExamMoodleCategoryMode =
+            options?.categoryMode === 'bloom'
+                ? 'bloom'
+                : options?.categoryMode === 'lesson'
+                ? 'lesson'
+                : 'single';
 
-        const xml = buildSingleCategoryExamMoodleXml(questions, categorySlug, mode);
-        const filename = `${categorySlug}_moodle.xml`;
+        const xml = buildExamMoodleXml(questions, categorySlug, mode, validCategoryMode);
+        const modeSuffix =
+            validCategoryMode === 'bloom'
+                ? '_bloom'
+                : validCategoryMode === 'lesson'
+                ? '_by_lesson'
+                : '';
+        const filename = `${categorySlug}${modeSuffix}_moodle.xml`;
 
         res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
         res.attachment(filename);
@@ -2240,9 +2278,15 @@ Respond ONLY with valid JSON in the exact format below:
     }
 
     /**
-     * Export ExamQuestionSet to Excel (.xlsx) with Source Lesson & Source Section columns
+     * Export ExamQuestionSet to Excel (.xlsx) inheriting Lesson Question Bank format
+     * + Source Lesson/Section traceability + Bloom Matrix summary sheet
      */
-    async exportExcel(userId: string, id: string, res: Response): Promise<void> {
+    async exportExcel(
+        userId: string,
+        id: string,
+        res: Response,
+        options?: { lessonId?: string; level?: string },
+    ): Promise<void> {
         const examSet = await this.prisma.examQuestionSet.findUnique({
             where: { id },
         });
@@ -2250,7 +2294,8 @@ Respond ONLY with valid JSON in the exact format below:
             throw new NotFoundException('Không tìm thấy bộ đề kiểm tra.');
         }
 
-        const questions: any[] = this.safeJsonParse<any[]>(examSet.questionsJson, []);
+        const rawQuestions: any[] = this.safeJsonParse<any[]>(examSet.questionsJson, []);
+        const questions = this.filterQuestionsForExport(rawQuestions, options);
         const categorySlug = toMoodleCategorySlug(examSet.categoryName || examSet.title);
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Đề kiểm tra');
@@ -2258,14 +2303,15 @@ Respond ONLY with valid JSON in the exact format below:
         if (examSet.mode === 'ENGLISH') {
             worksheet.columns = [
                 { header: 'STT', key: 'order', width: 6 },
-                { header: 'Bài học nguồn', key: 'sourceLesson', width: 26 },
+                { header: 'Bài học nguồn', key: 'sourceLesson', width: 28 },
                 { header: 'Mục / Slide nguồn', key: 'sourceSection', width: 24 },
                 { header: 'Dạng câu', key: 'type', width: 12 },
-                { header: 'Mức độ', key: 'difficulty', width: 14 },
+                { header: 'Phân môn', key: 'subDiscipline', width: 18 },
+                { header: 'Mức độ', key: 'difficulty', width: 16 },
                 { header: 'Mã / Tiêu đề', key: 'title', width: 24 },
-                { header: 'Nội dung câu hỏi', key: 'questionText', width: 48 },
-                { header: 'Phương án / Đáp án', key: 'details', width: 45 },
-                { header: 'Giải thích', key: 'explanation', width: 38 },
+                { header: 'Nội dung câu hỏi', key: 'questionText', width: 50 },
+                { header: 'Phương án / Đáp án', key: 'details', width: 46 },
+                { header: 'Giải thích', key: 'explanation', width: 40 },
             ];
 
             worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -2278,7 +2324,10 @@ Respond ONLY with valid JSON in the exact format below:
             questions.forEach((q: any, idx: number) => {
                 let details = '';
                 try {
-                    const data = typeof q.dataJson === 'string' ? JSON.parse(q.dataJson) : q.dataJson || {};
+                    const data =
+                        typeof q.dataJson === 'string'
+                            ? JSON.parse(q.dataJson)
+                            : q.dataJson || {};
                     if (Array.isArray(data.options)) {
                         details = data.options
                             .map((o: any, oIdx: number) => {
@@ -2288,7 +2337,10 @@ Respond ONLY with valid JSON in the exact format below:
                             .join('\n');
                     } else if (Array.isArray(data.pairs)) {
                         details = data.pairs
-                            .map((p: any) => `${p.left ?? p.subquestion ?? ''} ➔ ${p.right ?? p.answer ?? ''}`)
+                            .map(
+                                (p: any) =>
+                                    `${p.left ?? p.subquestion ?? ''} ➔ ${p.right ?? p.answer ?? ''}`,
+                            )
                             .join('\n');
                     } else if (data.clozeText) {
                         details = data.clozeText;
@@ -2299,15 +2351,17 @@ Respond ONLY with valid JSON in the exact format below:
                     details = String(q.dataJson || '');
                 }
 
-                worksheet.addRow({
+                const lvl = Number(q.difficulty || q.level || 1);
+                const row = worksheet.addRow({
                     order: idx + 1,
                     sourceLesson: q.sourceLessonTitle || '',
                     sourceSection: q.sourceSection || '',
                     type: q.questionType || 'MC',
+                    subDiscipline: q.subDiscipline || '',
                     difficulty:
-                        q.difficulty === 1
+                        lvl === 1
                             ? 'Mức 1 (Biết)'
-                            : q.difficulty === 2
+                            : lvl === 2
                             ? 'Mức 2 (Hiểu)'
                             : 'Mức 3 (Vận dụng)',
                     title: q.title || `Q${idx + 1}`,
@@ -2315,20 +2369,26 @@ Respond ONLY with valid JSON in the exact format below:
                     details,
                     explanation: q.explanation || '',
                 });
+                row.alignment = { wrapText: true, vertical: 'top' };
             });
+
+            worksheet.autoFilter = {
+                from: { row: 1, column: 1 },
+                to: { row: 1, column: 10 },
+            };
         } else {
             worksheet.columns = [
                 { header: 'STT', key: 'stt', width: 6 },
                 { header: 'Mã câu', key: 'questionId', width: 16 },
-                { header: 'Bài học nguồn', key: 'sourceLesson', width: 26 },
+                { header: 'Bài học nguồn', key: 'sourceLesson', width: 28 },
                 { header: 'Mục / Slide nguồn', key: 'sourceSection', width: 24 },
-                { header: 'Mức độ', key: 'level', width: 15 },
-                { header: 'Câu hỏi', key: 'question', width: 48 },
-                { header: 'A (Đáp án đúng)', key: 'correctAnswer', width: 28 },
-                { header: 'Phương án B', key: 'optionB', width: 28 },
-                { header: 'Phương án C', key: 'optionC', width: 28 },
-                { header: 'Phương án D', key: 'optionD', width: 28 },
-                { header: 'Giải thích chi tiết', key: 'explanation', width: 40 },
+                { header: 'Mức độ', key: 'level', width: 16 },
+                { header: 'Câu hỏi', key: 'question', width: 50 },
+                { header: 'A (Đáp án đúng)', key: 'correctAnswer', width: 30 },
+                { header: 'Phương án B', key: 'optionB', width: 30 },
+                { header: 'Phương án C', key: 'optionC', width: 30 },
+                { header: 'Phương án D', key: 'optionD', width: 30 },
+                { header: 'Giải thích chi tiết', key: 'explanation', width: 42 },
             ];
 
             worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -2339,26 +2399,121 @@ Respond ONLY with valid JSON in the exact format below:
             };
 
             questions.forEach((q: any, idx: number) => {
-                worksheet.addRow({
+                const lvl = Number(q.level || q.difficulty || 1);
+                const cleanA = stripOptionPrefix(String(q.correctAnswer || ''));
+                const cleanB = stripOptionPrefix(String(q.optionB || ''));
+                const cleanC = stripOptionPrefix(String(q.optionC || ''));
+                const cleanD = stripOptionPrefix(String(q.optionD || ''));
+                const cleanExp = cleanExplanation(String(q.explanation || ''));
+                const row = worksheet.addRow({
                     stt: idx + 1,
                     questionId: q.questionId || `Q${idx + 1}`,
                     sourceLesson: q.sourceLessonTitle || '',
                     sourceSection: q.sourceSection || '',
                     level:
-                        q.level === 1
+                        lvl === 1
                             ? 'Mức 1 (Biết)'
-                            : q.level === 2
+                            : lvl === 2
                             ? 'Mức 2 (Hiểu)'
                             : 'Mức 3 (Vận dụng)',
                     question: q.question || '',
-                    correctAnswer: q.correctAnswer || '',
-                    optionB: q.optionB || '',
-                    optionC: q.optionC || '',
-                    optionD: q.optionD || '',
-                    explanation: q.explanation || '',
+                    correctAnswer: cleanA,
+                    optionB: cleanB,
+                    optionC: cleanC,
+                    optionD: cleanD,
+                    explanation: cleanExp,
                 });
+                row.alignment = { wrapText: true, vertical: 'top' };
+            });
+
+            worksheet.autoFilter = {
+                from: { row: 1, column: 1 },
+                to: { row: 1, column: 11 },
+            };
+
+            // Sheet 2: Inherit exact 7-column Review Import Template schema for direct re-import compatibility
+            const importSheet = workbook.addWorksheet('Chuẩn Import Ôn tập');
+            importSheet.columns = [
+                { header: 'Level', key: 'level', width: 8 },
+                { header: 'Question', key: 'question', width: 50 },
+                { header: 'Correct Answer (A)', key: 'correctAnswer', width: 30 },
+                { header: 'Option B', key: 'optionB', width: 30 },
+                { header: 'Option C', key: 'optionC', width: 30 },
+                { header: 'Option D', key: 'optionD', width: 30 },
+                { header: 'Explanation', key: 'explanation', width: 40 },
+            ];
+            importSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+            importSheet.getRow(1).fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF4472C4' },
+            };
+            questions.forEach((q: any) => {
+                const row = importSheet.addRow({
+                    level: Number(q.level || q.difficulty || 1),
+                    question: q.question || '',
+                    correctAnswer: stripOptionPrefix(String(q.correctAnswer || '')),
+                    optionB: stripOptionPrefix(String(q.optionB || '')),
+                    optionC: stripOptionPrefix(String(q.optionC || '')),
+                    optionD: stripOptionPrefix(String(q.optionD || '')),
+                    explanation: cleanExplanation(String(q.explanation || '')),
+                });
+                row.alignment = { wrapText: true, vertical: 'top' };
             });
         }
+
+        // Summary Matrix Sheet: Lesson x Bloom Level (1/2/3)
+        const matrixSheet = workbook.addWorksheet('Ma trận đề kiểm tra');
+        matrixSheet.columns = [
+            { header: 'Bài học nguồn', key: 'lesson', width: 38 },
+            { header: 'Mức 1 (Biết)', key: 'l1', width: 15 },
+            { header: 'Mức 2 (Hiểu)', key: 'l2', width: 15 },
+            { header: 'Mức 3 (Vận dụng)', key: 'l3', width: 18 },
+            { header: 'Tổng số câu', key: 'total', width: 15 },
+        ];
+        matrixSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        matrixSheet.getRow(1).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF2E75B6' },
+        };
+
+        const matrixMap = new Map<string, { l1: number; l2: number; l3: number }>();
+        for (const q of questions) {
+            const lessonLabel = String(q.sourceLessonTitle || 'Bài học').trim();
+            const lvl = Number(q.level || q.difficulty || 1);
+            if (!matrixMap.has(lessonLabel)) {
+                matrixMap.set(lessonLabel, { l1: 0, l2: 0, l3: 0 });
+            }
+            const entry = matrixMap.get(lessonLabel)!;
+            if (lvl === 3) entry.l3 += 1;
+            else if (lvl === 2) entry.l2 += 1;
+            else entry.l1 += 1;
+        }
+
+        let sumL1 = 0;
+        let sumL2 = 0;
+        let sumL3 = 0;
+        for (const [lessonLabel, counts] of matrixMap.entries()) {
+            sumL1 += counts.l1;
+            sumL2 += counts.l2;
+            sumL3 += counts.l3;
+            matrixSheet.addRow({
+                lesson: lessonLabel,
+                l1: counts.l1,
+                l2: counts.l2,
+                l3: counts.l3,
+                total: counts.l1 + counts.l2 + counts.l3,
+            });
+        }
+        const totalRow = matrixSheet.addRow({
+            lesson: 'TỔNG CỘNG TOÀN ĐỀ',
+            l1: sumL1,
+            l2: sumL2,
+            l3: sumL3,
+            total: sumL1 + sumL2 + sumL3,
+        });
+        totalRow.font = { bold: true };
 
         const filename = `${categorySlug}_exam_questions.xlsx`;
         res.setHeader(

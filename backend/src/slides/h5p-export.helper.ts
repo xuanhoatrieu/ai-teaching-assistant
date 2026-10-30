@@ -93,10 +93,15 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
     const isDarkTheme = options?.theme === 'dark';
     const isMinimal = options?.bgOption === 'minimal';
     const isTuafBranded = !options?.bgOption || options?.bgOption === 'tuaf_clean' || options?.bgOption === 'tuaf_full';
+    const isTuafFullTitle = options?.bgOption === 'tuaf_full' && Boolean(options?.hasTitleBg);
+    const isTuafFullContent = options?.bgOption === 'tuaf_full' && Boolean(options?.hasContentBg);
+    const useLightBodySurface = !isDarkTheme || isTuafFullContent;
     const titleColor = isDarkTheme ? '#52b788' : '#005a36';
-    const pointColor = isDarkTheme ? '#ffffff' : '#0f172a';
-    const descColor = isDarkTheme ? '#cbd5e1' : '#334155';
-    const textColor = isDarkTheme ? '#f8fafc' : '#1e293b';
+    const pointColor = useLightBodySurface ? '#0f172a' : '#ffffff';
+    const descColor = useLightBodySurface ? '#334155' : '#cbd5e1';
+    const textColor = useLightBodySurface ? '#1e293b' : '#f8fafc';
+    const bodyTopY = isTuafFullContent ? 17 : 14;
+    const bodyHeight = isTuafFullContent ? 79 : 82;
 
     const h5pSlides = slides.map((s, idx) => {
         const elements: any[] = [];
@@ -146,8 +151,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 }));
         }
 
+        const suppressCoverAiImage = isTuafFullTitle && idx === 0 && layoutType !== 'full_slide_canvas';
         const hasBullets = bullets.length > 0;
-        const hasImage = !!s.h5pImagePath;
+        const hasImage = !suppressCoverAiImage && !!s.h5pImagePath;
         const hasAudio = !!s.h5pAudioPath;
         const hasSampleAudio = !!s.h5pSampleAudioPath;
         const slideTitleText = s.title || `Slide ${s.slideIndex}`;
@@ -176,11 +182,12 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         };
 
         // Helper: Compact top-right Narration Audio Button (dynamic MIME)
-        const addNarrationAudioButton = () => {
+        const addNarrationAudioButton = (customY?: number) => {
             if (!hasAudio) return;
+            const audioY = customY !== undefined ? customY : (isTuafFullContent && idx > 0 ? 4.5 : 2.5);
             elements.push({
                 x: 93.5,
-                y: 2.5,
+                y: audioY,
                 width: 4,
                 height: 6,
                 action: {
@@ -390,6 +397,34 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             };
         }
 
+        // Special Layout for Slide 1 with TUAF Original Cover Background #1 (tuaf_full):
+        // Suppress AI image, badge, and subtitles; display ONLY lesson title centered in middle green stage (matching PPTX _add_title_slide)
+        if (idx === 0 && isTuafFullTitle && !hasQuiz) {
+            const coverTitleText = (s.title && !/^slide\s*1$/i.test(String(s.title).trim()))
+                ? s.title
+                : (lessonTitle || slideTitleText);
+
+            elements.push({
+                x: 10,
+                y: 34,
+                width: 76,
+                height: 32,
+                action: {
+                    library: 'H5P.AdvancedText 1.1',
+                    params: {
+                        text: `<div style="height: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; background: transparent; font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                            <h1 style="margin: 0; padding: 0; font-size: 2.35em; line-height: 1.3; color: #ffffff; font-weight: 700; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);">${escapeHtml(coverTitleText)}</h1>
+                        </div>`
+                    },
+                    subContentId: `title_${idx}`
+                }
+            });
+
+            addNarrationAudioButton(23.5);
+
+            return { elements, keywords: [{ main: coverTitleText }] };
+        }
+
         // Special Layout for Slide 1 (idx === 0: Traditional Cover / Title Slide when no quiz is attached)
         if (idx === 0 && !hasQuiz) {
             const badgeBg = isDarkTheme ? 'rgba(45, 106, 79, 0.35)' : 'rgba(0, 90, 54, 0.12)';
@@ -432,20 +467,38 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             return { elements, keywords: [{ main: slideTitleText }] };
         }
 
-        // 3. Slide Title (Single-line clean header for content slides)
-        elements.push({
-            x: 3,
-            y: 3,
-            width: hasAudio ? 89 : 94,
-            height: 8,
-            action: {
-                library: 'H5P.AdvancedText 1.1',
-                params: {
-                    text: `<h2 style="margin: 0; padding: 0; font-size: 1.3em; line-height: 1.25; color: ${titleColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700;">${escapeHtml(slideTitleText)}</h2>`
-                },
-                subContentId: `title_${idx}`
-            }
-        });
+        // 3. Slide Title (For tuaf_full content slides: transparent box, white centered text aligned inside top green banner 0..15.46%)
+        if (isTuafFullContent) {
+            elements.push({
+                x: 9,
+                y: 2.2,
+                width: 82,
+                height: 11,
+                action: {
+                    library: 'H5P.AdvancedText 1.1',
+                    params: {
+                        text: `<div style="height: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; background: transparent;">
+                            <h2 style="margin: 0; padding: 0; font-size: 1.4em; line-height: 1.25; color: #ffffff; font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700; text-align: center;">${escapeHtml(slideTitleText)}</h2>
+                        </div>`
+                    },
+                    subContentId: `title_${idx}`
+                }
+            });
+        } else {
+            elements.push({
+                x: 3,
+                y: 3,
+                width: hasAudio ? 89 : 94,
+                height: 8,
+                action: {
+                    library: 'H5P.AdvancedText 1.1',
+                    params: {
+                        text: `<h2 style="margin: 0; padding: 0; font-size: 1.3em; line-height: 1.25; color: ${titleColor}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-weight: 700;">${escapeHtml(slideTitleText)}</h2>`
+                    },
+                    subContentId: `title_${idx}`
+                }
+            });
+        }
 
         // 4. Narration Audio Button (Compact top-right icon, not stretched)
         addNarrationAudioButton();
@@ -482,9 +535,12 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         // 6. Layout Routing based on layoutType:
         if (layoutType === 'checkpoint_gate' || (hasQuiz && isCheckpoint)) {
             // Layout 1: Checkpoint Gate (Full-width Mastery Gate)
+            const gateTopY = isTuafFullContent ? 17 : 13;
+            const gateQuizY = isTuafFullContent ? 28 : 25;
+            const gateQuizH = isTuafFullContent ? 68 : 71;
             elements.push({
                 x: 6,
-                y: 13,
+                y: gateTopY,
                 width: 88,
                 height: 10,
                 action: {
@@ -499,13 +555,16 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                     subContentId: `gate_banner_${idx}`
                 }
             });
-            addQuizElement(6, 25, 88, 71);
+            addQuizElement(6, gateQuizY, 88, gateQuizH);
 
         } else if (layoutType === 'audio_lab' || hasSampleAudio) {
             // Layout 2: Audio Lab (Central sample audio + prompt/quiz)
+            const audioBarY = bodyTopY;
+            const audioContentY = bodyTopY + 11;
+            const audioContentH = 95 - audioContentY;
             elements.push({
                 x: 8,
-                y: 14,
+                y: audioBarY,
                 width: 84,
                 height: 9,
                 action: {
@@ -525,22 +584,22 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             if (hasQuiz) {
                 elements.push({
                     x: 8,
-                    y: 25,
+                    y: audioContentY,
                     width: 42,
-                    height: 70,
+                    height: audioContentH,
                     action: {
                         library: 'H5P.AdvancedText 1.1',
                         params: { text: contentHtml },
                         subContentId: `content_${idx}`
                     }
                 });
-                addQuizElement(52, 25, 42, 70);
+                addQuizElement(52, audioContentY, 42, audioContentH);
             } else {
                 elements.push({
                     x: 8,
-                    y: 25,
+                    y: audioContentY,
                     width: 84,
-                    height: 70,
+                    height: audioContentH,
                     action: {
                         library: 'H5P.AdvancedText 1.1',
                         params: { text: contentHtml },
@@ -551,12 +610,12 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
 
         } else if (layoutType === 'split_reversed') {
             // Layout 3: Split Reversed (Left Image, Right Text)
-            addImageElement(4, 14, 45, 82);
+            addImageElement(4, bodyTopY, 45, bodyHeight);
             elements.push({
                 x: 51,
-                y: 14,
+                y: bodyTopY,
                 width: 45,
-                height: 82,
+                height: bodyHeight,
                 action: {
                     library: 'H5P.AdvancedText 1.1',
                     params: { text: contentHtml },
@@ -587,9 +646,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
 
             elements.push({
                 x: 4,
-                y: 14,
+                y: bodyTopY,
                 width: 92,
-                height: 82,
+                height: bodyHeight,
                 action: {
                     library: 'H5P.AdvancedText 1.1',
                     params: { text: comparisonHtml },
@@ -600,12 +659,14 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         } else if (layoutType === 'hero_infographic') {
             // Layout 5: Hero Infographic (Large visual on top, takeaway bullets below)
             if (hasImage) {
-                addImageElement(6, 14, 88, 50);
+                const heroImgH = isTuafFullContent ? 48 : 50;
+                const heroTextY = bodyTopY + heroImgH + 2;
+                addImageElement(6, bodyTopY, 88, heroImgH);
                 elements.push({
                     x: 6,
-                    y: 66,
+                    y: heroTextY,
                     width: 88,
-                    height: 30,
+                    height: 96 - heroTextY,
                     action: {
                         library: 'H5P.AdvancedText 1.1',
                         params: { text: contentHtml },
@@ -615,9 +676,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             } else {
                 elements.push({
                     x: 6,
-                    y: 14,
+                    y: bodyTopY,
                     width: 88,
-                    height: 82,
+                    height: bodyHeight,
                     action: {
                         library: 'H5P.AdvancedText 1.1',
                         params: { text: contentHtml },
@@ -652,9 +713,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
 
             elements.push({
                 x: 4,
-                y: 14,
+                y: bodyTopY,
                 width: hasImage ? 46 : 92,
-                height: 82,
+                height: bodyHeight,
                 action: {
                     library: 'H5P.AdvancedText 1.1',
                     params: { text: timelineHtml },
@@ -663,7 +724,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             });
 
             if (hasImage) {
-                addImageElement(52, 14, 44, 82);
+                addImageElement(52, bodyTopY, 44, bodyHeight);
             }
 
         } else {
@@ -672,43 +733,43 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 if (hasBullets) {
                     elements.push({
                         x: 4,
-                        y: 14,
+                        y: bodyTopY,
                         width: 46,
-                        height: 82,
+                        height: bodyHeight,
                         action: {
                             library: 'H5P.AdvancedText 1.1',
                             params: { text: contentHtml },
                             subContentId: `content_${idx}`
                         }
                     });
-                    addQuizElement(52, 14, 44, 82);
+                    addQuizElement(52, bodyTopY, 44, bodyHeight);
                 } else if (hasImage) {
-                    addImageElement(4, 14, 46, 82);
-                    addQuizElement(52, 14, 44, 82);
+                    addImageElement(4, bodyTopY, 46, bodyHeight);
+                    addQuizElement(52, bodyTopY, 44, bodyHeight);
                 } else {
-                    addQuizElement(6, 14, 88, 82);
+                    addQuizElement(6, bodyTopY, 88, bodyHeight);
                 }
             } else if (hasBullets && hasImage) {
                 elements.push({
                     x: 4,
-                    y: 14,
+                    y: bodyTopY,
                     width: 46,
-                    height: 82,
+                    height: bodyHeight,
                     action: {
                         library: 'H5P.AdvancedText 1.1',
                         params: { text: contentHtml },
                         subContentId: `content_${idx}`
                     }
                 });
-                addImageElement(52, 14, 44, 82);
+                addImageElement(52, bodyTopY, 44, bodyHeight);
             } else if (hasImage) {
-                addImageElement(8, 14, 84, 82);
+                addImageElement(8, bodyTopY, 84, bodyHeight);
             } else if (hasBullets) {
                 elements.push({
                     x: 10,
-                    y: 14,
+                    y: bodyTopY,
                     width: 80,
-                    height: 82,
+                    height: bodyHeight,
                     action: {
                         library: 'H5P.AdvancedText 1.1',
                         params: { text: contentHtml },
@@ -798,7 +859,70 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         presentation: {
             slides: h5pSlides,
             keywordListEnabled: true,
+            keywordListAlwaysShow: false,
+            keywordListAutoHide: false,
+            keywordListOpacity: 90,
             globalBackgroundSelector
+        },
+        override: {
+            activeSurface: false,
+            hideSummarySlide: false,
+            summarySlideSolutionButton: true,
+            summarySlideRetryButton: true,
+            enablePrintButton: false,
+            social: {
+                showFacebookShare: false,
+                showTwitterShare: false,
+                showGoogleShare: false
+            }
+        },
+        l10n: {
+            slide: 'Trang',
+            score: 'Điểm',
+            yourScore: 'Điểm của bạn',
+            maxScore: 'Điểm tối đa',
+            total: 'Tổng cộng',
+            totalScore: 'Tổng điểm',
+            showSolutions: 'Xem đáp án',
+            retry: 'Làm lại',
+            exportAnswers: 'Xuất câu trả lời',
+            hideKeywords: 'Ẩn mục lục slide',
+            showKeywords: 'Hiện mục lục slide',
+            fullscreen: 'Toàn màn hình',
+            exitFullscreen: 'Thoát toàn màn hình',
+            prevSlide: 'Slide trước',
+            nextSlide: 'Slide tiếp theo',
+            currentSlide: 'Slide hiện tại',
+            lastSlide: 'Slide cuối cùng',
+            solutionModeTitle: 'Thoát chế độ xem đáp án',
+            solutionModeText: 'Chế độ xem đáp án',
+            summaryMultipleTaskText: 'Nhiều bài tập',
+            scoreMessage: 'Bạn đạt :achieved trên :max điểm',
+            shareFacebook: 'Chia sẻ Facebook',
+            shareTwitter: 'Chia sẻ Twitter',
+            shareGoogle: 'Chia sẻ Google+',
+            summary: 'Tổng kết bài học',
+            solutionsButtonTitle: 'Xem lời giải',
+            printTitle: 'In bài giảng',
+            printIngress: 'Bạn muốn in bài giảng này như thế nào?',
+            printAllSlides: 'In toàn bộ slide',
+            printCurrentSlide: 'In slide hiện tại',
+            noTitle: 'Không có tiêu đề',
+            accessibilitySlideNavigationExplanation: 'Dùng phím mũi tên trái và phải để chuyển slide',
+            accessibilityCanvasLabel: 'Khung trình chiếu bài giảng. Dùng mũi tên trái và phải để chuyển slide.',
+            accessibilityProgressBarLabel: 'Chọn slide để hiển thị',
+            containsNotCompleted: '@slideName có bài tập tương tác chưa hoàn thành',
+            containsCompleted: '@slideName có bài tập tương tác đã hoàn thành',
+            slideCount: 'Slide @index / @total',
+            containsOnlyCorrect: '@slideName đã trả lời đúng toàn bộ',
+            containsIncorrectAnswers: '@slideName có câu trả lời chưa đúng',
+            shareResult: 'Chia sẻ kết quả',
+            accessibilityTotalScore: 'Bạn đạt tổng cộng @score trên @maxScore điểm',
+            accessibilityEnteredFullscreen: 'Đã vào chế độ toàn màn hình',
+            accessibilityExitedFullscreen: 'Đã thoát chế độ toàn màn hình',
+            confirmDialogHeader: 'Nộp câu trả lời của bạn?',
+            confirmDialogText: 'Thao tác này sẽ nộp kết quả làm bài của bạn, bạn có muốn tiếp tục?',
+            confirmDialogConfirmText: 'Nộp bài và xem kết quả'
         }
     }, null, 2);
 }
@@ -838,9 +962,16 @@ export async function packageH5pZip(
         }
     }
 
-    for (const slide of packagedSlides) {
-        // 1. Pack Slide Image into content/images/
-        if (slide.imageUrl) {
+    for (let sIdx = 0; sIdx < packagedSlides.length; sIdx++) {
+        const slide = packagedSlides[sIdx];
+        const isTuafFullCoverSlide =
+            opts.bgOption === 'tuaf_full' &&
+            opts.hasTitleBg &&
+            sIdx === 0 &&
+            slide.layoutType !== 'full_slide_canvas';
+
+        // 1. Pack Slide Image into content/images/ (suppress AI cover image on Slide 1 when using TUAF original cover #1)
+        if (!isTuafFullCoverSlide && slide.imageUrl) {
             const localImgPath = resolveLocalMediaFile(slide.imageUrl);
             if (localImgPath) {
                 const ext = path.extname(localImgPath) || '.png';

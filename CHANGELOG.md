@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.6.19] - 2026-10-30 - Exam Moodle XML/Excel Export & SCORM/H5P TUAF Original Background Parity + Progress Fix (US-032, US-033)
+
+### Added & Fixed
+- **Exam Set Moodle XML & Multi-Sheet Excel (`.xlsx`) Export Inheritance (`US-032`)**:
+  - Extended `moodle-xml.helper.ts`, `ExamSetService`, `ExamSetController`, and `ExamManagerPanel.tsx` so generated exam sets support 3 Moodle XML category modes (`single`, `bloom`, `lesson`) plus filtered export by lesson/Bloom level, and fixed English multi-lesson exam question name collisions (`B1-MC-C01` -> `B01-MC-01`).
+  - Added 3-worksheet Excel (`.xlsx`) export (`Đề kiểm tra`, `Chuẩn Import Ôn tập` 7-column LMS import format, and `Ma trận đề kiểm tra` by lesson × Bloom level) with persistent quick-export action buttons across the Exam Manager header, set pills, and preview toolbar.
+- **SCORM 1.2 & H5P TUAF Original Background (`tuaf_full`) PPTX Layout Parity (`US-033`)**:
+  - Guaranteed `tuaf_full` always resolves the TUAF system default template (`title_bg.png` + `content_bg.png`) across `SlidesService` and `PptxAudioToolService`.
+  - **Cover Slide (Slide 1)**: Suppressed AI-generated cover illustration images, translucent white cards, badges, and subtitle bullets; rendered only the centered bold white (`#ffffff`, Arial) lesson title over TUAF background #1 (`title_bg.png`) matching PowerPoint `_add_title_slide`.
+  - **Content Slides (Slide 2+)**: Removed header background box/border (`background: transparent`) and centered bold white (`#ffffff`) slide titles directly inside the top green banner (`0%..15.46%` / `1920×167px`) of TUAF background #2 (`content_bg.png`) matching PowerPoint `_add_content_slide_v2`.
+- **SCORM 1.2 & H5P Learner Progress Tracking Fix (`US-033`)**:
+  - Fixed SCORM 1.2 `#scoreBadge` freezing at `"Đã xem: 3%"` on ~33-slide decks by tracking accumulated `visitedSlides`, persisting/resuming via `cmi.suspend_data` & `cmi.core.lesson_location` (without overwriting existing `"completed"`/`"passed"` status), calling `updateSCORMScore()` on every `renderSlide()`, and syncing `cmi.core.score.raw` + automatic `"completed"` status to Moodle LMS upon 100% slide viewing; added full `override` and Vietnamese `l10n` metadata to H5P `content.json` (40/40 Jest unit tests passing).
+
 ## [v1.6.18] - 2026-10-30 - Unified Subject Lesson Discovery & Per-Lesson Multi-Source + Question Bank Exam Generator (US-031)
 
 ### Added & Changed

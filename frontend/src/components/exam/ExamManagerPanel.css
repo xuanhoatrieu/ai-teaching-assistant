@@ -34,6 +34,35 @@
     line-height: 1.45;
 }
 
+.exam-top-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+.exam-export-mode-select {
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(245, 158, 11, 0.45);
+    border-radius: 8px;
+    padding: 8px 10px;
+    color: #fde68a;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.exam-export-mode-select:focus {
+    outline: none;
+    border-color: #f59e0b;
+}
+
+.exam-export-mode-select:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .exam-sets-bar {
     display: flex;
     flex-wrap: wrap;
@@ -41,14 +70,32 @@
     align-items: center;
 }
 
+.exam-set-pill-group {
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(30, 41, 59, 0.85);
+    transition: all 0.18s ease;
+}
+
+.exam-set-pill-group:hover {
+    border-color: rgba(99, 102, 241, 0.6);
+}
+
+.exam-set-pill-group.active {
+    border-color: #6366f1;
+    background: rgba(79, 70, 229, 0.18);
+}
+
 .exam-set-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 14px;
-    background: rgba(30, 41, 59, 0.85);
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    border-radius: 10px;
+    padding: 9px 13px;
+    background: transparent;
+    border: none;
     color: #cbd5e1;
     font-size: 0.88rem;
     cursor: pointer;
@@ -56,15 +103,51 @@
 }
 
 .exam-set-pill:hover {
-    border-color: rgba(99, 102, 241, 0.6);
-    background: rgba(51, 65, 85, 0.9);
+    background: rgba(51, 65, 85, 0.65);
 }
 
 .exam-set-pill.active {
     background: rgba(79, 70, 229, 0.22);
-    border-color: #6366f1;
     color: #fff;
     font-weight: 600;
+}
+
+.exam-set-pill-mini-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 9px;
+    border: none;
+    border-left: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.55);
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+
+.exam-set-pill-mini-btn.xml {
+    color: #fcd34d;
+}
+
+.exam-set-pill-mini-btn.xml:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.24);
+    color: #fef3c7;
+}
+
+.exam-set-pill-mini-btn.excel {
+    color: #6ee7b7;
+}
+
+.exam-set-pill-mini-btn.excel:hover:not(:disabled) {
+    background: rgba(16, 185, 129, 0.24);
+    color: #d1fae5;
+}
+
+.exam-set-pill-mini-btn:disabled {
+    opacity: 0.5;
+    cursor: wait;
 }
 
 .exam-set-pill .pill-badge {
@@ -450,6 +533,7 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    align-items: center;
 }
 
 .btn-exam-action {
@@ -464,6 +548,12 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    transition: all 0.16s ease;
+}
+
+.btn-exam-action:disabled {
+    opacity: 0.48;
+    cursor: not-allowed;
 }
 
 .btn-exam-action.moodle {
@@ -472,10 +562,22 @@
     color: #fcd34d;
 }
 
+.btn-exam-action.moodle:hover:not(:disabled) {
+    background: rgba(245, 158, 11, 0.32);
+    border-color: #f59e0b;
+    color: #fef3c7;
+}
+
 .btn-exam-action.excel {
     background: rgba(16, 185, 129, 0.18);
     border-color: rgba(16, 185, 129, 0.55);
     color: #6ee7b7;
+}
+
+.btn-exam-action.excel:hover:not(:disabled) {
+    background: rgba(16, 185, 129, 0.32);
+    border-color: #10b981;
+    color: #d1fae5;
 }
 
 .btn-exam-action.append {
@@ -484,10 +586,34 @@
     color: #a5b4fc;
 }
 
+.btn-exam-action.append:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.35);
+    border-color: #818cf8;
+    color: #e0e7ff;
+}
+
 .btn-exam-action.danger {
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.45);
     color: #fca5a5;
+}
+
+.btn-exam-action.danger:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.28);
+    border-color: #ef4444;
+    color: #fee2e2;
+}
+
+.exam-secondary-export-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: rgba(30, 41, 59, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.18);
 }
 
 .exam-filter-bar {

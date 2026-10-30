@@ -1,9 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
+import { api } from '../../lib/api';
+import { filenameFromDisposition } from '../../lib/download-filename';
 import {
     examSetsApi,
     type ExamLessonOverviewItem,
     type ExamSetSummary,
     type ExamSetDetail,
+    type ExamMoodleCategoryMode,
 } from '../../lib/exam-sets-api';
 import { useJobPolling } from '../../hooks/useJobPolling';
 import { ModelSelector } from '../ModelSelector';
@@ -117,6 +120,11 @@ export function ExamManagerPanel({
     // Delete Exam Set confirmation modal
     const [confirmDeleteSetId, setConfirmDeleteSetId] = useState<string | null>(null);
 
+    // Export state (inherited from Step6QuestionBank Moodle XML & Excel export pattern)
+    const [moodleCategoryMode, setMoodleCategoryMode] = useState<ExamMoodleCategoryMode>('single');
+    const [exportingXmlId, setExportingXmlId] = useState<string | null>(null);
+    const [exportingExcelId, setExportingExcelId] = useState<string | null>(null);
+
     // Job polling
     const generateJob = useJobPolling({
         onComplete: async (status) => {
@@ -140,8 +148,19 @@ export function ExamManagerPanel({
     );
 
     useEffect(() => {
-        if (subjectId || pptxSubjectId) {
+        const ownerScopeId = subjectId || pptxSubjectId;
+        if (ownerScopeId) {
             fetchOverviewAndSets();
+            // Auto-resume background exam generation job if user switched tabs
+            api.get('/generation-jobs/active', {
+                params: { lessonId: ownerScopeId, type: 'exam-questions' },
+            })
+                .then((res) => {
+                    if (res.data?.id) {
+                        generateJob.startPolling(res.data.id);
+                    }
+                })
+                .catch(() => {});
         }
     }, [subjectId, pptxSubjectId]);
 
@@ -396,45 +415,152 @@ export function ExamManagerPanel({
         }
     };
 
-    const handleExportMoodleXml = async () => {
-        if (!activeExamSet) return;
+    const defaultExportTargetSet: ExamSetSummary | ExamSetDetail | null =
+        activeExamSet || (examSets.length > 0 ? examSets[0] : null);
+
+    const extractBlobErrorMessage = async (err: any, fallback: string): Promise<string> => {
         try {
-            const res = await examSetsApi.exportMoodleXml(activeExamSet.id);
+            const data = err?.response?.data;
+            if (data instanceof Blob) {
+                const rawText = await data.text();
+                const parsed = JSON.parse(rawText);
+                if (parsed?.message) {
+                    return Array.isArray(parsed.message)
+                        ? parsed.message.join(', ')
+                        : String(parsed.message);
+                }
+            } else if (err?.response?.data?.message) {
+                return String(err.response.data.message);
+            }
+        } catch {
+            // fallback below
+        }
+        return fallback;
+    };
+
+    const formatMoodleCategoryPath = (slugRaw: string): string => {
+        const slug = toClientCategorySlug(slugRaw);
+        if (moodleCategoryMode === 'bloom') {
+            return `$course$/top/${slug}/muc_1_biet | muc_2_hieu | muc_3_van_dung`;
+        }
+        if (moodleCategoryMode === 'lesson') {
+            return `$course$/top/${slug}/{Bai_hoc_nguon}`;
+        }
+        return `$course$/top/${slug}`;
+    };
+
+    const handleExportMoodleXml = async (
+        targetSet?: ExamSetSummary | ExamSetDetail | null,
+        options?: { useActiveFilter?: boolean },
+    ) => {
+        const setToExport = targetSet || defaultExportTargetSet;
+        if (!setToExport) {
+            setBannerMessage({
+                type: 'error',
+                text: '⚠️ Chưa có bộ đề kiểm tra nào để xuất Moodle XML. Vui lòng tạo bộ đề trước.',
+            });
+            return;
+        }
+        try {
+            setExportingXmlId(setToExport.id);
+            const params = {
+                categoryMode: moodleCategoryMode,
+                ...(options?.useActiveFilter && filterLessonId !== 'ALL'
+                    ? { lessonId: filterLessonId }
+                    : {}),
+                ...(options?.useActiveFilter && filterLevel !== 'ALL'
+                    ? { level: filterLevel }
+                    : {}),
+            };
+            const res = await examSetsApi.exportMoodleXml(setToExport.id, params);
+            const fallbackName = `${toClientCategorySlug(
+                setToExport.categoryName || setToExport.name,
+            )}_moodle.xml`;
+            const filename = filenameFromDisposition(
+                res.headers?.['content-disposition'],
+                fallbackName,
+                '.xml',
+            );
             const url = window.URL.createObjectURL(
                 new Blob([res.data], { type: 'application/xml; charset=utf-8' }),
             );
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${activeExamSet.categoryName}_moodle.xml`;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             a.remove();
             window.URL.revokeObjectURL(url);
-        } catch {
+            setBannerMessage({
+                type: 'success',
+                text: `✓ Đã xuất file Moodle XML (${filename}) thành công!`,
+            });
+        } catch (err: any) {
+            const msg = await extractBlobErrorMessage(err, 'Không thể xuất file Moodle XML.');
             setBannerMessage({
                 type: 'error',
-                text: 'Không thể xuất file Moodle XML.',
+                text: `❌ ${msg}`,
             });
+        } finally {
+            setExportingXmlId(null);
         }
     };
 
-    const handleExportExcel = async () => {
-        if (!activeExamSet) return;
+    const handleExportExcel = async (
+        targetSet?: ExamSetSummary | ExamSetDetail | null,
+        options?: { useActiveFilter?: boolean },
+    ) => {
+        const setToExport = targetSet || defaultExportTargetSet;
+        if (!setToExport) {
+            setBannerMessage({
+                type: 'error',
+                text: '⚠️ Chưa có bộ đề kiểm tra nào để xuất Excel (.xlsx). Vui lòng tạo bộ đề trước.',
+            });
+            return;
+        }
         try {
-            const res = await examSetsApi.exportExcel(activeExamSet.id);
-            const url = window.URL.createObjectURL(new Blob([res.data]));
+            setExportingExcelId(setToExport.id);
+            const params = {
+                ...(options?.useActiveFilter && filterLessonId !== 'ALL'
+                    ? { lessonId: filterLessonId }
+                    : {}),
+                ...(options?.useActiveFilter && filterLevel !== 'ALL'
+                    ? { level: filterLevel }
+                    : {}),
+            };
+            const res = await examSetsApi.exportExcel(setToExport.id, params);
+            const fallbackName = `${toClientCategorySlug(
+                setToExport.categoryName || setToExport.name,
+            )}_exam_questions.xlsx`;
+            const filename = filenameFromDisposition(
+                res.headers?.['content-disposition'],
+                fallbackName,
+                '.xlsx',
+            );
+            const url = window.URL.createObjectURL(
+                new Blob([res.data], {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                }),
+            );
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${activeExamSet.categoryName}_exam_questions.xlsx`;
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             a.remove();
             window.URL.revokeObjectURL(url);
-        } catch {
+            setBannerMessage({
+                type: 'success',
+                text: `✓ Đã xuất file Excel (${filename}) kèm Ma trận đề kiểm tra thành công!`,
+            });
+        } catch (err: any) {
+            const msg = await extractBlobErrorMessage(err, 'Không thể xuất file Excel (.xlsx).');
             setBannerMessage({
                 type: 'error',
-                text: 'Không thể xuất file Excel (.xlsx).',
+                text: `❌ ${msg}`,
             });
+        } finally {
+            setExportingExcelId(null);
         }
     };
 
@@ -545,7 +671,7 @@ export function ExamManagerPanel({
         <div className="exam-manager-panel">
             {/* Header */}
             <div className="exam-panel-top-header">
-                <div>
+                <div style={{ flex: 1, minWidth: 280 }}>
                     <h2>
                         📝 Tạo Bộ Câu Hỏi Kiểm Tra Theo Nhóm Bài Học
                         {subjectName ? ` — ${subjectName}` : ''}
@@ -557,17 +683,68 @@ export function ExamManagerPanel({
                             100% nguồn dữ liệu bài học (Giáo trình, Slide, Lời giảng, Đề cương, Handout,
                             Tài liệu TK) + Ngân hàng câu hỏi của từng bài
                         </strong>{' '}
-                        để sinh mới 100% câu hỏi nằm trọn trong giới hạn các bài đã chọn và gom vào{' '}
-                        <strong>1 Category Moodle duy nhất</strong>.
+                        để sinh mới 100% câu hỏi nằm trọn trong giới hạn các bài đã chọn, xuất trực tiếp{' '}
+                        <strong>Moodle XML</strong> và <strong>Excel (.xlsx)</strong>.
                     </p>
                 </div>
-                <button
-                    type="button"
-                    className={`btn-new-exam-set ${isCreateView ? 'active' : ''}`}
-                    onClick={() => setIsCreateView(true)}
-                >
-                    ➕ Tạo Bộ Đề Kiểm Tra Mới
-                </button>
+                <div className="exam-top-actions">
+                    <select
+                        className="exam-export-mode-select"
+                        value={moodleCategoryMode}
+                        disabled={!defaultExportTargetSet}
+                        onChange={(e) =>
+                            setMoodleCategoryMode(e.target.value as ExamMoodleCategoryMode)
+                        }
+                        title="Chọn cấu trúc Category khi xuất Moodle XML"
+                    >
+                        <option value="single">🏷️ XML: 1 Category chung</option>
+                        <option value="bloom">🏷️ XML: Phân 3 mức Bloom</option>
+                        <option value="lesson">🏷️ XML: Phân theo Bài học</option>
+                    </select>
+                    <button
+                        type="button"
+                        className="btn-exam-action moodle"
+                        disabled={
+                            !defaultExportTargetSet ||
+                            exportingXmlId === defaultExportTargetSet?.id
+                        }
+                        onClick={() => handleExportMoodleXml(defaultExportTargetSet)}
+                        title={
+                            defaultExportTargetSet
+                                ? `Xuất Moodle XML cho đề "${defaultExportTargetSet.name}"`
+                                : 'Hãy tạo bộ đề kiểm tra bên dưới trước để xuất Moodle XML'
+                        }
+                    >
+                        {exportingXmlId && exportingXmlId === defaultExportTargetSet?.id
+                            ? '⏳ Đang xuất XML...'
+                            : '📋 Xuất Moodle XML'}
+                    </button>
+                    <button
+                        type="button"
+                        className="btn-exam-action excel"
+                        disabled={
+                            !defaultExportTargetSet ||
+                            exportingExcelId === defaultExportTargetSet?.id
+                        }
+                        onClick={() => handleExportExcel(defaultExportTargetSet)}
+                        title={
+                            defaultExportTargetSet
+                                ? `Xuất Excel (.xlsx) kèm Ma trận đề cho "${defaultExportTargetSet.name}"`
+                                : 'Hãy tạo bộ đề kiểm tra bên dưới trước để xuất Excel (.xlsx)'
+                        }
+                    >
+                        {exportingExcelId && exportingExcelId === defaultExportTargetSet?.id
+                            ? '⏳ Đang xuất Excel...'
+                            : '📊 Xuất Excel (.xlsx)'}
+                    </button>
+                    <button
+                        type="button"
+                        className={`btn-new-exam-set ${isCreateView ? 'active' : ''}`}
+                        onClick={() => setIsCreateView(true)}
+                    >
+                        ➕ Tạo Bộ Đề Kiểm Tra Mới
+                    </button>
+                </div>
             </div>
 
             {/* Banner Message */}
@@ -607,28 +784,51 @@ export function ExamManagerPanel({
                 </div>
             )}
 
-            {/* Existing Exam Sets Pills */}
+            {/* Existing Exam Sets Pills with Quick Moodle XML & Excel Export Buttons */}
             {examSets.length > 0 && (
                 <div className="exam-sets-bar">
                     <span style={{ fontSize: '0.84rem', color: '#94a3b8', fontWeight: 600 }}>
                         🗂️ Các bộ đề đã tạo ({examSets.length}):
                     </span>
-                    {examSets.map((set) => (
-                        <button
-                            key={set.id}
-                            type="button"
-                            className={`exam-set-pill ${
-                                !isCreateView && activeExamSet?.id === set.id ? 'active' : ''
-                            }`}
-                            onClick={() => handleSelectExamSet(set.id)}
-                        >
-                            <span>📋 {set.name}</span>
-                            <span className="pill-badge">{set.questionCount} câu</span>
-                            <span style={{ fontSize: '0.75rem', opacity: 0.75 }}>
-                                ({set.mode === 'ENGLISH' ? '🇬🇧 EN' : '📚 Bloom'})
-                            </span>
-                        </button>
-                    ))}
+                    {examSets.map((set) => {
+                        const isActivePill = !isCreateView && activeExamSet?.id === set.id;
+                        return (
+                            <div
+                                key={set.id}
+                                className={`exam-set-pill-group ${isActivePill ? 'active' : ''}`}
+                            >
+                                <button
+                                    type="button"
+                                    className={`exam-set-pill ${isActivePill ? 'active' : ''}`}
+                                    onClick={() => handleSelectExamSet(set.id)}
+                                >
+                                    <span>📋 {set.name}</span>
+                                    <span className="pill-badge">{set.questionCount} câu</span>
+                                    <span style={{ fontSize: '0.75rem', opacity: 0.75 }}>
+                                        ({set.mode === 'ENGLISH' ? '🇬🇧 EN' : '📚 Bloom'})
+                                    </span>
+                                </button>
+                                <button
+                                    type="button"
+                                    className="exam-set-pill-mini-btn xml"
+                                    disabled={exportingXmlId === set.id}
+                                    onClick={() => handleExportMoodleXml(set)}
+                                    title={`Xuất nhanh Moodle XML cho đề "${set.name}"`}
+                                >
+                                    {exportingXmlId === set.id ? '⏳' : '📋 XML'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="exam-set-pill-mini-btn excel"
+                                    disabled={exportingExcelId === set.id}
+                                    onClick={() => handleExportExcel(set)}
+                                    title={`Xuất nhanh Excel (.xlsx) cho đề "${set.name}"`}
+                                >
+                                    {exportingExcelId === set.id ? '⏳' : '📊 Excel'}
+                                </button>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 
@@ -653,7 +853,7 @@ export function ExamManagerPanel({
             {/* BUILDER VIEW */}
             {isCreateView && (
                 <div className="exam-builder-card">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                         <h3 style={{ margin: 0, fontSize: '1.08rem', color: '#f8fafc' }}>
                             ⚙️ Cấu hình Tạo Bộ Câu Hỏi Kiểm Tra Mới (100% Grounded)
                         </h3>
@@ -663,12 +863,12 @@ export function ExamManagerPanel({
                                 className="btn-Exam-mini"
                                 onClick={() => setIsCreateView(false)}
                             >
-                                ← Quay lại xem đề "{activeExamSet.name}"
+                                ← Quay lại xem &amp; xuất đề "{activeExamSet.name}"
                             </button>
                         )}
                     </div>
 
-                    {/* Name & Single Category Slug */}
+                    {/* Name & Category Slug */}
                     <div className="exam-builder-grid">
                         <div className="exam-field">
                             <label>📝 Tên đợt / Bộ đề kiểm tra:</label>
@@ -687,7 +887,7 @@ export function ExamManagerPanel({
                         </div>
 
                         <div className="exam-field">
-                            <label>🏷️ Tên Category Moodle duy nhất (Gom 100% câu hỏi vào 1 Category):</label>
+                            <label>🏷️ Tên Category gốc trên Moodle:</label>
                             <input
                                 type="text"
                                 className="exam-input"
@@ -700,7 +900,7 @@ export function ExamManagerPanel({
                             />
                             <span className="category-preview-hint">
                                 Đường dẫn khi import Moodle XML:{' '}
-                                <code>$course$/top/{toClientCategorySlug(categoryName || examName)}</code>
+                                <code>{formatMoodleCategoryPath(categoryName || examName)}</code>
                             </span>
                         </div>
                     </div>
@@ -1072,9 +1272,9 @@ export function ExamManagerPanel({
                                 </span>
                                 <span>•</span>
                                 <span>
-                                    Category Moodle duy nhất:{' '}
+                                    Category Moodle:{' '}
                                     <code style={{ color: '#38bdf8' }}>
-                                        $course$/top/{activeExamSet.categoryName}
+                                        {formatMoodleCategoryPath(activeExamSet.categoryName)}
                                     </code>
                                 </span>
                                 <span>•</span>
@@ -1096,21 +1296,41 @@ export function ExamManagerPanel({
                                 disabled={generateJob.isRunning}
                                 onClick={() => setShowAppendModal((prev) => !prev)}
                             >
-                                ➕ Tạo thêm câu hỏi vào đề này
+                                ➕ Tạo thêm câu hỏi
                             </button>
+                            <select
+                                className="exam-export-mode-select"
+                                value={moodleCategoryMode}
+                                onChange={(e) =>
+                                    setMoodleCategoryMode(
+                                        e.target.value as ExamMoodleCategoryMode,
+                                    )
+                                }
+                                title="Cấu trúc Category khi xuất Moodle XML"
+                            >
+                                <option value="single">🏷️ 1 Category chung</option>
+                                <option value="bloom">🏷️ Phân 3 mức Bloom</option>
+                                <option value="lesson">🏷️ Phân theo Bài học</option>
+                            </select>
                             <button
                                 type="button"
                                 className="btn-exam-action moodle"
-                                onClick={handleExportMoodleXml}
+                                disabled={exportingXmlId === activeExamSet.id}
+                                onClick={() => handleExportMoodleXml(activeExamSet)}
                             >
-                                📥 Xuất Moodle XML (1 Category)
+                                {exportingXmlId === activeExamSet.id
+                                    ? '⏳ Đang xuất XML...'
+                                    : '📋 Xuất Moodle XML'}
                             </button>
                             <button
                                 type="button"
                                 className="btn-exam-action excel"
-                                onClick={handleExportExcel}
+                                disabled={exportingExcelId === activeExamSet.id}
+                                onClick={() => handleExportExcel(activeExamSet)}
                             >
-                                📊 Xuất Excel (.xlsx)
+                                {exportingExcelId === activeExamSet.id
+                                    ? '⏳ Đang xuất Excel...'
+                                    : '📊 Xuất Excel (.xlsx)'}
                             </button>
                             <button
                                 type="button"
@@ -1267,6 +1487,37 @@ export function ExamManagerPanel({
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
+
+                        {(filterLessonId !== 'ALL' || filterLevel !== 'ALL') && (
+                            <>
+                                <button
+                                    type="button"
+                                    className="btn-exam-action moodle"
+                                    disabled={exportingXmlId === activeExamSet.id}
+                                    onClick={() =>
+                                        handleExportMoodleXml(activeExamSet, {
+                                            useActiveFilter: true,
+                                        })
+                                    }
+                                    title="Chỉ xuất các câu hỏi khớp với bộ lọc Bài học / Mức độ đang chọn"
+                                >
+                                    📋 Xuất XML theo lọc
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn-exam-action excel"
+                                    disabled={exportingExcelId === activeExamSet.id}
+                                    onClick={() =>
+                                        handleExportExcel(activeExamSet, {
+                                            useActiveFilter: true,
+                                        })
+                                    }
+                                    title="Chỉ xuất Excel cho các câu hỏi khớp với bộ lọc Bài học / Mức độ đang chọn"
+                                >
+                                    📊 Xuất Excel theo lọc
+                                </button>
+                            </>
+                        )}
                     </div>
 
                     {/* Questions List */}
@@ -1523,6 +1774,37 @@ export function ExamManagerPanel({
                             );
                         })}
                     </div>
+
+                    {/* Bottom Export Bar for long exam sets */}
+                    {filteredQuestions.length > 3 && (
+                        <div className="exam-secondary-export-bar">
+                            <span style={{ fontSize: '0.84rem', color: '#94a3b8' }}>
+                                📦 Xuất toàn bộ đề <strong style={{ color: '#e2e8f0' }}>{activeExamSet.name}</strong> ({activeExamSet.questions.length} câu hỏi):
+                            </span>
+                            <div className="exam-export-actions">
+                                <button
+                                    type="button"
+                                    className="btn-exam-action moodle"
+                                    disabled={exportingXmlId === activeExamSet.id}
+                                    onClick={() => handleExportMoodleXml(activeExamSet)}
+                                >
+                                    {exportingXmlId === activeExamSet.id
+                                        ? '⏳ Đang xuất XML...'
+                                        : '📋 Xuất Moodle XML'}
+                                </button>
+                                <button
+                                    type="button"
+                                    className="btn-exam-action excel"
+                                    disabled={exportingExcelId === activeExamSet.id}
+                                    onClick={() => handleExportExcel(activeExamSet)}
+                                >
+                                    {exportingExcelId === activeExamSet.id
+                                        ? '⏳ Đang xuất Excel...'
+                                        : '📊 Xuất Excel (.xlsx)'}
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

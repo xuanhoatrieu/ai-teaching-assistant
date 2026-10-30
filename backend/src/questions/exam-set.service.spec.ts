@@ -1,4 +1,6 @@
 import { NotFoundException } from '@nestjs/common';
+import { PassThrough } from 'stream';
+import * as ExcelJS from 'exceljs';
 import { ExamSetService } from './exam-set.service';
 
 describe('ExamSetService — Subject Multi-Lesson & Grounded Question Bank Pipeline (US-031)', () => {
@@ -609,6 +611,145 @@ describe('ExamSetService — Subject Multi-Lesson & Grounded Question Bank Pipel
             // Specifically verify old rounding bug case: count = 1, weights 50/50/0 must sum to 1 (not 2!)
             const edge = (service as any).apportionLevels(1, 50, 50, 0);
             expect(edge.level1 + edge.level2 + edge.level3).toBe(1);
+        });
+    });
+
+    describe('Moodle XML & Excel (.xlsx) Export Inheritance (US-032)', () => {
+        const sampleExamQuestions = [
+            {
+                questionId: 'B1-1-01',
+                level: 1,
+                sourceLessonId: 'lesson-1',
+                sourceLessonTitle: 'Bài 01: Tiến trình và Điều phối CPU',
+                sourceSection: 'Mục 1.1',
+                question: 'PCB là viết tắt của cụm từ nào?',
+                correctAnswer: 'A. Process Control Block',
+                optionB: 'B. Program Counter Block',
+                optionC: 'C. Process CPU Bus',
+                optionD: 'D. Primary Control Buffer',
+                explanation: 'Vì: A đúng vì PCB là khối điều khiển tiến trình.',
+            },
+            {
+                questionId: 'B2-2-02',
+                level: 2,
+                sourceLessonId: 'sl:sl-2',
+                sourceLessonTitle: 'Bài 02: Đồng bộ hóa Tiến trình & Semaphore',
+                sourceSection: 'Mục 2.1',
+                question: 'Thao tác wait(S) trên Semaphore làm gì khi S <= 0?',
+                correctAnswer: 'Đưa tiến trình vào hàng đợi chờ',
+                optionB: 'Xóa ngay tiến trình khỏi bộ nhớ',
+                optionC: 'Tăng S thêm 1 đơn vị',
+                optionD: 'Khởi động lại CPU',
+                explanation: 'Khi S <= 0 tiến trình phải chờ đến khi có signal(S).',
+            },
+        ];
+
+        it('exportMoodleXml enforces ownership, exposes Content-Disposition, and supports categoryMode + lesson/level filtering', async () => {
+            mockPrisma.examQuestionSet.findUnique.mockResolvedValue({
+                id: 'exam-1',
+                userId: ownerUserId,
+                title: 'Kiểm tra Giữa kỳ HĐH',
+                categoryName: 'Giua_Ky_HDH',
+                mode: 'REVIEW',
+                questionsJson: JSON.stringify(sampleExamQuestions),
+            });
+
+            // 1. Fail-closed check for another user
+            const unauthorizedRes: any = {
+                setHeader: jest.fn(),
+                attachment: jest.fn(),
+                send: jest.fn(),
+            };
+            await expect(
+                service.exportMoodleXml('wrong-user', 'exam-1', unauthorizedRes),
+            ).rejects.toThrow(NotFoundException);
+
+            // 2. Bloom category mode + filter level='2'
+            let sentXml = '';
+            let attachedFilename = '';
+            const headers: Record<string, string> = {};
+            const mockRes: any = {
+                setHeader: jest.fn((k: string, v: string) => {
+                    headers[k] = v;
+                }),
+                attachment: jest.fn((fname: string) => {
+                    attachedFilename = fname;
+                }),
+                send: jest.fn((body: string) => {
+                    sentXml = body;
+                }),
+            };
+
+            await service.exportMoodleXml(ownerUserId, 'exam-1', mockRes, {
+                categoryMode: 'bloom',
+                level: '2',
+            });
+
+            expect(headers['Access-Control-Expose-Headers']).toBe('Content-Disposition');
+            expect(headers['Content-Type']).toBe('application/xml; charset=utf-8');
+            expect(attachedFilename).toBe('Giua_Ky_HDH_bloom_moodle.xml');
+            expect(sentXml).toContain('<text>$course$/top/Giua_Ky_HDH/muc_2_hieu</text>');
+            expect(sentXml).not.toContain('muc_1_biet');
+            expect(sentXml).toContain('Thao tác wait(S) trên Semaphore làm gì khi S');
+        });
+
+        it('exportExcel generates 3 worksheets (Đề kiểm tra, Chuẩn Import Ôn tập, Ma trận đề kiểm tra) with cleaned options and accurate totals', async () => {
+            mockPrisma.examQuestionSet.findUnique.mockResolvedValue({
+                id: 'exam-1',
+                userId: ownerUserId,
+                title: 'Kiểm tra Giữa kỳ HĐH',
+                categoryName: 'Giua_Ky_HDH',
+                mode: 'REVIEW',
+                questionsJson: JSON.stringify(sampleExamQuestions),
+            });
+
+            const stream = new PassThrough();
+            const chunks: Buffer[] = [];
+            stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+
+            const headers: Record<string, string> = {};
+            let attachedFilename = '';
+            (stream as any).setHeader = jest.fn((k: string, v: string) => {
+                headers[k] = v;
+            });
+            (stream as any).attachment = jest.fn((fname: string) => {
+                attachedFilename = fname;
+            });
+
+            await service.exportExcel(ownerUserId, 'exam-1', stream as any);
+
+            const buffer = Buffer.concat(chunks);
+            expect(headers['Access-Control-Expose-Headers']).toBe('Content-Disposition');
+            expect(attachedFilename).toBe('Giua_Ky_HDH_exam_questions.xlsx');
+            expect(buffer.length).toBeGreaterThan(500);
+
+            const wb = new ExcelJS.Workbook();
+            await wb.xlsx.load(buffer as any);
+
+            const mainSheet = wb.getWorksheet('Đề kiểm tra');
+            const importSheet = wb.getWorksheet('Chuẩn Import Ôn tập');
+            const matrixSheet = wb.getWorksheet('Ma trận đề kiểm tra');
+
+            expect(mainSheet).toBeDefined();
+            expect(importSheet).toBeDefined();
+            expect(matrixSheet).toBeDefined();
+
+            // Verify cleaned option A & cleaned explanation on both sheets
+            expect(mainSheet!.getRow(2).getCell(7).value).toBe('Process Control Block');
+            expect(mainSheet!.getRow(2).getCell(11).value).toBe('PCB là khối điều khiển tiến trình.');
+
+            // Verify 7-column Review Import schema on Sheet 2
+            expect(importSheet!.getRow(1).getCell(1).value).toBe('Level');
+            expect(importSheet!.getRow(1).getCell(3).value).toBe('Correct Answer (A)');
+            expect(importSheet!.getRow(2).getCell(1).value).toBe(1);
+            expect(importSheet!.getRow(2).getCell(3).value).toBe('Process Control Block');
+
+            // Verify Matrix summary totals on Sheet 3 (Row 4 = TỔNG CỘNG TOÀN ĐỀ: L1=1, L2=1, L3=0, Total=2)
+            expect(matrixSheet!.getRow(4).getCell(1).value).toBe('TỔNG CỘNG TOÀN ĐỀ');
+            expect(matrixSheet!.getRow(4).getCell(2).value).toBe(1);
+            expect(matrixSheet!.getRow(4).getCell(3).value).toBe(1);
+            expect(matrixSheet!.getRow(4).getCell(4).value).toBe(0);
+            expect(matrixSheet!.getRow(4).getCell(5).value).toBe(2);
         });
     });
 });

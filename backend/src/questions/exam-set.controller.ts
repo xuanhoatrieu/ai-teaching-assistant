@@ -106,26 +106,38 @@ export class ExamSetController {
     }
 
     /**
-     * GET /exam-sets/:id/export/moodle-xml
+     * GET /exam-sets/:id/export/moodle-xml?categoryMode=single|bloom|lesson&lessonId=...&level=...
      */
     @Get(':id/export/moodle-xml')
     async exportMoodleXml(
         @Req() req: any,
         @Param('id') id: string,
         @Res() res: Response,
+        @Query('categoryMode') categoryMode?: string,
+        @Query('lessonId') lessonId?: string,
+        @Query('level') level?: string,
     ) {
-        await this.examSetService.exportMoodleXml(req.user.id, id, res);
+        await this.examSetService.exportMoodleXml(req.user.id, id, res, {
+            categoryMode,
+            lessonId,
+            level,
+        });
     }
 
     /**
-     * GET /exam-sets/:id/export/excel
+     * GET /exam-sets/:id/export/excel?lessonId=...&level=...
      */
     @Get(':id/export/excel')
     async exportExcel(
         @Req() req: any,
         @Param('id') id: string,
         @Res() res: Response,
+        @Query('lessonId') lessonId?: string,
+        @Query('level') level?: string,
     ) {
-        await this.examSetService.exportExcel(req.user.id, id, res);
+        await this.examSetService.exportExcel(req.user.id, id, res, {
+            lessonId,
+            level,
+        });
     }
 }
