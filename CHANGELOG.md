@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.6.18] - 2026-10-30 - Unified Subject Lesson Discovery & Per-Lesson Multi-Source + Question Bank Exam Generator (US-031)
+
+### Added & Changed
+- **Unified Subject Created-Lessons Discovery (`getLessonsOverview`)**:
+  - Unified 1-to-1 discovery of all created lessons within each `Subject` across both `syllabus_lessons` (bridged and unbridged `sl:<id>` lessons in `📋 Đề cương`) and standalone `lessons` (`📚 Bài giảng`), strictly isolated per `Subject`.
+  - Eliminated duplicate `"Bài 1: Bài 01..."` title prefixes via `normalizeLessonTitle`, displaying clean real lesson titles across lesson cards, range selectors, and exam metadata, along with rich data-source badges (`📗 Giáo trình`, `📊 Slides`, `🎙️ Lời giảng`, `📋 Đề cương bài`, `📄 Handout`, `📎 Tài liệu TK`, `❓ Ngân hàng (N câu)`) and a `🔄 Làm mới DS bài` button in `ExamManagerPanel.tsx`.
+- **Per-Lesson Even Split + Full Multi-Source Content + Full 4-Table Question Bank + Strict Selected-Lesson Boundary**:
+  - Added largest-remainder Bloom level apportionment (`apportionLevels`) guaranteeing exact `level1 + level2 + level3 === count` per selected lesson.
+  - Upgraded `extractLessonGroundedContext` to aggregate 100% of each selected lesson's multi-source content (`SyllabusLesson.textbookContent` & `textbookPlan`, `Slide.content` + `Slide.optimizedContentJson`, `SlideAudio.speakerNote` prioritized over `Slide.speakerNote`, `Lesson.slideScript`, `SyllabusLesson.outline`, `Lesson.detailedOutline` / `outlineRaw`, `GeneratedContent(HANDOUT)`, and lesson-scoped passages from `SyllabusReference` filtered against unselected lessons) **plus 100% of the lesson's existing Question Bank** (`ReviewQuestion`, `QuestionBank.questionsJson`, `EnglishQuestion` with `dataJson`, `InteractiveQuestion`) to generate 100% NEW questions strictly within selected lessons (`[PHẠM VI CẤM]` negative guard; 27/27 Jest unit tests passing).
+
 ## [v1.6.17] - 2026-10-30 - Institution-Neutral Minimal Theme for SCORM 1.2 & H5P Exports
 
 ### Changed

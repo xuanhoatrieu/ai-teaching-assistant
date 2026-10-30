@@ -2,13 +2,20 @@ import { api } from './api';
 
 export interface ExamLessonOverviewItem {
     id: string;
+    syllabusLessonId?: string | null;
+    lessonId?: string | null;
+    originType?: 'bridged' | 'syllabus' | 'lesson' | 'pptx';
     order: number;
     title: string;
+    displayTitle?: string;
     hasContent: boolean;
     contentSummary: string;
+    sourceBadges?: string[];
     slideCount: number;
     reviewQuestionCount: number;
     englishQuestionCount: number;
+    interactiveQuestionCount?: number;
+    questionBankTotal?: number;
 }
 
 export interface ExamLessonsOverviewResponse {

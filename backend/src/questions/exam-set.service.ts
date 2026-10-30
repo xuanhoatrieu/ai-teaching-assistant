@@ -39,13 +39,20 @@ export interface ExamEnglishQuestionData extends EnglishQuestionData {
 
 export interface ExamLessonOverviewItem {
     id: string;
+    syllabusLessonId?: string | null;
+    lessonId?: string | null;
+    originType?: 'bridged' | 'syllabus' | 'lesson' | 'pptx';
     order: number;
     title: string;
+    displayTitle?: string;
     hasContent: boolean;
     contentSummary: string;
+    sourceBadges?: string[];
     slideCount: number;
     reviewQuestionCount: number;
     englishQuestionCount: number;
+    interactiveQuestionCount?: number;
+    questionBankTotal?: number;
 }
 
 export interface GenerateExamSetDto {
@@ -76,10 +83,12 @@ interface GroundedLessonContext {
     id: string;
     order: number;
     title: string;
+    displayTitle: string;
     subjectName: string;
     subjectContext: string;
     contentText: string;
     existingQuestionsSummary: string;
+    excludedLessonsGuard: string;
 }
 
 @Injectable()
@@ -129,7 +138,8 @@ export class ExamSetService implements OnModuleInit {
     }
 
     /**
-     * List available lessons/sessions with their content & existing question bank metrics
+     * List available created lessons of a Subject (unifying SyllabusLesson + Lesson 1-to-1)
+     * or sessions of a PptxSubject, with full multi-source & question bank metrics.
      */
     async getLessonsOverview(
         userId: string,
@@ -139,20 +149,61 @@ export class ExamSetService implements OnModuleInit {
             const subject = await this.prisma.subject.findUnique({
                 where: { id: params.subjectId },
                 include: {
+                    syllabus: {
+                        include: {
+                            lessons: {
+                                orderBy: { sortOrder: 'asc' },
+                                select: {
+                                    id: true,
+                                    sortOrder: true,
+                                    title: true,
+                                    outline: true,
+                                    textbookContent: true,
+                                    textbookPlan: true,
+                                    lessonId: true,
+                                },
+                            },
+                            references: {
+                                where: { status: 'done' },
+                                select: {
+                                    id: true,
+                                    fileName: true,
+                                    markdownContent: true,
+                                },
+                            },
+                        },
+                    },
                     lessons: {
                         orderBy: { createdAt: 'asc' },
                         include: {
                             syllabusLesson: {
                                 select: {
+                                    id: true,
                                     sortOrder: true,
+                                    title: true,
+                                    outline: true,
                                     textbookContent: true,
+                                    textbookPlan: true,
+                                },
+                            },
+                            questionBank: {
+                                select: {
+                                    questionsJson: true,
+                                },
+                            },
+                            generatedContents: {
+                                where: { type: 'HANDOUT' },
+                                select: {
+                                    contentJson: true,
                                 },
                             },
                             _count: {
                                 select: {
                                     slides: true,
+                                    slideAudios: true,
                                     reviewQuestions: true,
                                     englishQuestions: true,
+                                    interactiveQuestions: true,
                                 },
                             },
                         },
@@ -164,43 +215,93 @@ export class ExamSetService implements OnModuleInit {
                 throw new NotFoundException('Không tìm thấy môn học hoặc bạn không có quyền truy cập.');
             }
 
-            const sortedLessons = [...subject.lessons].sort((a, b) => {
-                const orderA = a.syllabusLesson?.sortOrder ?? 9999;
-                const orderB = b.syllabusLesson?.sortOrder ?? 9999;
-                if (orderA !== orderB) return orderA - orderB;
-                return a.createdAt.getTime() - b.createdAt.getTime();
-            });
+            const syllabusLessons = subject.syllabus?.lessons || [];
+            const hasValidReferences = (subject.syllabus?.references || []).some((r) =>
+                Boolean(r.markdownContent?.trim()),
+            );
+            const lessonById = new Map(subject.lessons.map((l) => [l.id, l]));
+            const bridgedLessonIds = new Set<string>();
 
-            const items: ExamLessonOverviewItem[] = sortedLessons.map((lesson, idx) => {
-                const slideCount = lesson._count?.slides || 0;
-                const hasTextbook = Boolean(lesson.syllabusLesson?.textbookContent?.trim());
-                const hasScript = Boolean(lesson.slideScript?.trim());
-                const hasOutline = Boolean(lesson.detailedOutline?.trim() || lesson.outlineRaw?.trim());
-                const hasContent = slideCount > 0 || hasTextbook || hasScript || hasOutline;
+            const items: ExamLessonOverviewItem[] = [];
 
-                const summaryParts: string[] = [];
-                if (slideCount > 0) summaryParts.push(`${slideCount} slides`);
-                if (hasTextbook) summaryParts.push('Giáo trình');
-                if (hasScript && slideCount === 0) summaryParts.push('Kịch bản slide');
-                if (hasOutline) summaryParts.push('Đề cương');
-                if (summaryParts.length === 0) summaryParts.push('Chưa có nội dung');
+            // 1. Created lessons from Syllabus (both bridged to Lesson and unbridged SyllabusLesson)
+            for (const sl of syllabusLessons) {
+                const linkedLesson = sl.lessonId ? lessonById.get(sl.lessonId) : undefined;
+                if (linkedLesson) {
+                    bridgedLessonIds.add(linkedLesson.id);
+                    items.push(
+                        this.buildSubjectLessonOverviewItem({
+                            order: sl.sortOrder + 1,
+                            lesson: linkedLesson,
+                            syllabusLesson: sl,
+                            hasSubjectReferences: hasValidReferences,
+                            originType: 'bridged',
+                        }),
+                    );
+                } else {
+                    items.push(
+                        this.buildSubjectLessonOverviewItem({
+                            order: sl.sortOrder + 1,
+                            lesson: undefined,
+                            syllabusLesson: sl,
+                            hasSubjectReferences: hasValidReferences,
+                            originType: 'syllabus',
+                        }),
+                    );
+                }
+            }
 
-                return {
-                    id: lesson.id,
-                    order: idx + 1,
-                    title: lesson.title,
-                    hasContent,
-                    contentSummary: summaryParts.join(' • '),
-                    slideCount,
-                    reviewQuestionCount: lesson._count?.reviewQuestions || 0,
-                    englishQuestionCount: lesson._count?.englishQuestions || 0,
-                };
-            });
+            // 2. Standalone created lessons in `lessons` table (not linked from syllabus_lessons)
+            const standaloneLessons = subject.lessons.filter((l) => !bridgedLessonIds.has(l.id));
+            if (standaloneLessons.length > 0) {
+                const sortedStandalone = [...standaloneLessons].sort((a, b) => {
+                    const numA = this.extractExplicitLessonNumber(a.title);
+                    const numB = this.extractExplicitLessonNumber(b.title);
+                    if (numA !== null && numB !== null && numA !== numB) {
+                        return numA - numB;
+                    }
+                    return a.createdAt.getTime() - b.createdAt.getTime();
+                });
+
+                const usedOrders = new Set<number>(items.map((it) => it.order));
+                let nextFallbackOrder =
+                    items.length > 0 ? Math.max(...items.map((it) => it.order)) + 1 : 1;
+
+                for (const lesson of sortedStandalone) {
+                    const explicitNum = this.extractExplicitLessonNumber(lesson.title);
+                    let assignedOrder: number;
+                    if (
+                        syllabusLessons.length === 0 &&
+                        explicitNum !== null &&
+                        explicitNum > 0 &&
+                        !usedOrders.has(explicitNum)
+                    ) {
+                        assignedOrder = explicitNum;
+                    } else {
+                        while (usedOrders.has(nextFallbackOrder)) {
+                            nextFallbackOrder++;
+                        }
+                        assignedOrder = nextFallbackOrder;
+                        nextFallbackOrder++;
+                    }
+                    usedOrders.add(assignedOrder);
+
+                    items.push(
+                        this.buildSubjectLessonOverviewItem({
+                            order: assignedOrder,
+                            lesson,
+                            syllabusLesson: lesson.syllabusLesson || undefined,
+                            hasSubjectReferences: hasValidReferences,
+                            originType: 'lesson',
+                        }),
+                    );
+                }
+            }
 
             const isEnglishSubject = this.detectEnglishSubject(
                 subject.name,
                 subject.majorName || subject.expertiseArea || '',
-                items.some((i) => i.englishQuestionCount > 0),
+                items.some((i) => i.englishQuestionCount > 0) || subject.language === 'en',
             );
 
             return {
@@ -235,6 +336,7 @@ export class ExamSetService implements OnModuleInit {
 
                 let reviewCount = 0;
                 let englishCount = 0;
+                let interactiveCount = 0;
                 try {
                     if (session.questionsJson) {
                         const parsed = JSON.parse(session.questionsJson);
@@ -243,41 +345,63 @@ export class ExamSetService implements OnModuleInit {
                         } else if (parsed && typeof parsed === 'object') {
                             reviewCount = Array.isArray(parsed.review) ? parsed.review.length : 0;
                             englishCount = Array.isArray(parsed.english) ? parsed.english.length : 0;
+                            interactiveCount = Array.isArray(parsed.interactive) ? parsed.interactive.length : 0;
                         }
                     }
                 } catch {
                     // ignore
                 }
 
+                const questionBankTotal = reviewCount + englishCount + interactiveCount;
                 const hasContextDoc = Boolean(session.contextText?.trim());
-                const hasContent = slideCount > 0 || hasContextDoc;
+                const hasContent = slideCount > 0 || hasContextDoc || questionBankTotal > 0;
 
+                const sourceBadges: string[] = [];
                 const summaryParts: string[] = [];
-                if (slideCount > 0) summaryParts.push(`${slideCount} slides`);
-                if (hasContextDoc) summaryParts.push(session.contextFileName || 'Tài liệu đính kèm');
-                if (summaryParts.length === 0) summaryParts.push('Chưa có nội dung');
+                if (slideCount > 0) {
+                    summaryParts.push(`${slideCount} slides`);
+                    sourceBadges.push(`📊 ${slideCount} Slides`);
+                }
+                if (hasContextDoc) {
+                    const docLabel = session.contextFileName || 'Tài liệu đính kèm';
+                    summaryParts.push(docLabel);
+                    sourceBadges.push(`📎 ${docLabel}`);
+                }
+                if (questionBankTotal > 0) {
+                    sourceBadges.push(`❓ ${questionBankTotal} câu ngân hàng`);
+                }
+                if (summaryParts.length === 0 && questionBankTotal === 0) {
+                    summaryParts.push('Chưa có nội dung');
+                }
 
-                const lessonTitle =
+                const rawTitle =
                     session.lessonTitle?.trim() ||
                     fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '') ||
                     `Bài ${idx + 1}`;
+                const order = idx + 1;
+                const { cleanTopic, displayTitle } = this.normalizeLessonTitle(rawTitle, order);
 
                 return {
                     id: session.id,
-                    order: idx + 1,
-                    title: lessonTitle,
+                    originType: 'pptx',
+                    order,
+                    title: cleanTopic,
+                    displayTitle,
                     hasContent,
                     contentSummary: summaryParts.join(' • '),
+                    sourceBadges,
                     slideCount,
                     reviewQuestionCount: reviewCount,
                     englishQuestionCount: englishCount,
+                    interactiveQuestionCount: interactiveCount,
+                    questionBankTotal,
                 };
             });
 
             const isEnglishSubject = this.detectEnglishSubject(
                 pptxSubject.name,
                 pptxSubject.majorName || pptxSubject.expertiseArea || '',
-                items.some((i) => i.englishQuestionCount > 0),
+                items.some((i) => i.englishQuestionCount > 0) || pptxSubject.language === 'en',
             );
 
             return {
@@ -288,6 +412,158 @@ export class ExamSetService implements OnModuleInit {
         }
 
         throw new BadRequestException('Cần cung cấp subjectId hoặc pptxSubjectId.');
+    }
+
+    private buildSubjectLessonOverviewItem(input: {
+        order: number;
+        lesson?: any;
+        syllabusLesson?: any;
+        hasSubjectReferences: boolean;
+        originType: 'bridged' | 'syllabus' | 'lesson';
+    }): ExamLessonOverviewItem {
+        const { order, lesson, syllabusLesson, hasSubjectReferences, originType } = input;
+        const rawTitle = (lesson?.title || syllabusLesson?.title || `Bài ${order}`).trim();
+        const { cleanTopic, displayTitle } = this.normalizeLessonTitle(rawTitle, order);
+
+        const slideCount = lesson?._count?.slides || 0;
+        const slideAudioCount = lesson?._count?.slideAudios || 0;
+        const hasTextbook = Boolean(
+            syllabusLesson?.textbookContent?.trim() || syllabusLesson?.textbookPlan?.trim(),
+        );
+        const hasSyllabusOutline = Boolean(syllabusLesson?.outline?.trim());
+        const hasLessonOutline = Boolean(
+            lesson?.detailedOutline?.trim() || lesson?.outlineRaw?.trim(),
+        );
+        const hasOutline = hasSyllabusOutline || hasLessonOutline;
+        const hasScript = Boolean(lesson?.slideScript?.trim());
+        const hasHandout = Boolean(
+            Array.isArray(lesson?.generatedContents) &&
+                lesson.generatedContents.some((gc: any) => Boolean(gc.contentJson?.trim())),
+        );
+
+        const reviewCount = lesson?._count?.reviewQuestions || 0;
+        const englishCount = lesson?._count?.englishQuestions || 0;
+        const interactiveCount = lesson?._count?.interactiveQuestions || 0;
+        const qbParsed = this.safeJsonParse<any[]>(lesson?.questionBank?.questionsJson, []);
+        const qbCount = Array.isArray(qbParsed) ? qbParsed.length : 0;
+        // QuestionBank table may mirror or supplement reviewQuestions; count extra distinct questions accurately
+        const effectiveReviewOrQb = Math.max(reviewCount, qbCount);
+        const questionBankTotal = effectiveReviewOrQb + englishCount + interactiveCount;
+
+        const hasRefSupport = hasSubjectReferences && Boolean(rawTitle || hasOutline);
+        const hasContent =
+            slideCount > 0 ||
+            slideAudioCount > 0 ||
+            hasTextbook ||
+            hasOutline ||
+            hasScript ||
+            hasHandout ||
+            questionBankTotal > 0 ||
+            hasRefSupport;
+
+        const summaryParts: string[] = [];
+        const sourceBadges: string[] = [];
+
+        if (hasTextbook) {
+            summaryParts.push('Giáo trình');
+            sourceBadges.push('📗 Giáo trình');
+        }
+        if (slideCount > 0) {
+            summaryParts.push(`${slideCount} slides`);
+            sourceBadges.push(`📊 ${slideCount} Slides`);
+        } else if (hasScript) {
+            summaryParts.push('Kịch bản slide');
+            sourceBadges.push('📝 Kịch bản slide');
+        }
+        if (slideAudioCount > 0) {
+            sourceBadges.push(`🎙️ Lời giảng (${slideAudioCount})`);
+        }
+        if (hasOutline) {
+            summaryParts.push('Đề cương bài');
+            sourceBadges.push('📋 Đề cương bài');
+        }
+        if (hasHandout) {
+            summaryParts.push('Handout');
+            sourceBadges.push('📄 Handout');
+        }
+        if (hasRefSupport) {
+            summaryParts.push('Tài liệu TK');
+            sourceBadges.push('📎 Tài liệu TK');
+        }
+        if (questionBankTotal > 0) {
+            sourceBadges.push(`❓ Ngân hàng (${questionBankTotal} câu)`);
+        }
+        if (summaryParts.length === 0 && questionBankTotal === 0) {
+            summaryParts.push('Chưa có nội dung');
+        }
+
+        const itemId = lesson ? lesson.id : `sl:${syllabusLesson.id}`;
+
+        return {
+            id: itemId,
+            syllabusLessonId: syllabusLesson?.id || null,
+            lessonId: lesson?.id || null,
+            originType,
+            order,
+            title: cleanTopic,
+            displayTitle,
+            hasContent,
+            contentSummary: summaryParts.join(' • '),
+            sourceBadges,
+            slideCount,
+            reviewQuestionCount: effectiveReviewOrQb,
+            englishQuestionCount: englishCount,
+            interactiveQuestionCount: interactiveCount,
+            questionBankTotal,
+        };
+    }
+
+    private extractExplicitLessonNumber(title: string | null | undefined): number | null {
+        if (!title) return null;
+        const m = title
+            .trim()
+            .match(/^(?:Bài|Bai|Lesson|Unit|Chương|Chuong|Chapter|Chủ\s*đề|Topic)\s*0*(\d+)\b/i);
+        if (!m || !m[1]) return null;
+        const num = parseInt(m[1], 10);
+        return Number.isFinite(num) && num > 0 ? num : null;
+    }
+
+    private normalizeLessonTitle(
+        rawTitle: string,
+        order: number,
+    ): { cleanTopic: string; displayTitle: string } {
+        const trimmed = (rawTitle || '').trim();
+        const padded = String(order).padStart(2, '0');
+        if (!trimmed) {
+            return { cleanTopic: `Bài ${padded}`, displayTitle: `Bài ${padded}` };
+        }
+        const viPrefixMatch = trimmed.match(/^(?:Bài|Bai)\s*0*(\d+)\s*[:.\-–—_]\s*(.+)$/i);
+        if (viPrefixMatch) {
+            const numStr = String(parseInt(viPrefixMatch[1], 10) || order).padStart(2, '0');
+            const topic = viPrefixMatch[2].trim();
+            return {
+                cleanTopic: topic || trimmed,
+                displayTitle: `Bài ${numStr}: ${topic}`,
+            };
+        }
+        const bareViMatch = trimmed.match(/^(?:Bài|Bai)\s*0*(\d+)$/i);
+        if (bareViMatch) {
+            const numStr = String(parseInt(bareViMatch[1], 10) || order).padStart(2, '0');
+            return {
+                cleanTopic: `Bài ${numStr}`,
+                displayTitle: `Bài ${numStr}`,
+            };
+        }
+        if (/^(?:Lesson|Unit|Chương|Chuong|Chapter|Chủ\s*đề|Topic)\s*\d+/i.test(trimmed)) {
+            return {
+                cleanTopic: trimmed,
+                displayTitle: trimmed,
+            };
+        }
+        return {
+            cleanTopic: trimmed,
+            displayTitle: `Bài ${padded}: ${trimmed}`,
+        };
     }
 
     private detectEnglishSubject(name: string, major: string, hasEnglishQuestions: boolean): boolean {
@@ -469,20 +745,54 @@ export class ExamSetService implements OnModuleInit {
     private resolveTotalRequested(dto: GenerateExamSetDto): number {
         if (dto.perLessonCounts && Object.keys(dto.perLessonCounts).length > 0) {
             const sum = dto.lessonIds.reduce(
-                (acc, id) => acc + Math.max(0, Number(dto.perLessonCounts?.[id] || 0)),
+                (acc, id) => acc + Math.max(0, Math.floor(Number(dto.perLessonCounts?.[id] || 0))),
                 0,
             );
-            if (sum > 0) return sum;
+            if (sum > 0) return Math.min(300, sum);
         }
-        const l1 = Math.max(0, Number(dto.level1 ?? 20));
-        const l2 = Math.max(0, Number(dto.level2 ?? 20));
-        const l3 = Math.max(0, Number(dto.level3 ?? 10));
-        if (dto.totalCount && dto.totalCount > 0) return Number(dto.totalCount);
-        return Math.max(1, l1 + l2 + l3);
+        const l1 = Math.max(0, Math.floor(Number(dto.level1 ?? 20)));
+        const l2 = Math.max(0, Math.floor(Number(dto.level2 ?? 20)));
+        const l3 = Math.max(0, Math.floor(Number(dto.level3 ?? 10)));
+        if (dto.totalCount && dto.totalCount > 0) {
+            return Math.min(300, Math.floor(Number(dto.totalCount)));
+        }
+        return Math.min(300, Math.max(1, l1 + l2 + l3));
     }
 
     /**
-     * Core Multi-Lesson Grounded Generation Pipeline
+     * Exact largest-remainder apportionment so level1 + level2 + level3 === count (100% guaranteed)
+     */
+    private apportionLevels(
+        count: number,
+        l1Ratio: number,
+        l2Ratio: number,
+        l3Ratio: number,
+    ): { level1: number; level2: number; level3: number } {
+        if (count <= 0) return { level1: 0, level2: 0, level3: 0 };
+        const weights = [Math.max(0, l1Ratio), Math.max(0, l2Ratio), Math.max(0, l3Ratio)];
+        const sum = weights[0] + weights[1] + weights[2];
+        if (sum <= 0) {
+            return { level1: count, level2: 0, level3: 0 };
+        }
+        const exact = weights.map((w) => (count * w) / sum);
+        const floors = exact.map((v) => Math.floor(v));
+        let rem = count - (floors[0] + floors[1] + floors[2]);
+        const orderIdx = [0, 1, 2].sort((a, b) => exact[b] - floors[b] - (exact[a] - floors[a]));
+        for (let i = 0; i < orderIdx.length && rem > 0; i++) {
+            floors[orderIdx[i]] += 1;
+            rem -= 1;
+        }
+        return {
+            level1: floors[0],
+            level2: floors[1],
+            level3: floors[2],
+        };
+    }
+
+    /**
+     * Core Multi-Lesson Grounded Generation Pipeline:
+     * Splits total requested questions evenly across selected lessons (or custom per-lesson counts),
+     * then generates 100% NEW questions per selected lesson strictly bounded to that lesson's content & question bank.
      */
     private async runGenerateExamSetBackground(
         jobId: string,
@@ -498,10 +808,18 @@ export class ExamSetService implements OnModuleInit {
             pptxSubjectId: dto.pptxSubjectId,
         });
 
-        const selectedOverviews = overview.lessons.filter((l) => dto.lessonIds.includes(l.id));
+        const requestedIdSet = new Set(dto.lessonIds);
+        const selectedOverviews = overview.lessons.filter(
+            (l) =>
+                requestedIdSet.has(l.id) ||
+                (l.syllabusLessonId && requestedIdSet.has(`sl:${l.syllabusLessonId}`)),
+        );
         if (selectedOverviews.length === 0) {
             throw new BadRequestException('Không tìm thấy bài học hợp lệ trong danh sách đã chọn.');
         }
+
+        const selectedCanonicalIds = new Set(selectedOverviews.map((l) => l.id));
+        const unselectedOverviews = overview.lessons.filter((l) => !selectedCanonicalIds.has(l.id));
 
         // Load existing exam set questions if appending
         let existingExamQuestions: any[] = [];
@@ -516,33 +834,44 @@ export class ExamSetService implements OnModuleInit {
             }
         }
 
-        // Compute per-lesson question allocations
+        // Compute per-lesson question allocations (auto evenly split or custom per-lesson)
         const totalRequested = this.resolveTotalRequested(dto);
         const l1Ratio = Math.max(0, Number(dto.level1 ?? 20));
         const l2Ratio = Math.max(0, Number(dto.level2 ?? 20));
         const l3Ratio = Math.max(0, Number(dto.level3 ?? 10));
-        const ratioSum = Math.max(1, l1Ratio + l2Ratio + l3Ratio);
 
         const lessonCount = selectedOverviews.length;
         const basePerLesson = Math.floor(totalRequested / lessonCount);
         const remainder = totalRequested % lessonCount;
 
-        const allocations = selectedOverviews.map((lesson, idx) => {
-            let count = basePerLesson + (idx < remainder ? 1 : 0);
-            if (dto.perLessonCounts && dto.perLessonCounts[lesson.id] !== undefined) {
-                count = Math.max(0, Number(dto.perLessonCounts[lesson.id]));
-            }
-            const level1 = Math.round((count * l1Ratio) / ratioSum);
-            const level2 = Math.round((count * l2Ratio) / ratioSum);
-            const level3 = Math.max(0, count - level1 - level2);
-            return {
-                lesson,
-                count,
-                level1,
-                level2,
-                level3,
-            };
-        }).filter((a) => a.count > 0);
+        const allocations = selectedOverviews
+            .map((lesson, idx) => {
+                let count = basePerLesson + (idx < remainder ? 1 : 0);
+                const customKey =
+                    dto.perLessonCounts?.[lesson.id] !== undefined
+                        ? lesson.id
+                        : lesson.syllabusLessonId &&
+                          dto.perLessonCounts?.[`sl:${lesson.syllabusLessonId}`] !== undefined
+                        ? `sl:${lesson.syllabusLessonId}`
+                        : null;
+                if (customKey && dto.perLessonCounts) {
+                    count = Math.max(0, Math.floor(Number(dto.perLessonCounts[customKey])));
+                }
+                const { level1, level2, level3 } = this.apportionLevels(
+                    count,
+                    l1Ratio,
+                    l2Ratio,
+                    l3Ratio,
+                );
+                return {
+                    lesson,
+                    count,
+                    level1,
+                    level2,
+                    level3,
+                };
+            })
+            .filter((a) => a.count > 0);
 
         if (allocations.length === 0) {
             throw new BadRequestException('Tổng số câu hỏi cần tạo phải lớn hơn 0.');
@@ -559,17 +888,28 @@ export class ExamSetService implements OnModuleInit {
                 92,
                 Math.round((completedLessons / allocations.length) * 85) + 5,
             );
+            const lessonLabel =
+                alloc.lesson.displayTitle || `Bài ${alloc.lesson.order}: ${alloc.lesson.title}`;
             await this.jobService.updateProgress(
                 jobId,
                 progressPct,
-                `Đang tạo ${alloc.count} câu hỏi từ Bài ${alloc.lesson.order}: ${alloc.lesson.title} (${completedLessons + 1}/${allocations.length})...`,
+                `Đang tạo ${alloc.count} câu hỏi mới từ ${lessonLabel} (${completedLessons + 1}/${allocations.length})...`,
+            );
+
+            const matchingExistingInExam = existingExamQuestions.filter(
+                (q) =>
+                    q.sourceLessonId === alloc.lesson.id ||
+                    (alloc.lesson.syllabusLessonId &&
+                        q.sourceLessonId === `sl:${alloc.lesson.syllabusLessonId}`),
             );
 
             const groundedContext = await this.extractLessonGroundedContext(
+                userId,
                 sourceType,
-                alloc.lesson.id,
-                alloc.lesson.order,
-                existingExamQuestions.filter((q) => q.sourceLessonId === alloc.lesson.id),
+                alloc.lesson,
+                matchingExistingInExam,
+                unselectedOverviews,
+                overview.lessons,
             );
 
             const lessonQuestions = await this.generateGroundedQuestionsForLesson(
@@ -653,107 +993,318 @@ export class ExamSetService implements OnModuleInit {
     }
 
     /**
-     * Extract 100% of a single lesson's content + existing questions for anti-duplication & grounding
+     * Extract 360-degree content + full existing question bank of ONE selected lesson,
+     * strictly bounded to this lesson's scope (zero leakage from unselected lessons).
      */
     private async extractLessonGroundedContext(
+        userId: string,
         sourceType: 'subject' | 'pptx',
-        lessonId: string,
-        lessonOrder: number,
+        lessonOverview: ExamLessonOverviewItem,
         alreadyInExamSet: any[] = [],
+        unselectedLessons: ExamLessonOverviewItem[] = [],
+        allSubjectLessons: ExamLessonOverviewItem[] = [],
     ): Promise<GroundedLessonContext> {
-        if (sourceType === 'subject') {
-            const lesson = await this.prisma.lesson.findUnique({
-                where: { id: lessonId },
-                include: {
-                    subject: true,
-                    syllabusLesson: true,
-                    slides: {
-                        orderBy: { slideIndex: 'asc' },
-                    },
-                    reviewQuestions: {
-                        orderBy: [{ level: 'asc' }, { questionOrder: 'asc' }],
-                    },
-                    englishQuestions: {
-                        orderBy: { questionOrder: 'asc' },
-                    },
-                },
-            });
+        const lessonId = lessonOverview.id;
+        const lessonOrder = lessonOverview.order;
+        const excludedLessonsGuard =
+            unselectedLessons.length > 0
+                ? unselectedLessons
+                      .map((u) => `- ${u.displayTitle || `Bài ${u.order}: ${u.title}`}`)
+                      .join('\n')
+                : '';
 
-            if (!lesson) {
-                throw new NotFoundException(`Không tìm thấy bài học ${lessonId}`);
+        if (sourceType === 'subject') {
+            let lesson: any = null;
+            let syllabusLesson: any = null;
+            let subject: any = null;
+            let allSyllabusLessons: Array<{ id: string; sortOrder: number; title: string; outline: string; lessonId: string | null }> = [];
+            let syllabusReferences: Array<{ id: string; fileName: string; markdownContent: string | null }> = [];
+
+            if (lessonId.startsWith('sl:')) {
+                const slId = lessonId.slice(3);
+                const slRecord = await this.prisma.syllabusLesson.findUnique({
+                    where: { id: slId },
+                    include: {
+                        syllabus: {
+                            include: {
+                                subject: true,
+                                lessons: {
+                                    orderBy: { sortOrder: 'asc' },
+                                    select: {
+                                        id: true,
+                                        sortOrder: true,
+                                        title: true,
+                                        outline: true,
+                                        lessonId: true,
+                                    },
+                                },
+                                references: {
+                                    where: { status: 'done' },
+                                    select: {
+                                        id: true,
+                                        fileName: true,
+                                        markdownContent: true,
+                                    },
+                                },
+                            },
+                        },
+                        lesson: {
+                            include: {
+                                slides: { orderBy: { slideIndex: 'asc' } },
+                                slideAudios: { orderBy: { slideIndex: 'asc' } },
+                                generatedContents: { where: { type: 'HANDOUT' } },
+                                reviewQuestions: {
+                                    orderBy: [{ level: 'asc' }, { questionOrder: 'asc' }],
+                                },
+                                englishQuestions: { orderBy: { questionOrder: 'asc' } },
+                                interactiveQuestions: { orderBy: { questionOrder: 'asc' } },
+                                questionBank: true,
+                            },
+                        },
+                    },
+                });
+
+                if (!slRecord || !slRecord.syllabus?.subject) {
+                    throw new NotFoundException(`Không tìm thấy bài học đề cương ${slId}`);
+                }
+                if (slRecord.syllabus.subject.userId !== userId) {
+                    throw new NotFoundException('Bạn không có quyền truy cập bài học này.');
+                }
+
+                syllabusLesson = slRecord;
+                lesson = slRecord.lesson || null;
+                subject = slRecord.syllabus.subject;
+                allSyllabusLessons = slRecord.syllabus.lessons || [];
+                syllabusReferences = slRecord.syllabus.references || [];
+            } else {
+                const lessonRecord = await this.prisma.lesson.findUnique({
+                    where: { id: lessonId },
+                    include: {
+                        subject: {
+                            include: {
+                                syllabus: {
+                                    include: {
+                                        lessons: {
+                                            orderBy: { sortOrder: 'asc' },
+                                            select: {
+                                                id: true,
+                                                sortOrder: true,
+                                                title: true,
+                                                outline: true,
+                                                lessonId: true,
+                                            },
+                                        },
+                                        references: {
+                                            where: { status: 'done' },
+                                            select: {
+                                                id: true,
+                                                fileName: true,
+                                                markdownContent: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                        syllabusLesson: true,
+                        slides: { orderBy: { slideIndex: 'asc' } },
+                        slideAudios: { orderBy: { slideIndex: 'asc' } },
+                        generatedContents: { where: { type: 'HANDOUT' } },
+                        reviewQuestions: {
+                            orderBy: [{ level: 'asc' }, { questionOrder: 'asc' }],
+                        },
+                        englishQuestions: { orderBy: { questionOrder: 'asc' } },
+                        interactiveQuestions: { orderBy: { questionOrder: 'asc' } },
+                        questionBank: true,
+                    },
+                });
+
+                if (!lessonRecord || !lessonRecord.subject) {
+                    throw new NotFoundException(`Không tìm thấy bài học ${lessonId}`);
+                }
+                if (lessonRecord.subject.userId !== userId) {
+                    throw new NotFoundException('Bạn không có quyền truy cập bài học này.');
+                }
+
+                lesson = lessonRecord;
+                syllabusLesson = lessonRecord.syllabusLesson || null;
+                subject = lessonRecord.subject;
+                allSyllabusLessons = lessonRecord.subject.syllabus?.lessons || [];
+                syllabusReferences = lessonRecord.subject.syllabus?.references || [];
             }
+
+            const rawTitle = (lesson?.title || syllabusLesson?.title || `Bài ${lessonOrder}`).trim();
+            const { cleanTopic, displayTitle } = this.normalizeLessonTitle(rawTitle, lessonOrder);
 
             const contentSections: string[] = [];
 
-            if (lesson.syllabusLesson?.textbookContent?.trim()) {
+            // 1. Giáo trình bài học (Textbook content + Backward Design Plan)
+            if (syllabusLesson?.textbookContent?.trim()) {
                 contentSections.push(
-                    `=== GIÁO TRÌNH CHI TIẾT BÀI HỌC (${lesson.title}) ===\n` +
-                        lesson.syllabusLesson.textbookContent.trim().substring(0, 28000),
+                    `=== GIÁO TRÌNH CHI TIẾT BÀI HỌC (${displayTitle}) ===\n` +
+                        syllabusLesson.textbookContent.trim().substring(0, 24000),
                 );
             }
+            if (syllabusLesson?.textbookPlan?.trim()) {
+                const planFormatted = this.formatTextbookPlanSummary(syllabusLesson.textbookPlan);
+                if (planFormatted) {
+                    contentSections.push(
+                        `=== MỤC TIÊU & KHUNG KIẾN THỨC GIÁO TRÌNH (${displayTitle}) ===\n` +
+                            planFormatted.substring(0, 4000),
+                    );
+                }
+            }
 
-            if (lesson.slides.length > 0) {
+            // 2. Slide bài giảng (bao gồm cả Slide.content + Slide.optimizedContentJson + SlideAudio.speakerNote)
+            if (lesson && Array.isArray(lesson.slides) && lesson.slides.length > 0) {
+                const audioNoteMap = new Map<number, string>();
+                if (Array.isArray(lesson.slideAudios)) {
+                    for (const sa of lesson.slideAudios) {
+                        if (sa.speakerNote?.trim()) {
+                            audioNoteMap.set(sa.slideIndex, sa.speakerNote.trim());
+                        }
+                    }
+                }
+
                 const slidesStr = lesson.slides
-                    .map(
-                        (s) =>
-                            `[Slide ${s.slideIndex}: ${s.title}]\nNội dung slide:\n${s.content || ''}${
-                                s.speakerNote ? `\nLời giảng / Thuyết minh:\n${s.speakerNote}` : ''
-                            }`,
-                    )
+                    .map((s: any) => {
+                        const slideBody = this.extractFullSlideText(s);
+                        const bestNote =
+                            audioNoteMap.get(s.slideIndex) || s.speakerNote?.trim() || '';
+                        const parts = [`[Slide ${s.slideIndex}: ${s.title || ''}]`];
+                        if (slideBody) {
+                            parts.push(`Nội dung slide:\n${slideBody}`);
+                        }
+                        if (bestNote) {
+                            parts.push(`Lời giảng / Thuyết minh:\n${bestNote}`);
+                        }
+                        return parts.join('\n');
+                    })
                     .join('\n\n---\n\n');
-                contentSections.push(`=== NỘI DUNG CÁC SLIDE BÀI GIẢNG ===\n${slidesStr.substring(0, 28000)}`);
-            } else if (lesson.slideScript?.trim()) {
+
+                if (slidesStr.trim()) {
+                    contentSections.push(
+                        `=== NỘI DUNG SLIDE & LỜI GIẢNG BÀI HỌC (${displayTitle}) ===\n` +
+                            slidesStr.substring(0, 24000),
+                    );
+                }
+            } else if (lesson?.slideScript?.trim()) {
                 contentSections.push(
-                    `=== KỊCH BẢN SLIDE BÀI GIẢNG ===\n${lesson.slideScript.trim().substring(0, 25000)}`,
+                    `=== KỊCH BẢN SLIDE BÀI GIẢNG (${displayTitle}) ===\n` +
+                        lesson.slideScript.trim().substring(0, 20000),
                 );
             }
 
-            if (lesson.detailedOutline?.trim() || lesson.outlineRaw?.trim()) {
-                const outline = (lesson.detailedOutline || lesson.outlineRaw || '').trim();
-                contentSections.push(`=== ĐỀ CƯƠNG BÀI HỌC ===\n${outline.substring(0, 12000)}`);
+            // 3. Đề cương riêng của bài học (SyllabusLesson.outline + Lesson.detailedOutline / outlineRaw)
+            if (syllabusLesson?.outline?.trim()) {
+                contentSections.push(
+                    `=== ĐỀ CƯƠNG BÀI HỌC TRONG HỌC PHẦN (${displayTitle}) ===\n` +
+                        syllabusLesson.outline.trim().substring(0, 8000),
+                );
+            }
+            if (lesson?.detailedOutline?.trim() || lesson?.outlineRaw?.trim()) {
+                const lessonOutline = (lesson.detailedOutline || lesson.outlineRaw || '').trim();
+                // Avoid exact duplicate if outlineRaw was just copied verbatim from syllabusLesson.outline
+                if (lessonOutline && lessonOutline !== syllabusLesson?.outline?.trim()) {
+                    contentSections.push(
+                        `=== DÀN BÀI CHI TIẾT BÀI GIẢNG (${displayTitle}) ===\n` +
+                            lessonOutline.substring(0, 10000),
+                    );
+                }
+            }
+
+            // 4. Tài liệu Handout của bài học (GeneratedContent type = HANDOUT)
+            if (lesson && Array.isArray(lesson.generatedContents)) {
+                for (const gc of lesson.generatedContents) {
+                    if (gc.contentJson?.trim()) {
+                        const handoutText = this.formatHandoutContent(gc.contentJson);
+                        if (handoutText) {
+                            contentSections.push(
+                                `=== TÀI LIỆU HANDOUT BÀI HỌC (${displayTitle}) ===\n` +
+                                    handoutText.substring(0, 8000),
+                            );
+                        }
+                    }
+                }
+            }
+
+            // 5. Tài liệu tham khảo (SyllabusReference) — LỌC KHÓA PHẠM VI CHỈ RIÊNG BÀI HỌC NÀY
+            if (syllabusReferences.length > 0) {
+                const thisOutlineCombined = [
+                    syllabusLesson?.outline || '',
+                    lesson?.outlineRaw || '',
+                    lesson?.detailedOutline || '',
+                ]
+                    .filter(Boolean)
+                    .join('\n');
+
+                const otherLessonDescriptors = this.collectOtherLessonDescriptors(
+                    lessonOverview,
+                    allSyllabusLessons,
+                    allSubjectLessons,
+                );
+
+                const scopedRefText = this.extractLessonScopedReferencePassages(
+                    displayTitle,
+                    cleanTopic,
+                    thisOutlineCombined,
+                    otherLessonDescriptors,
+                    syllabusReferences,
+                    10000,
+                );
+
+                if (scopedRefText) {
+                    contentSections.push(
+                        `=== TRÍCH ĐOẠN TÀI LIỆU THAM KHẢO THUỘC RIÊNG PHẠM VI ${displayTitle} ===\n` +
+                            scopedRefText,
+                    );
+                }
+            }
+
+            // 6. Toàn bộ Ngân hàng câu hỏi đã có của bài học (Review + English + Interactive + QuestionBank + Đề hiện tại)
+            const existingItems = this.extractFullLessonQuestionBank(lesson, alreadyInExamSet);
+
+            // Nếu bài học mới chỉ có Ngân hàng câu hỏi mà chưa có văn bản slide/giáo trình, dùng tri thức từ Ngân hàng câu hỏi làm nguồn
+            if (contentSections.length === 0 && existingItems.length > 0) {
+                contentSections.push(
+                    `=== ĐƠN VỊ KIẾN THỨC TRỌNG TÂM TỪ NGÂN HÀNG CÂU HỎI CỦA BÀI (${displayTitle}) ===\n` +
+                        existingItems.join('\n').substring(0, 22000),
+                );
             }
 
             const fullContent = contentSections.join('\n\n').trim();
             if (!fullContent) {
                 throw new BadRequestException(
-                    `Bài học "${lesson.title}" chưa có nội dung (giáo trình, slide hoặc đề cương). Vui lòng tạo nội dung bài học trước.`,
+                    `Bài học "${displayTitle}" chưa có nội dung (đề cương bài, giáo trình, slide, tài liệu tham khảo hoặc ngân hàng câu hỏi). Vui lòng biên soạn nội dung cho bài học trước.`,
                 );
             }
 
-            const existingItems: string[] = [];
-            for (const rq of lesson.reviewQuestions.slice(0, 35)) {
-                existingItems.push(`- [Ôn tập Mức ${rq.level}] ${rq.question} (Đáp án: ${rq.correctAnswer})`);
-            }
-            for (const eq of lesson.englishQuestions.slice(0, 35)) {
-                existingItems.push(`- [${eq.questionType}] ${eq.questionText}`);
-            }
-            for (const ex of alreadyInExamSet.slice(0, 35)) {
-                existingItems.push(`- [Đã có trong đề] ${ex.question || ex.questionText}`);
-            }
-
-            const sub = lesson.subject;
             const subjectContextParts: string[] = [];
-            if (sub.majorName || sub.expertiseArea) {
-                subjectContextParts.push(`Chuyên ngành: ${sub.majorName || sub.expertiseArea}`);
+            if (subject.majorName || subject.expertiseArea) {
+                subjectContextParts.push(
+                    `Chuyên ngành: ${subject.majorName || subject.expertiseArea}`,
+                );
             }
-            if (sub.targetAudience) {
-                subjectContextParts.push(`Đối tượng: ${sub.targetAudience}`);
+            if (subject.targetAudience) {
+                subjectContextParts.push(`Đối tượng: ${subject.targetAudience}`);
             }
-            if (sub.additionalContext) {
-                subjectContextParts.push(`Định hướng môn học: ${sub.additionalContext}`);
+            if (subject.additionalContext) {
+                subjectContextParts.push(`Định hướng môn học: ${subject.additionalContext}`);
             }
 
             return {
-                id: lesson.id,
+                id: lessonOverview.id,
                 order: lessonOrder,
-                title: lesson.title,
-                subjectName: sub.name,
+                title: cleanTopic,
+                displayTitle,
+                subjectName: subject.name,
                 subjectContext: subjectContextParts.join(' | '),
                 contentText: fullContent,
                 existingQuestionsSummary:
                     existingItems.length > 0
                         ? existingItems.join('\n')
-                        : '(Chưa có câu hỏi cũ trong bài học này)',
+                        : '(Bài học này chưa có câu hỏi cũ trong ngân hàng câu hỏi)',
+                excludedLessonsGuard,
             };
         }
 
@@ -763,14 +1314,15 @@ export class ExamSetService implements OnModuleInit {
             include: { pptxSubject: true },
         });
 
-        if (!session) {
+        if (!session || session.userId !== userId) {
             throw new NotFoundException(`Không tìm thấy bài giảng PPTX ${lessonId}`);
         }
 
-        const lessonTitle =
+        const rawTitle =
             session.lessonTitle?.trim() ||
             fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '') ||
             `Bài ${lessonOrder}`;
+        const { cleanTopic, displayTitle } = this.normalizeLessonTitle(rawTitle, lessonOrder);
 
         const contentSections: string[] = [];
         if (session.contextText?.trim()) {
@@ -782,38 +1334,44 @@ export class ExamSetService implements OnModuleInit {
 
         const contentArr = this.safeJsonParse<any[]>(session.contentJson || '[]', []);
         const slidesArr = this.safeJsonParse<any[]>(session.slidesJson || '[]', []);
+        const slideLen = Math.max(
+            Array.isArray(contentArr) ? contentArr.length : 0,
+            Array.isArray(slidesArr) ? slidesArr.length : 0,
+        );
 
-        if (Array.isArray(contentArr) && contentArr.length > 0) {
-            const slidesText = contentArr
-                .map((s: any, idx: number) => {
-                    const slideNote =
-                        slidesArr[idx]?.noteFull ||
-                        slidesArr[idx]?.noteVN ||
-                        slidesArr[idx]?.noteEN ||
-                        '';
-                    const slideNum = (s.index ?? idx) + 1;
-                    return `[Slide ${slideNum}: ${s.title || ''}]\nNội dung:\n${
-                        Array.isArray(s.content) ? s.content.join('\n') : s.content || ''
-                    }${slideNote ? `\nLời giảng / Speaker note:\n${slideNote}` : ''}`;
-                })
-                .join('\n\n---\n\n');
-            contentSections.push(`=== NỘI DUNG CÁC SLIDE BÀI GIẢNG ===\n${slidesText.substring(0, 30000)}`);
-        } else if (Array.isArray(slidesArr) && slidesArr.length > 0) {
-            const slidesText = slidesArr
-                .map((s: any, idx: number) => {
-                    const slideNum = (s.index ?? idx) + 1;
-                    return `[Slide ${slideNum}: ${s.title || ''}]\nNội dung:\n${
-                        Array.isArray(s.content) ? s.content.join('\n') : s.content || ''
-                    }\nLời giảng / Speaker note:\n${s.noteFull || s.noteVN || s.noteEN || ''}`;
-                })
-                .join('\n\n---\n\n');
-            contentSections.push(`=== NỘI DUNG CÁC SLIDE BÀI GIẢNG ===\n${slidesText.substring(0, 30000)}`);
-        }
+        if (slideLen > 0) {
+            const slidesTextList: string[] = [];
+            for (let idx = 0; idx < slideLen; idx++) {
+                const cSlide = Array.isArray(contentArr) ? contentArr[idx] : null;
+                const sSlide = Array.isArray(slidesArr) ? slidesArr[idx] : null;
+                const slideNum = (sSlide?.index ?? cSlide?.index ?? idx) + 1;
+                const slideTitle = sSlide?.title || cSlide?.title || '';
+                const rawBullets = cSlide?.content ?? sSlide?.content ?? [];
+                const bulletText = Array.isArray(rawBullets)
+                    ? rawBullets.join('\n')
+                    : String(rawBullets || '');
+                const optItems = Array.isArray(sSlide?.optimizedContent)
+                    ? sSlide.optimizedContent
+                          .map((b: any) =>
+                              [b?.point, b?.description].filter(Boolean).join(': ').trim(),
+                          )
+                          .filter(Boolean)
+                          .join('\n')
+                    : '';
+                const combinedSlideBody = [bulletText.trim(), optItems.trim()]
+                    .filter(Boolean)
+                    .join('\n');
+                const slideNote =
+                    sSlide?.noteFull || sSlide?.noteVN || sSlide?.noteEN || '';
 
-        const fullContent = contentSections.join('\n\n').trim();
-        if (!fullContent) {
-            throw new BadRequestException(
-                `Bài giảng "${lessonTitle}" chưa có nội dung slide hoặc tài liệu đính kèm.`,
+                slidesTextList.push(
+                    `[Slide ${slideNum}: ${slideTitle}]` +
+                        (combinedSlideBody ? `\nNội dung:\n${combinedSlideBody}` : '') +
+                        (slideNote ? `\nLời giảng / Speaker note:\n${slideNote}` : ''),
+                );
+            }
+            contentSections.push(
+                `=== NỘI DUNG CÁC SLIDE BÀI GIẢNG ===\n${slidesTextList.join('\n\n---\n\n').substring(0, 30000)}`,
             );
         }
 
@@ -824,16 +1382,52 @@ export class ExamSetService implements OnModuleInit {
             : Array.isArray(sessionQuestions?.review)
             ? sessionQuestions.review
             : [];
-        const englishList = Array.isArray(sessionQuestions?.english) ? sessionQuestions.english : [];
+        const englishList = Array.isArray(sessionQuestions?.english)
+            ? sessionQuestions.english
+            : [];
+        const interactiveList = Array.isArray(sessionQuestions?.interactive)
+            ? sessionQuestions.interactive
+            : [];
 
-        for (const rq of reviewList.slice(0, 35)) {
-            existingItems.push(`- [Ôn tập Mức ${rq.level || 1}] ${rq.question} (Đáp án: ${rq.correctAnswer})`);
+        for (const rq of reviewList.slice(0, 60)) {
+            const distractors = [rq.optionB, rq.optionC, rq.optionD].filter(Boolean).join('; ');
+            existingItems.push(
+                `- [Ôn tập Mức ${rq.level || 1}] ${rq.question} | Đáp án đúng: ${rq.correctAnswer}` +
+                    (distractors ? ` | Nhiễu: ${distractors}` : '') +
+                    (rq.explanation ? ` | Giải thích: ${rq.explanation}` : ''),
+            );
         }
-        for (const eq of englishList.slice(0, 35)) {
-            existingItems.push(`- [${eq.questionType || 'MC'}] ${eq.questionText}`);
+        for (const eq of englishList.slice(0, 60)) {
+            const detail = this.summarizeEnglishQuestionData(eq.dataJson || eq.data);
+            existingItems.push(
+                `- [Tiếng Anh ${eq.questionType || 'MC'} - Mức ${eq.difficulty || 1}] ${eq.questionText}` +
+                    (detail ? ` | Đáp án: ${detail}` : '') +
+                    (eq.explanation ? ` | Giải thích: ${eq.explanation}` : ''),
+            );
         }
-        for (const ex of alreadyInExamSet.slice(0, 35)) {
-            existingItems.push(`- [Đã có trong đề] ${ex.question || ex.questionText}`);
+        for (const iq of interactiveList.slice(0, 30)) {
+            const ans = Array.isArray(iq.answers) ? iq.answers.join('; ') : '';
+            existingItems.push(
+                `- [Tương tác ${iq.questionType || 'MC'}] ${iq.questionText}` +
+                    (ans ? ` | Phương án: ${ans}` : ''),
+            );
+        }
+        for (const ex of alreadyInExamSet.slice(0, 60)) {
+            existingItems.push(`- [Đã có trong đề kiểm tra này] ${ex.question || ex.questionText}`);
+        }
+
+        if (contentSections.length === 0 && existingItems.length > 0) {
+            contentSections.push(
+                `=== ĐƠN VỊ KIẾN THỨC TỪ NGÂN HÀNG CÂU HỎI BÀI GIẢNG ===\n` +
+                    existingItems.join('\n').substring(0, 22000),
+            );
+        }
+
+        const fullContent = contentSections.join('\n\n').trim();
+        if (!fullContent) {
+            throw new BadRequestException(
+                `Bài giảng "${displayTitle}" chưa có nội dung slide, tài liệu đính kèm hoặc ngân hàng câu hỏi.`,
+            );
         }
 
         const sub = session.pptxSubject;
@@ -851,15 +1445,441 @@ export class ExamSetService implements OnModuleInit {
         return {
             id: session.id,
             order: lessonOrder,
-            title: lessonTitle,
+            title: cleanTopic,
+            displayTitle,
             subjectName: sub?.name || 'Môn học',
             subjectContext: subjectContextParts.join(' | '),
             contentText: fullContent,
             existingQuestionsSummary:
                 existingItems.length > 0
                     ? existingItems.join('\n')
-                    : '(Chưa có câu hỏi cũ trong bài học này)',
+                    : '(Bài học này chưa có câu hỏi cũ trong ngân hàng câu hỏi)',
+            excludedLessonsGuard,
         };
+    }
+
+    /**
+     * Extract full slide text from BOTH Slide.content AND Slide.optimizedContentJson (+ interactiveData)
+     */
+    private extractFullSlideText(slide: any): string {
+        const parts: string[] = [];
+        if (slide?.content?.trim()) {
+            parts.push(slide.content.trim());
+        }
+        if (slide?.optimizedContentJson?.trim()) {
+            const parsedOpt = this.safeJsonParse<any>(slide.optimizedContentJson, null);
+            const bullets = Array.isArray(parsedOpt)
+                ? parsedOpt
+                : Array.isArray(parsedOpt?.bullets)
+                ? parsedOpt.bullets
+                : [];
+            if (bullets.length > 0) {
+                const optLines = bullets
+                    .map((b: any) => {
+                        if (typeof b === 'string') return `- ${b.trim()}`;
+                        const pt = String(b?.point || '').trim();
+                        const desc = String(b?.description || '').trim();
+                        if (pt && desc) return `- ${pt}: ${desc}`;
+                        return pt || desc ? `- ${pt || desc}` : '';
+                    })
+                    .filter(Boolean);
+                if (optLines.length > 0) {
+                    const optBlock = optLines.join('\n');
+                    if (!parts.some((p) => p.includes(optBlock))) {
+                        parts.push(optBlock);
+                    }
+                }
+            }
+        }
+        return parts.join('\n');
+    }
+
+    private formatTextbookPlanSummary(rawPlan: string): string {
+        const plan = this.safeJsonParse<any>(rawPlan, null);
+        if (!plan || typeof plan !== 'object') {
+            return rawPlan.trim();
+        }
+        const lines: string[] = [];
+        if (Array.isArray(plan.learningOutcomes) && plan.learningOutcomes.length > 0) {
+            lines.push(`Chuẩn đầu ra bài học:\n- ${plan.learningOutcomes.join('\n- ')}`);
+        }
+        if (plan.contentOutline) {
+            lines.push(`Đề cương chi tiết:\n${String(plan.contentOutline)}`);
+        }
+        if (Array.isArray(plan.keyTerms) && plan.keyTerms.length > 0) {
+            lines.push(`Thuật ngữ trọng tâm: ${plan.keyTerms.join(', ')}`);
+        }
+        return lines.join('\n\n').trim();
+    }
+
+    private formatHandoutContent(rawContentJson: string): string {
+        const parsed = this.safeJsonParse<any>(rawContentJson, null);
+        if (!parsed) return rawContentJson.trim();
+        if (typeof parsed === 'string') return parsed.trim();
+        const lines: string[] = [];
+        if (parsed.title) lines.push(`Tiêu đề: ${parsed.title}`);
+        if (parsed.summary || parsed.overview) {
+            lines.push(String(parsed.summary || parsed.overview));
+        }
+        if (Array.isArray(parsed.sections)) {
+            for (const sec of parsed.sections) {
+                const heading = sec?.heading || sec?.title || '';
+                const body = Array.isArray(sec?.content)
+                    ? sec.content.join('\n')
+                    : String(sec?.content || sec?.body || '');
+                if (heading || body) {
+                    lines.push(`${heading ? `## ${heading}\n` : ''}${body}`.trim());
+                }
+            }
+        }
+        if (Array.isArray(parsed.keyTakeaways) && parsed.keyTakeaways.length > 0) {
+            lines.push(`Điểm chính:\n- ${parsed.keyTakeaways.join('\n- ')}`);
+        }
+        return lines.length > 0 ? lines.join('\n\n').trim() : JSON.stringify(parsed);
+    }
+
+    /**
+     * Collect full existing question bank of a Lesson across ALL 4 question tables + existing exam set
+     * so AI understands the lesson's assessment focus & creates 100% NEW questions without duplication.
+     */
+    private extractFullLessonQuestionBank(lesson: any, alreadyInExamSet: any[]): string[] {
+        const items: string[] = [];
+        const seenStems = new Set<string>();
+        const normStem = (s: string) =>
+            String(s || '')
+                .toLowerCase()
+                .replace(/\s+/g, ' ')
+                .trim();
+
+        if (lesson) {
+            // 1. ReviewQuestion (Bloom 3 levels)
+            const reviewQs = Array.isArray(lesson.reviewQuestions) ? lesson.reviewQuestions : [];
+            for (const rq of reviewQs.slice(0, 80)) {
+                const stem = String(rq.question || '').trim();
+                if (!stem) continue;
+                seenStems.add(normStem(stem));
+                const distractors = [rq.optionB, rq.optionC, rq.optionD]
+                    .map((o) => String(o || '').trim())
+                    .filter(Boolean)
+                    .join('; ');
+                items.push(
+                    `- [Câu hỏi Ôn tập bài học - Mức ${rq.level || 1}] Câu hỏi: ${stem} | Đáp án đúng: ${rq.correctAnswer}` +
+                        (distractors ? ` | Phương án nhiễu: ${distractors}` : '') +
+                        (rq.explanation ? ` | Giải thích: ${rq.explanation}` : ''),
+                );
+            }
+
+            // 2. QuestionBank (question_banks.questionsJson — supplement any questions not already in reviewQuestions)
+            if (lesson.questionBank?.questionsJson) {
+                const qbList = this.safeJsonParse<any[]>(lesson.questionBank.questionsJson, []);
+                if (Array.isArray(qbList)) {
+                    for (const qb of qbList.slice(0, 80)) {
+                        const stem = String(qb?.question || qb?.questionText || '').trim();
+                        if (!stem || seenStems.has(normStem(stem))) continue;
+                        seenStems.add(normStem(stem));
+                        const distractors = [qb?.optionB, qb?.optionC, qb?.optionD]
+                            .map((o) => String(o || '').trim())
+                            .filter(Boolean)
+                            .join('; ');
+                        items.push(
+                            `- [Ngân hàng câu hỏi bài học - Mức ${qb?.level || 1}] Câu hỏi: ${stem} | Đáp án đúng: ${qb?.correctAnswer || ''}` +
+                                (distractors ? ` | Phương án nhiễu: ${distractors}` : '') +
+                                (qb?.explanation ? ` | Giải thích: ${qb.explanation}` : ''),
+                        );
+                    }
+                }
+            }
+
+            // 3. EnglishQuestion (MC, MR, MATCH, CLOZE, TRUEFALSE with full dataJson)
+            const englishQs = Array.isArray(lesson.englishQuestions) ? lesson.englishQuestions : [];
+            for (const eq of englishQs.slice(0, 80)) {
+                const stem = String(eq.questionText || '').trim();
+                if (!stem) continue;
+                seenStems.add(normStem(stem));
+                const detail = this.summarizeEnglishQuestionData(eq.dataJson);
+                items.push(
+                    `- [Ngân hàng Tiếng Anh - ${eq.questionType || 'MC'} - Mức ${eq.difficulty || 1}] ${stem}` +
+                        (detail ? ` | Chi tiết đáp án: ${detail}` : '') +
+                        (eq.explanation ? ` | Giải thích: ${eq.explanation}` : ''),
+                );
+            }
+
+            // 4. InteractiveQuestion (answer1..answer10 + feedback)
+            const interactiveQs = Array.isArray(lesson.interactiveQuestions)
+                ? lesson.interactiveQuestions
+                : [];
+            for (const iq of interactiveQs.slice(0, 40)) {
+                const stem = String(iq.questionText || '').trim();
+                if (!stem || seenStems.has(normStem(stem))) continue;
+                seenStems.add(normStem(stem));
+                const rawAnswers: string[] = [];
+                for (let k = 1; k <= 10; k++) {
+                    const val = iq[`answer${k}`];
+                    if (typeof val === 'string' && val.trim()) {
+                        const t = val.trim();
+                        rawAnswers.push(
+                            t.startsWith('*') ? `${t.slice(1).trim()} [✓]` : t,
+                        );
+                    }
+                }
+                items.push(
+                    `- [Câu hỏi Tương tác bài học - ${iq.questionType || 'MC'}] ${stem}` +
+                        (rawAnswers.length > 0 ? ` | Phương án: ${rawAnswers.join('; ')}` : '') +
+                        (iq.correctFeedback ? ` | Giải thích: ${iq.correctFeedback}` : ''),
+                );
+            }
+        }
+
+        // 5. Questions already generated in this ExamQuestionSet for this lesson
+        for (const ex of alreadyInExamSet.slice(0, 80)) {
+            const stem = String(ex?.question || ex?.questionText || '').trim();
+            if (!stem) continue;
+            items.push(
+                `- [Đã có trong đề kiểm tra này] ${stem}` +
+                    (ex?.correctAnswer ? ` (Đáp án: ${ex.correctAnswer})` : ''),
+            );
+        }
+
+        return items;
+    }
+
+    private summarizeEnglishQuestionData(rawDataJson: any): string {
+        const data =
+            typeof rawDataJson === 'string'
+                ? this.safeJsonParse<any>(rawDataJson, {})
+                : rawDataJson || {};
+        if (!data || typeof data !== 'object') return '';
+        if (Array.isArray(data.options) && data.options.length > 0) {
+            return data.options
+                .map((o: any) => {
+                    const txt = String(o?.text ?? o?.answer ?? '').trim();
+                    const isRight = Number(o?.fraction) > 0 || Boolean(o?.isCorrect);
+                    return isRight ? `${txt} [✓]` : txt;
+                })
+                .filter(Boolean)
+                .join('; ');
+        }
+        if (Array.isArray(data.pairs) && data.pairs.length > 0) {
+            return data.pairs
+                .map((p: any) => `${p?.left ?? p?.subquestion ?? ''} -> ${p?.right ?? p?.answer ?? ''}`)
+                .join('; ');
+        }
+        if (data.clozeText) {
+            return String(data.clozeText).substring(0, 350);
+        }
+        if (data.correctAnswer !== undefined) {
+            return String(data.correctAnswer);
+        }
+        return '';
+    }
+
+    private collectOtherLessonDescriptors(
+        currentOverview: ExamLessonOverviewItem,
+        allSyllabusLessons: Array<{
+            id: string;
+            sortOrder: number;
+            title: string;
+            outline: string;
+            lessonId: string | null;
+        }>,
+        allSubjectLessons: ExamLessonOverviewItem[],
+    ): Array<{ title: string; outline: string }> {
+        const others: Array<{ title: string; outline: string }> = [];
+        const currentSlId =
+            currentOverview.syllabusLessonId ||
+            (currentOverview.id.startsWith('sl:') ? currentOverview.id.slice(3) : null);
+        const currentLessonId = currentOverview.lessonId || currentOverview.id;
+
+        const seenIds = new Set<string>();
+        for (const sl of allSyllabusLessons) {
+            if (currentSlId && sl.id === currentSlId) continue;
+            if (sl.lessonId && sl.lessonId === currentLessonId) continue;
+            seenIds.add(sl.id);
+            if (sl.lessonId) seenIds.add(sl.lessonId);
+            others.push({ title: sl.title || '', outline: sl.outline || '' });
+        }
+
+        for (const ov of allSubjectLessons) {
+            if (ov.id === currentOverview.id) continue;
+            if (ov.syllabusLessonId && seenIds.has(ov.syllabusLessonId)) continue;
+            if (ov.lessonId && seenIds.has(ov.lessonId)) continue;
+            others.push({ title: ov.displayTitle || ov.title || '', outline: '' });
+        }
+
+        return others;
+    }
+
+    /**
+     * Extract ONLY reference document passages that strongly match THIS lesson's title/outline
+     * AND score strictly higher for THIS lesson than for any OTHER lesson in the Subject.
+     * Prevents cross-lesson content leakage from whole-course reference books.
+     */
+    private extractLessonScopedReferencePassages(
+        displayTitle: string,
+        cleanTopic: string,
+        lessonOutline: string,
+        otherLessons: Array<{ title: string; outline: string }>,
+        references: Array<{ fileName: string; markdownContent: string | null }>,
+        maxTotalChars = 10000,
+    ): string {
+        const thisTitleTokens = this.tokenizeForScopeMatch(`${displayTitle} ${cleanTopic}`);
+        const thisOutlineTokens = this.tokenizeForScopeMatch(lessonOutline);
+        if (thisTitleTokens.size === 0 && thisOutlineTokens.size === 0) {
+            return '';
+        }
+
+        const otherTokenSets = otherLessons
+            .map((o) => ({
+                titleTokens: this.tokenizeForScopeMatch(o.title),
+                outlineTokens: this.tokenizeForScopeMatch(o.outline),
+            }))
+            .filter((o) => o.titleTokens.size > 0 || o.outlineTokens.size > 0);
+
+        const scoredChunks: Array<{ fileName: string; text: string; score: number }> = [];
+
+        for (const ref of references) {
+            const md = ref.markdownContent?.trim();
+            if (!md) continue;
+
+            const rawBlocks = this.splitReferenceIntoBlocks(md, 1400);
+            for (const block of rawBlocks) {
+                const headingLine = block.split('\n')[0] || '';
+                const headingTokens = this.tokenizeForScopeMatch(headingLine);
+                const bodyTokens = this.tokenizeForScopeMatch(block);
+                if (bodyTokens.size === 0) continue;
+
+                const thisScore = this.computeScopeAffinity(
+                    thisTitleTokens,
+                    thisOutlineTokens,
+                    headingTokens,
+                    bodyTokens,
+                );
+                if (thisScore < 0.18) continue;
+
+                let maxOtherScore = 0;
+                for (const other of otherTokenSets) {
+                    const oScore = this.computeScopeAffinity(
+                        other.titleTokens,
+                        other.outlineTokens,
+                        headingTokens,
+                        bodyTokens,
+                    );
+                    if (oScore > maxOtherScore) {
+                        maxOtherScore = oScore;
+                    }
+                }
+
+                // Strict boundary guard: passage must belong more strongly to THIS lesson than any other lesson
+                if (otherTokenSets.length > 0 && thisScore <= maxOtherScore * 1.12) {
+                    continue;
+                }
+
+                scoredChunks.push({
+                    fileName: ref.fileName,
+                    text: block,
+                    score: thisScore - maxOtherScore * 0.5,
+                });
+            }
+        }
+
+        if (scoredChunks.length === 0) return '';
+
+        scoredChunks.sort((a, b) => b.score - a.score);
+        const picked: string[] = [];
+        let usedChars = 0;
+        for (const chunk of scoredChunks.slice(0, 8)) {
+            const formatted = `[Nguồn: ${chunk.fileName}]\n${chunk.text}`;
+            if (usedChars + formatted.length > maxTotalChars && picked.length > 0) {
+                break;
+            }
+            picked.push(formatted);
+            usedChars += formatted.length;
+        }
+
+        return picked.join('\n\n---\n\n');
+    }
+
+    private splitReferenceIntoBlocks(markdown: string, maxChars = 1400): string[] {
+        const sections = markdown.split(/\n(?=#{1,6}\s)/g);
+        const blocks: string[] = [];
+        for (const sec of sections) {
+            const trimmed = sec.trim();
+            if (!trimmed) continue;
+            if (trimmed.length <= maxChars) {
+                blocks.push(trimmed);
+                continue;
+            }
+            const firstNewline = trimmed.indexOf('\n');
+            const secHeading =
+                firstNewline > 0 && trimmed.startsWith('#')
+                    ? trimmed.slice(0, firstNewline).trim()
+                    : '';
+            const paragraphs = trimmed.split(/\n\s*\n/);
+            let current = '';
+            for (const p of paragraphs) {
+                const candidate = current ? `${current}\n\n${p}` : p;
+                if (candidate.length > maxChars && current) {
+                    blocks.push(current.trim());
+                    current = secHeading ? `${secHeading}\n${p}` : p;
+                } else {
+                    current = candidate;
+                }
+            }
+            if (current.trim()) blocks.push(current.trim());
+        }
+        return blocks;
+    }
+
+    private tokenizeForScopeMatch(text: string): Set<string> {
+        if (!text) return new Set();
+        const stopWords = new Set([
+            'bai', 'bài', 'chuong', 'chương', 'phan', 'phần', 'muc', 'mục', 'gioi', 'giới',
+            'thieu', 'thiệu', 'tong', 'tổng', 'quan', 'noi', 'nội', 'dung', 'chinh', 'chính',
+            'hoc', 'học', 'sinh', 'vien', 'viên', 'trong', 'cua', 'của', 'cac', 'các', 'voi',
+            'với', 'cho', 'theo', 'tren', 'trên', 'duoi', 'dưới', 'nhung', 'những', 'mot',
+            'một', 'hai', 'ba', 'bon', 'nam', 'sau', 'bay', 'tam', 'chin', 'muoi', 'the',
+            'and', 'for', 'with', 'from', 'that', 'this', 'into', 'lesson', 'unit', 'chapter',
+            'topic', 'introduction', 'overview', 'section', 'part',
+        ]);
+        const tokens = text
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+            .split(/\s+/)
+            .filter((t) => t.length >= 3 && !stopWords.has(t) && !/^\d+$/.test(t));
+        return new Set(tokens);
+    }
+
+    private computeScopeAffinity(
+        titleTokens: Set<string>,
+        outlineTokens: Set<string>,
+        headingTokens: Set<string>,
+        bodyTokens: Set<string>,
+    ): number {
+        let titleHitsInHeading = 0;
+        let titleHitsInBody = 0;
+        for (const t of titleTokens) {
+            if (headingTokens.has(t)) titleHitsInHeading++;
+            if (bodyTokens.has(t)) titleHitsInBody++;
+        }
+
+        let outlineHitsInBody = 0;
+        for (const t of outlineTokens) {
+            if (bodyTokens.has(t)) outlineHitsInBody++;
+        }
+
+        const titleScore =
+            titleTokens.size > 0
+                ? (titleHitsInHeading * 1.6 + titleHitsInBody) / titleTokens.size
+                : 0;
+        const outlineScore =
+            outlineTokens.size > 0
+                ? outlineHitsInBody / Math.min(outlineTokens.size, 25)
+                : 0;
+
+        if (titleTokens.size > 0 && outlineTokens.size > 0) {
+            return titleScore * 0.65 + outlineScore * 0.35;
+        }
+        return titleTokens.size > 0 ? titleScore : outlineScore;
     }
 
     /**
@@ -912,35 +1932,39 @@ export class ExamSetService implements OnModuleInit {
         },
         globalStartIndex: number,
     ): Promise<ExamReviewQuestionData[]> {
+        const excludedGuardBlock = ctx.excludedLessonsGuard
+            ? `\n[PHẠM VI CẤM — CÁC BÀI HỌC KHÔNG ĐƯỢC CHỌN TRONG ĐỀ KIỂM TRA NÀY]:\n${ctx.excludedLessonsGuard}\n=> TUYỆT ĐỐI CẤM đặt bất kỳ câu hỏi, đáp án hay tình huống nào lấn sang nội dung riêng của các bài không được chọn ở trên.\n`
+            : '';
+
         const prompt = `Bạn là Chuyên gia Khảo thí & Đo lường Giáo dục Đại học.
-Nhiệm vụ của bạn là biên soạn CHÍNH XÁC ${quota.total} câu hỏi trắc nghiệm khách quan (4 lựa chọn) cho ĐỀ KIỂM TRA từ bài học: "Bài ${ctx.order}: ${ctx.title}" thuộc môn "${ctx.subjectName}".
+Nhiệm vụ của bạn là biên soạn THÊM CHÍNH XÁC ${quota.total} câu hỏi trắc nghiệm khách quan MỚI (4 lựa chọn) cho ĐỀ KIỂM TRA từ duy nhất bài học: "${ctx.displayTitle}" thuộc môn "${ctx.subjectName}".
 ${ctx.subjectContext ? `Thông tin môn học: ${ctx.subjectContext}` : ''}
 
 =====================================================================
 QUY TẮC KHẢO THÍ TỐI THƯỢNG (BẮT BUỘC TUÂN THỦ 100%):
-1. PHẠM VI KHÉP KÍN TUYỆT ĐỐI (CLOSED-WORLD GROUNDING):
-   - 100% câu hỏi, đáp án đúng, phương án nhiễu và giải thích BẮT BUỘC phải dựa hoàn toàn vào [NỘI DUNG BÀI HỌC NGUỒN] được cung cấp bên dưới.
-   - TUYỆT ĐỐI CẤM đưa bất kỳ kiến thức, khái niệm, số liệu hay sự kiện nào KHÔNG CÓ trong nội dung bài học này.
-2. TRÍCH DẪN NGUỒN RÕ RÀNG (SOURCE SECTION):
-   - Mỗi câu hỏi BẮT BUỘC phải điền trường "sourceSection" chỉ rõ câu hỏi được trích xuất từ Slide số mấy hoặc Mục kiến thức nào của bài học (ví dụ: "Slide 3: Khái niệm...", "Mục 2.1: Phân loại...").
-3. KẾ THỪA PHONG CÁCH & CHỐNG TRÙNG LẶP 100% (ANTI-DUPLICATION):
-   - Tham khảo [DANH SÁCH CÂU HỎI ĐÃ CÓ CỦA BÀI HỌC] để nắm bắt chuẩn thuật ngữ và phong cách hỏi.
-   - Tuyệt đối KHÔNG sao chép hay lặp lại câu hỏi đã có. Phải tạo mới 100% góc hỏi, tình huống hoặc cách kiểm tra kiến thức trong bài.
+1. GIỚI HẠN CỨNG TRONG PHẠM VI BÀI HỌC ĐÃ CHỌN (STRICT LESSON-SCOPE GROUNDING):
+   - 100% câu hỏi, đáp án đúng, phương án nhiễu và giải thích BẮT BUỘC chỉ được nằm trong giới hạn nội dung của bài "${ctx.displayTitle}" dựa trên [NỘI DUNG BÀI HỌC NGUỒN] và [NGÂN HÀNG CÂU HỎI ĐÃ CÓ CỦA BÀI HỌC] bên dưới.
+   - TUYỆT ĐỐI CẤM đưa bất kỳ kiến thức, khái niệm, số liệu hay chủ đề nào nằm ngoài bài học này hoặc thuộc các bài học khác chưa chọn.
+2. KHAI THÁC NGÂN HÀNG CÂU HỎI CỦA BÀI ĐỂ TẠO THÊM CÂU HỎI MỚI 100%:
+   - Phân tích kỹ cả [NỘI DUNG BÀI HỌC NGUỒN] lẫn [NGÂN HÀNG CÂU HỎI ĐÃ CÓ CỦA BÀI HỌC] (bao gồm câu hỏi, đáp án, phương án nhiễu và giải thích) để nắm chắc toàn bộ kiến thức trọng tâm, độ sâu học thuật và chuẩn thuật ngữ của bài học này.
+   - Từ đó tạo thêm ${quota.total} câu hỏi MỚI 100% cho bài học: khai thác góc hỏi mới, tình huống/ví dụ ứng dụng mới hoặc các đơn vị kiến thức trong bài chưa bị trùng. Tuyệt đối KHÔNG sao chép nguyên văn câu hỏi cũ.
+3. TRÍCH DẪN NGUỒN RÕ RÀNG (SOURCE SECTION):
+   - Mỗi câu hỏi BẮT BUỘC điền trường "sourceSection" chỉ rõ câu hỏi thuộc Slide số mấy, Mục giáo trình/đề cương nào của bài học (ví dụ: "Slide 3: Khái niệm...", "Mục 2.1: Phân loại...").
 4. QUY TẮC ĐỊNH DẠNG MOODLE LMS:
-   - Phân bổ độ khó Bloom:
+   - Phân bổ độ khó Bloom chính xác:
      + Mức 1 (Biết / Remember): ${quota.level1} câu
      + Mức 2 (Hiểu / Understand): ${quota.level2} câu
      + Mức 3 (Vận dụng / Apply): ${quota.level3} câu
    - Mỗi câu gồm: "correctAnswer" (1 đáp án đúng duy nhất) và 3 phương án nhiễu ("optionB", "optionC", "optionD") có độ dài và cấu trúc ngữ pháp tương đương.
    - TUYỆT ĐỐI KHÔNG gắn tiền tố "A.", "B.", "C.", "D." vào đầu nội dung các phương án.
-   - Trường "explanation": Giải thích rõ bản chất vì sao đáp án đúng dựa vào nội dung bài học. TUYỆT ĐỐI KHÔNG dùng cụm từ "Đáp án A đúng vì..." hay "Chọn B vì..." (do LMS sẽ xáo trộn thứ tự đáp án).
+   - Trường "explanation": Giải thích rõ bản chất vì sao đáp án đúng dựa vào kiến thức bài học. TUYỆT ĐỐI KHÔNG dùng cụm từ "Đáp án A đúng vì..." hay "Chọn B vì..." (do LMS sẽ xáo trộn thứ tự đáp án).
 ${quota.customInstructions ? `5. YÊU CẦU BỔ SUNG TỪ GIẢNG VIÊN:\n   ${quota.customInstructions}` : ''}
 =====================================================================
-
-[DANH SÁCH CÂU HỎI ĐÃ CÓ CỦA BÀI HỌC (ĐỂ THAM KHẢO PHONG CÁCH & TRÁNH TRÙNG LẶP)]:
+${excludedGuardBlock}
+[NGÂN HÀNG CÂU HỎI ĐÃ CÓ CỦA BÀI HỌC "${ctx.displayTitle}" (DÙNG ĐỂ NẮM TRỌNG TÂM KIẾN THỨC & TẠO THÊM CÂU HỎI MỚI KHÔNG TRÙNG LẶP)]:
 ${ctx.existingQuestionsSummary}
 
-[NỘI DUNG BÀI HỌC NGUỒN — BÀI ${ctx.order}: ${ctx.title}]:
+[NỘI DUNG BÀI HỌC NGUỒN — ${ctx.displayTitle}]:
 ${ctx.contentText}
 
 =====================================================================
@@ -950,7 +1974,7 @@ Hãy trả lời CHỈ BẰNG JSON HỢP LỆ theo đúng cấu trúc sau (khôn
   "questions": [
     {
       "level": 1,
-      "sourceSection": "Slide 2: Tên mục hoặc tiêu đề slide",
+      "sourceSection": "Slide 2 / Mục 1.2: Tên mục kiến thức",
       "question": "Nội dung câu hỏi rõ ràng, chuẩn học thuật?",
       "correctAnswer": "Nội dung đáp án đúng (không có tiền tố A.)",
       "optionB": "Nội dung phương án nhiễu 1",
@@ -968,7 +1992,7 @@ Hãy trả lời CHỈ BẰNG JSON HỢP LỆ theo đúng cấu trúc sau (khôn
         const parsedList = this.parseQuestionsArrayFromAiResponse(aiResult.content);
 
         const results: ExamReviewQuestionData[] = [];
-        for (let i = 0; i < parsedList.length; i++) {
+        for (let i = 0; i < parsedList.length && results.length < quota.total; i++) {
             const raw = parsedList[i];
             const questionText = String(raw.question || raw.questionText || '').trim();
             const correctAnswer = stripOptionPrefix(String(raw.correctAnswer || ''));
@@ -994,8 +2018,8 @@ Hãy trả lời CHỈ BẰNG JSON HỢP LỆ theo đúng cấu trúc sau (khôn
                 optionD: optionD || '-',
                 explanation: cleanExplanation(raw.explanation || ''),
                 sourceLessonId: ctx.id,
-                sourceLessonTitle: `Bài ${ctx.order}: ${ctx.title}`,
-                sourceSection: String(raw.sourceSection || `Bài ${ctx.order}`).trim(),
+                sourceLessonTitle: ctx.displayTitle,
+                sourceSection: String(raw.sourceSection || ctx.displayTitle).trim(),
             });
         }
 
@@ -1028,19 +2052,24 @@ Hãy trả lời CHỈ BẰNG JSON HỢP LỆ theo đúng cấu trúc sau (khôn
         const subDiscipline =
             quota.subDiscipline || 'ALL (Comprehensive English Studies & Linguistics)';
 
+        const excludedGuardBlock = ctx.excludedLessonsGuard
+            ? `\n[FORBIDDEN OUT-OF-SCOPE LESSONS — NOT SELECTED FOR THIS EXAM]:\n${ctx.excludedLessonsGuard}\n=> STRICTLY DO NOT test any grammar rules, vocabulary sets, or topics that belong exclusively to the unselected lessons listed above.\n`
+            : '';
+
         const prompt = `You are an Assessment Specialist in University-Level English Studies & Linguistics.
-Generate EXACTLY ${quota.total} 100% NEW, auto-gradable exam questions for Lesson ${ctx.order}: "${ctx.title}" (Course: "${ctx.subjectName}", Sub-discipline focus: ${subDiscipline}).
+Generate EXACTLY ${quota.total} 100% NEW, auto-gradable exam questions strictly bounded to "${ctx.displayTitle}" (Course: "${ctx.subjectName}", Sub-discipline focus: ${subDiscipline}).
 ${ctx.subjectContext ? `Course context: ${ctx.subjectContext}` : ''}
 
 =====================================================================
 STRICT ASSESSMENT & GROUNDING RULES (100% MANDATORY):
-1. CLOSED-WORLD GROUNDING (100% BOUNDED TO SOURCE LESSON):
-   - Every single question, option, matching pair, cloze blank, and explanation MUST be derived strictly from the [SOURCE LESSON CONTENT] below.
-   - DO NOT introduce outside topics, vocabulary, or concepts that are not covered in this lesson.
-2. SOURCE CITATION ("sourceSection"):
+1. STRICT SELECTED-LESSON BOUNDARY (CLOSED-WORLD GROUNDING):
+   - Every single question, option, matching pair, cloze blank, and explanation MUST be derived strictly within the scope of "${ctx.displayTitle}" from the [SOURCE LESSON CONTENT] and [EXISTING LESSON QUESTION BANK] below.
+   - DO NOT introduce outside topics, grammar points, vocabulary, or concepts from unselected lessons.
+2. LEVERAGE EXISTING LESSON QUESTION BANK TO CREATE 100% NEW QUESTIONS:
+   - Study BOTH the [SOURCE LESSON CONTENT] and the [EXISTING LESSON QUESTION BANK] (stems, answers, options/pairs, explanations) to master the exact target structures, academic depth, and assessment focus of this lesson.
+   - Generate ${quota.total} brand-new exam questions testing fresh contexts, examples, and angles of this lesson's content WITHOUT duplicating or trivially copying existing questions.
+3. SOURCE CITATION ("sourceSection"):
    - Every question MUST include a "sourceSection" field indicating the exact Slide number or Section in the lesson (e.g., "Slide 5: Past Perfect Continuous" or "Section 2: Lexical Collocations").
-3. STYLE CONTINUITY & 100% ANTI-DUPLICATION:
-   - Review the [EXISTING LESSON QUESTIONS] below to maintain consistent academic level and terminology, but DO NOT duplicate or paraphrase existing questions. Create 100% new questions.
 4. ALLOWED AUTO-GRADABLE MOODLE QUESTION TYPES ONLY (${activeTypes.join(', ')}):
    - NEVER generate ESSAY or SHORTANSWER questions.
    - Difficulty distribution:
@@ -1060,11 +2089,11 @@ STRICT ASSESSMENT & GROUNDING RULES (100% MANDATORY):
        "data": { "correctAnswer": true } (or false)
 ${quota.customInstructions ? `5. ADDITIONAL INSTRUCTOR INSTRUCTIONS:\n   ${quota.customInstructions}` : ''}
 =====================================================================
-
-[EXISTING LESSON QUESTIONS (FOR STYLE REFERENCE & ANTI-DUPLICATION ONLY)]:
+${excludedGuardBlock}
+[EXISTING LESSON QUESTION BANK FOR "${ctx.displayTitle}" (USE TO ALIGN ASSESSMENT FOCUS & CREATE 100% NEW NON-DUPLICATE QUESTIONS)]:
 ${ctx.existingQuestionsSummary}
 
-[SOURCE LESSON CONTENT — LESSON ${ctx.order}: ${ctx.title}]:
+[SOURCE LESSON CONTENT — ${ctx.displayTitle}]:
 ${ctx.contentText}
 
 =====================================================================
@@ -1100,7 +2129,7 @@ Respond ONLY with valid JSON in the exact format below:
         const parsedList = this.parseQuestionsArrayFromAiResponse(aiResult.content);
 
         const results: ExamEnglishQuestionData[] = [];
-        for (let i = 0; i < parsedList.length; i++) {
+        for (let i = 0; i < parsedList.length && results.length < quota.total; i++) {
             const item = parsedList[i];
             let qType = String(item.questionType || 'MC').toUpperCase();
             const questionText = String(item.questionText || item.question || '').trim();
@@ -1178,8 +2207,8 @@ Respond ONLY with valid JSON in the exact format below:
                 explanation: cleanExplanation(explanation),
                 points: Number(item.points) || 1,
                 sourceLessonId: ctx.id,
-                sourceLessonTitle: `Bài ${ctx.order}: ${ctx.title}`,
-                sourceSection: String(item.sourceSection || `Bài ${ctx.order}`).trim(),
+                sourceLessonTitle: ctx.displayTitle,
+                sourceSection: String(item.sourceSection || ctx.displayTitle).trim(),
             });
         }
 

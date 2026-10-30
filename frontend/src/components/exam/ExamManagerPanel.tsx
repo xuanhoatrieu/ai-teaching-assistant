@@ -43,6 +43,24 @@ function toClientCategorySlug(raw: string): string {
     );
 }
 
+function getLessonDisplayTitle(lesson: ExamLessonOverviewItem): string {
+    if (lesson.displayTitle && lesson.displayTitle.trim()) {
+        return lesson.displayTitle.trim();
+    }
+    const padded = String(lesson.order).padStart(2, '0');
+    const raw = (lesson.title || '').trim();
+    if (!raw) return `Bài ${padded}`;
+    if (/^(?:Bài|Bai|Lesson|Unit|Chương|Chuong|Chapter)\s*\d+/i.test(raw)) {
+        return raw;
+    }
+    return `Bài ${padded}: ${raw}`;
+}
+
+function truncateText(text: string, maxLen: number): string {
+    if (text.length <= maxLen) return text;
+    return `${text.slice(0, maxLen - 1).trim()}…`;
+}
+
 export function ExamManagerPanel({
     mode,
     subjectId,
@@ -54,6 +72,7 @@ export function ExamManagerPanel({
     const [activeExamSet, setActiveExamSet] = useState<ExamSetDetail | null>(null);
     const [isCreateView, setIsCreateView] = useState<boolean>(true);
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [isRefreshingLessons, setIsRefreshingLessons] = useState<boolean>(false);
     const [bannerMessage, setBannerMessage] = useState<{
         type: 'success' | 'error' | 'info';
         text: string;
@@ -126,9 +145,16 @@ export function ExamManagerPanel({
         }
     }, [subjectId, pptxSubjectId]);
 
-    const fetchOverviewAndSets = async (selectExamSetId?: string) => {
+    const fetchOverviewAndSets = async (
+        selectExamSetId?: string,
+        options?: { preserveSelection?: boolean; silentLoading?: boolean },
+    ) => {
         try {
-            setIsLoading(true);
+            if (options?.silentLoading) {
+                setIsRefreshingLessons(true);
+            } else {
+                setIsLoading(true);
+            }
             const [overviewRes, setsRes] = await Promise.all([
                 examSetsApi.getLessonsOverview(targetParams),
                 examSetsApi.list(targetParams),
@@ -140,23 +166,57 @@ export function ExamManagerPanel({
                 setQuestionMode('ENGLISH');
             }
 
-            // Default select first 6 lessons with content
-            const availableWithContent = loadedLessons.filter((l) => l.hasContent);
-            const initialSelected = (
-                availableWithContent.length > 0 ? availableWithContent : loadedLessons
-            )
-                .slice(0, 6)
-                .map((l) => l.id);
-            setSelectedLessonIds(initialSelected);
-            setRangeFromOrder(1);
-            setRangeToOrder(Math.min(6, Math.max(1, loadedLessons.length)));
+            const validIdMap = new Map<string, string>();
+            for (const l of loadedLessons) {
+                validIdMap.set(l.id, l.id);
+                if (l.syllabusLessonId) {
+                    validIdMap.set(`sl:${l.syllabusLessonId}`, l.id);
+                }
+            }
+
+            if (options?.preserveSelection) {
+                setSelectedLessonIds((prev) => {
+                    const remapped = Array.from(
+                        new Set(
+                            prev
+                                .map((id) => validIdMap.get(id))
+                                .filter((id): id is string => Boolean(id)),
+                        ),
+                    );
+                    if (remapped.length > 0) return remapped;
+                    const available = loadedLessons.filter((l) => l.hasContent);
+                    return (available.length > 0 ? available : loadedLessons)
+                        .slice(0, 6)
+                        .map((l) => l.id);
+                });
+            } else {
+                // Default select up to first 6 created lessons with content
+                const availableWithContent = loadedLessons.filter((l) => l.hasContent);
+                const initialSelected = (
+                    availableWithContent.length > 0 ? availableWithContent : loadedLessons
+                )
+                    .slice(0, 6)
+                    .map((l) => l.id);
+                setSelectedLessonIds(initialSelected);
+            }
+
+            if (loadedLessons.length > 0) {
+                const firstOrder = loadedLessons[0].order;
+                const defaultEndIdx = Math.min(5, loadedLessons.length - 1);
+                const endOrder = loadedLessons[defaultEndIdx].order;
+                setRangeFromOrder(firstOrder);
+                setRangeToOrder(endOrder);
+            } else {
+                setRangeFromOrder(1);
+                setRangeToOrder(1);
+            }
 
             const sets = setsRes.data || [];
             setExamSets(sets);
 
             if (selectExamSetId) {
                 await handleSelectExamSet(selectExamSetId);
-            } else if (sets.length > 0 && !activeExamSet) {
+            } else if (!options?.preserveSelection && sets.length > 0 && !activeExamSet) {
                 await handleSelectExamSet(sets[0].id);
             } else if (sets.length === 0) {
                 setIsCreateView(true);
@@ -169,6 +229,7 @@ export function ExamManagerPanel({
             });
         } finally {
             setIsLoading(false);
+            setIsRefreshingLessons(false);
         }
     };
 
@@ -191,11 +252,11 @@ export function ExamManagerPanel({
     // Update suggested category slug when selected lessons change (if not manually edited)
     useEffect(() => {
         if (isCategoryTouched || lessons.length === 0) return;
-        const chosenOrders = lessons
+        const chosenLessons = lessons
             .filter((l) => selectedLessonIds.includes(l.id))
-            .map((l) => l.order)
-            .sort((a, b) => a - b);
-        if (chosenOrders.length > 0) {
+            .sort((a, b) => a.order - b.order);
+        if (chosenLessons.length > 0) {
+            const chosenOrders = chosenLessons.map((l) => l.order);
             const first = chosenOrders[0];
             const last = chosenOrders[chosenOrders.length - 1];
             const isContiguous = chosenOrders.length === last - first + 1;
@@ -207,8 +268,8 @@ export function ExamManagerPanel({
                     : `Bai_${chosenOrders.join('_')}`;
             setCategoryName(`Giua_Ky_${rangeText}`);
             setExamName(
-                chosenOrders.length === 1
-                    ? `Kiểm tra Bài ${first}`
+                chosenLessons.length === 1
+                    ? `Kiểm tra ${truncateText(getLessonDisplayTitle(chosenLessons[0]), 60)}`
                     : isContiguous
                     ? `Kiểm tra Giữa kỳ (Bài ${first} - Bài ${last})`
                     : `Kiểm tra Tổng hợp (${chosenOrders.map((o) => `Bài ${o}`).join(', ')})`,
@@ -490,10 +551,14 @@ export function ExamManagerPanel({
                         {subjectName ? ` — ${subjectName}` : ''}
                     </h2>
                     <p>
-                        Chọn phạm vi bài học (VD: Bài 1 → Bài 6), hệ thống tự động đối chiếu{' '}
-                        <strong>100% nội dung bài học + câu hỏi ôn tập/tiếng Anh đã có</strong> để sinh mới
-                        100% câu hỏi không trùng lặp, tuyệt đối không vượt ngoài phạm vi bài đã chọn và
-                        gom vào <strong>1 Category Moodle duy nhất</strong>.
+                        Tự động tải đầy đủ danh sách các bài học đã tạo của môn học, chia đều số lượng
+                        câu hỏi cho từng bài được chọn và tổng hợp{' '}
+                        <strong>
+                            100% nguồn dữ liệu bài học (Giáo trình, Slide, Lời giảng, Đề cương, Handout,
+                            Tài liệu TK) + Ngân hàng câu hỏi của từng bài
+                        </strong>{' '}
+                        để sinh mới 100% câu hỏi nằm trọn trong giới hạn các bài đã chọn và gom vào{' '}
+                        <strong>1 Category Moodle duy nhất</strong>.
                     </p>
                 </div>
                 <button
@@ -672,11 +737,12 @@ export function ExamManagerPanel({
                         <div className="exam-lessons-toolbar">
                             <div>
                                 <strong style={{ fontSize: '0.93rem', color: '#f8fafc' }}>
-                                    📚 Chọn các Bài học nằm trong phạm vi Kiểm tra ({selectedLessonIds.length}/
-                                    {lessons.length} bài đã chọn)
+                                    📚 Chọn các Bài học đã tạo nằm trong phạm vi Kiểm tra (
+                                    {selectedLessonIds.length}/{lessons.length} bài đã chọn)
                                 </strong>
                                 <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2 }}>
-                                    AI cam kết CHỈ ra câu hỏi nằm trong nội dung các bài được tích chọn bên dưới.
+                                    Đề kiểm tra được tạo theo từng bài đã chọn (chia đều số câu + lấy đủ nội
+                                    dung &amp; ngân hàng câu hỏi của bài đó), tuyệt đối không lấn sang bài không chọn.
                                 </div>
                             </div>
 
@@ -688,7 +754,7 @@ export function ExamManagerPanel({
                                 >
                                     {lessons.map((l) => (
                                         <option key={l.id} value={l.order}>
-                                            Bài {l.order}
+                                            {truncateText(getLessonDisplayTitle(l), 46)}
                                         </option>
                                     ))}
                                 </select>
@@ -699,7 +765,7 @@ export function ExamManagerPanel({
                                 >
                                     {lessons.map((l) => (
                                         <option key={l.id} value={l.order}>
-                                            Bài {l.order}
+                                            {truncateText(getLessonDisplayTitle(l), 46)}
                                         </option>
                                     ))}
                                 </select>
@@ -720,12 +786,27 @@ export function ExamManagerPanel({
                                 >
                                     Bỏ chọn
                                 </button>
+                                <button
+                                    type="button"
+                                    className="btn-Exam-mini"
+                                    disabled={isRefreshingLessons}
+                                    onClick={() =>
+                                        fetchOverviewAndSets(undefined, {
+                                            preserveSelection: true,
+                                            silentLoading: true,
+                                        })
+                                    }
+                                    title="Tải lại danh sách bài học đã tạo từ Đề cương & Bài giảng"
+                                >
+                                    {isRefreshingLessons ? '⏳ Đang tải...' : '🔄 Làm mới DS bài'}
+                                </button>
                             </div>
                         </div>
 
                         {lessons.length === 0 ? (
                             <div style={{ padding: '16px', color: '#94a3b8', textAlign: 'center' }}>
-                                Môn học này chưa có bài học nào. Vui lòng tạo bài học trước khi tạo đề kiểm tra.
+                                Môn học này chưa có bài học nào được tạo trong tab Đề cương hoặc Bài giảng. Vui
+                                lòng tạo bài học trước khi tạo đề kiểm tra.
                             </div>
                         ) : (
                             <div className="exam-lessons-grid">
@@ -734,6 +815,15 @@ export function ExamManagerPanel({
                                     const quotaVal = useCustomPerLessonQuota
                                         ? perLessonCounts[lesson.id] ?? autoQuotaByLessonId[lesson.id] ?? 0
                                         : autoQuotaByLessonId[lesson.id] ?? 0;
+                                    const badges =
+                                        lesson.sourceBadges && lesson.sourceBadges.length > 0
+                                            ? lesson.sourceBadges
+                                            : [];
+                                    const bankTotal =
+                                        lesson.questionBankTotal ??
+                                        lesson.reviewQuestionCount +
+                                            lesson.englishQuestionCount +
+                                            (lesson.interactiveQuestionCount || 0);
                                     return (
                                         <div
                                             key={lesson.id}
@@ -751,15 +841,37 @@ export function ExamManagerPanel({
                                                 />
                                                 <div>
                                                     <div className="exam-lesson-infoTitle">
-                                                        Bài {lesson.order}: {lesson.title}
+                                                        {getLessonDisplayTitle(lesson)}
                                                     </div>
-                                                    <div className="exam-lesson-meta">
-                                                        📄 {lesson.contentSummary} · Ngân hàng cũ:{' '}
-                                                        {lesson.reviewQuestionCount} câu ôn tập
-                                                        {lesson.englishQuestionCount > 0
-                                                            ? ` • ${lesson.englishQuestionCount} câu EN`
-                                                            : ''}
-                                                    </div>
+                                                    {badges.length > 0 ? (
+                                                        <div className="exam-lesson-badges">
+                                                            {badges.map((badge, bIdx) => (
+                                                                <span
+                                                                    key={bIdx}
+                                                                    className={`exam-lesson-badge ${
+                                                                        badge.startsWith('❓') ? 'bank' : ''
+                                                                    }`}
+                                                                >
+                                                                    {badge}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="exam-lesson-meta">
+                                                            {lesson.hasContent ? (
+                                                                <>
+                                                                    📄 {lesson.contentSummary}
+                                                                    {bankTotal > 0
+                                                                        ? ` · Ngân hàng: ${bankTotal} câu`
+                                                                        : ''}
+                                                                </>
+                                                            ) : (
+                                                                <span className="exam-lesson-badge empty">
+                                                                    ⚠️ Chưa có nội dung bài học
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                             {isChecked && (
