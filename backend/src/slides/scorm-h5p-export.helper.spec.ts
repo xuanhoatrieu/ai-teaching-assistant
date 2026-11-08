@@ -566,5 +566,51 @@ describe('SCORM 1.2 & H5P Full-Slide Canvas and Media Security Helpers', () => {
             expect(getEl('progressFill').style.width).toBe('100%');
             expect(cmiStore['cmi.core.lesson_status']).toBe('completed');
         });
+
+        it('enables vertical scrolling inside .slide-body-container for slides with 5+ interactive questions in template background modes', () => {
+            const fiveQuestionSlide = [
+                {
+                    slideIndex: 1,
+                    slideType: 'title',
+                    title: 'Cover Slide',
+                    content: [],
+                },
+                {
+                    slideIndex: 2,
+                    slideType: 'checkpoint_quiz',
+                    layoutType: 'checkpoint_gate',
+                    title: 'Kiểm tra kiến thức (5 câu)',
+                    interactiveData: JSON.stringify({
+                        isCheckpoint: true,
+                        passScore: 4,
+                        fallbackSlideIndex: 1,
+                        questions: [1, 2, 3, 4, 5].map((n) => ({
+                            id: `q${n}`,
+                            type: 'MC',
+                            question: `Câu hỏi tương tác số ${n}?`,
+                            options: ['Đáp án A', 'Đáp án B', 'Đáp án C', 'Đáp án D'],
+                            correctAnswer: 'Đáp án A',
+                        })),
+                    }),
+                },
+            ];
+
+            const html = generateScormPlayerHtml('Bài giảng 5 câu tương tác', fiveQuestionSlide, {
+                bgOption: 'custom',
+                hasTitleBg: true,
+                hasContentBg: true,
+                theme: 'light',
+            });
+
+            expect(html).toContain('has-tuaf-content-bg');
+            expect(html).toContain('overflow-y: auto;');
+            expect(html).toContain('justify-content: flex-start;');
+            expect(html).toContain('max-height: calc(100vh - 165px);');
+            expect(html).toContain('top: 15.463%;');
+            expect(html).toContain('.slide-body-container::-webkit-scrollbar');
+            for (let n = 1; n <= 5; n++) {
+                expect(html).toContain(`Câu hỏi tương tác số ${n}?`);
+            }
+        });
     });
 });

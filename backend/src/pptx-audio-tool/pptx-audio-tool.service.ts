@@ -1958,8 +1958,17 @@ Return JSON only.`;
             slide.layoutType !== 'full_slide_canvas' &&
             String(slide.imageUrl || '').includes('/rendered_slides/full_slide_')
         ) {
+            await this.ensureForegroundImagesForSession(sessionId, session.filePath);
             const origIdx = slide.originalSlideIndex !== undefined ? slide.originalSlideIndex : slide.index;
             slide.imageUrl = this.resolveSlideIllustrationUrl(sessionId, slide, origIdx) || null;
+        } else if (
+            slide.layoutType === 'full_slide_canvas' &&
+            !slide.hasCustomImage &&
+            !String(slide.imageUrl || '').includes('_custom_') &&
+            !String(slide.imageUrl || '').includes('_ai_') &&
+            slide.renderedSlideUrl
+        ) {
+            slide.imageUrl = slide.renderedSlideUrl;
         }
         if (dto.interactiveData !== undefined) {
             slide.interactiveData = dto.interactiveData === null
@@ -2266,6 +2275,7 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
             slide.layoutType = 'split_standard';
         }
         if (String(slide.imageUrl || '').includes('/rendered_slides/full_slide_')) {
+            await this.ensureForegroundImagesForSession(sessionId, session.filePath);
             const origIdx = slide.originalSlideIndex !== undefined ? slide.originalSlideIndex : slide.index;
             slide.imageUrl = this.resolveSlideIllustrationUrl(sessionId, slide, origIdx) || null;
         }
@@ -3055,6 +3065,54 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         }
     }
 
+    private async ensureForegroundImagesForSession(
+        sessionId: string,
+        sessionFilePath?: string | null,
+    ): Promise<boolean> {
+        try {
+            const sessionDir = this.getSessionDir(sessionId);
+            const imagesDir = path.join(sessionDir, 'images');
+            const markerPath = path.join(imagesDir, '.extracted_v2');
+            if (fs.existsSync(markerPath)) {
+                return false;
+            }
+            const candidatePptxPath = (sessionFilePath && fs.existsSync(sessionFilePath))
+                ? sessionFilePath
+                : path.join(sessionDir, 'original.pptx');
+            if (!fs.existsSync(candidatePptxPath)) {
+                return false;
+            }
+            const candidateScriptDirs = [
+                path.resolve(process.cwd(), 'utils', 'pptx_generator'),
+                path.resolve(process.cwd(), 'backend', 'utils', 'pptx_generator'),
+                path.resolve(__dirname, '..', '..', 'utils', 'pptx_generator'),
+                path.resolve(__dirname, '..', '..', '..', 'utils', 'pptx_generator'),
+            ];
+            const scriptDir = candidateScriptDirs.find(d => fs.existsSync(path.join(d, 'main.py'))) || candidateScriptDirs[0];
+            if (!fs.existsSync(path.join(scriptDir, 'main.py'))) {
+                return false;
+            }
+            const venvPython = path.join(scriptDir, 'venv', 'bin', 'python');
+            const pythonBin = fs.existsSync(venvPython) ? venvPython : 'python3';
+            fs.mkdirSync(imagesDir, { recursive: true });
+            await execFileAsync(
+                pythonBin,
+                [
+                    '-c',
+                    'import sys; sys.path.insert(0, sys.argv[1]); from pptx import Presentation; from main import _extract_slides_from_pptx; _extract_slides_from_pptx(Presentation(sys.argv[2]), sys.argv[3])',
+                    scriptDir,
+                    candidatePptxPath,
+                    imagesDir,
+                ],
+                { timeout: 60000 },
+            );
+            return fs.existsSync(markerPath);
+        } catch (err: any) {
+            this.logger.warn(`Foreground slide image extraction v2 skipped for ${sessionId}: ${err?.message || err}`);
+            return false;
+        }
+    }
+
     async ensureRenderedSlidesForSession(sessionId: string): Promise<ParsedSlide[]> {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
@@ -3076,20 +3134,23 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             return slides;
         }
 
-        const allAlreadyRendered = origSlides.every(s => {
-            if (!s.renderedSlideUrl || !s.imageUrl) return false;
-            const localFile = resolveLocalMediaFile(s.renderedSlideUrl);
-            return Boolean(localFile && fs.existsSync(localFile));
-        });
-        if (allAlreadyRendered) {
-            return slides;
-        }
-
         const sessionDir = this.getSessionDir(sessionId);
         const renderedDir = path.join(sessionDir, 'rendered_slides');
         const candidatePptxPath = (session.filePath && fs.existsSync(session.filePath))
             ? session.filePath
             : path.join(sessionDir, 'original.pptx');
+
+        const reExtractedV2 = await this.ensureForegroundImagesForSession(sessionId, candidatePptxPath);
+
+        const allAlreadyRendered = !reExtractedV2 && origSlides.every(s => {
+            if (!s.renderedSlideUrl || !s.imageUrl) return false;
+            const localRendered = resolveLocalMediaFile(s.renderedSlideUrl);
+            const localImg = resolveLocalMediaFile(s.imageUrl);
+            return Boolean(localRendered && fs.existsSync(localRendered) && localImg && fs.existsSync(localImg));
+        });
+        if (allAlreadyRendered) {
+            return slides;
+        }
 
         const missingOnDisk = origSlides.some(s => {
             const origIdx = (s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index) as number;
@@ -3125,6 +3186,16 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             const origIdx = s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index;
             if (origIdx === null || origIdx < 0) continue;
 
+            const hasCustomOrAiImg =
+                s.hasCustomImage === true ||
+                String(s.imageUrl || '').includes('_custom_') ||
+                String(s.imageUrl || '').includes('_ai_');
+            const hasOptBullets = Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0;
+            const isSpecialInteractive =
+                s.slideType === 'interactive' ||
+                s.slideType === 'checkpoint_quiz' ||
+                s.slideType === 'interactive_audio';
+
             const fileName = `full_slide_${String(origIdx).padStart(2, '0')}.png`;
             const diskPath = path.join(renderedDir, fileName);
             if (fs.existsSync(diskPath)) {
@@ -3134,15 +3205,6 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                     s.renderedSlideUrl = publicRenderedUrl;
                     updated = true;
                 }
-                const hasCustomOrAiImg =
-                    s.hasCustomImage === true ||
-                    String(s.imageUrl || '').includes('_custom_') ||
-                    String(s.imageUrl || '').includes('_ai_');
-                const hasOptBullets = Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0;
-                const isSpecialInteractive =
-                    s.slideType === 'interactive' ||
-                    s.slideType === 'checkpoint_quiz' ||
-                    s.slideType === 'interactive_audio';
                 if (
                     !hasCustomOrAiImg &&
                     (!s.imageUrl || s.layoutType === 'full_slide_canvas' || !hasOptBullets) &&
@@ -3150,6 +3212,12 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 ) {
                     s.imageUrl = publicRenderedUrl;
                     updated = true;
+                } else if (!hasCustomOrAiImg && s.layoutType !== 'full_slide_canvas' && hasOptBullets) {
+                    const resolvedIllust = this.resolveSlideIllustrationUrl(sessionId, s, origIdx) || null;
+                    if (s.imageUrl !== resolvedIllust) {
+                        s.imageUrl = resolvedIllust;
+                        updated = true;
+                    }
                 }
                 if (
                     wasUnrenderedLegacySlide &&
@@ -3161,9 +3229,9 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                     s.layoutType = 'full_slide_canvas';
                     updated = true;
                 }
-            } else if (!s.imageUrl) {
-                const extractedFallback = this.resolveSlideIllustrationUrl(sessionId, s, origIdx);
-                if (extractedFallback) {
+            } else if (!hasCustomOrAiImg) {
+                const extractedFallback = this.resolveSlideIllustrationUrl(sessionId, s, origIdx) || null;
+                if (s.imageUrl !== extractedFallback) {
                     s.imageUrl = extractedFallback;
                     updated = true;
                 }
@@ -3182,8 +3250,20 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         slide: ParsedSlide,
         origIdx?: number | null,
     ): string {
-        if (slide.imageUrl && !String(slide.imageUrl).includes('/rendered_slides/full_slide_')) {
-            return slide.imageUrl;
+        const rawImgUrl = String(slide.imageUrl || '').trim();
+        const isCustomOrAi =
+            slide.hasCustomImage === true ||
+            rawImgUrl.includes('_custom_') ||
+            rawImgUrl.includes('_ai_');
+        if (isCustomOrAi && rawImgUrl) {
+            const cleanUrl = rawImgUrl.split('?')[0];
+            if (/^https?:\/\//i.test(cleanUrl)) {
+                return cleanUrl;
+            }
+            const localCustom = resolveLocalMediaFile(cleanUrl);
+            if (localCustom && fs.existsSync(localCustom)) {
+                return cleanUrl;
+            }
         }
         if (origIdx !== undefined && origIdx !== null && origIdx >= 0) {
             const imagesDir = path.join(this.getSessionDir(sessionId), 'images');
@@ -3193,6 +3273,16 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 if (fs.existsSync(path.join(imagesDir, candidate))) {
                     return `/uploads/pptx-tool/${sessionId}/images/${candidate}`;
                 }
+            }
+        }
+        if (rawImgUrl && !rawImgUrl.includes('/rendered_slides/full_slide_')) {
+            const cleanUrl = rawImgUrl.split('?')[0];
+            if (/^https?:\/\//i.test(cleanUrl)) {
+                return cleanUrl;
+            }
+            const localFile = resolveLocalMediaFile(cleanUrl);
+            if (localFile && fs.existsSync(localFile)) {
+                return cleanUrl;
             }
         }
         return '';
@@ -3260,7 +3350,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
 
             const illustrationUrl = this.resolveSlideIllustrationUrl(sessionId, s, origIdx);
             const fallbackVisualOnlyUrl =
-                !hasOptimizedBullets && !hasRawContent && !isSpecialInteractiveSlide && idx > 0
+                !isTemplateBgMode && !hasOptimizedBullets && !hasRawContent && !isSpecialInteractiveSlide && idx > 0
                     ? (effectiveRenderedUrl || '')
                     : '';
 

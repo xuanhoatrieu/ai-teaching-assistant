@@ -500,7 +500,7 @@ def _split_bilingual_notes(note_text: str) -> dict:
 
 def _extract_shapes_recursive(shapes, title_shape, title_text: str, slide_content: list, pictures: list):
     """Recursively extract text from text frames, tables, group shapes, and collect pictures."""
-    for shape in shapes:
+    for z_idx, shape in enumerate(shapes):
         # 1. Group shape -> recurse into child shapes
         if hasattr(shape, "shapes"):
             try:
@@ -544,21 +544,114 @@ def _extract_shapes_recursive(shapes, title_shape, title_text: str, slide_conten
             except Exception as e:
                 logger.debug(f"Could not extract text frame: {e}")
 
-        # 4. Picture shape -> collect candidate image for SCORM/H5P & preview
+        # 4. Picture shape -> collect candidate image with geometry + SHA1 for foreground filtering
         if hasattr(shape, "image"):
             try:
                 img = shape.image
                 if img and img.blob:
-                    width = getattr(shape, "width", 0) or 0
-                    height = getattr(shape, "height", 0) or 0
+                    import hashlib
+                    width = float(getattr(shape, "width", 0) or 0)
+                    height = float(getattr(shape, "height", 0) or 0)
                     area = width * height
-                    pictures.append((area, img))
+                    sha1 = hashlib.sha1(img.blob).hexdigest()
+                    pictures.append({
+                        "width": width,
+                        "height": height,
+                        "area": area,
+                        "size": len(img.blob),
+                        "sha1": sha1,
+                        "ext": (img.ext or "png").lower(),
+                        "blob": img.blob,
+                        "z": z_idx,
+                    })
             except Exception:
                 pass
 
 
+def _select_foreground_pictures_across_slides(prs, raw_pictures_per_slide: list) -> Dict[int, dict]:
+    """
+    Filter out full-slide template backgrounds (Image 1 cover / Image 2 content bg),
+    repeated master/template graphics (logos, speaker audio icons, headers/footers),
+    tiny bullet icons, and low-byte decorative border frames.
+    Returns {slide_idx: chosen_pic_dict} for slides that genuinely have a foreground illustration.
+    """
+    slide_w = float(getattr(prs, "slide_width", 0) or 9144000)
+    slide_h = float(getattr(prs, "slide_height", 0) or 5143500)
+    slide_area = max(1.0, slide_w * slide_h)
+    total_slides = len(raw_pictures_per_slide)
+
+    sha1_slide_count: Dict[str, int] = {}
+    full_bleed_sha1s = set()
+
+    for pics in raw_pictures_per_slide:
+        seen_on_slide = set()
+        for p in pics:
+            w_ratio = p["width"] / slide_w
+            h_ratio = p["height"] / slide_h
+            p["w_ratio"] = w_ratio
+            p["h_ratio"] = h_ratio
+            p["area_ratio"] = p["area"] / slide_area
+            seen_on_slide.add(p["sha1"])
+            if w_ratio >= 0.82 and h_ratio >= 0.82:
+                full_bleed_sha1s.add(p["sha1"])
+        for hsh in seen_on_slide:
+            sha1_slide_count[hsh] = sha1_slide_count.get(hsh, 0) + 1
+
+    chosen_map: Dict[int, dict] = {}
+    repeat_threshold = max(3, int(total_slides * 0.25)) if total_slides >= 3 else 999
+
+    for idx, pics in enumerate(raw_pictures_per_slide):
+        valid = []
+        for p in pics:
+            wr = p["w_ratio"]
+            hr = p["h_ratio"]
+            ar = p["area_ratio"]
+            hsh = p["sha1"]
+            sz = p["size"]
+
+            # 1. Exclude full-bleed slide background images (Image 1 cover / Image 2 content background)
+            if wr >= 0.82 and hr >= 0.82:
+                continue
+            if hsh in full_bleed_sha1s:
+                continue
+
+            # 2. Exclude repeated template/master elements (speaker icon, logo, header/footer, repeated bg)
+            if total_slides >= 3 and sha1_slide_count.get(hsh, 0) >= repeat_threshold:
+                continue
+            if idx > 0 and sha1_slide_count.get(hsh, 0) >= 2 and ar >= 0.70:
+                continue
+
+            # 3. Exclude tiny icons, bullet markers, or audio badges
+            if wr < 0.10 or hr < 0.10 or ar < 0.02:
+                continue
+
+            # 4. Exclude empty/flat decorative border/shadow rectangles (< 3.5 KB)
+            if sz < 3500:
+                continue
+
+            valid.append(p)
+
+        if valid:
+            # Prefer real high-detail illustrations (>= 8 KB) and larger area/file size
+            valid.sort(
+                key=lambda x: (
+                    1 if x["size"] >= 8000 else 0,
+                    round(x["area_ratio"], 2),
+                    x["size"],
+                    x["z"],
+                ),
+                reverse=True,
+            )
+            chosen_map[idx] = valid[0]
+
+    return chosen_map
+
+
 def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> list:
+    if isinstance(prs, str):
+        prs = PptxPresentation(prs)
     slides_data = []
+    raw_pictures_per_slide = []
     if output_images_dir:
         os.makedirs(output_images_dir, exist_ok=True)
 
@@ -586,23 +679,7 @@ def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> l
         slide_content = []
         pictures = []
         _extract_shapes_recursive(slide.shapes, title_shape, title, slide_content, pictures)
-
-        # Save largest meaningful picture from slide if output_images_dir is provided
-        image_file_name = None
-        if output_images_dir and pictures:
-            try:
-                pictures.sort(key=lambda item: item[0], reverse=True)
-                best_area, best_img = pictures[0]
-                ext = (best_img.ext or "png").lower()
-                if ext not in ("png", "jpg", "jpeg", "gif", "webp"):
-                    ext = "png"
-                fname = f"slide_{i:02d}.{ext}"
-                fpath = os.path.join(output_images_dir, fname)
-                with open(fpath, "wb") as img_f:
-                    img_f.write(best_img.blob)
-                image_file_name = fname
-            except Exception as e:
-                logger.warning(f"Could not save extracted image for slide {i}: {e}")
+        raw_pictures_per_slide.append(pictures)
 
         # Extract speaker notes
         note_full = ""
@@ -622,8 +699,40 @@ def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> l
             "noteEN": note_data["en"],
             "noteVN": note_data["vi"],
             "hasDual": note_data["has_dual"],
-            "imageFileName": image_file_name,
+            "imageFileName": None,
         })
+
+    if output_images_dir:
+        chosen_pictures = _select_foreground_pictures_across_slides(prs, raw_pictures_per_slide)
+        for i, slide_entry in enumerate(slides_data):
+            # Remove any stale auto-extracted slide_{i:02d}.* file from older versions
+            for old_ext in ("png", "jpg", "jpeg", "gif", "webp"):
+                stale_path = os.path.join(output_images_dir, f"slide_{i:02d}.{old_ext}")
+                if os.path.isfile(stale_path):
+                    try:
+                        os.unlink(stale_path)
+                    except Exception:
+                        pass
+
+            chosen = chosen_pictures.get(i)
+            if chosen:
+                try:
+                    ext = chosen["ext"] if chosen["ext"] in ("png", "jpg", "jpeg", "gif", "webp") else "png"
+                    fname = f"slide_{i:02d}.{ext}"
+                    fpath = os.path.join(output_images_dir, fname)
+                    with open(fpath, "wb") as img_f:
+                        img_f.write(chosen["blob"])
+                    slide_entry["imageFileName"] = fname
+                except Exception as e:
+                    logger.warning(f"Could not save extracted foreground image for slide {i}: {e}")
+
+        try:
+            marker_path = os.path.join(output_images_dir, ".extracted_v2")
+            with open(marker_path, "w", encoding="utf-8") as mf:
+                mf.write("v2\n")
+        except Exception:
+            pass
+
     return slides_data
 
 

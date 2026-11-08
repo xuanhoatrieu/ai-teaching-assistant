@@ -536,6 +536,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       flex-direction: column;
       gap: 20px;
       min-height: 520px;
+      max-height: calc(100vh - 165px);
       position: relative;
       overflow: hidden;
       transition: all 0.3s ease;
@@ -545,9 +546,36 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       flex: 1;
       display: flex;
       flex-direction: column;
-      justify-content: center;
+      justify-content: flex-start;
       width: 100%;
       min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(100, 116, 139, 0.5) rgba(148, 163, 184, 0.14);
+    }
+    .slide-body-container > * {
+      flex-shrink: 0;
+    }
+    .slide-body-container > :first-child {
+      margin-top: auto;
+    }
+    .slide-body-container > :last-child {
+      margin-bottom: auto;
+    }
+    .slide-body-container::-webkit-scrollbar {
+      width: 8px;
+    }
+    .slide-body-container::-webkit-scrollbar-track {
+      background: rgba(148, 163, 184, 0.14);
+      border-radius: 999px;
+    }
+    .slide-body-container::-webkit-scrollbar-thumb {
+      background: rgba(100, 116, 139, 0.5);
+      border-radius: 999px;
+    }
+    .slide-body-container::-webkit-scrollbar-thumb:hover {
+      background: rgba(71, 85, 105, 0.75);
     }
     .slide-body-container.title-slide-body {
       justify-content: center;
@@ -2066,6 +2094,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       background-repeat: no-repeat !important;
       aspect-ratio: 16 / 9;
       min-height: 0;
+      max-height: none;
       padding: 0;
       gap: 0;
       border: 1px solid #cbd5e1 !important;
@@ -2115,7 +2144,15 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       background: rgba(255, 255, 255, 0.32) !important;
     }
     body.has-tuaf-content-bg .slide-card.is-content-slide .slide-body-container {
+      position: absolute;
+      top: 15.463%;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: auto;
       padding: 18px 28px 26px 28px;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
     /* Keep content readable on bg_content.png's white body even when outer chrome is in dark theme */
     body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .bullet-item,
@@ -2125,15 +2162,28 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       background: rgba(255, 255, 255, 0.96);
       border-color: #cbd5e1;
     }
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .question-block,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .gate-action-bar {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .option-btn {
+      background: #ffffff;
+      border-color: #cbd5e1;
+      color: #1e293b;
+    }
     body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .bullet-point,
     body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .comparison-card-header,
     body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .process-step-title,
-    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .question-prompt {
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .question-prompt,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .interaction-header-left {
       color: #0f172a;
     }
     body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .bullet-desc,
     body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .comparison-card-desc,
-    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .process-step-desc {
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .process-step-desc,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .interaction-instruction,
+    body.theme-dark.has-tuaf-content-bg .slide-card.is-content-slide .gate-status-text {
       color: #334155;
     }
   </style>
@@ -3157,6 +3207,13 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             \${layoutBodyHtml}
           </div>
         \`;
+      }
+
+      const bodyScrollEl = typeof slideCard.querySelector === 'function'
+        ? slideCard.querySelector('.slide-body-container')
+        : null;
+      if (bodyScrollEl) {
+        bodyScrollEl.scrollTop = 0;
       }
 
       // Handle Narration Audio
