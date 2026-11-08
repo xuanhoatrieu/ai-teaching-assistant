@@ -8,11 +8,17 @@ export class TemplatesService {
     constructor(private readonly prisma: PrismaService) { }
 
     /**
-     * Get all active templates (for users)
+     * Get all active templates (for users: system templates + user's personal templates)
      */
-    async findAll() {
+    async findAll(userId?: string) {
         return this.prisma.pPTXTemplate.findMany({
-            where: { isActive: true },
+            where: {
+                isActive: true,
+                OR: [
+                    { isSystem: true },
+                    ...(userId ? [{ userId }] : []),
+                ],
+            },
             orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
         });
     }

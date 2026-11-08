@@ -599,6 +599,8 @@ export class PptxAudioToolService {
                 },
             });
 
+            const finalSlides = await this.ensureRenderedSlidesForSession(session.id);
+
             return {
                 sessionId: session.id,
                 pptxSubjectId: validSubjectId,
@@ -606,8 +608,8 @@ export class PptxAudioToolService {
                 contextText: session.contextText,
                 contextFileName: session.contextFileName,
                 fileName,
-                totalSlides: slides.length,
-                slides,
+                totalSlides: finalSlides.length,
+                slides: finalSlides,
                 status: 'notes_extracted',
             };
         } catch (error) {
@@ -775,7 +777,7 @@ export class PptxAudioToolService {
         if (!session) {
             throw new NotFoundException(`Session ${sessionId} not found`);
         }
-        const slides = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slides = await this.ensureRenderedSlidesForSession(sessionId);
         const cleanFileName = fixUtf8Filename(session.fileName);
         return {
             ...session,
@@ -787,14 +789,7 @@ export class PptxAudioToolService {
     }
 
     async getSlides(sessionId: string): Promise<ParsedSlide[]> {
-        const session = await this.prisma.pptxAudioSession.findUnique({
-            where: { id: sessionId },
-            select: { slidesJson: true },
-        });
-        if (!session) {
-            throw new NotFoundException(`Session ${sessionId} not found`);
-        }
-        return session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        return this.ensureRenderedSlidesForSession(sessionId);
     }
 
     // ========== 3. LANGUAGE TOGGLE ==========
@@ -3082,7 +3077,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         }
 
         const allAlreadyRendered = origSlides.every(s => {
-            if (!s.renderedSlideUrl) return false;
+            if (!s.renderedSlideUrl || !s.imageUrl) return false;
             const localFile = resolveLocalMediaFile(s.renderedSlideUrl);
             return Boolean(localFile && fs.existsSync(localFile));
         });
@@ -3148,7 +3143,11 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                     s.slideType === 'interactive' ||
                     s.slideType === 'checkpoint_quiz' ||
                     s.slideType === 'interactive_audio';
-                if (!hasCustomOrAiImg && s.imageUrl !== publicRenderedUrl) {
+                if (
+                    !hasCustomOrAiImg &&
+                    (!s.imageUrl || s.layoutType === 'full_slide_canvas' || !hasOptBullets) &&
+                    s.imageUrl !== publicRenderedUrl
+                ) {
                     s.imageUrl = publicRenderedUrl;
                     updated = true;
                 }
@@ -3160,6 +3159,12 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                     (!s.layoutType || s.layoutType === 'split_standard')
                 ) {
                     s.layoutType = 'full_slide_canvas';
+                    updated = true;
+                }
+            } else if (!s.imageUrl) {
+                const extractedFallback = this.resolveSlideIllustrationUrl(sessionId, s, origIdx);
+                if (extractedFallback) {
+                    s.imageUrl = extractedFallback;
                     updated = true;
                 }
             }

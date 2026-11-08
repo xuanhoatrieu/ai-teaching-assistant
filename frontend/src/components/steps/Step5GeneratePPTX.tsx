@@ -15,6 +15,7 @@ interface Template {
     titleBgUrl?: string;
     contentBgUrl?: string;
     isSystem: boolean;
+    isDefault?: boolean;
 }
 
 interface OptimizedBullet {
@@ -41,7 +42,7 @@ interface SlideProgress {
 }
 
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/api\/?$/, '');
 
 export function Step5GeneratePPTX() {
     const { lessonId, lessonData, stepMountCounter, refreshLessonData } = useLessonEditor();
@@ -1334,7 +1335,7 @@ export function Step5GeneratePPTX() {
                                     const newId = e.target.value;
                                     setSelectedTemplate(newId);
                                     const tpl = templates.find(t => t.id === newId);
-                                    if (tpl && !tpl.isSystem) {
+                                    if (tpl && (!tpl.isSystem || (scormH5pBgOption === 'tuaf_full' && !tpl.isDefault))) {
                                         setScormH5pBgOption('custom');
                                     }
                                 }}

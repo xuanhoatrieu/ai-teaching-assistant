@@ -100,19 +100,29 @@ export class SlideDataService {
             where: { lessonId },
             select: {
                 slideIndex: true,
+                title: true,
                 optimizedContentJson: true,
                 imageUrl: true,
                 imagePrompt: true,
+                interactiveData: true,
+                layoutType: true,
+                extraAudioUrl: true,
+                extraAudioName: true,
+                extraAudioDuration: true,
             },
         });
 
-        // Create a map of existing slide data by slideIndex
-        const existingDataMap = new Map(
-            existingSlides.map(s => [s.slideIndex, {
-                optimizedContentJson: s.optimizedContentJson,
-                imageUrl: s.imageUrl,
-                imagePrompt: s.imagePrompt,
-            }])
+        const sameSlideCount = existingSlides.length === parsedSlides.length;
+        const normalizeTitleKey = (t: string | null | undefined) => (t || '').trim().toLowerCase();
+
+        // Create maps of existing slide data by slideIndex and by normalized title
+        const existingByIndex = new Map(
+            existingSlides.map(s => [s.slideIndex, s])
+        );
+        const existingByTitle = new Map(
+            existingSlides
+                .filter(s => normalizeTitleKey(s.title).length > 0)
+                .map(s => [normalizeTitleKey(s.title), s])
         );
 
         // Delete existing slides for this lesson
@@ -120,23 +130,35 @@ export class SlideDataService {
             where: { lessonId },
         });
 
-        // Create all new slides, preserving AI-generated content where slideIndex matches
+        // Create all new slides, preserving AI-generated content safely:
+        // - If slide count is unchanged, match by slideIndex (or title fallback).
+        // - If slide count changed (condensed/expanded), match ONLY by normalized title
+        //   so old images/bullets from different slide numbers are never attached to wrong slides.
         const createdSlides = await this.prisma.$transaction(
-            parsedSlides.map((slide) => {
-                const existingData = existingDataMap.get(slide.slideIndex);
+            parsedSlides.map((slide, idx) => {
+                const sequentialIndex = idx + 1;
+                const byTitle = existingByTitle.get(normalizeTitleKey(slide.title));
+                const existingData = sameSlideCount
+                    ? (existingByIndex.get(sequentialIndex) || byTitle)
+                    : byTitle;
                 return this.prisma.slide.create({
                     data: {
                         lessonId,
-                        slideIndex: slide.slideIndex,
+                        slideIndex: sequentialIndex,
                         slideType: slide.slideType,
                         title: slide.title,
                         content: slide.content,
                         visualIdea: slide.visualIdea,
                         speakerNote: slide.speakerNote,
-                        // Preserve AI-generated content from existing slides
+                        // Preserve AI-generated content from matching existing slide
                         optimizedContentJson: existingData?.optimizedContentJson || null,
                         imageUrl: existingData?.imageUrl || null,
                         imagePrompt: existingData?.imagePrompt || null,
+                        interactiveData: existingData?.interactiveData || null,
+                        layoutType: existingData?.layoutType || 'split_standard',
+                        extraAudioUrl: existingData?.extraAudioUrl || null,
+                        extraAudioName: existingData?.extraAudioName || null,
+                        extraAudioDuration: existingData?.extraAudioDuration ?? null,
                         status: existingData?.optimizedContentJson ? 'optimized' : 'parsed',
                     },
                 });
@@ -213,8 +235,8 @@ export class SlideDataService {
             console.log(`[DEBUG tryParseAsJson] Successfully parsed ${slides.length} slides from JSON`);
 
             return slides.map((slide: any, index: number) => ({
-                slideIndex: slide.slideIndex ?? slide.slide_index ?? index,
-                slideType: this.inferSlideType(slide.slideType ?? slide.slide_type ?? 'content', slide.title ?? '', index),
+                slideIndex: index + 1,
+                slideType: this.inferSlideType(slide.slideType ?? slide.slide_type ?? 'content', slide.title ?? '', index + 1),
                 title: slide.title ?? `Slide ${index + 1}`,
                 content: Array.isArray(slide.content) ? slide.content.join('\n') : slide.content ?? null,
                 visualIdea: slide.visualIdea ?? slide.visual_idea ?? slide['Visual Idea'] ?? null,

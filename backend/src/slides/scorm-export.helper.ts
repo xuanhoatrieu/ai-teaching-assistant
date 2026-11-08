@@ -67,6 +67,17 @@ export function resolveLocalMediaFile(publicUrl: string): string | null {
         return null;
     }
 
+    // Handle /files/public/pptx-tool/{sessionId}/{folder}/{filename}
+    const pptxToolPublicMatch = cleanUrl.match(/^\/files\/public\/pptx-tool\/([^/]+)\/(images|rendered_slides|audio)\/(.+)$/);
+    if (pptxToolPublicMatch) {
+        const [, sessionId, folder, filename] = pptxToolPublicMatch;
+        const p = path.resolve(uploadsRoot, 'pptx-tool', sessionId, folder, filename);
+        if (isWithinDirectory(p, uploadsRoot) && fs.existsSync(p) && fs.statSync(p).isFile()) {
+            return p;
+        }
+        return null;
+    }
+
     // Handle /files/public/system/templates/{uuid}/{filename}
     const systemTemplateMatch = cleanUrl.match(/^\/files\/public\/system\/templates\/([^/]+)\/(.+)$/);
     if (systemTemplateMatch) {
@@ -2051,7 +2062,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       background-color: #ffffff !important;
       background-image: url('images/bg_content.png') !important;
       background-position: top center !important;
-      background-size: 100% auto !important;
+      background-size: 100% 100% !important;
       background-repeat: no-repeat !important;
       aspect-ratio: 16 / 9;
       min-height: 0;

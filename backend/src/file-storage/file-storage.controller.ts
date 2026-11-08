@@ -85,6 +85,67 @@ export class FileStorageController {
     }
 
     /**
+     * PUBLIC endpoint for serving PPTX Tool media (slide images, rendered slides, audio)
+     * GET /files/public/pptx-tool/:sessionId/:folder/:filename
+     *
+     * Serves: uploads/pptx-tool/{sessionId}/{folder}/{filename}
+     * Routed under /files/public/ so Nginx `location ^~ /files/` proxies directly to backend
+     * without being intercepted by static asset regex rules.
+     */
+    @Get('public/pptx-tool/:sessionId/:folder/:filename')
+    async servePptxToolMedia(
+        @Param('sessionId') sessionId: string,
+        @Param('folder') folder: string,
+        @Param('filename') filename: string,
+        @Res() res: Response,
+    ): Promise<void> {
+        const allowedFolders = new Set(['images', 'rendered_slides', 'audio']);
+        if (!allowedFolders.has(folder)) {
+            throw new ForbiddenException('Invalid media folder');
+        }
+
+        const baseRoot = path.resolve(process.cwd(), 'uploads', 'pptx-tool');
+        const filePath = path.resolve(baseRoot, sessionId, folder, filename);
+
+        if (!filePath.startsWith(baseRoot + path.sep)) {
+            throw new ForbiddenException('Invalid file path');
+        }
+
+        const exists = await this.fileStorageService.fileExists(filePath);
+        if (!exists) {
+            throw new NotFoundException(`PPTX tool file not found: ${sessionId}/${folder}/${filename}`);
+        }
+
+        const ext = path.extname(filename).toLowerCase();
+        const contentTypes: Record<string, string> = {
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.webp': 'image/webp',
+            '.svg': 'image/svg+xml',
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+            '.ogg': 'audio/ogg',
+            '.m4a': 'audio/mp4',
+        };
+
+        const contentType = contentTypes[ext] || 'application/octet-stream';
+
+        try {
+            const fileBuffer = await this.fileStorageService.readFile(filePath);
+
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Content-Length', fileBuffer.length);
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+
+            res.send(fileBuffer);
+        } catch (error) {
+            throw new NotFoundException('File not found');
+        }
+    }
+
+    /**
      * PUBLIC endpoint for serving USER template background images
      * GET /files/public/:userId/templates/:templateId/:filename
      * 

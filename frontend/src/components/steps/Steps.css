@@ -5240,3 +5240,161 @@
     color: #a5f3fc;
     font-style: italic;
 }
+
+/* ========================================================
+   STEP 3: TARGET SLIDE COUNT & CONDENSE/EXPAND CONTROL BAR
+   ======================================================== */
+.slide-budget-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    background: rgba(30, 41, 59, 0.65);
+    border: 1px solid rgba(99, 102, 241, 0.28);
+    border-radius: 12px;
+}
+
+.slide-budget-left {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.slide-budget-label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #e2e8f0;
+    white-space: nowrap;
+}
+
+.slide-budget-input-group {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 8px;
+    padding: 2px 10px 2px 6px;
+    gap: 6px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.slide-budget-input-group:focus-within {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25);
+}
+
+.slide-budget-input {
+    width: 72px;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #f8fafc;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+    padding: 4px 2px;
+}
+
+.slide-budget-input::placeholder {
+    color: #94a3b8;
+    font-weight: 500;
+    font-size: 12.5px;
+}
+
+.slide-budget-unit {
+    font-size: 12.5px;
+    color: #94a3b8;
+    font-weight: 500;
+}
+
+.slide-budget-presets {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.slide-preset-chip {
+    padding: 5px 10px;
+    font-size: 12.5px;
+    font-weight: 600;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, 0.28);
+    background: rgba(15, 23, 42, 0.65);
+    color: #cbd5e1;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.slide-preset-chip:hover:not(:disabled) {
+    border-color: rgba(99, 102, 241, 0.55);
+    color: #ffffff;
+    background: rgba(99, 102, 241, 0.18);
+}
+
+.slide-preset-chip.active {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    border-color: #818cf8;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.slide-preset-chip:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.slide-budget-right {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.current-slide-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.current-slide-count-badge strong {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+.btn-condense-slides {
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(16, 185, 129, 0.5);
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25);
+    transition: all 0.2s ease;
+}
+
+.btn-condense-slides:hover:not(:disabled) {
+    background: linear-gradient(135deg, #047857, #059669);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+}
+
+.btn-condense-slides:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}

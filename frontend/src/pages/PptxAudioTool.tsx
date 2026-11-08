@@ -10,9 +10,19 @@ import { ExamManagerPanel } from '../components/exam/ExamManagerPanel';
 import './PptxAudioTool.css';
 import '../components/steps/Steps.css';
 
+const API_ROOT = API_BASE_URL.replace(/\/api\/?$/, '');
+
 const getFullAudioUrl = (audioUrl: string | null): string => {
     if (!audioUrl) return '';
     if (audioUrl.startsWith('http://') || audioUrl.startsWith('https://')) return audioUrl;
+    const pptxToolMatch = audioUrl.match(/^\/uploads\/pptx-tool\/([^/]+)\/(images|rendered_slides|audio)\/(.+)$/);
+    if (pptxToolMatch) {
+        const [, sid, folder, rest] = pptxToolMatch;
+        return `${API_ROOT}/files/public/pptx-tool/${sid}/${folder}/${rest}`;
+    }
+    if (audioUrl.startsWith('/files/') || audioUrl.startsWith('/uploads/')) {
+        return `${API_ROOT}${audioUrl}`;
+    }
     return `${API_BASE_URL}${audioUrl}`;
 };
 
@@ -3864,7 +3874,7 @@ export function PptxAudioToolPage() {
                                             const newId = e.target.value;
                                             setSelectedTemplateId(newId);
                                             const tpl = templates.find(t => t.id === newId);
-                                            if (tpl && !tpl.isSystem) {
+                                            if (tpl && (!tpl.isSystem || (exportBgOption === 'tuaf_full' && !tpl.isDefault))) {
                                                 setExportBgOption('custom');
                                             } else if (newId === 'blank' && exportBgOption === 'custom') {
                                                 setExportBgOption('tuaf_clean');
@@ -3899,7 +3909,14 @@ export function PptxAudioToolPage() {
                                     <select
                                         id="pptx-tool-scorm-bg-select"
                                         value={exportBgOption}
-                                        onChange={(e) => setExportBgOption(e.target.value as any)}
+                                        onChange={(e) => {
+                                            const val = e.target.value as any;
+                                            setExportBgOption(val);
+                                            if (val === 'custom' && (!selectedTemplateId || selectedTemplateId === 'blank') && templates.length > 0) {
+                                                const def = templates.find(t => t.isDefault) || templates[0];
+                                                if (def) setSelectedTemplateId(def.id);
+                                            }
+                                        }}
                                         className="template-dropdown"
                                         title="Tùy chọn hình nền và nhận diện thương hiệu khi xuất SCORM / H5P"
                                     >

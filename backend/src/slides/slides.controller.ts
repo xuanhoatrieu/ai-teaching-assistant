@@ -40,6 +40,17 @@ class CreateExportTicketDto {
 }
 
 // DTOs
+class GenerateSlideScriptDto {
+    @IsOptional()
+    @IsNumber()
+    targetSlideCount?: number;
+}
+
+class AdjustSlideScriptCountDto {
+    @IsNumber()
+    targetSlideCount: number;
+}
+
 class UpdateSlideScriptDto {
     @IsString()
     @IsNotEmpty()
@@ -214,13 +225,43 @@ export class SlidesController {
     @Post('generate-script')
     async generateSlideScript(
         @Param('lessonId') lessonId: string,
+        @Body() body: GenerateSlideScriptDto,
         @Request() req,
     ) {
-        const slideScript = await this.slidesService.generateSlideScript(
+        const result = await this.slidesService.generateSlideScript(
             lessonId,
             req.user.id,
+            body?.targetSlideCount,
         );
-        return { slideScript };
+        return {
+            slideScript: result.content,
+            content: result.content,
+            slideCount: result.slideCount,
+            coveragePercent: result.coveragePercent,
+            warnings: result.warnings,
+        };
+    }
+
+    // POST /lessons/:id/slides/adjust-count - Condense or expand existing slide script to targetSlideCount (Step 3)
+    @Post('adjust-count')
+    async adjustSlideScriptCount(
+        @Param('lessonId') lessonId: string,
+        @Body() dto: AdjustSlideScriptCountDto,
+        @Request() req,
+    ) {
+        const result = await this.slidesService.adjustSlideScriptCount(
+            lessonId,
+            req.user.id,
+            dto.targetSlideCount,
+        );
+        return {
+            slideScript: result.content,
+            content: result.content,
+            slideCount: result.slideCount,
+            previousSlideCount: result.previousSlideCount,
+            coveragePercent: result.coveragePercent,
+            warnings: result.warnings,
+        };
     }
 
     // PUT /lessons/:id/slides/script - Update slide script after user edit

@@ -14,10 +14,19 @@ import { Lesson } from '@prisma/client';
 import { packageScormZip } from './scorm-export.helper';
 import { packageH5pZip } from './h5p-export.helper';
 import { escapeForCdata, escapeXmlText, normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
-import { detectTextLanguage, resolveQuestionLanguage } from '../ai/language-instruction';
+import { detectTextLanguage, getOutputLanguageInstruction, resolveQuestionLanguage } from '../ai/language-instruction';
+import {
+    applyTargetSlideCountToPrompt,
+    buildAdjustSlideCountPrompt,
+    extractSlideScriptObject,
+    normalizeAndEnforceSlideScriptCount,
+    sanitizeTargetSlideCount,
+} from './slide-script-budget.helper';
 
 export interface GenerateSlideResult {
     content: string;
+    slideCount?: number;
+    previousSlideCount?: number;
     coveragePercent: number;
     warnings: string[];
 }
@@ -78,7 +87,11 @@ export class SlidesService {
     }
 
     // Generate slide script using Gemini (Step 3)
-    async generateSlideScript(lessonId: string, userId: string): Promise<GenerateSlideResult> {
+    async generateSlideScript(
+        lessonId: string,
+        userId: string,
+        targetSlideCount?: number,
+    ): Promise<GenerateSlideResult> {
         const lesson = await this.prisma.lesson.findUnique({
             where: { id: lessonId },
             include: { subject: true },
@@ -92,11 +105,13 @@ export class SlidesService {
             throw new BadRequestException('Detailed outline is required before generating slide script');
         }
 
+        const effectiveTargetCount = sanitizeTargetSlideCount(targetSlideCount);
+
         // Get configured model for SLIDES task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
 
         // Build prompt using PromptComposer (Role + Task)
-        const prompt = await this.promptComposer.buildFullPrompt(
+        const basePrompt = await this.promptComposer.buildFullPrompt(
             lesson.subjectId,
             'slides.script',
             {
@@ -104,13 +119,23 @@ export class SlidesService {
                 detailed_outline: lesson.detailedOutline,
             },
         );
+        const prompt = applyTargetSlideCountToPrompt(basePrompt, effectiveTargetCount);
 
-        this.logger.debug(`Generated prompt for slides (${prompt.length} chars)`);
+        this.logger.debug(
+            `Generated prompt for slides (${prompt.length} chars, targetSlideCount=${effectiveTargetCount ?? 'auto'})`,
+        );
 
         // Use AiProviderService (CLIProxy → Gemini SDK fallback)
         const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
-        const result = aiResult.content;
-        this.logger.log(`Slides generated via ${aiResult.provider} (${aiResult.model})`);
+        const normalized = normalizeAndEnforceSlideScriptCount(
+            aiResult.content,
+            effectiveTargetCount,
+            lesson.title,
+        );
+        const result = normalized.slideCount > 0 ? normalized.jsonString : aiResult.content;
+        this.logger.log(
+            `Slides generated via ${aiResult.provider} (${aiResult.model}): ${normalized.adjustedFromCount} -> ${normalized.slideCount} slides`,
+        );
 
         // Validate coverage: check if all outline sections are covered
         const validation = this.fidelityValidator.validateSlides(lesson.detailedOutline, result);
@@ -126,27 +151,139 @@ export class SlidesService {
         });
 
         // Auto-parse into structured Slide records
-        let parseSuccessful = false;
         let slidesCount = 0;
         try {
             this.logger.log(`Attempting to parse slides for lesson ${lessonId}...`);
-            this.logger.debug(`Slide script length: ${result.length} chars`);
-            this.logger.debug(`Slide script preview: ${result.substring(0, 300)}`);
             const parsedSlides = await this.slideDataService.parseAndSaveSlides(lessonId, result);
             slidesCount = parsedSlides.length;
-            parseSuccessful = true;
             this.logger.log(`✅ Successfully parsed and saved ${slidesCount} slides for lesson ${lessonId}`);
         } catch (parseError) {
-            this.logger.error(`❌ Failed to parse slides for lesson ${lessonId}`);
-            this.logger.error(`Error: ${parseError.message}`);
-            this.logger.error(`Stack: ${parseError.stack}`);
-            this.logger.error(`Slide script (first 1000 chars): ${result.substring(0, 1000)}...`);
-            // Add warning to response so frontend knows
+            this.logger.error(`❌ Failed to parse slides for lesson ${lessonId}: ${parseError.message}`);
             validation.warnings.push(`Slide parsing failed: ${parseError.message}. Slides not saved to database.`);
+        }
+
+        // Keep SlideAudio table in sync if Step 4 was previously initialized
+        try {
+            await this.syncSpeakerNotesToSlideAudios(lessonId, result);
+        } catch (syncError) {
+            this.logger.warn(`⚠️ Failed to sync SlideAudio after generateSlideScript: ${syncError.message}`);
         }
 
         return {
             content: result,
+            slideCount: slidesCount || normalized.slideCount,
+            coveragePercent: validation.coveragePercent,
+            warnings: validation.warnings,
+        };
+    }
+
+    /**
+     * Condense or expand an existing slide script to exact `targetSlideCount` slides using AI
+     * + deterministic post-processing guard (Step 3).
+     */
+    async adjustSlideScriptCount(
+        lessonId: string,
+        userId: string,
+        targetSlideCount: number,
+    ): Promise<GenerateSlideResult> {
+        const effectiveTarget = sanitizeTargetSlideCount(targetSlideCount);
+        if (!effectiveTarget) {
+            throw new BadRequestException('Số lượng slide mục tiêu không hợp lệ (từ 4 đến 60 slide).');
+        }
+
+        const lesson = await this.prisma.lesson.findUnique({
+            where: { id: lessonId },
+            include: { subject: true },
+        });
+        if (!lesson) {
+            throw new NotFoundException(`Lesson ${lessonId} not found`);
+        }
+
+        if (!lesson.slideScript) {
+            return this.generateSlideScript(lessonId, userId, effectiveTarget);
+        }
+
+        const currentExtracted = extractSlideScriptObject(lesson.slideScript);
+        const currentCount = currentExtracted?.slides.length || 0;
+        if (currentCount === 0) {
+            return this.generateSlideScript(lessonId, userId, effectiveTarget);
+        }
+
+        const modelConfig = await this.modelConfigService.getModelForTask(userId, 'SLIDES');
+        const rolePreview = await this.promptComposer.getSubjectRolePreview(lesson.subjectId);
+        const langInstruction = getOutputLanguageInstruction(lesson.subject?.language || 'vi');
+        const roleAndLanguageHeader = [rolePreview, langInstruction].filter(Boolean).join('\n\n');
+
+        const prompt = buildAdjustSlideCountPrompt({
+            lessonTitle: lesson.title,
+            detailedOutline: lesson.detailedOutline,
+            currentSlideScriptJson: JSON.stringify(currentExtracted, null, 2),
+            currentCount,
+            targetSlideCount: effectiveTarget,
+            roleAndLanguageHeader,
+        });
+
+        let finalScript = '';
+        let finalCount = effectiveTarget;
+
+        try {
+            const aiResult = await this.aiProvider.generateText(prompt, modelConfig.modelName, userId);
+            const normalized = normalizeAndEnforceSlideScriptCount(
+                aiResult.content,
+                effectiveTarget,
+                lesson.title,
+            );
+            if (normalized.slideCount > 0) {
+                finalScript = normalized.jsonString;
+                finalCount = normalized.slideCount;
+                this.logger.log(
+                    `Adjusted slide script via ${aiResult.provider} (${aiResult.model}): ${currentCount} -> ${finalCount} slides`,
+                );
+            }
+        } catch (aiErr: any) {
+            this.logger.warn(`AI adjustSlideScriptCount failed (${aiErr.message}), applying deterministic adjustment`);
+        }
+
+        if (!finalScript) {
+            const fallbackNormalized = normalizeAndEnforceSlideScriptCount(
+                lesson.slideScript,
+                effectiveTarget,
+                lesson.title,
+            );
+            finalScript = fallbackNormalized.jsonString;
+            finalCount = fallbackNormalized.slideCount;
+        }
+
+        const validation = lesson.detailedOutline
+            ? this.fidelityValidator.validateSlides(lesson.detailedOutline, finalScript)
+            : { coveragePercent: 100, warnings: [] as string[], missingSections: [] as string[] };
+
+        await this.prisma.lesson.update({
+            where: { id: lessonId },
+            data: {
+                slideScript: finalScript,
+                currentStep: Math.max(lesson.currentStep || 3, 3),
+            },
+        });
+
+        try {
+            const parsedSlides = await this.slideDataService.parseAndSaveSlides(lessonId, finalScript);
+            finalCount = parsedSlides.length;
+        } catch (parseError: any) {
+            this.logger.error(`❌ Failed to parse adjusted slides for lesson ${lessonId}: ${parseError.message}`);
+            validation.warnings.push(`Slide parsing failed: ${parseError.message}`);
+        }
+
+        try {
+            await this.syncSpeakerNotesToSlideAudios(lessonId, finalScript);
+        } catch (syncError: any) {
+            this.logger.warn(`⚠️ Failed to sync SlideAudio after adjustSlideScriptCount: ${syncError.message}`);
+        }
+
+        return {
+            content: finalScript,
+            slideCount: finalCount,
+            previousSlideCount: currentCount,
             coveragePercent: validation.coveragePercent,
             warnings: validation.warnings,
         };
@@ -162,40 +299,27 @@ export class SlidesService {
             throw new NotFoundException(`Lesson ${lessonId} not found`);
         }
 
+        const normalized = normalizeAndEnforceSlideScriptCount(slideScript, undefined, lesson.title);
+        const effectiveScript = normalized.slideCount > 0 ? normalized.jsonString : slideScript;
+
         // Update the slideScript field
         const updatedLesson = await this.prisma.lesson.update({
             where: { id: lessonId },
-            data: { slideScript },
+            data: { slideScript: effectiveScript },
         });
 
-        // Check if slides already have AI-generated content
-        const existingSlides = await this.prisma.slide.findMany({
-            where: { lessonId },
-            select: { optimizedContentJson: true, imageUrl: true },
-        });
-
-        const hasAIContent = existingSlides.some(
-            s => s.optimizedContentJson !== null || s.imageUrl !== null
-        );
-
-        if (hasAIContent) {
-            // SKIP re-parsing if slides already have AI-generated content
-            // This preserves Step 5 PPTX generation data
-            this.logger.log(`⏭️ Skipping slide re-parse for lesson ${lessonId} - AI content already exists (${existingSlides.length} slides with optimizedContentJson or imageUrl)`);
-        } else {
-            // No AI content yet, safe to sync to Slide table
-            try {
-                const parsedSlides = await this.slideDataService.parseAndSaveSlides(lessonId, slideScript);
-                this.logger.log(`✅ Synced ${parsedSlides.length} slides to Slide table for lesson ${lessonId}`);
-            } catch (parseError) {
-                this.logger.warn(`⚠️ Failed to sync slides to database: ${parseError.message}`);
-                // Don't throw - still return the updated lesson
-            }
+        // Always sync Slide table via parseAndSaveSlides (which safely preserves optimizedContentJson & imageUrl
+        // by slideIndex when count is unchanged, or by matching title when count was condensed/expanded)
+        try {
+            const parsedSlides = await this.slideDataService.parseAndSaveSlides(lessonId, effectiveScript);
+            this.logger.log(`✅ Synced ${parsedSlides.length} slides to Slide table for lesson ${lessonId}`);
+        } catch (parseError) {
+            this.logger.warn(`⚠️ Failed to sync slides to database: ${parseError.message}`);
         }
 
-        // Sync speaker notes to existing SlideAudio records (preserve audio files)
+        // Sync speaker notes & slide count to existing SlideAudio records
         try {
-            await this.syncSpeakerNotesToSlideAudios(lessonId, slideScript);
+            await this.syncSpeakerNotesToSlideAudios(lessonId, effectiveScript);
         } catch (syncError) {
             this.logger.warn(`⚠️ Failed to sync speaker notes to SlideAudio: ${syncError.message}`);
         }
@@ -204,13 +328,12 @@ export class SlidesService {
     }
 
     /**
-     * Sync speaker notes from slideScript JSON to existing SlideAudio records.
-     * Only updates records where the speaker note has actually changed.
-     * Resets audio status to 'pending' for changed notes (audio is outdated).
-     * Does NOT delete/recreate records — preserves existing audio files.
+     * Sync speaker notes and slide count from slideScript JSON to existing SlideAudio records:
+     * - Removes orphan SlideAudio records when slide count is reduced (e.g., 30 -> 20 slides).
+     * - Creates missing SlideAudio records when slide count is expanded.
+     * - Updates slideTitle and speakerNote (resetting status to 'pending' when note or title changes).
      */
     private async syncSpeakerNotesToSlideAudios(lessonId: string, slideScript: string) {
-        // Check if SlideAudio records exist for this lesson
         const existingAudios = await this.prisma.slideAudio.findMany({
             where: { lessonId },
             orderBy: { slideIndex: 'asc' },
@@ -221,71 +344,83 @@ export class SlidesService {
             return;
         }
 
-        // Parse speaker notes from the new slideScript
         const parsedNotes = this.parseSpeakerNotesFromSlideScript(slideScript);
         if (parsedNotes.length === 0) {
-            this.logger.warn(`Could not parse speaker notes from slideScript for lesson ${lessonId}`);
+            this.logger.warn(`Could not parse slides from slideScript for lesson ${lessonId}`);
             return;
         }
 
-        let updatedCount = 0;
-        for (const audio of existingAudios) {
-            // Find matching parsed note by slideIndex
-            const parsed = parsedNotes.find(p => p.slideIndex === audio.slideIndex);
-            if (!parsed) continue;
+        const validIndices = new Set(parsedNotes.map(p => p.slideIndex));
+        const orphanIds = existingAudios
+            .filter(a => !validIndices.has(a.slideIndex))
+            .map(a => a.id);
 
-            // Only update if the note actually changed
-            if (parsed.speakerNote !== audio.speakerNote) {
-                await this.prisma.slideAudio.update({
-                    where: { id: audio.id },
+        if (orphanIds.length > 0) {
+            await this.prisma.slideAudio.deleteMany({
+                where: { id: { in: orphanIds } },
+            });
+            this.logger.log(`🗑️ Removed ${orphanIds.length} orphan SlideAudio records for lesson ${lessonId}`);
+        }
+
+        const existingByIdx = new Map(existingAudios.map(a => [a.slideIndex, a]));
+        let updatedCount = 0;
+        let createdCount = 0;
+
+        for (const parsed of parsedNotes) {
+            const existing = existingByIdx.get(parsed.slideIndex);
+            if (!existing) {
+                await this.prisma.slideAudio.create({
                     data: {
-                        speakerNote: parsed.speakerNote,
-                        // Reset status to pending since note changed (audio is now outdated)
+                        lessonId,
+                        slideIndex: parsed.slideIndex,
+                        slideTitle: parsed.slideTitle,
+                        speakerNote: parsed.speakerNote || '',
                         status: 'pending',
+                    },
+                });
+                createdCount++;
+                continue;
+            }
+
+            const titleChanged = parsed.slideTitle && parsed.slideTitle !== existing.slideTitle;
+            const noteChanged = parsed.speakerNote && parsed.speakerNote !== existing.speakerNote;
+
+            if (titleChanged || noteChanged) {
+                await this.prisma.slideAudio.update({
+                    where: { id: existing.id },
+                    data: {
+                        slideTitle: parsed.slideTitle || existing.slideTitle,
+                        speakerNote: parsed.speakerNote ? parsed.speakerNote : existing.speakerNote,
+                        ...(noteChanged ? { status: 'pending' } : {}),
                     },
                 });
                 updatedCount++;
             }
         }
 
-        if (updatedCount > 0) {
-            this.logger.log(`✅ Synced ${updatedCount} speaker notes to SlideAudio for lesson ${lessonId}`);
+        if (updatedCount > 0 || createdCount > 0) {
+            this.logger.log(
+                `✅ Synced SlideAudio for lesson ${lessonId}: updated=${updatedCount}, created=${createdCount}`,
+            );
         }
     }
 
     /**
-     * Parse speaker notes from slideScript JSON string.
-     * Returns array of { slideIndex, speakerNote } for matching.
+     * Parse slides & speaker notes from slideScript JSON string.
+     * Returns array of { slideIndex, slideTitle, speakerNote } for all slides (1..N).
      */
-    private parseSpeakerNotesFromSlideScript(slideScript: string): Array<{ slideIndex: number; speakerNote: string }> {
-        try {
-            // Extract JSON from markdown code block if present
-            let jsonStr = slideScript;
-            const jsonStartTag = slideScript.indexOf('```json');
-            if (jsonStartTag !== -1) {
-                const contentStart = jsonStartTag + '```json'.length;
-                const lastBackticks = slideScript.lastIndexOf('```');
-                if (lastBackticks > contentStart) {
-                    jsonStr = slideScript.substring(contentStart, lastBackticks);
-                }
-            }
-
-            const data = JSON.parse(jsonStr.trim());
-            const slidesArray = data.slides || data;
-
-            if (!Array.isArray(slidesArray)) {
-                return [];
-            }
-
-            return slidesArray
-                .filter((s: any) => s.speakerNote !== undefined)
-                .map((s: any) => ({
-                    slideIndex: s.slideIndex ?? 0,
-                    speakerNote: s.speakerNote || '',
-                }));
-        } catch {
+    private parseSpeakerNotesFromSlideScript(
+        slideScript: string,
+    ): Array<{ slideIndex: number; slideTitle: string; speakerNote: string }> {
+        const extracted = extractSlideScriptObject(slideScript);
+        if (!extracted || extracted.slides.length === 0) {
             return [];
         }
+        return extracted.slides.map((s, idx) => ({
+            slideIndex: idx + 1,
+            slideTitle: s.title || `Slide ${idx + 1}`,
+            speakerNote: s.speakerNote || '',
+        }));
     }
 
     /**

@@ -46,8 +46,8 @@ export class TemplatesController {
      */
     @Get('templates')
     @UseGuards(JwtAuthGuard)
-    async findAll() {
-        return this.templatesService.findAll();
+    async findAll(@Req() req: any) {
+        return this.templatesService.findAll(req?.user?.id);
     }
 
     /**

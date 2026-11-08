@@ -118,13 +118,23 @@ export function Step3DesignSlides() {
     const { lessonId, lessonData, updateSlideScript, refreshLessonData } = useLessonEditor();
 
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isAdjustingCount, setIsAdjustingCount] = useState(false);
     const [isGeneratingImages, setIsGeneratingImages] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [editMode, setEditMode] = useState(false);
     const [slideScript, setSlideScript] = useState(lessonData?.slideScript || '');
     const [slides, setSlides] = useState<Slide[]>([]);
     const [viewMode, setViewMode] = useState<'table' | 'cards' | 'preview'>('table');
+    const [targetSlideCountInput, setTargetSlideCountInput] = useState<string>('');
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const parsedTargetCount = useMemo(() => {
+        const trimmed = targetSlideCountInput.trim();
+        if (!trimmed) return undefined;
+        const num = parseInt(trimmed, 10);
+        if (!Number.isFinite(num)) return undefined;
+        return Math.max(4, Math.min(60, num));
+    }, [targetSlideCountInput]);
 
     const handleCreateRemotionVideo = async (slide: Slide) => {
         if (!lessonData?.subjectId || !lessonId) return;
@@ -178,26 +188,71 @@ export function Step3DesignSlides() {
         setMessage(null);
 
         try {
-            const response = await api.post(`/lessons/${lessonId}/slides/generate-script`);
-            const content = response.data.content || response.data.slideScript || response.data;
-            setSlideScript(typeof content === 'string' ? content : JSON.stringify(content, null, 2));
+            const payload = parsedTargetCount ? { targetSlideCount: parsedTargetCount } : {};
+            const response = await api.post(`/lessons/${lessonId}/slides/generate-script`, payload);
+            const rawData = response.data?.content || response.data?.slideScript?.content || response.data?.slideScript || response.data;
+            setSlideScript(typeof rawData === 'string' ? rawData : JSON.stringify(rawData, null, 2));
             await refreshLessonData();
             await fetchSlides();
 
-            // Show coverage info if available
-            if (response.data.coveragePercent !== undefined) {
-                const warnings = response.data.warnings?.join(' ') || '';
+            const countLabel = response.data?.slideCount
+                ? ` (${response.data.slideCount} slide)`
+                : (parsedTargetCount ? ` (${parsedTargetCount} slide)` : '');
+            const coverageVal = response.data?.coveragePercent ?? response.data?.slideScript?.coveragePercent;
+            const warningsList = response.data?.warnings ?? response.data?.slideScript?.warnings;
+
+            if (coverageVal !== undefined) {
+                const warnings = Array.isArray(warningsList) ? warningsList.join(' ') : '';
                 setMessage({
                     type: 'success',
-                    text: `✓ Đã tạo kịch bản! Coverage: ${response.data.coveragePercent}% ${warnings}`
+                    text: `✓ Đã tạo kịch bản${countLabel}! Coverage: ${coverageVal}% ${warnings}`.trim(),
                 });
             } else {
-                setMessage({ type: 'success', text: '✓ Đã tạo kịch bản slide thành công!' });
+                setMessage({ type: 'success', text: `✓ Đã tạo kịch bản slide thành công${countLabel}!` });
             }
         } catch (err: any) {
             setMessage({ type: 'error', text: err.response?.data?.message || 'Không thể tạo kịch bản' });
         } finally {
             setIsGenerating(false);
+        }
+    };
+
+    const handleAdjustSlideCount = async () => {
+        if (!parsedTargetCount) {
+            setMessage({ type: 'error', text: 'Vui lòng nhập số lượng slide mong muốn (từ 4 đến 60 slide).' });
+            return;
+        }
+        setIsAdjustingCount(true);
+        setMessage(null);
+
+        try {
+            const response = await api.post(`/lessons/${lessonId}/slides/adjust-count`, {
+                targetSlideCount: parsedTargetCount,
+            });
+            const rawData = response.data?.content || response.data?.slideScript || response.data;
+            setSlideScript(typeof rawData === 'string' ? rawData : JSON.stringify(rawData, null, 2));
+            setEditMode(false);
+            await refreshLessonData();
+            await fetchSlides();
+
+            const prevCount = response.data?.previousSlideCount;
+            const finalCount = response.data?.slideCount || parsedTargetCount;
+            const coverageInfo = response.data?.coveragePercent !== undefined
+                ? ` (Coverage: ${response.data.coveragePercent}%)`
+                : '';
+            setMessage({
+                type: 'success',
+                text: prevCount && prevCount !== finalCount
+                    ? `✓ Đã điều chỉnh kịch bản từ ${prevCount} → ${finalCount} slide thành công!${coverageInfo}`
+                    : `✓ Đã chuẩn hóa kịch bản thành ${finalCount} slide!${coverageInfo}`,
+            });
+        } catch (err: any) {
+            setMessage({
+                type: 'error',
+                text: err.response?.data?.message || 'Không thể điều chỉnh số lượng slide.',
+            });
+        } finally {
+            setIsAdjustingCount(false);
         }
     };
 
@@ -270,6 +325,8 @@ export function Step3DesignSlides() {
     const hasScript = !!lessonData?.slideScript;
     const hasOutline = !!lessonData?.detailedOutline;
     const hasVisualIdeas = slidesArray.some(s => s.visualIdea);
+    const currentSlidesCount = slidesArray.length || parsedScript?.slides?.length || 0;
+    const isBusy = isGenerating || isAdjustingCount || isGeneratingImages;
 
     return (
         <div className="step-content">
@@ -283,9 +340,13 @@ export function Step3DesignSlides() {
                         <button
                             className="btn-primary"
                             onClick={handleGenerate}
-                            disabled={isGenerating || !hasOutline}
+                            disabled={isBusy || !hasOutline}
                         >
-                            {isGenerating ? '🔄 Đang tạo...' : '🤖 Tạo Kịch Bản'}
+                            {isGenerating
+                                ? '🔄 Đang tạo...'
+                                : parsedTargetCount
+                                    ? `🤖 Tạo Kịch Bản (${parsedTargetCount} slide)`
+                                    : '🤖 Tạo Kịch Bản'}
                         </button>
                     ) : (
                         <>
@@ -315,7 +376,7 @@ export function Step3DesignSlides() {
                                 <button
                                     className="btn-secondary"
                                     onClick={handleGenerateImages}
-                                    disabled={isGeneratingImages}
+                                    disabled={isBusy}
                                 >
                                     {isGeneratingImages ? '🔄 Đang tạo...' : '🖼️ Tạo Hình Ảnh'}
                                 </button>
@@ -323,15 +384,17 @@ export function Step3DesignSlides() {
                             <button
                                 className={`btn-toggle ${editMode ? 'active' : ''}`}
                                 onClick={() => setEditMode(!editMode)}
+                                disabled={isBusy}
                             >
                                 {editMode ? '👁️ Xem đẹp' : '⚙️ Sửa JSON'}
                             </button>
                             <button
                                 className="btn-secondary"
                                 onClick={handleGenerate}
-                                disabled={isGenerating}
+                                disabled={isBusy}
+                                title={parsedTargetCount ? `Tạo lại từ Outline với đúng ${parsedTargetCount} slide` : 'Tạo lại kịch bản từ Outline'}
                             >
-                                🔄 Tạo lại
+                                {parsedTargetCount ? `🔄 Tạo lại (${parsedTargetCount} slide)` : '🔄 Tạo lại'}
                             </button>
                         </>
                     )}
@@ -342,6 +405,78 @@ export function Step3DesignSlides() {
                 AI sẽ thiết kế nội dung cho từng slide bao gồm: Tiêu đề, Nội dung và Ý tưởng hình ảnh [Visual Idea].
                 Lời giảng [Speaker Notes] sẽ được tạo ở Bước 4.
             </p>
+
+            {/* Target Slide Count & Condense/Expand Control Bar */}
+            {hasOutline && (
+                <div className="slide-budget-bar">
+                    <div className="slide-budget-left">
+                        <label htmlFor="target-slide-count-input" className="slide-budget-label">
+                            🎯 Số lượng slide mong muốn:
+                        </label>
+                        <div className="slide-budget-input-group">
+                            <input
+                                id="target-slide-count-input"
+                                type="number"
+                                min={4}
+                                max={60}
+                                value={targetSlideCountInput}
+                                onChange={(e) => setTargetSlideCountInput(e.target.value)}
+                                placeholder="Tự động"
+                                className="slide-budget-input"
+                                disabled={isBusy}
+                            />
+                            <span className="slide-budget-unit">slide</span>
+                        </div>
+                        <div className="slide-budget-presets">
+                            <button
+                                type="button"
+                                className={`slide-preset-chip ${!targetSlideCountInput ? 'active' : ''}`}
+                                onClick={() => setTargetSlideCountInput('')}
+                                disabled={isBusy}
+                                title="AI tự quyết định số lượng slide theo độ dài Outline"
+                            >
+                                Tự động
+                            </button>
+                            {[12, 15, 20, 25, 30].map((preset) => (
+                                <button
+                                    key={preset}
+                                    type="button"
+                                    className={`slide-preset-chip ${parsedTargetCount === preset ? 'active' : ''}`}
+                                    onClick={() => setTargetSlideCountInput(String(preset))}
+                                    disabled={isBusy}
+                                >
+                                    {preset}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="slide-budget-right">
+                        {currentSlidesCount > 0 && (
+                            <span className="current-slide-count-badge">
+                                📊 Hiện có: <strong>{currentSlidesCount}</strong> slide
+                            </span>
+                        )}
+                        {hasScript && parsedTargetCount && (
+                            <button
+                                type="button"
+                                className="btn-condense-slides"
+                                onClick={handleAdjustSlideCount}
+                                disabled={isBusy}
+                                title="AI sẽ cô đọng/gộp hoặc chia nhỏ kịch bản hiện tại về đúng số lượng slide mong muốn mà vẫn giữ đủ nội dung chính"
+                            >
+                                {isAdjustingCount
+                                    ? `🔄 Đang điều chỉnh về ${parsedTargetCount} slide...`
+                                    : currentSlidesCount > 0 && parsedTargetCount < currentSlidesCount
+                                        ? `✨ Cô đọng ${currentSlidesCount} → ${parsedTargetCount} slide`
+                                        : currentSlidesCount > 0 && parsedTargetCount > currentSlidesCount
+                                            ? `✨ Mở rộng ${currentSlidesCount} → ${parsedTargetCount} slide`
+                                            : `✨ Chuẩn hóa đúng ${parsedTargetCount} slide`}
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {!hasOutline && (
                 <div className="warning-message">
@@ -355,15 +490,23 @@ export function Step3DesignSlides() {
                 </div>
             )}
 
-            {(isGenerating || isGeneratingImages) && (
+            {isBusy && (
                 <div className="generating-state">
                     <div className="loading-spinner"></div>
-                    <p>{isGeneratingImages ? 'Đang tạo hình ảnh...' : 'Đang thiết kế kịch bản slide...'}</p>
+                    <p>
+                        {isGeneratingImages
+                            ? 'Đang tạo hình ảnh...'
+                            : isAdjustingCount
+                                ? `Đang cô đọng / điều chỉnh kịch bản về đúng ${parsedTargetCount} slide...`
+                                : parsedTargetCount
+                                    ? `Đang thiết kế kịch bản (${parsedTargetCount} slide)...`
+                                    : 'Đang thiết kế kịch bản slide...'}
+                    </p>
                     <p className="hint">Quá trình này có thể mất 1-2 phút</p>
                 </div>
             )}
 
-            {!isGenerating && !isGeneratingImages && hasScript && (
+            {!isBusy && hasScript && (
                 <>
                     {editMode ? (
                         <>
@@ -480,7 +623,7 @@ export function Step3DesignSlides() {
                 </>
             )}
 
-            {!isGenerating && !hasScript && hasOutline && (
+            {!isBusy && !hasScript && hasOutline && (
                 <div className="empty-state">
                     <span className="empty-icon">🎨</span>
                     <p>Chưa có kịch bản slide</p>

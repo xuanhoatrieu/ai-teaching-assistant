@@ -27,13 +27,25 @@ describe('SCORM 1.2 & H5P Full-Slide Canvas and Media Security Helpers', () => {
             }
         });
 
-        it('resolves valid /uploads/... file paths inside the workspace uploads directory (positive proof)', () => {
+        it('resolves valid /uploads/... and /files/public/pptx-tool/... file paths inside the workspace uploads directory (positive proof)', () => {
             const resolved = resolveLocalMediaFile('/uploads/__jest_scorm_test__/full_slide_00.png?t=123');
             expect(resolved).toBe(path.resolve(tempTestFile));
+
+            const pptxToolDir = path.join(process.cwd(), 'uploads', 'pptx-tool', '__jest_session__', 'rendered_slides');
+            const pptxToolFile = path.join(pptxToolDir, 'full_slide_00.png');
+            fs.mkdirSync(pptxToolDir, { recursive: true });
+            fs.writeFileSync(pptxToolFile, Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+            try {
+                const resolvedPublic = resolveLocalMediaFile('/files/public/pptx-tool/__jest_session__/rendered_slides/full_slide_00.png?t=456');
+                expect(resolvedPublic).toBe(path.resolve(pptxToolFile));
+            } finally {
+                fs.rmSync(path.join(process.cwd(), 'uploads', 'pptx-tool', '__jest_session__'), { recursive: true, force: true });
+            }
         });
 
         it('rejects path traversal, percent-encoded traversal, null bytes, and arbitrary absolute paths (negative proof)', () => {
             expect(resolveLocalMediaFile('/uploads/../../etc/passwd')).toBeNull();
+            expect(resolveLocalMediaFile('/files/public/pptx-tool/../../etc/passwd/images/a.png')).toBeNull();
             expect(resolveLocalMediaFile('/uploads/%2e%2e/%2e%2e/%2e%2e/etc/passwd')).toBeNull();
             expect(resolveLocalMediaFile('/etc/passwd')).toBeNull();
             expect(resolveLocalMediaFile('/uploads/__jest_scorm_test__/full_slide_00.png\0.txt')).toBeNull();
