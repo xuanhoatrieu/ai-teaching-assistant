@@ -9,6 +9,8 @@
  *   - muc_3_van_dung (Apply)
  */
 
+import { detectTextLanguage } from '../ai/language-instruction';
+
 export interface ReviewQuestionData {
     questionId: string;
     level: number;
@@ -1176,17 +1178,32 @@ export function generateContextualDistractors(
 }
 
 /**
- * Normalizes Interactive Slide Quiz questions (FIB & CLOZE) so every FIB question
- * has selectable word-chip `options` (4 choices) and every CLOZE passage has `distractors`.
+ * Normalizes Interactive Slide Quiz questions (TF, FIB & CLOZE) so every FIB question
+ * has selectable word-chip `options` (4 choices), every CLOZE passage has `distractors`,
+ * and every TF question has language-consistent options (`["True", "False"]` vs `["Đúng", "Sai"]`).
  */
-export function normalizeInteractiveQuestions(questions: any[]): any[] {
+export function normalizeInteractiveQuestions(questions: any[], targetLang?: 'en' | 'vi'): any[] {
     if (!Array.isArray(questions)) return [];
     return questions.map((rawQ, qIdx) => {
         if (!rawQ || typeof rawQ !== 'object') return rawQ;
         const q = { ...rawQ };
         const qType = String(q.type || 'MC').toUpperCase();
 
-        if (qType === 'FIB') {
+        if (qType === 'TF' || qType === 'TRUEFALSE') {
+            q.type = 'TF';
+            const isEn = targetLang
+                ? targetLang === 'en'
+                : detectTextLanguage(String(q.question || q.questionText || ''), 'vi') === 'en';
+            const rawCorrect = String(q.correctAnswer ?? '').trim().toLowerCase();
+            const isTrueAnswer = !FALSE_WORDS.has(rawCorrect);
+            if (isEn) {
+                q.options = ['True', 'False'];
+                q.correctAnswer = isTrueAnswer ? 'True' : 'False';
+            } else {
+                q.options = ['Đúng', 'Sai'];
+                q.correctAnswer = isTrueAnswer ? 'Đúng' : 'Sai';
+            }
+        } else if (qType === 'FIB') {
             const correct = String(
                 q.correctAnswer ?? (Array.isArray(q.correctAnswers) ? q.correctAnswers[0] : '') ?? '',
             ).trim();

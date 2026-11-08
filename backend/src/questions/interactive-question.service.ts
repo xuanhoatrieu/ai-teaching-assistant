@@ -5,6 +5,7 @@ import { ApiKeysService } from '../api-keys/api-keys.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { InteractiveQuestion } from '@prisma/client';
+import { resolveQuestionLanguage } from '../ai/language-instruction';
 
 interface CreateInteractiveQuestionDto {
     questionType?: string;
@@ -157,6 +158,7 @@ export class InteractiveQuestionService {
         slidesContent: string,
         userId: string,
         count: number = 5,
+        questionLanguage?: 'auto' | 'en' | 'vi',
     ): Promise<InteractiveQuestion[]> {
         this.logger.log(`Generating ${count} interactive questions for lesson ${lessonId}`);
 
@@ -170,11 +172,24 @@ export class InteractiveQuestionService {
             throw new NotFoundException(`Lesson ${lessonId} not found`);
         }
 
+        const slides = await this.prisma.slide.findMany({
+            where: { lessonId, slideType: { notIn: ['checkpoint_quiz', 'interactive_audio'] } },
+            orderBy: { slideIndex: 'asc' },
+        });
+
+        const targetLang = resolveQuestionLanguage({
+            requestedLanguage: questionLanguage,
+            subjectLanguage: lesson.subject?.language,
+            sourceText: slidesContent,
+            slides,
+        });
+        const isEnglish = targetLang === 'en';
+
         // Get configured model for QUESTIONS task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
 
         // Build prompt using PromptComposer (Role from Subject + Task from DB)
-        const prompt = await this.promptComposer.buildFullPrompt(
+        const basePrompt = await this.promptComposer.buildFullPrompt(
             lesson.subjectId,
             'questions.interactive',
             {
@@ -183,7 +198,13 @@ export class InteractiveQuestionService {
             },
         );
 
-        this.logger.log(`Built prompt for interactive questions (${prompt.length} chars)`);
+        const languageOverrideBlock = isEnglish
+            ? `\n\n========================================\nCRITICAL LANGUAGE & QUANTITY OVERRIDE:\n- Generate EXACTLY ${count} interactive questions (mix of "MC" and "MR").\n- ALL output fields (questionText, answers, correctFeedback, incorrectFeedback) MUST be written 100% in ENGLISH (regardless of any Vietnamese examples above or Vietnamese speaker notes).\n- Prefix correct answer strings with "*" (or set "isCorrect": true).\n- Example English feedback: "Correct! You have mastered this concept." / "Incorrect. Please review the slide content."\n========================================`
+            : `\n\n========================================\nYÊU CẦU NGÔN NGỮ & SỐ LƯỢNG:\n- Tạo ĐÚNG ${count} câu hỏi tương tác (kết hợp dạng "MC" và "MR").\n- Toàn bộ nội dung (questionText, answers, correctFeedback, incorrectFeedback) PHẢI viết bằng TIẾNG VIỆT.\n========================================`;
+
+        const prompt = `${basePrompt}${languageOverrideBlock}`;
+
+        this.logger.log(`Built prompt for interactive questions (${prompt.length} chars, lang=${targetLang})`);
 
         try {
             // Use AiProviderService (CLIProxy → Gemini SDK fallback) with user's API key

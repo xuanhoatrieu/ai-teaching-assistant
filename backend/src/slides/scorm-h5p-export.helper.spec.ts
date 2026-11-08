@@ -399,6 +399,44 @@ describe('SCORM 1.2 & H5P Full-Slide Canvas and Media Security Helpers', () => {
             // Body content pushed cleanly below 15.46% green band (y = 17)
             const slide1BodyEl = slide1.elements.find((el: any) => el.action?.subContentId === 'content_1');
             expect(slide1BodyEl.y).toBe(17);
+
+            // 3. Custom Template Synchronization ('custom') MUST apply identical cover & content text optimization as 'tuaf_full'
+            const scormCustomHtml = generateScormPlayerHtml('Bài 1: Tổng quan về Khoa học Cây trồng', tuafSlides, {
+                bgOption: 'custom',
+                theme: 'light',
+                hasTitleBg: true,
+                hasContentBg: true,
+            });
+            expect(scormCustomHtml).toContain('mode-tuaf-full');
+            expect(scormCustomHtml).toContain('has-tuaf-title-bg');
+            expect(scormCustomHtml).toContain('has-tuaf-content-bg');
+            expect(scormCustomHtml).toContain('const IS_TUAF_FULL_TITLE = true;');
+            expect(scormCustomHtml).not.toContain('images/ai_cover_01.png');
+            expect(scormCustomHtml).toContain('images/slide_02.png');
+
+            const h5pCustomJson = JSON.parse(
+                generateH5pContentJson('Bài 1: Tổng quan về Khoa học Cây trồng', tuafSlides, {
+                    bgOption: 'custom',
+                    theme: 'light',
+                    hasTitleBg: true,
+                    hasContentBg: true,
+                    titleBgFilename: 'images/h5p_title_bg.png',
+                    contentBgFilename: 'images/h5p_content_bg.png',
+                }),
+            );
+            const customSlide0 = h5pCustomJson.presentation.slides[0];
+            expect(customSlide0.elements.some((el: any) => el.action?.library === 'H5P.Image 1.1')).toBe(false);
+            const customCoverTitleEl = customSlide0.elements.find((el: any) => el.action?.subContentId === 'title_0');
+            expect(customCoverTitleEl.y).toBe(34);
+            expect(customCoverTitleEl.action.params.text).toContain('color: #ffffff');
+
+            const customSlide1 = h5pCustomJson.presentation.slides[1];
+            const customContentTitleEl = customSlide1.elements.find((el: any) => el.action?.subContentId === 'title_1');
+            expect(customContentTitleEl.y).toBe(2.2);
+            expect(customContentTitleEl.action.params.text).toContain('color: #ffffff');
+            expect(customContentTitleEl.action.params.text).toContain('background: transparent');
+            const customSlide1BodyEl = customSlide1.elements.find((el: any) => el.action?.subContentId === 'content_1');
+            expect(customSlide1BodyEl.y).toBe(17);
         });
 
         it('updates learner progress dynamically from 3% up to 100% across a 33-slide deck and syncs SCORM completion/resume state', () => {

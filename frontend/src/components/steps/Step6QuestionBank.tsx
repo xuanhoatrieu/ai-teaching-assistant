@@ -251,6 +251,7 @@ export function Step6QuestionBank() {
 
     // Interactive Questions state
     const [interactiveCount, setInteractiveCount] = useState(5);
+    const [interactiveLanguage, setInteractiveLanguage] = useState<'auto' | 'en' | 'vi'>('auto');
     const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
     const [interactiveQuestions, setInteractiveQuestions] = useState<InteractiveQuestion[]>([]);
 
@@ -391,7 +392,10 @@ export function Step6QuestionBank() {
         setIsGeneratingInteractive(true);
         setMessage(null);
         try {
-            const response = await api.post(`/lessons/${lessonId}/interactive-questions/generate`, { count: interactiveCount });
+            const response = await api.post(`/lessons/${lessonId}/interactive-questions/generate`, {
+                count: interactiveCount,
+                questionLanguage: interactiveLanguage,
+            });
             const questions = response.data.questions || response.data || [];
             setInteractiveQuestions(questions);
             setMessage({ type: 'success', text: `✓ Đã tạo ${questions.length} câu hỏi tương tác!` });
@@ -837,8 +841,8 @@ export function Step6QuestionBank() {
                 <div className="question-section">
                     <div className="question-config">
                         <h3>🎯 Câu hỏi Tương tác</h3>
-                        <p className="hint">Kiểm tra sự tập trung của sinh viên trong bài giảng</p>
-                        <div className="level-inputs">
+                        <p className="hint">Kiểm tra sự tập trung của sinh viên trong bài giảng (Multiple Choice & Multiple Response)</p>
+                        <div className="level-inputs" style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', flexWrap: 'wrap' }}>
                             <div className="level-input">
                                 <label>Số câu hỏi</label>
                                 <input
@@ -848,6 +852,38 @@ export function Step6QuestionBank() {
                                     value={interactiveCount}
                                     onChange={(e) => setInteractiveCount(+e.target.value)}
                                 />
+                            </div>
+                            <div className="level-input" style={{ minWidth: '280px' }}>
+                                <label>🌐 Ngôn ngữ câu hỏi</label>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                    {([
+                                        { value: 'auto', label: '🔄 Tự động theo Slide' },
+                                        { value: 'en', label: '🇬🇧 Tiếng Anh' },
+                                        { value: 'vi', label: '🇻🇳 Tiếng Việt' },
+                                    ] as const).map((opt) => {
+                                        const active = interactiveLanguage === opt.value;
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => setInteractiveLanguage(opt.value)}
+                                                disabled={isGeneratingInteractive}
+                                                style={{
+                                                    padding: '6px 12px',
+                                                    borderRadius: '6px',
+                                                    border: active ? '2px solid #6366f1' : '1px solid #cbd5e1',
+                                                    background: active ? 'rgba(99, 102, 241, 0.12)' : '#ffffff',
+                                                    color: active ? '#4338ca' : '#334155',
+                                                    fontWeight: active ? 700 : 500,
+                                                    fontSize: '12.5px',
+                                                    cursor: isGeneratingInteractive ? 'not-allowed' : 'pointer',
+                                                }}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
                         <button

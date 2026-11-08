@@ -58,6 +58,7 @@ interface CreateReviewQuestionDto {
 
 interface GenerateQuestionsDto {
     count?: number;
+    questionLanguage?: 'auto' | 'en' | 'vi';
 }
 
 interface GenerateReviewQuestionsDto {
@@ -117,6 +118,7 @@ export class QuestionsController {
             slidesContent,
             userId,
             dto.count || 5,
+            dto.questionLanguage,
         );
     }
 

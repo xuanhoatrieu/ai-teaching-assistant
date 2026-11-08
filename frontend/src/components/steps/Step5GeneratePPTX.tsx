@@ -110,7 +110,8 @@ export function Step5GeneratePPTX() {
     const [interactiveImageBase64, setInteractiveImageBase64] = useState<string | null>(null);
     const modalAudioInputRef = useRef<HTMLInputElement | null>(null);
     const modalImageInputRef = useRef<HTMLInputElement | null>(null);
-    const [selectedQTypes, setSelectedQTypes] = useState<string[]>(['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
+    const [selectedQTypes, setSelectedQTypes] = useState<string[]>(['MC', 'MR']);
+    const [interactiveQuestionLanguage, setInteractiveQuestionLanguage] = useState<'auto' | 'en' | 'vi'>('auto');
     const [interactiveQCount, setInteractiveQCount] = useState<number>(5);
     const [interactivePassScore, setInteractivePassScore] = useState<number>(4);
     const [interactiveFallbackSlide, setInteractiveFallbackSlide] = useState<number>(1);
@@ -898,7 +899,8 @@ export function Step5GeneratePPTX() {
         setInteractiveImageFile(null);
         setInteractiveImagePreview(null);
         setInteractiveImageBase64(null);
-        setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
+        setSelectedQTypes(['MC', 'MR']);
+        setInteractiveQuestionLanguage('auto');
         setInteractiveQCount(5);
         setInteractivePassScore(4);
         setInteractiveAllowContinueWithoutPass(false);
@@ -931,14 +933,15 @@ export function Step5GeneratePPTX() {
         setInteractiveImageFile(null);
         setInteractiveImagePreview(null);
         setInteractiveImageBase64(null);
+        setInteractiveQuestionLanguage('auto');
 
         if (parsed?.questions && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
             const existingTypes = Array.from(new Set(parsed.questions.map((q: any) => q.type || 'MC'))) as string[];
-            setSelectedQTypes(existingTypes.length > 0 ? existingTypes : ['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
+            setSelectedQTypes(existingTypes.length > 0 ? existingTypes : ['MC', 'MR']);
             setInteractiveQCount(parsed.questions.length);
             setInteractivePassScore(parsed.passScore || 4);
         } else {
-            setSelectedQTypes(['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE']);
+            setSelectedQTypes(['MC', 'MR']);
             setInteractiveQCount(5);
             setInteractivePassScore(4);
         }
@@ -1026,6 +1029,7 @@ export function Step5GeneratePPTX() {
                     passScore: interactivePassScore,
                     fallbackSlideIndex: interactiveFallbackSlide,
                     allowContinueWithoutPass: interactiveAllowContinueWithoutPass,
+                    questionLanguage: interactiveQuestionLanguage,
                 });
             }
 
@@ -1326,7 +1330,14 @@ export function Step5GeneratePPTX() {
                             <select
                                 id="template-select"
                                 value={selectedTemplate}
-                                onChange={(e) => setSelectedTemplate(e.target.value)}
+                                onChange={(e) => {
+                                    const newId = e.target.value;
+                                    setSelectedTemplate(newId);
+                                    const tpl = templates.find(t => t.id === newId);
+                                    if (tpl && !tpl.isSystem) {
+                                        setScormH5pBgOption('custom');
+                                    }
+                                }}
                                 className="template-dropdown"
                             >
                                 <optgroup label="Mẫu hệ thống">
@@ -1357,7 +1368,11 @@ export function Step5GeneratePPTX() {
                                 <option value="tuaf_clean">🌿 Nhận diện TUAF Tối ưu (Khuyên dùng - Logo Player, viền xanh, tối đa diện tích slide)</option>
                                 <option value="tuaf_full">🖼️ Áp dụng ảnh nền gốc TUAF (Dùng cả 2 ảnh bìa & nội dung)</option>
                                 <option value="minimal">📄 Nền tối giản (Không ảnh, không logo & không tên trường)</option>
-                                <option value="custom">🎨 Đồng bộ theo mẫu PPTX đã chọn ở trên</option>
+                                <option value="custom">
+                                    {selectedTpl
+                                        ? `🎨 Đồng bộ theo mẫu đã chọn (${selectedTpl.name})`
+                                        : '🎨 Đồng bộ theo mẫu PPTX đã chọn ở trên'}
+                                </option>
                             </select>
                         </div>
 
@@ -2977,11 +2992,61 @@ Câu 4: Water [.....] at 100 degrees Celsius.
                                     )}
                                 </div>
 
+                                {/* 4b. Question Output Language Selector */}
+                                <div className="add-slide-form-group">
+                                    <label>🌐 Ngôn ngữ câu hỏi tương tác</label>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                                        {([
+                                            { value: 'auto', label: '🔄 Tự động theo Slide', desc: 'Slide tiếng Anh → tạo câu tiếng Anh; Slide tiếng Việt → tạo tiếng Việt' },
+                                            { value: 'en', label: '🇬🇧 Tiếng Anh (English)', desc: 'Bắt buộc tạo câu hỏi & đáp án bằng tiếng Anh' },
+                                            { value: 'vi', label: '🇻🇳 Tiếng Việt', desc: 'Bắt buộc tạo câu hỏi & đáp án bằng tiếng Việt' },
+                                        ] as const).map((opt) => {
+                                            const active = interactiveQuestionLanguage === opt.value;
+                                            return (
+                                                <button
+                                                    key={opt.value}
+                                                    type="button"
+                                                    onClick={() => setInteractiveQuestionLanguage(opt.value)}
+                                                    disabled={isGeneratingInteractive}
+                                                    title={opt.desc}
+                                                    style={{
+                                                        padding: '8px 14px',
+                                                        borderRadius: '8px',
+                                                        border: active ? '2px solid #6366f1' : '1px solid #cbd5e1',
+                                                        background: active ? 'rgba(99, 102, 241, 0.12)' : '#ffffff',
+                                                        color: active ? '#4338ca' : '#334155',
+                                                        fontWeight: active ? 700 : 500,
+                                                        fontSize: '13px',
+                                                        cursor: isGeneratingInteractive ? 'not-allowed' : 'pointer',
+                                                        transition: 'all 0.15s ease',
+                                                    }}
+                                                >
+                                                    {opt.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="qtype-note" style={{ marginTop: '6px' }}>
+                                        {interactiveQuestionLanguage === 'auto'
+                                            ? '💡 Chế độ Tự động: Nếu chữ trên slide là tiếng Anh, AI sẽ tự động sinh câu hỏi, phương án và giải thích hoàn toàn bằng tiếng Anh.'
+                                            : interactiveQuestionLanguage === 'en'
+                                                ? '🇬🇧 Đã khóa ngôn ngữ: Toàn bộ câu hỏi, đáp án và phản hồi sẽ được tạo 100% bằng tiếng Anh.'
+                                                : '🇻🇳 Đã khóa ngôn ngữ: Toàn bộ câu hỏi, đáp án và phản hồi sẽ được tạo bằng tiếng Việt.'}
+                                    </div>
+                                </div>
+
                                 {/* 5. Multi-selection of Question Types */}
                                 <div className="add-slide-form-group">
                                     <div className="form-group-header-row">
-                                        <label>🎯 Các dạng câu hỏi mong muốn (Tích chọn để tự phối hợp)</label>
-                                        <div className="quick-select-qtypes">
+                                        <label>🎯 Các dạng câu hỏi mong muốn (Mặc định: Multiple Choice & Multiple Response)</label>
+                                        <div className="quick-select-qtypes" style={{ display: 'flex', gap: '10px' }}>
+                                            <button
+                                                type="button"
+                                                className="btn-text-tiny"
+                                                onClick={() => setSelectedQTypes(['MC', 'MR'])}
+                                            >
+                                                Mặc định (MC + MR)
+                                            </button>
                                             <button
                                                 type="button"
                                                 className="btn-text-tiny"

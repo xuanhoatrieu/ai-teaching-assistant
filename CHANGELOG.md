@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.6.20] - 2026-11-08 - Multilingual Interactive Questions (Auto/EN/VI, Default MC+MR) & SCORM/H5P Custom Template Layout Parity (US-034)
+
+### Added & Fixed
+- **Multilingual Interactive & Review Question Generation (`US-034`)**:
+  - Added automatic slide/source language detection (`detectTextLanguage`, `extractSlideVisibleText`, `resolveQuestionLanguage` in `backend/src/ai/language-instruction.ts`) so English slide decks automatically generate 100% English interactive and review questions even when the subject/session language is set to `'vi'` or `'vi-en'`.
+  - Added explicit Question Language selector buttons (`🔄 Tự động theo Slide` / `🇬🇧 Tiếng Anh` / `🇻🇳 Tiếng Việt`) across all 4 modules: Lesson Editor Step 5 (Slide Interactions), Lesson Editor Step 6 (Interactive Question Bank), PPTX Tool Step 3 (Slide Interactions), and PPTX Tool Step 4 (Interactive & Review Question Banks).
+  - Updated default selected interactive question types from all 7 types to **only `MC` (Multiple Choice) and `MR` (Multiple Response)** (`['MC', 'MR']`) while keeping quick buttons to select all 7 types.
+  - Localized TF options (`True`/`False` vs `Đúng`/`Sai`), FIB/CLOZE fallback distractors, and H5P quiz UI labels/badges according to question language.
+- **SCORM 1.2 & H5P Custom Template Synchronization (`bgOption = 'custom'`) Parity with `tuaf_full`**:
+  - Enabled full 16:9 cover & content background layout and typography optimization (`isTuafFullTitle` & `isTuafFullContent` in `scorm-export.helper.ts` and `h5p-export.helper.ts`) when exporting with `bgOption === 'custom'` (`🎨 Đồng bộ theo mẫu đã chọn`), matching `tuaf_full` (`🖼️ Áp dụng ảnh nền gốc TUAF`).
+  - Updated `PptxAudioToolService.buildExportSlidesForSession` and `resolveSlideIllustrationUrl` so exporting SCORM/H5P with `tuaf_full` or `custom` in PPTX Tool renders structured slide titles & bullets over the template's `bg_title.png` / `bg_content.png` with extracted slide illustrations instead of obscuring the template background behind full-slide screenshots (20/20 Jest unit tests passing).
+
 ## [v1.6.19] - 2026-10-30 - Exam Moodle XML/Excel Export & SCORM/H5P TUAF Original Background Parity + Progress Fix (US-032, US-033)
 
 ### Added & Fixed

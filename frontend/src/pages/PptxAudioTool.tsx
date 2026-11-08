@@ -382,6 +382,7 @@ export function PptxAudioToolPage() {
     // 1. Review Questions state
     const [reviewQuestions, setReviewQuestions] = useState<ReviewQuestion[]>([]);
     const [reviewCounts, setReviewCounts] = useState({ level1: 20, level2: 20, level3: 10 });
+    const [reviewLanguage, setReviewLanguage] = useState<'auto' | 'en' | 'vi'>('auto');
     const [isGeneratingReview, setIsGeneratingReview] = useState(false);
     const [isAppendingReview, setIsAppendingReview] = useState(false);
     const [editingReviewId, setEditingReviewId] = useState<string | null>(null);
@@ -392,6 +393,7 @@ export function PptxAudioToolPage() {
     // 2. Interactive Questions state
     const [interactiveQuestions, setInteractiveQuestions] = useState<InteractiveQuestion[]>([]);
     const [interactiveCount, setInteractiveCount] = useState(5);
+    const [interactiveLanguage, setInteractiveLanguage] = useState<'auto' | 'en' | 'vi'>('auto');
     const [isGeneratingInteractive, setIsGeneratingInteractive] = useState(false);
     const [isAppendingInteractive, setIsAppendingInteractive] = useState(false);
     const [editingInteractiveId, setEditingInteractiveId] = useState<string | null>(null);
@@ -751,6 +753,7 @@ export function PptxAudioToolPage() {
         existingAudioUrl: string;
         existingAudioName: string;
         selectedQuestionTypes: string[];
+        questionLanguage: 'auto' | 'en' | 'vi';
         questionCount: number;
         passScore: number;
         fallbackSlideIndex: number;
@@ -771,7 +774,8 @@ export function PptxAudioToolPage() {
         audioFile: null,
         existingAudioUrl: '',
         existingAudioName: '',
-        selectedQuestionTypes: ['MC', 'TF', 'MR'],
+        selectedQuestionTypes: ['MC', 'MR'],
+        questionLanguage: 'auto',
         questionCount: 5,
         passScore: 4,
         fallbackSlideIndex: 1,
@@ -1961,7 +1965,8 @@ export function PptxAudioToolPage() {
             audioFile: null,
             existingAudioUrl: '',
             existingAudioName: '',
-            selectedQuestionTypes: ['MC', 'TF', 'MR'],
+            selectedQuestionTypes: ['MC', 'MR'],
+            questionLanguage: 'auto',
             questionCount: 5,
             passScore: 4,
             fallbackSlideIndex: defaultFrom,
@@ -1975,6 +1980,9 @@ export function PptxAudioToolPage() {
         const oneBased = slide.index + 1;
         const defaultTo = Math.max(1, oneBased - 1);
         const defaultFrom = Math.max(1, defaultTo - 2);
+        const existingTypes = Array.isArray(parsed?.questions) && parsed.questions.length > 0
+            ? (Array.from(new Set(parsed.questions.map((q: any) => String(q.type || 'MC').toUpperCase()))) as string[])
+            : ['MC', 'MR'];
         setExtractedInteractiveFileName('');
         setInteractiveConfigModal({
             isOpen: true,
@@ -1991,7 +1999,8 @@ export function PptxAudioToolPage() {
             audioFile: null,
             existingAudioUrl: slide.extraAudioUrl || '',
             existingAudioName: slide.extraAudioName || '',
-            selectedQuestionTypes: ['MC', 'TF', 'MR'],
+            selectedQuestionTypes: existingTypes.length > 0 ? existingTypes : ['MC', 'MR'],
+            questionLanguage: 'auto',
             questionCount: parsed?.totalQuestions || parsed?.questions?.length || 5,
             passScore: parsed?.passScore ?? 4,
             fallbackSlideIndex: parsed?.fallbackSlideIndex ?? defaultFrom,
@@ -2105,6 +2114,7 @@ export function PptxAudioToolPage() {
                 customContent: interactiveConfigModal.customContent,
                 imageBase64: interactiveConfigModal.imageBase64 || undefined,
                 selectedQuestionTypes: interactiveConfigModal.selectedQuestionTypes,
+                questionLanguage: interactiveConfigModal.questionLanguage,
                 questionCount: interactiveConfigModal.questionCount,
                 passScore: interactiveConfigModal.passScore,
                 fallbackSlideIndex: interactiveConfigModal.fallbackSlideIndex,
@@ -2169,6 +2179,7 @@ export function PptxAudioToolPage() {
                 level1: reviewCounts.level1,
                 level2: reviewCounts.level2,
                 level3: reviewCounts.level3,
+                questionLanguage: reviewLanguage,
             });
             if (res.data?.jobId) {
                 reviewJob.startPolling(res.data.jobId);
@@ -2189,6 +2200,7 @@ export function PptxAudioToolPage() {
                 level1: reviewCounts.level1,
                 level2: reviewCounts.level2,
                 level3: reviewCounts.level3,
+                questionLanguage: reviewLanguage,
             });
             if (res.data?.jobId) {
                 appendReviewJob.startPolling(res.data.jobId);
@@ -2328,7 +2340,10 @@ export function PptxAudioToolPage() {
         try {
             setIsGeneratingInteractive(true);
             setQuestionMessage(null);
-            const res = await api.post(`/pptx-audio-tool/${sessionId}/interactive-questions/generate`, { count: interactiveCount });
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/interactive-questions/generate`, {
+                count: interactiveCount,
+                questionLanguage: interactiveLanguage,
+            });
             if (res.data?.jobId) {
                 interactiveJob.startPolling(res.data.jobId);
             }
@@ -2344,7 +2359,10 @@ export function PptxAudioToolPage() {
         try {
             setIsAppendingInteractive(true);
             setQuestionMessage(null);
-            const res = await api.post(`/pptx-audio-tool/${sessionId}/interactive-questions/append`, { count: interactiveCount });
+            const res = await api.post(`/pptx-audio-tool/${sessionId}/interactive-questions/append`, {
+                count: interactiveCount,
+                questionLanguage: interactiveLanguage,
+            });
             if (res.data?.jobId) {
                 appendInteractiveJob.startPolling(res.data.jobId);
             }
@@ -3848,7 +3866,7 @@ export function PptxAudioToolPage() {
                                             const tpl = templates.find(t => t.id === newId);
                                             if (tpl && !tpl.isSystem) {
                                                 setExportBgOption('custom');
-                                            } else if (exportBgOption === 'custom') {
+                                            } else if (newId === 'blank' && exportBgOption === 'custom') {
                                                 setExportBgOption('tuaf_clean');
                                             }
                                         }}
@@ -3890,7 +3908,7 @@ export function PptxAudioToolPage() {
                                         <option value="minimal">📄 Nền tối giản (Không ảnh, không logo & không tên trường)</option>
                                         {(() => {
                                             const tpl = templates.find(t => t.id === selectedTemplateId);
-                                            if (tpl && !tpl.isSystem) {
+                                            if (tpl) {
                                                 return <option value="custom">🎨 Đồng bộ theo mẫu đã chọn ({tpl.name})</option>;
                                             }
                                             return <option value="custom">🎨 Đồng bộ theo mẫu PPTX đã chọn ở trên</option>;
@@ -5233,11 +5251,72 @@ export function PptxAudioToolPage() {
                                         </div>
                                     )}
 
-                                    {/* Question Types Selection (7 Types) */}
+                                    {/* Question Language Selector */}
                                     <div style={{ marginBottom: 14 }}>
                                         <label style={{ display: 'block', fontSize: '0.84rem', color: '#cbd5e1', marginBottom: 6, fontWeight: 600 }}>
-                                            Các dạng câu hỏi tương tác muốn tạo:
+                                            🌐 Ngôn ngữ câu hỏi tương tác:
                                         </label>
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                            {([
+                                                { value: 'auto', label: '🔄 Tự động theo Slide', desc: 'Slide tiếng Anh → tạo câu tiếng Anh; Slide tiếng Việt → tạo tiếng Việt' },
+                                                { value: 'en', label: '🇬🇧 Tiếng Anh (English)', desc: 'Bắt buộc tạo câu hỏi & đáp án bằng tiếng Anh' },
+                                                { value: 'vi', label: '🇻🇳 Tiếng Việt', desc: 'Bắt buộc tạo câu hỏi & đáp án bằng tiếng Việt' },
+                                            ] as const).map(opt => {
+                                                const active = interactiveConfigModal.questionLanguage === opt.value;
+                                                return (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        title={opt.desc}
+                                                        onClick={() => setInteractiveConfigModal(prev => ({ ...prev, questionLanguage: opt.value }))}
+                                                        style={{
+                                                            padding: '6px 12px',
+                                                            borderRadius: 6,
+                                                            border: `1.5px solid ${active ? '#f59e0b' : '#334155'}`,
+                                                            background: active ? 'rgba(245, 158, 11, 0.2)' : '#0f172a',
+                                                            color: active ? '#fcd34d' : '#cbd5e1',
+                                                            fontWeight: active ? 700 : 500,
+                                                            fontSize: '0.8rem',
+                                                            cursor: 'pointer',
+                                                        }}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 4 }}>
+                                            {interactiveConfigModal.questionLanguage === 'auto'
+                                                ? '💡 Nếu chữ trên slide là tiếng Anh, AI tự động sinh câu hỏi, đáp án và giải thích bằng tiếng Anh.'
+                                                : interactiveConfigModal.questionLanguage === 'en'
+                                                    ? '🇬🇧 Toàn bộ câu hỏi, đáp án và giải thích sẽ được tạo 100% bằng tiếng Anh.'
+                                                    : '🇻🇳 Toàn bộ câu hỏi, đáp án và giải thích sẽ được tạo bằng tiếng Việt.'}
+                                        </div>
+                                    </div>
+
+                                    {/* Question Types Selection (7 Types, Default MC + MR) */}
+                                    <div style={{ marginBottom: 14 }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                                            <label style={{ fontSize: '0.84rem', color: '#cbd5e1', fontWeight: 600 }}>
+                                                Các dạng câu hỏi tương tác muốn tạo (Mặc định: MC & MR):
+                                            </label>
+                                            <div style={{ display: 'flex', gap: 8 }}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setInteractiveConfigModal(prev => ({ ...prev, selectedQuestionTypes: ['MC', 'MR'] }))}
+                                                    style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
+                                                >
+                                                    Mặc định (MC + MR)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setInteractiveConfigModal(prev => ({ ...prev, selectedQuestionTypes: ['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE'] }))}
+                                                    style={{ background: 'transparent', border: 'none', color: '#a78bfa', fontSize: '0.75rem', cursor: 'pointer', padding: 0 }}
+                                                >
+                                                    Chọn tất cả (7 dạng)
+                                                </button>
+                                            </div>
+                                        </div>
                                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                             {[
                                                 { id: 'MC', label: '🔘 Trắc nghiệm 1 đáp án (MC)' },
@@ -5611,6 +5690,36 @@ export function PptxAudioToolPage() {
                                                 />
                                             </div>
                                         </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 10, marginBottom: 10 }}>
+                                            <span style={{ fontSize: '0.84rem', color: '#cbd5e1', fontWeight: 600 }}>🌐 Ngôn ngữ câu hỏi:</span>
+                                            {([
+                                                { value: 'auto', label: '🔄 Tự động theo Slide' },
+                                                { value: 'en', label: '🇬🇧 Tiếng Anh' },
+                                                { value: 'vi', label: '🇻🇳 Tiếng Việt' },
+                                            ] as const).map(opt => {
+                                                const active = reviewLanguage === opt.value;
+                                                return (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        onClick={() => setReviewLanguage(opt.value)}
+                                                        disabled={isGeneratingReview || isAppendingReview}
+                                                        style={{
+                                                            padding: '5px 12px',
+                                                            borderRadius: 6,
+                                                            border: `1.5px solid ${active ? '#6366f1' : '#334155'}`,
+                                                            background: active ? 'rgba(99, 102, 241, 0.2)' : '#0f172a',
+                                                            color: active ? '#a5b4fc' : '#cbd5e1',
+                                                            fontWeight: active ? 700 : 500,
+                                                            fontSize: '0.8rem',
+                                                            cursor: (isGeneratingReview || isAppendingReview) ? 'not-allowed' : 'pointer',
+                                                        }}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                         <div className="review-actions">
                                             <button
                                                 className="btn-primary"
@@ -5916,7 +6025,7 @@ export function PptxAudioToolPage() {
                                     <p className="hint">
                                         Tạo các câu hỏi trắc nghiệm tương tác dạng Multiple Choice / Multiple Response kèm điểm số và phản hồi Đúng/Sai.
                                     </p>
-                                    <div className="interactive-config-controls">
+                                    <div className="interactive-config-controls" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-end' }}>
                                         <div className="level-input interactive-input-box">
                                             <label>
                                                 <span className="level-badge level-know">Số lượng</span>
@@ -5929,6 +6038,38 @@ export function PptxAudioToolPage() {
                                                 value={interactiveCount}
                                                 onChange={(e) => setInteractiveCount(+e.target.value)}
                                             />
+                                        </div>
+                                        <div className="level-input" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                            <label style={{ fontSize: '0.84rem', color: '#cbd5e1', fontWeight: 600 }}>🌐 Ngôn ngữ câu hỏi:</label>
+                                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                                                {([
+                                                    { value: 'auto', label: '🔄 Tự động theo Slide' },
+                                                    { value: 'en', label: '🇬🇧 Tiếng Anh' },
+                                                    { value: 'vi', label: '🇻🇳 Tiếng Việt' },
+                                                ] as const).map(opt => {
+                                                    const active = interactiveLanguage === opt.value;
+                                                    return (
+                                                        <button
+                                                            key={opt.value}
+                                                            type="button"
+                                                            onClick={() => setInteractiveLanguage(opt.value)}
+                                                            disabled={isGeneratingInteractive || isAppendingInteractive}
+                                                            style={{
+                                                                padding: '6px 12px',
+                                                                borderRadius: 6,
+                                                                border: `1.5px solid ${active ? '#6366f1' : '#334155'}`,
+                                                                background: active ? 'rgba(99, 102, 241, 0.2)' : '#0f172a',
+                                                                color: active ? '#a5b4fc' : '#cbd5e1',
+                                                                fontWeight: active ? 700 : 500,
+                                                                fontSize: '0.8rem',
+                                                                cursor: (isGeneratingInteractive || isAppendingInteractive) ? 'not-allowed' : 'pointer',
+                                                            }}
+                                                        >
+                                                            {opt.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
                                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                                             <button

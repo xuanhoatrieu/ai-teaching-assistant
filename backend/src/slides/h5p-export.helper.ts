@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { resolveLocalMediaFile } from './scorm-export.helper';
 import { normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
+import { detectTextLanguage } from '../ai/language-instruction';
 
 const archiver = require('archiver');
 
@@ -93,8 +94,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
     const isDarkTheme = options?.theme === 'dark';
     const isMinimal = options?.bgOption === 'minimal';
     const isTuafBranded = !options?.bgOption || options?.bgOption === 'tuaf_clean' || options?.bgOption === 'tuaf_full';
-    const isTuafFullTitle = options?.bgOption === 'tuaf_full' && Boolean(options?.hasTitleBg);
-    const isTuafFullContent = options?.bgOption === 'tuaf_full' && Boolean(options?.hasContentBg);
+    const isFullBgTemplate = options?.bgOption === 'tuaf_full' || options?.bgOption === 'custom';
+    const isTuafFullTitle = isFullBgTemplate && Boolean(options?.hasTitleBg);
+    const isTuafFullContent = isFullBgTemplate && Boolean(options?.hasContentBg);
     const useLightBodySurface = !isDarkTheme || isTuafFullContent;
     const titleColor = isDarkTheme ? '#52b788' : '#005a36';
     const pointColor = useLightBodySurface ? '#0f172a' : '#ffffff';
@@ -221,26 +223,29 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             let optionsToUse: string[] = Array.isArray(firstQ.options) ? [...firstQ.options] : [];
             let displayQuestionText = String(firstQ.question || '');
             let overrideCorrectAnswers: string[] | null = null;
+            const isEnglishQ = detectTextLanguage(
+                `${displayQuestionText} ${optionsToUse.join(' ')} ${firstQ.explanation || ''} ${s.title || ''}`,
+            ) === 'en';
 
             if (qType === 'TF') {
-                typeBadgeHtml = '<span style="background: rgba(14, 165, 233, 0.15); color: #0369a1; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Đúng / Sai</span>';
+                typeBadgeHtml = `<span style="background: rgba(14, 165, 233, 0.15); color: #0369a1; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${isEnglishQ ? 'True / False' : 'Đúng / Sai'}</span>`;
                 if (!optionsToUse || optionsToUse.length < 2) {
-                    optionsToUse = ['Đúng', 'Sai'];
+                    optionsToUse = isEnglishQ ? ['True', 'False'] : ['Đúng', 'Sai'];
                 }
             } else if (qType === 'MR') {
                 isMultipleResponse = true;
-                typeBadgeHtml = '<span style="background: rgba(168, 85, 247, 0.15); color: #7e22ce; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn nhiều đáp án</span>';
+                typeBadgeHtml = `<span style="background: rgba(168, 85, 247, 0.15); color: #7e22ce; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${isEnglishQ ? 'Multiple Response' : 'Chọn nhiều đáp án'}</span>`;
             } else if (qType === 'FIB') {
-                typeBadgeHtml = '<span style="background: rgba(245, 158, 11, 0.15); color: #b45309; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn từ điền khuyết</span>';
+                typeBadgeHtml = `<span style="background: rgba(245, 158, 11, 0.15); color: #b45309; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${isEnglishQ ? 'Fill in the Blanks' : 'Chọn từ điền khuyết'}</span>`;
             } else if (qType === 'MATCH') {
-                typeBadgeHtml = '<span style="background: rgba(236, 72, 153, 0.15); color: #be185d; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Nối cặp</span>';
+                typeBadgeHtml = `<span style="background: rgba(236, 72, 153, 0.15); color: #be185d; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${isEnglishQ ? 'Matching' : 'Nối cặp'}</span>`;
             } else if (qType === 'ORDER') {
-                typeBadgeHtml = '<span style="background: rgba(6, 182, 212, 0.15); color: #0e7490; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Sắp xếp từ</span>';
+                typeBadgeHtml = `<span style="background: rgba(6, 182, 212, 0.15); color: #0e7490; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${isEnglishQ ? 'Word Ordering' : 'Sắp xếp từ'}</span>`;
                 if ((!optionsToUse || optionsToUse.length === 0) && firstQ.correctSentence) {
                     optionsToUse = [firstQ.correctSentence];
                 }
             } else if (qType === 'CLOZE') {
-                typeBadgeHtml = '<span style="background: rgba(217, 70, 239, 0.15); color: #a21caf; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn từ điền hội thoại</span>';
+                typeBadgeHtml = `<span style="background: rgba(217, 70, 239, 0.15); color: #a21caf; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${isEnglishQ ? 'Cloze Passage' : 'Chọn từ điền hội thoại'}</span>`;
                 const rawPassage = String(firstQ.passage || firstQ.questionText || '');
                 if (rawPassage) {
                     let bNum = 0;
@@ -277,7 +282,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                     }
                 }
             } else {
-                typeBadgeHtml = '<span style="background: rgba(99, 102, 241, 0.15); color: #4338ca; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">Chọn 1 đáp án</span>';
+                typeBadgeHtml = `<span style="background: rgba(99, 102, 241, 0.15); color: #4338ca; font-size: 0.75em; padding: 2px 8px; border-radius: 4px; margin-left: 8px;">${isEnglishQ ? 'Multiple Choice' : 'Chọn 1 đáp án'}</span>`;
             }
 
             const correctAnswersList: string[] = overrideCorrectAnswers
@@ -304,10 +309,12 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                                 tipsAndFeedback: {
                                     tip: '',
                                     chosenFeedback: isCorrect
-                                        ? `<div>✅ Chính xác! ${escapeHtml(firstQ.explanation || '')}</div>`
+                                        ? `<div>✅ ${isEnglishQ ? 'Correct!' : 'Chính xác!'} ${escapeHtml(firstQ.explanation || '')}</div>`
                                         : (hideSolutions
-                                            ? `<div>❌ Chưa chính xác. Vui lòng xem lại nội dung tại Slide ${fallbackSlideIndex} để ôn tập!</div>`
-                                            : `<div>❌ Chưa đúng. ${escapeHtml(firstQ.explanation || '')}</div>`)
+                                            ? `<div>❌ ${isEnglishQ
+                                                ? `Incorrect. Please review the content at Slide ${fallbackSlideIndex}!`
+                                                : `Chưa chính xác. Vui lòng xem lại nội dung tại Slide ${fallbackSlideIndex} để ôn tập!`}</div>`
+                                            : `<div>❌ ${isEnglishQ ? 'Incorrect.' : 'Chưa đúng.'} ${escapeHtml(firstQ.explanation || '')}</div>`)
                                 }
                             };
                         }),
@@ -319,9 +326,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                             showSolutionsRequiresInput: true
                         },
                         UI: {
-                            checkAnswerButton: 'Kiểm tra',
-                            showSolutionButton: 'Xem đáp án',
-                            tryAgainButton: 'Thử lại'
+                            checkAnswerButton: isEnglishQ ? 'Check' : 'Kiểm tra',
+                            showSolutionButton: isEnglishQ ? 'Show solution' : 'Xem đáp án',
+                            tryAgainButton: isEnglishQ ? 'Retry' : 'Thử lại'
                         }
                     },
                     subContentId: `quiz_${idx}`
@@ -538,6 +545,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             const gateTopY = isTuafFullContent ? 17 : 13;
             const gateQuizY = isTuafFullContent ? 28 : 25;
             const gateQuizH = isTuafFullContent ? 68 : 71;
+            const isEnglishGate = detectTextLanguage(
+                `${s.title || ''} ${(questions || []).map((q: any) => q.question || '').join(' ')}`,
+            ) === 'en';
             elements.push({
                 x: 6,
                 y: gateTopY,
@@ -548,7 +558,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                     params: {
                         text: `
                             <div style="background: rgba(99, 102, 241, 0.08); border-left: 4px solid #6366f1; border-radius: 6px; padding: 8px 14px; font-family: -apple-system, sans-serif; font-size: 0.9em; color: #1e293b; line-height: 1.4;">
-                                <strong>🎯 Kiểm tra chặn bài (Mastery Gate):</strong> Đạt ít nhất <strong>${passScore}/${questions.length} câu</strong> để mở khóa bài học tiếp theo. Nếu chưa đạt, bạn cần quay lại <strong>Slide ${fallbackSlideIndex}</strong> để ôn tập.
+                                ${isEnglishGate
+                                    ? `<strong>🎯 Mastery Gate:</strong> Score at least <strong>${passScore}/${questions.length}</strong> to unlock the next section. If not passed, review <strong>Slide ${fallbackSlideIndex}</strong>.`
+                                    : `<strong>🎯 Kiểm tra chặn bài (Mastery Gate):</strong> Đạt ít nhất <strong>${passScore}/${questions.length} câu</strong> để mở khóa bài học tiếp theo. Nếu chưa đạt, bạn cần quay lại <strong>Slide ${fallbackSlideIndex}</strong> để ôn tập.`}
                             </div>
                         `
                     },
@@ -965,7 +977,7 @@ export async function packageH5pZip(
     for (let sIdx = 0; sIdx < packagedSlides.length; sIdx++) {
         const slide = packagedSlides[sIdx];
         const isTuafFullCoverSlide =
-            opts.bgOption === 'tuaf_full' &&
+            (opts.bgOption === 'tuaf_full' || opts.bgOption === 'custom') &&
             opts.hasTitleBg &&
             sIdx === 0 &&
             slide.layoutType !== 'full_slide_canvas';

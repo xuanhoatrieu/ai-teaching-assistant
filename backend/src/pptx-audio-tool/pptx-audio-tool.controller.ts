@@ -404,6 +404,7 @@ export class PptxAudioToolController {
             passScore?: number;
             fallbackSlideIndex?: number;
             allowContinueWithoutPass?: boolean;
+            questionLanguage?: 'auto' | 'en' | 'vi';
         },
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
@@ -424,6 +425,7 @@ export class PptxAudioToolController {
                 passScore: body?.passScore,
                 fallbackSlideIndex: body?.fallbackSlideIndex,
                 allowContinueWithoutPass: body?.allowContinueWithoutPass,
+                questionLanguage: body?.questionLanguage,
             },
         );
     }
@@ -618,7 +620,7 @@ export class PptxAudioToolController {
     async generateReviewQuestions(
         @Param('sessionId') sessionId: string,
         @Req() req: Request,
-        @Body() body: { level1?: number; level2?: number; level3?: number; level1Count?: number; level2Count?: number; level3Count?: number },
+        @Body() body: { level1?: number; level2?: number; level3?: number; level1Count?: number; level2Count?: number; level3Count?: number; questionLanguage?: 'auto' | 'en' | 'vi' },
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
 
@@ -644,7 +646,7 @@ export class PptxAudioToolController {
 
         setImmediate(async () => {
             try {
-                await this.service.generateReviewQuestionsBackground(job.id, sessionId, userId, counts, false);
+                await this.service.generateReviewQuestionsBackground(job.id, sessionId, userId, counts, false, body.questionLanguage);
             } catch (err: any) {
                 this.logger.error(`[generateReviewQuestions] Job ${job.id} failed: ${err.message}`);
                 await this.jobService.failJob(job.id, err.message);
@@ -658,7 +660,7 @@ export class PptxAudioToolController {
     async appendReviewQuestions(
         @Param('sessionId') sessionId: string,
         @Req() req: Request,
-        @Body() body: { level1?: number; level2?: number; level3?: number; level1Count?: number; level2Count?: number; level3Count?: number },
+        @Body() body: { level1?: number; level2?: number; level3?: number; level1Count?: number; level2Count?: number; level3Count?: number; questionLanguage?: 'auto' | 'en' | 'vi' },
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
 
@@ -684,7 +686,7 @@ export class PptxAudioToolController {
 
         setImmediate(async () => {
             try {
-                await this.service.generateReviewQuestionsBackground(job.id, sessionId, userId, counts, true);
+                await this.service.generateReviewQuestionsBackground(job.id, sessionId, userId, counts, true, body.questionLanguage);
             } catch (err: any) {
                 this.logger.error(`[appendReviewQuestions] Job ${job.id} failed: ${err.message}`);
                 await this.jobService.failJob(job.id, err.message);
@@ -731,7 +733,7 @@ export class PptxAudioToolController {
     async generateInteractiveQuestions(
         @Param('sessionId') sessionId: string,
         @Req() req: Request,
-        @Body() body: { count?: number },
+        @Body() body: { count?: number; questionLanguage?: 'auto' | 'en' | 'vi' },
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
 
@@ -751,7 +753,7 @@ export class PptxAudioToolController {
 
         setImmediate(async () => {
             try {
-                await this.service.generateInteractiveQuestionsBackground(job.id, sessionId, userId, count, false);
+                await this.service.generateInteractiveQuestionsBackground(job.id, sessionId, userId, count, false, body.questionLanguage);
             } catch (err: any) {
                 this.logger.error(`[generateInteractiveQuestions] Job ${job.id} failed: ${err.message}`);
                 await this.jobService.failJob(job.id, err.message);
@@ -765,7 +767,7 @@ export class PptxAudioToolController {
     async appendInteractiveQuestions(
         @Param('sessionId') sessionId: string,
         @Req() req: Request,
-        @Body() body: { count?: number },
+        @Body() body: { count?: number; questionLanguage?: 'auto' | 'en' | 'vi' },
     ) {
         const userId = (req as any).user?.id || (req as any).user?.sub;
 
@@ -785,7 +787,7 @@ export class PptxAudioToolController {
 
         setImmediate(async () => {
             try {
-                await this.service.generateInteractiveQuestionsBackground(job.id, sessionId, userId, count, true);
+                await this.service.generateInteractiveQuestionsBackground(job.id, sessionId, userId, count, true, body.questionLanguage);
             } catch (err: any) {
                 this.logger.error(`[appendInteractiveQuestions] Job ${job.id} failed: ${err.message}`);
                 await this.jobService.failJob(job.id, err.message);

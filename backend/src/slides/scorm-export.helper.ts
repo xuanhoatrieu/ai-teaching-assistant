@@ -183,9 +183,10 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
     const bgOption = options?.bgOption || 'tuaf_clean';
     const initialTheme = (options?.theme === 'dark') ? 'dark' : 'light';
     const isMinimal = bgOption === 'minimal';
-    const isImageBg = (bgOption === 'tuaf_full' || bgOption === 'custom') && (options?.hasTitleBg || options?.hasContentBg);
-    const isTuafFullTitle = bgOption === 'tuaf_full' && Boolean(options?.hasTitleBg);
-    const isTuafFullContent = bgOption === 'tuaf_full' && Boolean(options?.hasContentBg);
+    const isFullBgTemplate = bgOption === 'tuaf_full' || bgOption === 'custom';
+    const isImageBg = isFullBgTemplate && (options?.hasTitleBg || options?.hasContentBg);
+    const isTuafFullTitle = isFullBgTemplate && Boolean(options?.hasTitleBg);
+    const isTuafFullContent = isFullBgTemplate && Boolean(options?.hasContentBg);
     const isTuafFull = isTuafFullTitle || isTuafFullContent;
     const isTuafClean = !isMinimal && !isImageBg;
 
@@ -3844,7 +3845,7 @@ export async function packageScormZip(
     for (let sIdx = 0; sIdx < packagedSlides.length; sIdx++) {
         const slide = packagedSlides[sIdx];
         const isTuafFullCoverSlide =
-            opts.bgOption === 'tuaf_full' &&
+            (opts.bgOption === 'tuaf_full' || opts.bgOption === 'custom') &&
             opts.hasTitleBg &&
             sIdx === 0 &&
             slide.layoutType !== 'full_slide_canvas';

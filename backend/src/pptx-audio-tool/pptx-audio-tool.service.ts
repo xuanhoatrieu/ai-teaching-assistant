@@ -51,6 +51,7 @@ import {
 import { fixUtf8Filename } from '../common/string.util';
 import { packageScormZip, resolveLocalMediaFile } from '../slides/scorm-export.helper';
 import { packageH5pZip } from '../slides/h5p-export.helper';
+import { detectTextLanguage, extractSlideVisibleText, resolveQuestionLanguage } from '../ai/language-instruction';
 
 const execFileAsync = promisify(execFile);
 
@@ -583,6 +584,10 @@ export class PptxAudioToolService {
                 };
             });
 
+            // Auto-detect slide language if subject didn't explicitly force 'en'
+            const detectedSlideLang = detectTextLanguage(extractSlideVisibleText(slides), initialLang as 'en' | 'vi');
+            const effectiveInitialLang = initialLang === 'en' ? 'en' : detectedSlideLang;
+
             // Update session
             await this.prisma.pptxAudioSession.update({
                 where: { id: session.id },
@@ -590,6 +595,7 @@ export class PptxAudioToolService {
                     slidesJson: JSON.stringify(slides),
                     contentJson: JSON.stringify(content),
                     status: 'notes_extracted',
+                    language: effectiveInitialLang,
                 },
             });
 
@@ -1707,9 +1713,10 @@ Return JSON only.`;
         userId: string,
         counts: { level1Count?: number; level2Count?: number; level3Count?: number },
         isAppend = false,
+        questionLanguage?: 'auto' | 'en' | 'vi',
     ) {
         await this.jobService.updateProgress(jobId, 10, 'Đang phân tích slide và chuẩn bị tạo câu hỏi ôn tập...');
-        const result = await this.generateReviewQuestions(sessionId, userId, counts, isAppend);
+        const result = await this.generateReviewQuestions(sessionId, userId, counts, isAppend, questionLanguage);
         await this.jobService.completeJob(jobId, result);
         return result;
     }
@@ -1720,9 +1727,10 @@ Return JSON only.`;
         userId: string,
         count: number,
         isAppend = false,
+        questionLanguage?: 'auto' | 'en' | 'vi',
     ) {
         await this.jobService.updateProgress(jobId, 10, 'Đang phân tích slide và chuẩn bị tạo câu hỏi tương tác...');
-        const result = await this.generateInteractiveQuestions(sessionId, userId, count, isAppend);
+        const result = await this.generateInteractiveQuestions(sessionId, userId, count, isAppend, questionLanguage);
         await this.jobService.completeJob(jobId, result);
         return result;
     }
@@ -1945,6 +1953,18 @@ Return JSON only.`;
         }
         if (dto.layoutType !== undefined && dto.layoutType !== null) {
             slide.layoutType = dto.layoutType.trim();
+        } else if (
+            (dto.optimizedContent !== undefined || dto.content !== undefined) &&
+            slide.layoutType === 'full_slide_canvas'
+        ) {
+            slide.layoutType = 'split_standard';
+        }
+        if (
+            slide.layoutType !== 'full_slide_canvas' &&
+            String(slide.imageUrl || '').includes('/rendered_slides/full_slide_')
+        ) {
+            const origIdx = slide.originalSlideIndex !== undefined ? slide.originalSlideIndex : slide.index;
+            slide.imageUrl = this.resolveSlideIllustrationUrl(sessionId, slide, origIdx) || null;
         }
         if (dto.interactiveData !== undefined) {
             slide.interactiveData = dto.interactiveData === null
@@ -2250,6 +2270,10 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
         if (slide.layoutType === 'full_slide_canvas') {
             slide.layoutType = 'split_standard';
         }
+        if (String(slide.imageUrl || '').includes('/rendered_slides/full_slide_')) {
+            const origIdx = slide.originalSlideIndex !== undefined ? slide.originalSlideIndex : slide.index;
+            slide.imageUrl = this.resolveSlideIllustrationUrl(sessionId, slide, origIdx) || null;
+        }
         await this.saveSlidesAndSyncContent(sessionId, slides);
 
         return {
@@ -2446,6 +2470,7 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
             passScore?: number;
             fallbackSlideIndex?: number;
             allowContinueWithoutPass?: boolean;
+            questionLanguage?: 'auto' | 'en' | 'vi';
         },
     ) {
         const session = await this.prisma.pptxAudioSession.findUnique({
@@ -2463,24 +2488,56 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
         let content = '';
         const isExtractMode = options?.mode === 'extract_existing';
         const sourceType = options?.sourceType || (isExtractMode ? 'custom_text' : 'current_slide');
+        let rangeSlides: ParsedSlide[] = [];
 
         if (sourceType === 'slide_range' && options?.fromSlideIndex && options?.toSlideIndex && !isExtractMode) {
             const fromIdx = Math.min(Number(options.fromSlideIndex), Number(options.toSlideIndex));
             const toIdx = Math.max(Number(options.fromSlideIndex), Number(options.toSlideIndex));
-            const rangeSlides = slides.filter(s => (s.index + 1) >= fromIdx && (s.index + 1) <= toIdx);
+            rangeSlides = slides.filter(s => (s.index + 1) >= fromIdx && (s.index + 1) <= toIdx);
+        }
+
+        let slidesForLangDetection: ParsedSlide[] = [];
+        if (rangeSlides.length > 0) {
+            slidesForLangDetection = rangeSlides;
+        } else {
+            const slideRawText = Array.isArray(slide.content) ? slide.content.join(' ') : String(slide.content || '');
+            const isDefaultPlaceholder = /^Hoạt động tương tác kiểm tra kiến thức từ Slide/i.test(slideRawText.trim());
+            if (slideRawText.trim().length > 10 && !isDefaultPlaceholder) {
+                slidesForLangDetection = [slide];
+            } else {
+                slidesForLangDetection = slides.filter(s => !['checkpoint_quiz', 'interactive_audio'].includes(s.slideType || ''));
+            }
+        }
+
+        const targetLang = resolveQuestionLanguage({
+            requestedLanguage: options?.questionLanguage,
+            subjectLanguage: session.pptxSubject?.language,
+            sessionLanguage: session.language,
+            sourceText: options?.customContent,
+            slides: slidesForLangDetection,
+        });
+        const isEnglish = targetLang === 'en';
+
+        if (sourceType === 'slide_range' && rangeSlides.length > 0 && !isExtractMode) {
             content = rangeSlides.map(s => {
                 let sBody = Array.isArray(s.content) ? s.content.join('\n') : String(s.content || '');
                 if (Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0) {
                     sBody = s.optimizedContent.map(p => `${p.emoji || '•'} ${p.point}: ${p.description || ''}`).join('\n');
                 }
-                const note = s.noteVN || s.noteEN || s.noteFull || '';
-                return `[Slide ${s.index + 1}: ${s.title}]\n${sBody}\n${note ? `Lời giảng: ${note}\n` : ''}`;
+                const preferredNote = isEnglish
+                    ? (s.noteEN || (detectTextLanguage(s.noteFull, 'vi') === 'en' ? s.noteFull : ''))
+                    : (s.noteVN || s.noteEN || s.noteFull || '');
+                return `[Slide ${s.index + 1}: ${s.title}]\n${sBody}\n${preferredNote ? `${isEnglish ? 'Speaker Note' : 'Lời giảng'}: ${preferredNote}\n` : ''}`;
             }).join('\n\n');
             if (session.contextText && session.contextText.trim()) {
-                content += `\n\n[Tài liệu tham khảo bổ sung của bài học]:\n${session.contextText.trim().substring(0, 12000)}`;
+                content += isEnglish
+                    ? `\n\n[Supplementary reference material]:\n${session.contextText.trim().substring(0, 12000)}`
+                    : `\n\n[Tài liệu tham khảo bổ sung của bài học]:\n${session.contextText.trim().substring(0, 12000)}`;
             }
         } else if ((sourceType === 'custom_text' || isExtractMode || sourceType === 'audio' || sourceType === 'image') && options?.customContent) {
-            content = `[Nội dung tài liệu/đề bài do giáo viên cung cấp]:\n${options.customContent}`;
+            content = isEnglish
+                ? `[Teacher-provided source material / questions]:\n${options.customContent}`
+                : `[Nội dung tài liệu/đề bài do giáo viên cung cấp]:\n${options.customContent}`;
         } else {
             if (Array.isArray(slide.optimizedContent) && slide.optimizedContent.length > 0) {
                 content = slide.optimizedContent.map(p => `${p.emoji || '•'} ${p.point}: ${p.description || ''}`).join('\n');
@@ -2492,31 +2549,90 @@ Chỉ trả về JSON hợp lệ theo đúng cấu trúc sau:
         const hasAudioSample = !!(slide.extraAudioUrl || slide.extraAudioName);
         const subjectName = session.pptxSubject?.name || '';
         const courseName = session.pptxSubject?.courseName || '';
-        const targetAudience = session.pptxSubject?.targetAudience || 'Sinh viên đại học';
+        const targetAudience = session.pptxSubject?.targetAudience || (isEnglish ? 'University students' : 'Sinh viên đại học');
         const lessonTitle = session.lessonTitle || fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '');
 
         const selectedTypes = (options?.selectedQuestionTypes && options.selectedQuestionTypes.length > 0)
             ? options.selectedQuestionTypes
-            : ['MC', 'TF', 'MR', 'FIB', 'MATCH', 'ORDER', 'CLOZE'];
+            : ['MC', 'MR'];
 
-        const typeLabels: Record<string, string> = {
-            MC: 'Trắc nghiệm đơn 1 đáp án đúng (type: "MC", options: 4 lựa chọn A, B, C, D, correctAnswer: "chuỗi đáp án đúng")',
-            TF: 'Đúng hay Sai (type: "TF", options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai")',
-            MR: 'Nhiều lựa chọn đúng (type: "MR", options: 4 lựa chọn, correctAnswers: [mảng chứa các đáp án đúng])',
-            FIB: 'Điền khuyết từ/thuật ngữ có phương án lựa chọn (type: "FIB", question: câu hỏi chứa ký hiệu [.....], options: [mảng 4 từ/cụm từ gồm 1 đáp án đúng và 3 phương án nhiễu hợp lý để sinh viên chọn], correctAnswer: "từ hoặc cụm từ đúng nằm trong options")',
-            MATCH: 'Nối cặp tương ứng hai vế A và B (type: "MATCH", question: "Yêu cầu nối...", pairs: [ { "left": "Khái niệm/Thuật ngữ vế A", "right": "Định nghĩa/Ý nghĩa vế B tương ứng" }, ... ])',
-            ORDER: 'Sắp xếp thứ tự từ trong câu (type: "ORDER", question: "Sắp xếp các từ sau thành câu hoàn chỉnh:", words: ["mảng", "từ", "bị", "xáo", "trộn"], correctSentence: "Câu hoàn chỉnh đúng chuẩn ngữ pháp")',
-            CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại bằng menu lựa chọn (type: "CLOZE", question: "Chọn từ/cụm từ thích hợp cho các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", distractors: ["từ nhiễu 1", "từ nhiễu 2", "từ nhiễu 3"], explanation: "Giải thích ngữ cảnh...")',
-        };
+        const typeLabels: Record<string, string> = isEnglish
+            ? {
+                  MC: 'Single-choice Multiple Choice (type: "MC", options: 4 choices A, B, C, D in English, correctAnswer: "exact correct option string")',
+                  TF: 'True or False (type: "TF", options: ["True", "False"], correctAnswer: "True" or "False")',
+                  MR: 'Multiple Response with multiple correct answers (type: "MR", options: 4 choices in English, correctAnswers: [array of exact correct option strings])',
+                  FIB: 'Fill in the Blank with selectable word chips (type: "FIB", question: sentence containing [.....], options: [array of 4 English words/phrases: 1 correct answer and 3 plausible distractors], correctAnswer: "exact correct word/phrase from options")',
+                  MATCH: 'Matching pairs between Column A and Column B (type: "MATCH", question: "Match each term with its corresponding definition:", pairs: [ { "left": "Term/Concept A", "right": "Matching Definition/Meaning B" }, ... ])',
+                  ORDER: 'Word ordering to form a sentence (type: "ORDER", question: "Arrange the following words to form a complete sentence:", words: ["shuffled", "array", "of", "words"], correctSentence: "Complete grammatically correct English sentence")',
+                  CLOZE: 'Cloze passage / dialogue with dropdown blanks (type: "CLOZE", question: "Choose the appropriate word/phrase for each blank:", passage: "English paragraph or dialogue with target words in square brackets [target_word] (e.g., A: Hello, how are [you]?\\nB: I am [fine], thanks.)", distractors: ["distractor 1", "distractor 2", "distractor 3"], explanation: "Brief explanation in English...")',
+              }
+            : {
+                  MC: 'Trắc nghiệm đơn 1 đáp án đúng (type: "MC", options: 4 lựa chọn A, B, C, D, correctAnswer: "chuỗi đáp án đúng")',
+                  TF: 'Đúng hay Sai (type: "TF", options: ["Đúng", "Sai"], correctAnswer: "Đúng" hoặc "Sai")',
+                  MR: 'Nhiều lựa chọn đúng (type: "MR", options: 4 lựa chọn, correctAnswers: [mảng chứa các đáp án đúng])',
+                  FIB: 'Điền khuyết từ/thuật ngữ có phương án lựa chọn (type: "FIB", question: câu hỏi chứa ký hiệu [.....], options: [mảng 4 từ/cụm từ gồm 1 đáp án đúng và 3 phương án nhiễu hợp lý để sinh viên chọn], correctAnswer: "từ hoặc cụm từ đúng nằm trong options")',
+                  MATCH: 'Nối cặp tương ứng hai vế A và B (type: "MATCH", question: "Yêu cầu nối...", pairs: [ { "left": "Khái niệm/Thuật ngữ vế A", "right": "Định nghĩa/Ý nghĩa vế B tương ứng" }, ... ])',
+                  ORDER: 'Sắp xếp thứ tự từ trong câu (type: "ORDER", question: "Sắp xếp các từ sau thành câu hoàn chỉnh:", words: ["mảng", "từ", "bị", "xáo", "trộn"], correctSentence: "Câu hoàn chỉnh đúng chuẩn ngữ pháp")',
+                  CLOZE: 'Điền từ vào chỗ trống trong đoạn văn hoặc hội thoại bằng menu lựa chọn (type: "CLOZE", question: "Chọn từ/cụm từ thích hợp cho các chỗ trống:", passage: "Đoạn văn hoặc kịch bản hội thoại với các từ cần điền đặt trong ngoặc vuông [từ_cần_điền] (Ví dụ: A: Hello, how are [you]?\\nB: I am [fine], thanks.)", distractors: ["từ nhiễu 1", "từ nhiễu 2", "từ nhiễu 3"], explanation: "Giải thích ngữ cảnh...")',
+              };
 
         const typesRequirementText = selectedTypes.map(t => `- ${typeLabels[t] || t}`).join('\n');
         const questionCount = options?.questionCount ? Number(options.questionCount) : 5;
         const passScore = options?.passScore !== undefined ? Number(options.passScore) : (questionCount >= 5 ? 4 : Math.max(1, questionCount - 1));
         const fallbackSlideIndex = options?.fallbackSlideIndex !== undefined ? Number(options.fallbackSlideIndex) : (options?.fromSlideIndex || Math.max(1, oneBasedSlideNumber - 1));
 
+        const defaultBadgeLabel = isEnglish
+            ? (hasAudioSample ? '🎧 Listening Comprehension' : (options?.allowContinueWithoutPass ? '📝 Practice & Knowledge Check' : '🎯 Knowledge Checkpoint (Mastery Gate)'))
+            : (hasAudioSample ? '🎧 Bài tập nghe hiểu' : (options?.allowContinueWithoutPass ? '📝 Luyện tập & Khảo sát quan điểm' : '🎯 Kiểm tra kiến thức (Chặn bài)'));
+        const defaultInstruction = isEnglish
+            ? 'Answer the interactive questions below to check your understanding'
+            : 'Hãy trả lời các câu hỏi kiểm tra dưới đây';
+
         let promptText = '';
         if (isExtractMode) {
-            promptText = `
+            promptText = isEnglish
+                ? `
+You are an automated EXAM QUESTION EXTRACTOR & DIGITALIZATION EXPERT for Moodle / SCORM / H5P.
+The instructor has ALREADY PROVIDED QUESTIONS in the material below. Your task is to READ AND EXTRACT THOSE QUESTIONS ACCURATELY without inventing unrelated questions.
+
+CRITICAL LANGUAGE RULE:
+- ALL questions, options, correct answers, instructions, badgeLabel, and explanations MUST be in ENGLISH.
+- For True/False ("TF") questions, options MUST be ["True", "False"] and correctAnswer MUST be "True" or "False".
+
+SOURCE MATERIAL PROVIDED BY INSTRUCTOR:
+${content || '(No text content provided)'}
+${options?.imageBase64 ? '\n[SPECIAL NOTE FOR ATTACHED IMAGE]: Carefully OCR and extract all questions and answer options from the attached worksheet/exam image!\n' : ''}
+MANDATORY EXTRACTION RULES:
+1. VERBATIM EXTRACTION: Preserve the original questions and options (A, B, C, D...) accurately.
+2. QUESTION TYPE CLASSIFICATION: "MC", "TF", "MR", "FIB", "MATCH", "ORDER", "CLOZE".
+3. IDENTIFY CORRECT ANSWERS with a concise explanation in English.
+4. QUANTITY & MASTERY GATE:
+   - Extract up to ${questionCount} questions.
+   - Minimum pass score (passScore): ${passScore}.
+   - Fallback review slide (fallbackSlideIndex): Slide ${fallbackSlideIndex}.
+
+OUTPUT FORMAT (VALID JSON ONLY):
+{
+  "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
+  "badgeLabel": "${defaultBadgeLabel}",
+  "instruction": "${defaultInstruction}",
+  "passScore": ${passScore},
+  "totalQuestions": ${questionCount},
+  "fallbackSlideIndex": ${fallbackSlideIndex},
+  "allowContinueWithoutPass": ${options?.allowContinueWithoutPass === true},
+  "hideSolutions": ${!hasAudioSample},
+  "questions": [
+    {
+      "id": "q1",
+      "type": "MC",
+      "question": "Question text in English...",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": "Option A",
+      "explanation": "Detailed explanation in English..."
+    }
+  ]
+}`
+                : `
 Bạn là CHUYÊN GIA SỐ HÓA VÀ TRÍCH XUẤT ĐỀ THI TỰ ĐỘNG (EXAM QUESTION EXTRACTOR) theo chuẩn Moodle / SCORM / H5P.
 Giáo viên ĐÃ CÓ SẴN CÂU HỎI TRONG TÀI LIỆU DƯỚI ĐÂY. Nhiệm vụ của bạn là ĐỌC VÀ TRÍCH XUẤT CHÍNH XÁC CÁC CÂU HỎI ĐÓ, KHÔNG TỰ BỊA RA CÂU HỎI MỚI.
 
@@ -2535,8 +2651,8 @@ QUY TẮC TRÍCH XUẤT BẮT BUỘC:
 YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
 {
   "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
-  "badgeLabel": "${hasAudioSample ? '🎧 Bài tập nghe hiểu' : '🎯 Kiểm tra kiến thức (Chặn bài)'}",
-  "instruction": "Hãy trả lời các câu hỏi kiểm tra dưới đây",
+  "badgeLabel": "${defaultBadgeLabel}",
+  "instruction": "${defaultInstruction}",
   "passScore": ${passScore},
   "totalQuestions": ${questionCount},
   "fallbackSlideIndex": ${fallbackSlideIndex},
@@ -2554,8 +2670,62 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
   ]
 }`;
         } else {
-            const slideNote = slide.noteVN || slide.noteEN || slide.noteFull || '';
-            promptText = `
+            const slideNote = isEnglish
+                ? (slide.noteEN || (detectTextLanguage(slide.noteFull, 'vi') === 'en' ? slide.noteFull : ''))
+                : (slide.noteVN || slide.noteEN || slide.noteFull || '');
+            promptText = isEnglish
+                ? `
+You are an expert Instructional Designer creating interactive e-learning activities (Moodle / H5P / SCORM standard).
+Design an engaging Interactive Activity for the following lesson slide(s):
+
+CRITICAL LANGUAGE RULE:
+- ALL output fields (question, options, correctAnswer, correctAnswers, pairs, words, correctSentence, passage, distractors, explanation, instruction, badgeLabel) MUST be written 100% in ENGLISH.
+- Do NOT output Vietnamese anywhere in the JSON.
+
+LESSON CONTEXT:
+- Subject: ${subjectName} (${courseName})
+- Target Audience: ${targetAudience}
+- Lesson Title: ${lessonTitle}
+- Slide Number: ${oneBasedSlideNumber}
+- Slide Title: ${slide.title}
+${sourceType === 'slide_range' ? `- SOURCE KNOWLEDGE FROM SLIDES (${options?.fromSlideIndex} TO ${options?.toSlideIndex}):` : '- Source Knowledge Content:'}
+${content || '(Based on slide title and lesson topic)'}
+${slideNote && sourceType !== 'slide_range' ? `- Speaker Note: ${slideNote}` : ''}
+${hasAudioSample ? `- ATTACHED AUDIO SAMPLE: "${slide.extraAudioName || 'Audio sample'}" (Prioritize listening comprehension questions based on this context!)` : ''}
+${requestedType ? `- Requested Activity Type: ${requestedType}` : ''}
+
+ALLOWED QUESTION TYPES (STRICT):
+Generate ONLY questions belonging to the following selected type(s):
+${typesRequirementText}
+Do NOT generate any question type outside this list!
+
+QUANTITY & MASTERY GATE:
+- Generate EXACTLY ${questionCount} questions (distributed across the selected question types above).
+- Minimum pass score: ${passScore}/${questionCount}.
+- Fallback slide if student does not pass: Slide ${fallbackSlideIndex}.
+
+OUTPUT FORMAT (VALID JSON ONLY):
+{
+  "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
+  "badgeLabel": "${defaultBadgeLabel}",
+  "instruction": "${defaultInstruction}",
+  "passScore": ${passScore},
+  "totalQuestions": ${questionCount},
+  "fallbackSlideIndex": ${fallbackSlideIndex},
+  "allowContinueWithoutPass": ${options?.allowContinueWithoutPass === true},
+  "hideSolutions": ${!hasAudioSample},
+  "questions": [
+    {
+      "id": "q1",
+      "type": "${selectedTypes[0] || 'MC'}",
+      "question": "Question text in English...",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": "Option A",
+      "explanation": "Detailed explanation in English..."
+    }
+  ]
+}`
+                : `
 Bạn là chuyên gia thiết kế sư phạm và học liệu điện tử tương tác cao (Instructional Designer) theo chuẩn Moodle / H5P / SCORM.
 Hãy tạo 1 hoạt động tương tác (Interactive Activity) tốt nhất cho Slide học sau:
 
@@ -2585,7 +2755,7 @@ YÊU CẦU SỐ LƯỢNG & CHUẨN ĐẠT:
 YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
 {
   "activityType": "${requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz')}",
-  "badgeLabel": "${hasAudioSample ? '🎧 Bài tập nghe hiểu' : (options?.allowContinueWithoutPass ? '📝 Luyện tập & Khảo sát quan điểm' : '🎯 Kiểm tra kiến thức (Chặn bài)')}",
+  "badgeLabel": "${defaultBadgeLabel}",
   "instruction": "Hướng dẫn ngắn gọn cho sinh viên thực hiện bài tập",
   "passScore": ${passScore},
   "totalQuestions": ${questionCount},
@@ -2623,29 +2793,41 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             this.logger.error(`Failed to parse AI interactive JSON: ${err.message}`);
             parsedInteractive = {
                 activityType: requestedType || (hasAudioSample ? 'listening_comprehension' : 'checkpoint_quiz'),
-                badgeLabel: hasAudioSample ? '🎧 Bài tập nghe hiểu' : (options?.allowContinueWithoutPass ? '📝 Luyện tập & Khảo sát quan điểm' : '🎯 Kiểm tra kiến thức (Chặn bài)'),
-                instruction: 'Trả lời các câu hỏi kiểm tra kiến thức để mở khóa bài học tiếp theo',
+                badgeLabel: defaultBadgeLabel,
+                instruction: defaultInstruction,
                 passScore,
                 totalQuestions: questionCount,
                 fallbackSlideIndex,
                 allowContinueWithoutPass: options?.allowContinueWithoutPass === true,
                 hideSolutions: !hasAudioSample,
-                questions: [
-                    {
-                        id: 'q1',
-                        type: 'MC',
-                        question: `Kiến thức trọng tâm của ${slide.title} là gì?`,
-                        options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
-                        correctAnswer: 'Phương án A',
-                        explanation: 'Vui lòng xem lại nội dung bài học để nắm rõ kiến thức.',
-                    },
-                ],
+                questions: isEnglish
+                    ? [
+                          {
+                              id: 'q1',
+                              type: 'MC',
+                              question: `What is the main focus of ${slide.title || 'this section'}?`,
+                              options: ['Option A', 'Option B', 'Option C', 'Option D'],
+                              correctAnswer: 'Option A',
+                              explanation: 'Please review the slide content for more details.',
+                          },
+                      ]
+                    : [
+                          {
+                              id: 'q1',
+                              type: 'MC',
+                              question: `Kiến thức trọng tâm của ${slide.title} là gì?`,
+                              options: ['Phương án A', 'Phương án B', 'Phương án C', 'Phương án D'],
+                              correctAnswer: 'Phương án A',
+                              explanation: 'Vui lòng xem lại nội dung bài học để nắm rõ kiến thức.',
+                          },
+                      ],
             };
         }
 
         if (Array.isArray(parsedInteractive.questions)) {
-            parsedInteractive.questions = normalizeInteractiveQuestions(parsedInteractive.questions);
+            parsedInteractive.questions = normalizeInteractiveQuestions(parsedInteractive.questions, targetLang);
         }
+        parsedInteractive.language = targetLang;
         parsedInteractive.passScore = passScore;
         parsedInteractive.fallbackSlideIndex = fallbackSlideIndex;
         parsedInteractive.allowContinueWithoutPass = options?.allowContinueWithoutPass === true;
@@ -2654,6 +2836,14 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         slide.interactiveData = JSON.stringify(parsedInteractive);
         slide.slideType = requestedType || (hasAudioSample ? 'interactive_audio' : 'checkpoint_quiz');
         slide.layoutType = hasAudioSample ? 'audio_lab' : 'checkpoint_gate';
+        if (isEnglish && /^(Điểm\s+kiểm\s+tra\s+kiến\s+thức|Trạm\s+kiểm\s+soát\s+kiến\s+thức)/i.test(slide.title || '')) {
+            slide.title = hasAudioSample
+                ? `Listening Comprehension (Slide ${oneBasedSlideNumber})`
+                : `Knowledge Checkpoint (Slide ${oneBasedSlideNumber})`;
+        }
+        if (isEnglish && Array.isArray(slide.content) && slide.content.length === 1 && /^Hoạt động tương tác kiểm tra kiến thức từ Slide/i.test(slide.content[0])) {
+            slide.content = [`Interactive knowledge checkpoint covering Slide ${options?.fromSlideIndex || 1} to Slide ${options?.toSlideIndex || oneBasedSlideNumber}.`];
+        }
 
         await this.saveSlidesAndSyncContent(sessionId, slides);
 
@@ -2982,7 +3172,28 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         return slides;
     }
 
-    private async buildExportSlidesForSession(sessionId: string, forH5p = false) {
+    private resolveSlideIllustrationUrl(
+        sessionId: string,
+        slide: ParsedSlide,
+        origIdx?: number | null,
+    ): string {
+        if (slide.imageUrl && !String(slide.imageUrl).includes('/rendered_slides/full_slide_')) {
+            return slide.imageUrl;
+        }
+        if (origIdx !== undefined && origIdx !== null && origIdx >= 0) {
+            const imagesDir = path.join(this.getSessionDir(sessionId), 'images');
+            const prefix = `slide_${String(origIdx).padStart(2, '0')}.`;
+            for (const ext of ['png', 'jpg', 'jpeg', 'webp', 'gif']) {
+                const candidate = `${prefix}${ext}`;
+                if (fs.existsSync(path.join(imagesDir, candidate))) {
+                    return `/uploads/pptx-tool/${sessionId}/images/${candidate}`;
+                }
+            }
+        }
+        return '';
+    }
+
+    private async buildExportSlidesForSession(sessionId: string, forH5p = false, bgOption?: string) {
         await this.ensureRenderedSlidesForSession(sessionId);
 
         const session = await this.prisma.pptxAudioSession.findUnique({
@@ -2999,6 +3210,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         }
 
         const activeLang = session.language || 'vi';
+        const isTemplateBgMode = bgOption === 'tuaf_full' || bgOption === 'custom';
         let hasInlineInteractiveSlide = false;
         const exportSlides: any[] = parsedSlides.map((s, idx) => {
             const speakerNote = activeLang === 'en'
@@ -3014,6 +3226,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 String(s.imageUrl || '').includes('_custom_') ||
                 String(s.imageUrl || '').includes('_ai_');
             const hasOptimizedBullets = Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0;
+            const hasRawContent = Array.isArray(s.content) && s.content.some(line => String(line || '').trim().length > 0);
             const isSpecialInteractiveSlide =
                 s.slideType === 'interactive' ||
                 s.slideType === 'checkpoint_quiz' ||
@@ -3023,6 +3236,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 (String(s.imageUrl || '').includes('/rendered_slides/full_slide_') ? s.imageUrl : null);
 
             const useFullSlideCanvas =
+                !isTemplateBgMode &&
                 Boolean(effectiveRenderedUrl) && (
                     s.layoutType === 'full_slide_canvas' ||
                     (
@@ -3035,17 +3249,29 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                     )
                 );
 
+            const effectiveLayoutType = useFullSlideCanvas
+                ? 'full_slide_canvas'
+                : (s.layoutType && s.layoutType !== 'full_slide_canvas' ? s.layoutType : 'split_standard');
+
+            const illustrationUrl = this.resolveSlideIllustrationUrl(sessionId, s, origIdx);
+            const fallbackVisualOnlyUrl =
+                !hasOptimizedBullets && !hasRawContent && !isSpecialInteractiveSlide && idx > 0
+                    ? (effectiveRenderedUrl || '')
+                    : '';
+
             return {
                 slideIndex: idx + 1,
                 slideType: s.slideType || (idx === 0 ? 'title' : 'content'),
-                layoutType: useFullSlideCanvas ? 'full_slide_canvas' : (s.layoutType || 'split_standard'),
+                layoutType: effectiveLayoutType,
                 title: s.title || `Slide ${idx + 1}`,
                 content: Array.isArray(s.content) ? s.content : [],
                 optimizedContentJson: hasOptimizedBullets
                     ? JSON.stringify(s.optimizedContent)
                     : null,
                 speakerNote,
-                imageUrl: useFullSlideCanvas ? (effectiveRenderedUrl || '') : (s.imageUrl || ''),
+                imageUrl: useFullSlideCanvas
+                    ? (effectiveRenderedUrl || '')
+                    : (idx === 0 && isTemplateBgMode ? '' : (illustrationUrl || fallbackVisualOnlyUrl)),
                 audioUrl: (s.audioStatus === 'done' && s.audioUrl) ? s.audioUrl : '',
                 extraAudioUrl: s.extraAudioUrl || null,
                 extraAudioName: s.extraAudioName || null,
@@ -3080,6 +3306,11 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 }).filter(mq => mq.question && mq.options.length >= 2);
 
                 if (mappedQuestions.length > 0) {
+                    const isEnglishExport =
+                        activeLang === 'en' ||
+                        detectTextLanguage(mappedQuestions.map(mq => `${mq.question} ${mq.options.join(' ')}`).join('\n')) === 'en' ||
+                        detectTextLanguage(extractSlideVisibleText(parsedSlides)) === 'en';
+
                     if (forH5p) {
                         mappedQuestions.forEach((mq, idx) => {
                             exportSlides.push({
@@ -3087,14 +3318,16 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                                 slideType: 'interactive',
                                 layoutType: 'checkpoint_gate',
                                 title: mappedQuestions.length > 1
-                                    ? `Câu hỏi tương tác (${idx + 1}/${mappedQuestions.length})`
-                                    : 'Câu hỏi tương tác',
+                                    ? (isEnglishExport
+                                        ? `Interactive Question (${idx + 1}/${mappedQuestions.length})`
+                                        : `Câu hỏi tương tác (${idx + 1}/${mappedQuestions.length})`)
+                                    : (isEnglishExport ? 'Interactive Question' : 'Câu hỏi tương tác'),
                                 content: [mq.question],
                                 speakerNote: '',
                                 imageUrl: '',
                                 audioUrl: '',
                                 interactiveData: JSON.stringify({
-                                    badgeLabel: 'Hoạt động tương tác',
+                                    badgeLabel: isEnglishExport ? 'Interactive Activity' : 'Hoạt động tương tác',
                                     questions: [mq],
                                 }),
                             });
@@ -3104,13 +3337,19 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                             slideIndex: exportSlides.length + 1,
                             slideType: 'interactive',
                             layoutType: 'checkpoint_gate',
-                            title: 'Bài tập tương tác & Củng cố kiến thức',
-                            content: ['Hãy hoàn thành các câu hỏi tương tác dưới đây để kiểm tra mức độ nắm vững bài học.'],
+                            title: isEnglishExport
+                                ? 'Interactive Practice & Knowledge Check'
+                                : 'Bài tập tương tác & Củng cố kiến thức',
+                            content: [
+                                isEnglishExport
+                                    ? 'Complete the interactive questions below to check your understanding of the lesson.'
+                                    : 'Hãy hoàn thành các câu hỏi tương tác dưới đây để kiểm tra mức độ nắm vững bài học.',
+                            ],
                             speakerNote: '',
                             imageUrl: '',
                             audioUrl: '',
                             interactiveData: JSON.stringify({
-                                badgeLabel: 'Hoạt động tương tác',
+                                badgeLabel: isEnglishExport ? 'Interactive Activity' : 'Hoạt động tương tác',
                                 questions: mappedQuestions,
                             }),
                         });
@@ -3145,12 +3384,17 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 where: { isDefault: true, isActive: true },
             });
         }
+        if (!selectedTemplate || (!selectedTemplate.titleBgUrl && !selectedTemplate.contentBgUrl)) {
+            selectedTemplate = await this.prisma.pPTXTemplate.findFirst({
+                where: { isSystem: true, isActive: true, titleBgUrl: { not: '' } },
+            });
+        }
         return selectedTemplate;
     }
 
     async exportScorm(sessionId: string, res: Response, templateId?: string, bgOption?: string, theme?: string) {
-        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, false);
         const effectiveBgOption = bgOption || 'tuaf_clean';
+        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, false, effectiveBgOption);
         const selectedTemplate = await this.resolveTemplateForExport(templateId, effectiveBgOption);
         const safeTitle = (lessonTitle || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
@@ -3171,8 +3415,8 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
     }
 
     async exportH5p(sessionId: string, res: Response, templateId?: string, bgOption?: string, theme?: string) {
-        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, true);
         const effectiveBgOption = bgOption || 'tuaf_clean';
+        const { lessonTitle, exportSlides } = await this.buildExportSlidesForSession(sessionId, true, effectiveBgOption);
         const selectedTemplate = await this.resolveTemplateForExport(templateId, effectiveBgOption);
         const safeTitle = (lessonTitle || 'lesson')
             .replace(/[^a-zA-Z0-9\u00C0-\u024F\u1E00-\u1EFF ]/g, '_')
@@ -3236,7 +3480,32 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         return updated;
     }
 
-    private async getSessionContentText(sessionId: string): Promise<string> {
+    private async resolveSessionQuestionLanguage(
+        sessionId: string,
+        questionLanguage?: 'auto' | 'en' | 'vi',
+    ): Promise<'en' | 'vi'> {
+        const session = await this.prisma.pptxAudioSession.findUnique({
+            where: { id: sessionId },
+            include: { pptxSubject: true },
+        });
+        if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+
+        const content = session.contentJson ? JSON.parse(session.contentJson) : [];
+        const slides = session.slidesJson ? JSON.parse(session.slidesJson) : [];
+        const slideSource = content.length > 0 ? content : slides;
+        const visibleSlideText = [
+            extractSlideVisibleText(slideSource),
+            session.contextText || '',
+        ].filter(Boolean).join('\n');
+
+        return resolveQuestionLanguage({
+            explicitChoice: questionLanguage || 'auto',
+            slideVisibleText: visibleSlideText,
+            subjectOrSessionLanguage: session.pptxSubject?.language || session.language,
+        });
+    }
+
+    private async getSessionContentText(sessionId: string, preferredLang?: 'en' | 'vi'): Promise<string> {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
             include: { pptxSubject: true },
@@ -3248,38 +3517,45 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
 
         const contextHeaderParts: string[] = [];
         const lessonTitle = session.lessonTitle || fixUtf8Filename(session.fileName).replace(/\.pptx$/i, '');
-        contextHeaderParts.push(`Tên bài học: ${lessonTitle}`);
+        contextHeaderParts.push(preferredLang === 'en' ? `Lesson Title: ${lessonTitle}` : `Tên bài học: ${lessonTitle}`);
         if (session.pptxSubject) {
             const sub = session.pptxSubject;
             const subMajor = sub.majorName || sub.expertiseArea;
-            contextHeaderParts.push(`Môn học: ${sub.name}`);
-            if (subMajor) contextHeaderParts.push(`Chuyên ngành: ${subMajor}`);
-            if (sub.targetAudience) contextHeaderParts.push(`Đối tượng người học: ${sub.targetAudience}`);
-            if (sub.additionalContext) contextHeaderParts.push(`Định hướng sư phạm: ${sub.additionalContext}`);
+            contextHeaderParts.push(preferredLang === 'en' ? `Subject: ${sub.name}` : `Môn học: ${sub.name}`);
+            if (subMajor) contextHeaderParts.push(preferredLang === 'en' ? `Major / Field: ${subMajor}` : `Chuyên ngành: ${subMajor}`);
+            if (sub.targetAudience) contextHeaderParts.push(preferredLang === 'en' ? `Target Audience: ${sub.targetAudience}` : `Đối tượng người học: ${sub.targetAudience}`);
+            if (sub.additionalContext) contextHeaderParts.push(preferredLang === 'en' ? `Pedagogical Orientation: ${sub.additionalContext}` : `Định hướng sư phạm: ${sub.additionalContext}`);
         }
         if (session.contextText && session.contextText.trim()) {
             contextHeaderParts.push(
-                `\n=== TÀI LIỆU THAM KHẢO / GIÁO TRÌNH BỔ SUNG (${session.contextFileName || 'Ghi chú bài học'}) ===\n` +
+                (preferredLang === 'en'
+                    ? `\n=== SUPPLEMENTARY REFERENCE MATERIAL (${session.contextFileName || 'Lesson Notes'}) ===\n`
+                    : `\n=== TÀI LIỆU THAM KHẢO / GIÁO TRÌNH BỔ SUNG (${session.contextFileName || 'Ghi chú bài học'}) ===\n`) +
                 session.contextText.trim().substring(0, 35000),
             );
         }
 
         const headerStr = contextHeaderParts.length > 0
-            ? `${contextHeaderParts.join('\n')}\n\n=== NỘI DUNG CÁC SLIDE BÀI GIẢNG ===\n\n`
+            ? `${contextHeaderParts.join('\n')}\n\n${preferredLang === 'en' ? '=== LECTURE SLIDES CONTENT ===' : '=== NỘI DUNG CÁC SLIDE BÀI GIẢNG ==='}\n\n`
             : '';
 
         if (content.length > 0) {
             const slidesText = content.map((s: any, idx: number) => {
-                const slideNote = slides[idx]?.noteFull || slides[idx]?.noteVN || slides[idx]?.noteEN || '';
-                return `Slide ${s.index + 1}: ${s.title || ''}\nNội dung:\n${(s.content || []).join('\n')}${slideNote ? `\nSpeaker note:\n${slideNote}` : ''}`;
+                const slideNote = preferredLang === 'en'
+                    ? (slides[idx]?.noteEN || slides[idx]?.noteFull || slides[idx]?.noteVN || '')
+                    : (slides[idx]?.noteFull || slides[idx]?.noteVN || slides[idx]?.noteEN || '');
+                return `Slide ${s.index + 1}: ${s.title || ''}\n${preferredLang === 'en' ? 'Content' : 'Nội dung'}:\n${(s.content || []).join('\n')}${slideNote ? `\nSpeaker note:\n${slideNote}` : ''}`;
             }).join('\n\n---\n\n');
             return `${headerStr}${slidesText}`;
         }
 
         if (slides.length > 0) {
-            const slidesText = slides.map((s: any) =>
-                `Slide ${s.index + 1}: ${s.title || ''}\nSpeaker note:\n${s.noteFull || s.noteVN || s.noteEN || ''}`
-            ).join('\n\n---\n\n');
+            const slidesText = slides.map((s: any) => {
+                const slideNote = preferredLang === 'en'
+                    ? (s.noteEN || s.noteFull || s.noteVN || '')
+                    : (s.noteFull || s.noteVN || s.noteEN || '');
+                return `Slide ${s.index + 1}: ${s.title || ''}\nSpeaker note:\n${slideNote}`;
+            }).join('\n\n---\n\n');
             return `${headerStr}${slidesText}`;
         }
 
@@ -3299,20 +3575,57 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         userId: string,
         counts: { level1Count?: number; level2Count?: number; level3Count?: number },
         isAppend = false,
+        questionLanguage: 'auto' | 'en' | 'vi' = 'auto',
     ) {
-        const contentText = await this.getSessionContentText(sessionId);
+        const targetLang = await this.resolveSessionQuestionLanguage(sessionId, questionLanguage);
+        const contentText = await this.getSessionContentText(sessionId, targetLang);
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
 
         const level1 = counts.level1Count ?? 20;
         const level2 = counts.level2Count ?? 20;
         const level3 = counts.level3Count ?? 10;
 
-        const prompt = `Bạn là giảng viên đại học. Hãy tạo bộ câu hỏi trắc nghiệm ôn tập (Bloom Taxonomy) từ nội dung bài giảng sau.
+        const prompt = targetLang === 'en'
+            ? `You are a university professor. Generate a Multiple-Choice Review Question Bank (Bloom's Taxonomy) from the following lecture content.
+
+LECTURE CONTENT:
+${contentText}
+
+MANDATORY REQUIREMENTS:
+- 🌐 LANGUAGE REQUIREMENT: Write ALL questions ("question"), answers ("correctAnswer", "optionB", "optionC", "optionD"), and explanations ("explanation") 100% in ENGLISH. Do NOT use Vietnamese.
+- Generate ${level1} Level 1 questions (Remember - Core concepts, definitions, basic facts)
+- Generate ${level2} Level 2 questions (Understand - Analysis, comparison, mechanisms)
+- Generate ${level3} Level 3 questions (Apply - Real-world scenarios, problem solving, practical application)
+- Each question must have 4 options: "correctAnswer" is the correct option, and "optionB"/"optionC"/"optionD" are plausible distractors.
+- STRICTLY DO NOT include option prefixes (such as A., B., C., D., 1., 2.) inside "correctAnswer" or any option string.
+- "explanation": Concisely explain the underlying academic reason why the answer is correct based on the lecture. STRICTLY DO NOT write "A is correct because..." or "Option A" (options are randomized on LMS).
+- Format questionId as: B1-1-01, B1-2-01, etc.
+
+Respond ONLY with valid JSON:
+\`\`\`json
+{
+  "questions": [
+    {
+      "id": "REV-${Date.now()}-1",
+      "questionId": "B1-1-01",
+      "level": 1,
+      "question": "Question stem in English?",
+      "correctAnswer": "Correct answer text in English",
+      "optionB": "Distractor B in English",
+      "optionC": "Distractor C in English",
+      "optionD": "Distractor D in English",
+      "explanation": "Concise explanation in English of why this answer is correct"
+    }
+  ]
+}
+\`\`\``
+            : `Bạn là giảng viên đại học. Hãy tạo bộ câu hỏi trắc nghiệm ôn tập (Bloom Taxonomy) từ nội dung bài giảng sau.
 
 NỘI DUNG BÀI GIẢNG:
 ${contentText}
 
 YÊU CẦU BẮT BUỘC:
+- 🌐 NGÔN NGỮ: Viết toàn bộ câu hỏi, đáp án và giải thích bằng TIẾNG VIỆT (giữ nguyên thuật ngữ chuyên ngành hoặc mã lệnh tiếng Anh nếu cần).
 - Tạo ${level1} câu hỏi mức 1 (Biết/Remember - Kiến thức cơ bản, định nghĩa)
 - Tạo ${level2} câu hỏi mức 2 (Hiểu/Understand - Phân tích, so sánh, bản chất)
 - Tạo ${level3} câu hỏi mức 3 (Vận dụng/Apply - Tình huống, ứng dụng thực tế)
@@ -3670,17 +3983,52 @@ Trả lời CHỈ bằng JSON hợp lệ:
         userId: string,
         count = 5,
         isAppend = false,
+        questionLanguage: 'auto' | 'en' | 'vi' = 'auto',
     ) {
-        const contentText = await this.getSessionContentText(sessionId);
+        const targetLang = await this.resolveSessionQuestionLanguage(sessionId, questionLanguage);
+        const contentText = await this.getSessionContentText(sessionId, targetLang);
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'QUESTIONS');
 
-        const prompt = `Bạn là chuyên gia thiết kế câu hỏi tương tác kiểm tra độ tập trung của người học (E-Learning Interactive Questions).
+        const prompt = targetLang === 'en'
+            ? `You are an E-Learning Instructional Design Expert specializing in interactive knowledge-check questions.
+Generate ${count} interactive questions from the following lecture content:
+
+LECTURE CONTENT:
+${contentText}
+
+MANDATORY REQUIREMENTS:
+- 🌐 LANGUAGE REQUIREMENT: Write ALL questions ("questionText"), answer options ("answers"), and feedback ("correctFeedback", "incorrectFeedback") 100% in ENGLISH. Do NOT use Vietnamese.
+- Include a mix of Multiple Choice (MC: 1 correct answer) and Multiple Response (MR: multiple correct answers).
+- Every correct option MUST start with an asterisk (*) prefix (e.g., "*Correct option", "Incorrect option").
+- STRICTLY DO NOT include option letter/number prefixes (A., B., C., D., 1., 2.) inside answer strings.
+- Provide constructive feedback for correct answers ("correctFeedback") and incorrect answers ("incorrectFeedback") explaining the concept without referring to fixed option letters A, B, C, D.
+- Default points per question: 1
+
+Respond ONLY with valid JSON:
+\`\`\`json
+{
+  "questions": [
+    {
+      "id": "INT-${Date.now()}-1",
+      "questionOrder": 1,
+      "questionType": "MC",
+      "questionText": "Interactive question in English?",
+      "answers": ["*Correct option 1", "Distractor option 2", "Distractor option 3", "Distractor option 4"],
+      "correctFeedback": "Correct! You have mastered this concept.",
+      "incorrectFeedback": "Incorrect. Please review the previous slide.",
+      "points": 1
+    }
+  ]
+}
+\`\`\``
+            : `Bạn là chuyên gia thiết kế câu hỏi tương tác kiểm tra độ tập trung của người học (E-Learning Interactive Questions).
 Hãy tạo ${count} câu hỏi tương tác từ nội dung bài giảng sau:
 
 NỘI DUNG BÀI GIẢNG:
 ${contentText}
 
 YÊU CẦU BẮT BUỘC:
+- 🌐 NGÔN NGỮ: Viết toàn bộ câu hỏi, đáp án và phản hồi bằng TIẾNG VIỆT (giữ nguyên thuật ngữ chuyên ngành hoặc mã lệnh tiếng Anh nếu cần).
 - Gồm câu hỏi Multiple Choice (MC: 1 đáp án đúng) và Multiple Response (MR: nhiều đáp án đúng)
 - Phương án đúng PHẢI có dấu hoa thị (*) ở đầu (ví dụ: "*Đáp án đúng", "Đáp án sai")
 - TUYỆT ĐỐI KHÔNG thêm tiền tố nhãn (A., B., C., D., 1., 2.) vào nội dung câu trả lời.
@@ -3706,7 +4054,7 @@ Trả lời CHỈ bằng JSON hợp lệ:
 \`\`\``;
 
         const modelName = modelConfig.modelName || 'gemini-2.0-flash';
-        this.logger.log(`[PptxAudioTool] Generating interactive questions with model: ${modelName}`);
+        this.logger.log(`[PptxAudioTool] Generating interactive questions with model: ${modelName}, targetLang=${targetLang}`);
         const aiResult = await this.aiProvider.generateText(prompt, modelName, userId, { maxTokens: 16384 });
         const responseText = aiResult.content;
 
@@ -3733,8 +4081,12 @@ Trả lời CHỈ bằng JSON hợp lệ:
                     return isCorrect ? `*${cleanText}` : cleanText;
                 })
                 : [],
-            correctFeedback: cleanExplanation(q.correctFeedback || 'Chính xác!'),
-            incorrectFeedback: cleanExplanation(q.incorrectFeedback || 'Chưa đúng, hãy xem lại.'),
+            correctFeedback: cleanExplanation(
+                q.correctFeedback || (targetLang === 'en' ? 'Correct! Well done.' : 'Chính xác!'),
+            ),
+            incorrectFeedback: cleanExplanation(
+                q.incorrectFeedback || (targetLang === 'en' ? 'Incorrect. Please review the slide.' : 'Chưa đúng, hãy xem lại.'),
+            ),
             points: Number(q.points) || 1,
         }));
 
