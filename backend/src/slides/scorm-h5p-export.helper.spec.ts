@@ -4,6 +4,8 @@ import {
     generateScormManifest,
     generateScormPlayerHtml,
     resolveLocalMediaFile,
+    computeFileSha1Safe,
+    collectTemplateAndRepeatedBgHashes,
 } from './scorm-export.helper';
 import {
     generateH5pContentJson,
@@ -610,6 +612,43 @@ describe('SCORM 1.2 & H5P Full-Slide Canvas and Media Security Helpers', () => {
             expect(html).toContain('.slide-body-container::-webkit-scrollbar');
             for (let n = 1; n <= 5; n++) {
                 expect(html).toContain(`Câu hỏi tương tác số ${n}?`);
+            }
+        });
+
+        it('identifies template background #1/#2 and repeated background images by SHA-1 so they are never packed as slide illustrations', () => {
+            const tmpBgDir = path.join(process.cwd(), 'uploads', '__jest_bg_sha1_test__');
+            fs.mkdirSync(tmpBgDir, { recursive: true });
+            try {
+                const bg2Path = path.join(tmpBgDir, 'content_bg_test.png');
+                const realIllustPath = path.join(tmpBgDir, 'real_illust.png');
+                fs.writeFileSync(bg2Path, Buffer.from('FAKE_TEMPLATE_CONTENT_BG_2_BYTES'));
+                fs.writeFileSync(realIllustPath, Buffer.from('REAL_SLIDE_ILLUSTRATION_BYTES'));
+
+                const bg2Sha1 = computeFileSha1Safe(bg2Path);
+                const realSha1 = computeFileSha1Safe(realIllustPath);
+                expect(bg2Sha1).toBeTruthy();
+                expect(realSha1).toBeTruthy();
+                expect(bg2Sha1).not.toBe(realSha1);
+
+                const slidesWithAccidentalBg2 = [1, 2, 3, 4].map((idx) => ({
+                    slideIndex: idx,
+                    layoutType: 'split_standard',
+                    imageUrl: `/uploads/__jest_bg_sha1_test__/content_bg_test.png`,
+                }));
+                slidesWithAccidentalBg2.push({
+                    slideIndex: 5,
+                    layoutType: 'split_standard',
+                    imageUrl: `/uploads/__jest_bg_sha1_test__/real_illust.png`,
+                });
+
+                const blockedHashes = collectTemplateAndRepeatedBgHashes(slidesWithAccidentalBg2, {
+                    contentBgUrl: `/uploads/__jest_bg_sha1_test__/content_bg_test.png`,
+                });
+
+                expect(blockedHashes.has(bg2Sha1!)).toBe(true);
+                expect(blockedHashes.has(realSha1!)).toBe(false);
+            } finally {
+                fs.rmSync(tmpBgDir, { recursive: true, force: true });
             }
         });
     });

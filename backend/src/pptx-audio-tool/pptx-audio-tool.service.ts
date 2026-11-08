@@ -16,6 +16,7 @@ import { APIService } from '@prisma/client';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import type { Response } from 'express';
@@ -538,9 +539,11 @@ export class PptxAudioToolService {
 
             const result = await response.json() as { slides: any[]; totalSlides: number };
 
-            // Build slides JSON with audio status + rendered full-slide PNG + extracted imageUrl
+            // Build slides JSON with audio status + rendered full-slide PNG + extracted foreground imageUrl
             const slides: ParsedSlide[] = result.slides.map((s: any, idx: number) => {
-                const extractedImgUrl = s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null;
+                const extractedImgUrl = (idx > 0 && s.imageFileName)
+                    ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}`
+                    : null;
                 const renderedSlideUrl = s.renderedSlideFileName
                     ? `/uploads/pptx-tool/${session.id}/rendered_slides/${s.renderedSlideFileName}`
                     : null;
@@ -548,7 +551,7 @@ export class PptxAudioToolService {
                     index: s.index,
                     originalSlideIndex: s.index,
                     slideType: idx === 0 ? 'title' : 'content',
-                    layoutType: renderedSlideUrl ? 'full_slide_canvas' : 'split_standard',
+                    layoutType: 'split_standard',
                     title: s.title || `Slide ${s.index + 1}`,
                     content: s.content || [],
                     optimizedContent: null,
@@ -557,7 +560,7 @@ export class PptxAudioToolService {
                     noteEN: s.noteEN || '',
                     noteVN: s.noteVN || '',
                     hasDual: s.hasDual || false,
-                    imageUrl: renderedSlideUrl || extractedImgUrl,
+                    imageUrl: extractedImgUrl,
                     renderedSlideUrl,
                     hasCustomImage: false,
                     audioUrl: null,
@@ -571,16 +574,15 @@ export class PptxAudioToolService {
             });
 
             // Build content JSON
-            const content = result.slides.map((s: any) => {
-                const extractedImgUrl = s.imageFileName ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}` : null;
-                const renderedSlideUrl = s.renderedSlideFileName
-                    ? `/uploads/pptx-tool/${session.id}/rendered_slides/${s.renderedSlideFileName}`
+            const content = result.slides.map((s: any, idx: number) => {
+                const extractedImgUrl = (idx > 0 && s.imageFileName)
+                    ? `/uploads/pptx-tool/${session.id}/images/${s.imageFileName}`
                     : null;
                 return {
                     index: s.index,
                     title: s.title || `Slide ${s.index + 1}`,
                     content: s.content || [],
-                    imageUrl: renderedSlideUrl || extractedImgUrl,
+                    imageUrl: extractedImgUrl,
                 };
             });
 
@@ -3065,52 +3067,237 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         }
     }
 
+    private static readonly STDLIB_PPTX_FOREGROUND_EXTRACT_SCRIPT = [
+        'import sys, os, posixpath, zipfile, hashlib, xml.etree.ElementTree as ET',
+        'pptx_path, out_dir = sys.argv[1], sys.argv[2]',
+        'P_NS = "{http://schemas.openxmlformats.org/presentationml/2006/main}"',
+        'A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"',
+        'R_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"',
+        'os.makedirs(out_dir, exist_ok=True)',
+        'with zipfile.ZipFile(pptx_path, "r") as zf:',
+        '    namelist = set(zf.namelist())',
+        '    pres_root = ET.fromstring(zf.read("ppt/presentation.xml"))',
+        '    sldSz = pres_root.find(f".//{P_NS}sldSz")',
+        '    slide_w = float(sldSz.attrib.get("cx", 9144000)) if sldSz is not None else 9144000.0',
+        '    slide_h = float(sldSz.attrib.get("cy", 5143500)) if sldSz is not None else 5143500.0',
+        '    slide_area = max(1.0, slide_w * slide_h)',
+        '    rels_root = ET.fromstring(zf.read("ppt/_rels/presentation.xml.rels"))',
+        '    rid_to_target = {}',
+        '    for rel in rels_root:',
+        '        rid, target = rel.attrib.get("Id"), rel.attrib.get("Target", "")',
+        '        if rid and target:',
+        '            norm = posixpath.normpath(posixpath.join("ppt", target.lstrip("/")))',
+        '            if not norm.startswith("ppt/"): norm = posixpath.normpath("ppt/" + target.lstrip("/"))',
+        '            rid_to_target[rid] = norm',
+        '    slide_paths = []',
+        '    sldIdLst = pres_root.find(f".//{P_NS}sldIdLst")',
+        '    if sldIdLst is not None:',
+        '        for sldId in sldIdLst:',
+        '            t = rid_to_target.get(sldId.attrib.get(f"{R_NS}id"))',
+        '            if t and t in namelist: slide_paths.append(t)',
+        '    raw_pictures_per_slide = []',
+        '    for spath in slide_paths:',
+        '        sdir, sbase = posixpath.dirname(spath), posixpath.basename(spath)',
+        '        srels_path = posixpath.join(sdir, "_rels", sbase + ".rels")',
+        '        srels = {}',
+        '        if srels_path in namelist:',
+        '            for rel in ET.fromstring(zf.read(srels_path)):',
+        '                rid, target = rel.attrib.get("Id"), rel.attrib.get("Target", "")',
+        '                if rid and target:',
+        '                    srels[rid] = posixpath.normpath(target.lstrip("/")) if target.startswith("/") else posixpath.normpath(posixpath.join(sdir, target))',
+        '        sroot = ET.fromstring(zf.read(spath))',
+        '        pics, z_idx = [], 0',
+        '        for pic in sroot.iter(f"{P_NS}pic"):',
+        '            z_idx += 1',
+        '            blip = pic.find(f".//{A_NS}blip")',
+        '            if blip is None: continue',
+        '            media_path = srels.get(blip.attrib.get(f"{R_NS}embed"))',
+        '            if not media_path or media_path not in namelist: continue',
+        '            xfrm = pic.find(f".//{A_NS}xfrm")',
+        '            ext_el = xfrm.find(f"{A_NS}ext") if xfrm is not None else None',
+        '            w = float(ext_el.attrib.get("cx", 0)) if ext_el is not None else 0.0',
+        '            h = float(ext_el.attrib.get("cy", 0)) if ext_el is not None else 0.0',
+        '            blob = zf.read(media_path)',
+        '            if not blob: continue',
+        '            sha1 = hashlib.sha1(blob).hexdigest()',
+        '            ext = posixpath.splitext(media_path)[1].lstrip(".").lower() or "png"',
+        '            if ext == "jpeg": ext = "jpg"',
+        '            pics.append({"w_ratio": w / slide_w, "h_ratio": h / slide_h, "area_ratio": (w * h) / slide_area, "size": len(blob), "sha1": sha1, "ext": ext if ext in ("png", "jpg", "jpeg", "gif", "webp") else "png", "blob": blob, "z": z_idx})',
+        '        raw_pictures_per_slide.append(pics)',
+        '    total_slides = len(raw_pictures_per_slide)',
+        '    sha1_slide_count, full_bleed_sha1s = {}, set()',
+        '    for pics in raw_pictures_per_slide:',
+        '        seen = set()',
+        '        for p in pics:',
+        '            seen.add(p["sha1"])',
+        '            if p["w_ratio"] >= 0.85 and p["h_ratio"] >= 0.85: full_bleed_sha1s.add(p["sha1"])',
+        '        for hsh in seen: sha1_slide_count[hsh] = sha1_slide_count.get(hsh, 0) + 1',
+        '    repeat_threshold = max(4, int(total_slides * 0.25)) if total_slides >= 4 else 999',
+        '    for idx, pics in enumerate(raw_pictures_per_slide):',
+        '        for old_ext in ("png", "jpg", "jpeg", "gif", "webp"):',
+        '            sp = os.path.join(out_dir, f"slide_{idx:02d}.{old_ext}")',
+        '            if os.path.isfile(sp):',
+        '                try: os.unlink(sp)',
+        '                except Exception: pass',
+        '        if idx == 0: continue',
+        '        valid = []',
+        '        for p in pics:',
+        '            wr, hr, ar, hsh, sz = p["w_ratio"], p["h_ratio"], p["area_ratio"], p["sha1"], p["size"]',
+        '            if wr >= 0.85 and hr >= 0.85: continue',
+        '            if hsh in full_bleed_sha1s: continue',
+        '            if total_slides >= 4 and sha1_slide_count.get(hsh, 0) >= repeat_threshold: continue',
+        '            if idx > 0 and sha1_slide_count.get(hsh, 0) >= 2 and ar >= 0.65: continue',
+        '            if wr < 0.10 or hr < 0.10 or ar < 0.02: continue',
+        '            if sz < 3500: continue',
+        '            valid.append(p)',
+        '        if valid:',
+        '            valid.sort(key=lambda x: (1 if x["size"] >= 8000 else 0, round(x["area_ratio"], 2), x["size"], x["z"]), reverse=True)',
+        '            chosen = valid[0]',
+        '            with open(os.path.join(out_dir, f"slide_{idx:02d}.{chosen[\'ext\']}"), "wb") as f: f.write(chosen["blob"])',
+        '    for mname in (".extracted_v2", ".extracted_v3"):',
+        '        with open(os.path.join(out_dir, mname), "w", encoding="utf-8") as mf: mf.write("v3\\n")',
+    ].join('\n');
+
+    private async collectTemplateBgSha1Set(): Promise<Set<string>> {
+        const hashes = new Set<string>();
+        const hashFileSafe = (filePath?: string | null) => {
+            if (!filePath) return;
+            try {
+                if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+                    const buf = fs.readFileSync(filePath);
+                    hashes.add(crypto.createHash('sha1').update(buf).digest('hex'));
+                }
+            } catch { /* ignore */ }
+        };
+
+        try {
+            const templates = await this.prisma.pPTXTemplate.findMany({
+                select: { titleBgUrl: true, contentBgUrl: true },
+            });
+            for (const tpl of templates) {
+                if (tpl.titleBgUrl) hashFileSafe(resolveLocalMediaFile(tpl.titleBgUrl));
+                if (tpl.contentBgUrl) hashFileSafe(resolveLocalMediaFile(tpl.contentBgUrl));
+            }
+        } catch { /* ignore */ }
+
+        const candidateTemplateDirs = [
+            path.resolve(process.cwd(), 'uploads', 'templates'),
+            path.resolve(process.cwd(), 'backend', 'uploads', 'templates'),
+        ];
+        for (const dir of candidateTemplateDirs) {
+            if (!fs.existsSync(dir)) continue;
+            try {
+                const walk = (d: string) => {
+                    for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+                        const full = path.join(d, entry.name);
+                        if (entry.isDirectory()) walk(full);
+                        else if (/\.(png|jpe?g|webp|gif)$/i.test(entry.name)) hashFileSafe(full);
+                    }
+                };
+                walk(dir);
+            } catch { /* ignore */ }
+        }
+        return hashes;
+    }
+
+    private async purgeTemplateAndRepeatedImagesInDir(imagesDir: string): Promise<boolean> {
+        if (!fs.existsSync(imagesDir)) return false;
+        let purged = false;
+        try {
+            const entries = fs.readdirSync(imagesDir);
+            const slideImgFiles = entries.filter(name => /^slide_\d+\.(png|jpe?g|webp|gif)$/i.test(name));
+            if (slideImgFiles.length === 0) return false;
+
+            const templateHashes = await this.collectTemplateBgSha1Set();
+            const fileHashMap = new Map<string, string>();
+            const hashCounts = new Map<string, number>();
+
+            for (const fname of slideImgFiles) {
+                const fullPath = path.join(imagesDir, fname);
+                if (/^slide_00\./i.test(fname)) {
+                    try {
+                        fs.unlinkSync(fullPath);
+                        purged = true;
+                    } catch { /* ignore */ }
+                    continue;
+                }
+                try {
+                    const buf = fs.readFileSync(fullPath);
+                    const sha1 = crypto.createHash('sha1').update(buf).digest('hex');
+                    fileHashMap.set(fname, sha1);
+                    hashCounts.set(sha1, (hashCounts.get(sha1) || 0) + 1);
+                } catch { /* ignore */ }
+            }
+
+            for (const [fname, sha1] of fileHashMap.entries()) {
+                const count = hashCounts.get(sha1) || 0;
+                if (templateHashes.has(sha1) || count >= 4) {
+                    try {
+                        fs.unlinkSync(path.join(imagesDir, fname));
+                        purged = true;
+                    } catch { /* ignore */ }
+                }
+            }
+        } catch { /* ignore */ }
+        return purged;
+    }
+
     private async ensureForegroundImagesForSession(
         sessionId: string,
         sessionFilePath?: string | null,
     ): Promise<boolean> {
+        let changed = false;
+        const sessionDir = this.getSessionDir(sessionId);
+        const imagesDir = path.join(sessionDir, 'images');
+        const markerV3Path = path.join(imagesDir, '.extracted_v3');
+
         try {
-            const sessionDir = this.getSessionDir(sessionId);
-            const imagesDir = path.join(sessionDir, 'images');
-            const markerPath = path.join(imagesDir, '.extracted_v2');
-            if (fs.existsSync(markerPath)) {
-                return false;
-            }
             const candidatePptxPath = (sessionFilePath && fs.existsSync(sessionFilePath))
                 ? sessionFilePath
                 : path.join(sessionDir, 'original.pptx');
-            if (!fs.existsSync(candidatePptxPath)) {
-                return false;
+
+            if (!fs.existsSync(markerV3Path) && fs.existsSync(candidatePptxPath)) {
+                fs.mkdirSync(imagesDir, { recursive: true });
+                try {
+                    await execFileAsync(
+                        'python3',
+                        [
+                            '-c',
+                            PptxAudioToolService.STDLIB_PPTX_FOREGROUND_EXTRACT_SCRIPT,
+                            candidatePptxPath,
+                            imagesDir,
+                        ],
+                        { timeout: 60000 },
+                    );
+                } catch (pyErr: any) {
+                    this.logger.warn(`Inline python3 stdlib foreground extract failed for ${sessionId}: ${pyErr?.message || pyErr}`);
+                }
+
+                if (!fs.existsSync(markerV3Path)) {
+                    try {
+                        const resp = await fetch(`${this.pythonServiceUrl}/extract-foreground-images`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ file_path: candidatePptxPath }),
+                        });
+                        if (!resp.ok) {
+                            this.logger.warn(`Python /extract-foreground-images returned HTTP ${resp.status}`);
+                        }
+                    } catch (httpErr: any) {
+                        this.logger.warn(`Python /extract-foreground-images unreachable for ${sessionId}: ${httpErr?.message || httpErr}`);
+                    }
+                }
+
+                if (fs.existsSync(markerV3Path)) {
+                    changed = true;
+                }
             }
-            const candidateScriptDirs = [
-                path.resolve(process.cwd(), 'utils', 'pptx_generator'),
-                path.resolve(process.cwd(), 'backend', 'utils', 'pptx_generator'),
-                path.resolve(__dirname, '..', '..', 'utils', 'pptx_generator'),
-                path.resolve(__dirname, '..', '..', '..', 'utils', 'pptx_generator'),
-            ];
-            const scriptDir = candidateScriptDirs.find(d => fs.existsSync(path.join(d, 'main.py'))) || candidateScriptDirs[0];
-            if (!fs.existsSync(path.join(scriptDir, 'main.py'))) {
-                return false;
-            }
-            const venvPython = path.join(scriptDir, 'venv', 'bin', 'python');
-            const pythonBin = fs.existsSync(venvPython) ? venvPython : 'python3';
-            fs.mkdirSync(imagesDir, { recursive: true });
-            await execFileAsync(
-                pythonBin,
-                [
-                    '-c',
-                    'import sys; sys.path.insert(0, sys.argv[1]); from pptx import Presentation; from main import _extract_slides_from_pptx; _extract_slides_from_pptx(Presentation(sys.argv[2]), sys.argv[3])',
-                    scriptDir,
-                    candidatePptxPath,
-                    imagesDir,
-                ],
-                { timeout: 60000 },
-            );
-            return fs.existsSync(markerPath);
         } catch (err: any) {
-            this.logger.warn(`Foreground slide image extraction v2 skipped for ${sessionId}: ${err?.message || err}`);
-            return false;
+            this.logger.warn(`Foreground slide image extraction v3 warning for ${sessionId}: ${err?.message || err}`);
         }
+
+        const purged = await this.purgeTemplateAndRepeatedImagesInDir(imagesDir);
+        return changed || purged;
     }
 
     async ensureRenderedSlidesForSession(sessionId: string): Promise<ParsedSlide[]> {
@@ -3140,17 +3327,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             ? session.filePath
             : path.join(sessionDir, 'original.pptx');
 
-        const reExtractedV2 = await this.ensureForegroundImagesForSession(sessionId, candidatePptxPath);
-
-        const allAlreadyRendered = !reExtractedV2 && origSlides.every(s => {
-            if (!s.renderedSlideUrl || !s.imageUrl) return false;
-            const localRendered = resolveLocalMediaFile(s.renderedSlideUrl);
-            const localImg = resolveLocalMediaFile(s.imageUrl);
-            return Boolean(localRendered && fs.existsSync(localRendered) && localImg && fs.existsSync(localImg));
-        });
-        if (allAlreadyRendered) {
-            return slides;
-        }
+        const reExtractedV3 = await this.ensureForegroundImagesForSession(sessionId, candidatePptxPath);
 
         const missingOnDisk = origSlides.some(s => {
             const origIdx = (s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index) as number;
@@ -3191,6 +3368,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 String(s.imageUrl || '').includes('_custom_') ||
                 String(s.imageUrl || '').includes('_ai_');
             const hasOptBullets = Array.isArray(s.optimizedContent) && s.optimizedContent.length > 0;
+            const hasRawContent = Array.isArray(s.content) && s.content.some(line => String(line || '').trim().length > 0);
             const isSpecialInteractive =
                 s.slideType === 'interactive' ||
                 s.slideType === 'checkpoint_quiz' ||
@@ -3198,41 +3376,34 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
 
             const fileName = `full_slide_${String(origIdx).padStart(2, '0')}.png`;
             const diskPath = path.join(renderedDir, fileName);
-            if (fs.existsSync(diskPath)) {
-                const publicRenderedUrl = `/uploads/pptx-tool/${sessionId}/rendered_slides/${fileName}`;
-                const wasUnrenderedLegacySlide = !s.renderedSlideUrl;
-                if (s.renderedSlideUrl !== publicRenderedUrl) {
-                    s.renderedSlideUrl = publicRenderedUrl;
-                    updated = true;
-                }
-                if (
-                    !hasCustomOrAiImg &&
-                    (!s.imageUrl || s.layoutType === 'full_slide_canvas' || !hasOptBullets) &&
-                    s.imageUrl !== publicRenderedUrl
-                ) {
-                    s.imageUrl = publicRenderedUrl;
-                    updated = true;
-                } else if (!hasCustomOrAiImg && s.layoutType !== 'full_slide_canvas' && hasOptBullets) {
-                    const resolvedIllust = this.resolveSlideIllustrationUrl(sessionId, s, origIdx) || null;
-                    if (s.imageUrl !== resolvedIllust) {
-                        s.imageUrl = resolvedIllust;
-                        updated = true;
-                    }
-                }
-                if (
-                    wasUnrenderedLegacySlide &&
-                    !hasCustomOrAiImg &&
-                    !hasOptBullets &&
-                    !isSpecialInteractive &&
-                    (!s.layoutType || s.layoutType === 'split_standard')
-                ) {
-                    s.layoutType = 'full_slide_canvas';
-                    updated = true;
-                }
-            } else if (!hasCustomOrAiImg) {
-                const extractedFallback = this.resolveSlideIllustrationUrl(sessionId, s, origIdx) || null;
-                if (s.imageUrl !== extractedFallback) {
-                    s.imageUrl = extractedFallback;
+            const publicRenderedUrl = fs.existsSync(diskPath)
+                ? `/uploads/pptx-tool/${sessionId}/rendered_slides/${fileName}`
+                : null;
+
+            if (publicRenderedUrl && s.renderedSlideUrl !== publicRenderedUrl) {
+                s.renderedSlideUrl = publicRenderedUrl;
+                updated = true;
+            }
+
+            const resolvedIllust = origIdx === 0
+                ? null
+                : (this.resolveSlideIllustrationUrl(sessionId, s, origIdx) || null);
+
+            if (
+                !hasCustomOrAiImg &&
+                s.layoutType === 'full_slide_canvas' &&
+                (reExtractedV3 || Boolean(resolvedIllust) || hasOptBullets || hasRawContent || origIdx === 0)
+            ) {
+                s.layoutType = 'split_standard';
+                updated = true;
+            }
+
+            if (!hasCustomOrAiImg) {
+                const desiredImgUrl = s.layoutType === 'full_slide_canvas'
+                    ? (publicRenderedUrl || resolvedIllust)
+                    : resolvedIllust;
+                if (s.imageUrl !== desiredImgUrl) {
+                    s.imageUrl = desiredImgUrl;
                     updated = true;
                 }
             }
@@ -3266,6 +3437,9 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             }
         }
         if (origIdx !== undefined && origIdx !== null && origIdx >= 0) {
+            if (origIdx === 0) {
+                return '';
+            }
             const imagesDir = path.join(this.getSessionDir(sessionId), 'images');
             const prefix = `slide_${String(origIdx).padStart(2, '0')}.`;
             for (const ext of ['png', 'jpg', 'jpeg', 'webp', 'gif']) {
@@ -3274,6 +3448,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                     return `/uploads/pptx-tool/${sessionId}/images/${candidate}`;
                 }
             }
+            return '';
         }
         if (rawImgUrl && !rawImgUrl.includes('/rendered_slides/full_slide_')) {
             const cleanUrl = rawImgUrl.split('?')[0];
@@ -3330,25 +3505,21 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 s.renderedSlideUrl ||
                 (String(s.imageUrl || '').includes('/rendered_slides/full_slide_') ? s.imageUrl : null);
 
+            const illustrationUrl = this.resolveSlideIllustrationUrl(sessionId, s, origIdx);
+
             const useFullSlideCanvas =
                 !isTemplateBgMode &&
-                Boolean(effectiveRenderedUrl) && (
-                    s.layoutType === 'full_slide_canvas' ||
-                    (
-                        !s.layoutType &&
-                        origIdx !== null &&
-                        origIdx >= 0 &&
-                        !hasCustomOrAiImage &&
-                        !hasOptimizedBullets &&
-                        !isSpecialInteractiveSlide
-                    )
-                );
+                Boolean(effectiveRenderedUrl) &&
+                s.layoutType === 'full_slide_canvas' &&
+                !illustrationUrl &&
+                !hasRawContent &&
+                !hasOptimizedBullets &&
+                !isSpecialInteractiveSlide;
 
             const effectiveLayoutType = useFullSlideCanvas
                 ? 'full_slide_canvas'
                 : (s.layoutType && s.layoutType !== 'full_slide_canvas' ? s.layoutType : 'split_standard');
 
-            const illustrationUrl = this.resolveSlideIllustrationUrl(sessionId, s, origIdx);
             const fallbackVisualOnlyUrl =
                 !isTemplateBgMode && !hasOptimizedBullets && !hasRawContent && !isSpecialInteractiveSlide && idx > 0
                     ? (effectiveRenderedUrl || '')
@@ -3366,10 +3537,11 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 speakerNote,
                 imageUrl: useFullSlideCanvas
                     ? (effectiveRenderedUrl || '')
-                    : (idx === 0 && isTemplateBgMode ? '' : (illustrationUrl || fallbackVisualOnlyUrl)),
+                    : (idx === 0 && (isTemplateBgMode || !hasCustomOrAiImage) ? '' : (illustrationUrl || fallbackVisualOnlyUrl)),
                 audioUrl: (s.audioStatus === 'done' && s.audioUrl) ? s.audioUrl : '',
                 extraAudioUrl: s.extraAudioUrl || null,
                 extraAudioName: s.extraAudioName || null,
+                extraAudioDuration: s.extraAudioDuration || null,
                 interactiveData: s.interactiveData || null,
             };
         });

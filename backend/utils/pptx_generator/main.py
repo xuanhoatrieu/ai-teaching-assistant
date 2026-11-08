@@ -592,15 +592,17 @@ def _select_foreground_pictures_across_slides(prs, raw_pictures_per_slide: list)
             p["h_ratio"] = h_ratio
             p["area_ratio"] = p["area"] / slide_area
             seen_on_slide.add(p["sha1"])
-            if w_ratio >= 0.82 and h_ratio >= 0.82:
+            if w_ratio >= 0.85 and h_ratio >= 0.85:
                 full_bleed_sha1s.add(p["sha1"])
         for hsh in seen_on_slide:
             sha1_slide_count[hsh] = sha1_slide_count.get(hsh, 0) + 1
 
     chosen_map: Dict[int, dict] = {}
-    repeat_threshold = max(3, int(total_slides * 0.25)) if total_slides >= 3 else 999
+    repeat_threshold = max(4, int(total_slides * 0.25)) if total_slides >= 4 else 999
 
     for idx, pics in enumerate(raw_pictures_per_slide):
+        if idx == 0:
+            continue
         valid = []
         for p in pics:
             wr = p["w_ratio"]
@@ -610,15 +612,15 @@ def _select_foreground_pictures_across_slides(prs, raw_pictures_per_slide: list)
             sz = p["size"]
 
             # 1. Exclude full-bleed slide background images (Image 1 cover / Image 2 content background)
-            if wr >= 0.82 and hr >= 0.82:
+            if wr >= 0.85 and hr >= 0.85:
                 continue
             if hsh in full_bleed_sha1s:
                 continue
 
             # 2. Exclude repeated template/master elements (speaker icon, logo, header/footer, repeated bg)
-            if total_slides >= 3 and sha1_slide_count.get(hsh, 0) >= repeat_threshold:
+            if total_slides >= 4 and sha1_slide_count.get(hsh, 0) >= repeat_threshold:
                 continue
-            if idx > 0 and sha1_slide_count.get(hsh, 0) >= 2 and ar >= 0.70:
+            if idx > 0 and sha1_slide_count.get(hsh, 0) >= 2 and ar >= 0.65:
                 continue
 
             # 3. Exclude tiny icons, bullet markers, or audio badges
@@ -727,9 +729,10 @@ def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> l
                     logger.warning(f"Could not save extracted foreground image for slide {i}: {e}")
 
         try:
-            marker_path = os.path.join(output_images_dir, ".extracted_v2")
-            with open(marker_path, "w", encoding="utf-8") as mf:
-                mf.write("v2\n")
+            for mname in (".extracted_v2", ".extracted_v3"):
+                marker_path = os.path.join(output_images_dir, mname)
+                with open(marker_path, "w", encoding="utf-8") as mf:
+                    mf.write("v3\n")
         except Exception:
             pass
 
@@ -814,16 +817,54 @@ async def parse_pptx_local(request: ParseLocalRequest):
         raise HTTPException(status_code=500, detail=f"Failed to parse local PPTX: {str(e)}")
 
 
+@app.post("/extract-foreground-images")
+async def extract_foreground_images(request: ParseLocalRequest):
+    """
+    Re-extract true foreground slide illustrations (filtering out Image 1 / Image 2 template backgrounds)
+    directly on the shared /app/uploads volume without needing LibreOffice full-slide rendering.
+    """
+    try:
+        real_path = _validate_local_pptx_path(request.file_path)
+        prs = PptxPresentation(real_path)
+        session_dir = os.path.dirname(real_path)
+        images_dir = os.path.join(session_dir, "images")
+        slides_data = _extract_slides_from_pptx(prs, output_images_dir=images_dir)
+        extracted_count = sum(1 for s in slides_data if s.get("imageFileName"))
+        logger.info(
+            f"Extracted foreground images (v3): {extracted_count}/{len(slides_data)} slides from {real_path}"
+        )
+        return {
+            "slides": slides_data,
+            "totalSlides": len(slides_data),
+            "extractedCount": extracted_count,
+        }
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to extract foreground images: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to extract foreground images: {str(e)}")
+
+
 @app.post("/render-pptx-slides")
 async def render_pptx_slides(request: RenderLocalSlidesRequest):
     """
     On-demand full-slide PNG rendering for existing PPTX sessions (idempotent & cached on disk).
+    Also ensures v3 foreground slide illustrations are extracted into images/.
     """
     try:
         real_path = _validate_local_pptx_path(request.file_path)
         prs = PptxPresentation(real_path)
         total_slides = len(prs.slides)
-        rendered_dir = os.path.join(os.path.dirname(real_path), "rendered_slides")
+        session_dir = os.path.dirname(real_path)
+        images_dir = os.path.join(session_dir, "images")
+        if not os.path.isfile(os.path.join(images_dir, ".extracted_v3")):
+            try:
+                _extract_slides_from_pptx(prs, output_images_dir=images_dir)
+            except Exception as ex:
+                logger.warning(f"Foreground image extraction during render_pptx_slides failed: {ex}")
+        rendered_dir = os.path.join(session_dir, "rendered_slides")
         rendered_map = _render_pptx_slides_to_png(
             real_path,
             rendered_dir,

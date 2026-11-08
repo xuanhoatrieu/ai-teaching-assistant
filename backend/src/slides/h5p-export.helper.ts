@@ -8,7 +8,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { resolveLocalMediaFile } from './scorm-export.helper';
+import {
+    resolveLocalMediaFile,
+    computeFileSha1Safe,
+    collectTemplateAndRepeatedBgHashes,
+} from './scorm-export.helper';
 import { normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
 import { detectTextLanguage } from '../ai/language-instruction';
 
@@ -951,6 +955,7 @@ export async function packageH5pZip(
 
     const packagedSlides = slides.map(s => ({ ...s }));
     const opts: H5pExportOptions = { ...(options || {}) };
+    const bgImageSha1Set = collectTemplateAndRepeatedBgHashes(packagedSlides, opts);
 
     // Pack background images if full image mode or custom template requested
     if (opts.bgOption === 'tuaf_full' || (opts.bgOption === 'custom' && (opts.titleBgUrl || opts.contentBgUrl))) {
@@ -982,14 +987,19 @@ export async function packageH5pZip(
             sIdx === 0 &&
             slide.layoutType !== 'full_slide_canvas';
 
-        // 1. Pack Slide Image into content/images/ (suppress AI cover image on Slide 1 when using TUAF original cover #1)
+        // 1. Pack Slide Image into content/images/ (suppress AI cover image on Slide 1 and any template/repeated background image)
         if (!isTuafFullCoverSlide && slide.imageUrl) {
             const localImgPath = resolveLocalMediaFile(slide.imageUrl);
             if (localImgPath) {
-                const ext = path.extname(localImgPath) || '.png';
-                const relativeName = `images/slide_${String(slide.slideIndex).padStart(2, '0')}${ext}`;
-                archive.file(localImgPath, { name: `content/${relativeName}` });
-                slide.h5pImagePath = relativeName;
+                const imgSha1 = slide.layoutType !== 'full_slide_canvas'
+                    ? computeFileSha1Safe(localImgPath)
+                    : null;
+                if (!imgSha1 || !bgImageSha1Set.has(imgSha1)) {
+                    const ext = path.extname(localImgPath) || '.png';
+                    const relativeName = `images/slide_${String(slide.slideIndex).padStart(2, '0')}${ext}`;
+                    archive.file(localImgPath, { name: `content/${relativeName}` });
+                    slide.h5pImagePath = relativeName;
+                }
             }
         }
 

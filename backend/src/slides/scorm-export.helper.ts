@@ -9,6 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
 
 const archiver = require('archiver');
@@ -3875,6 +3876,71 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
 </html>`;
 }
 
+export function computeFileSha1Safe(filePath?: string | null): string | null {
+    if (!filePath) return null;
+    try {
+        if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return null;
+        const buf = fs.readFileSync(filePath);
+        return crypto.createHash('sha1').update(buf).digest('hex');
+    } catch {
+        return null;
+    }
+}
+
+export function collectTemplateAndRepeatedBgHashes(
+    slides: any[],
+    options?: { titleBgUrl?: string; contentBgUrl?: string },
+): Set<string> {
+    const bgHashes = new Set<string>();
+
+    if (options?.titleBgUrl) {
+        const h = computeFileSha1Safe(resolveLocalMediaFile(options.titleBgUrl));
+        if (h) bgHashes.add(h);
+    }
+    if (options?.contentBgUrl) {
+        const h = computeFileSha1Safe(resolveLocalMediaFile(options.contentBgUrl));
+        if (h) bgHashes.add(h);
+    }
+
+    const candidateTemplateDirs = [
+        path.resolve(process.cwd(), 'uploads', 'templates'),
+        path.resolve(process.cwd(), 'backend', 'uploads', 'templates'),
+    ];
+    for (const dir of candidateTemplateDirs) {
+        if (!fs.existsSync(dir)) continue;
+        try {
+            const walk = (d: string) => {
+                for (const entry of fs.readdirSync(d, { withFileTypes: true })) {
+                    const full = path.join(d, entry.name);
+                    if (entry.isDirectory()) walk(full);
+                    else if (/\.(png|jpe?g|webp|gif)$/i.test(entry.name)) {
+                        const h = computeFileSha1Safe(full);
+                        if (h) bgHashes.add(h);
+                    }
+                }
+            };
+            walk(dir);
+        } catch { /* ignore */ }
+    }
+
+    const slideImgHashCounts = new Map<string, number>();
+    for (const s of slides || []) {
+        if (!s?.imageUrl || s?.layoutType === 'full_slide_canvas') continue;
+        const localImgPath = resolveLocalMediaFile(s.imageUrl);
+        const h = computeFileSha1Safe(localImgPath);
+        if (h) {
+            slideImgHashCounts.set(h, (slideImgHashCounts.get(h) || 0) + 1);
+        }
+    }
+    for (const [h, count] of slideImgHashCounts.entries()) {
+        if (count >= 4) {
+            bgHashes.add(h);
+        }
+    }
+
+    return bgHashes;
+}
+
 export async function packageScormZip(
     lessonTitle: string, 
     lessonId: string, 
@@ -3889,6 +3955,7 @@ export async function packageScormZip(
     const assetFiles: string[] = ['index.html'];
     const packagedSlides = slides.map(s => ({ ...s }));
     const opts: ScormExportOptions = { ...(options || {}) };
+    const bgImageSha1Set = collectTemplateAndRepeatedBgHashes(packagedSlides, opts);
 
     // Pack background images if full image mode or custom template requested
     if (opts.bgOption === 'tuaf_full' || (opts.bgOption === 'custom' && (opts.titleBgUrl || opts.contentBgUrl))) {
@@ -3918,17 +3985,26 @@ export async function packageScormZip(
             sIdx === 0 &&
             slide.layoutType !== 'full_slide_canvas';
 
-        // 1. Pack Slide Image into images/ (suppress AI cover image on Slide 1 when using TUAF original cover #1)
+        // 1. Pack Slide Image into images/ (suppress AI cover image on Slide 1 and any template/repeated background image)
         if (isTuafFullCoverSlide) {
             slide.imageUrl = '';
         } else if (slide.imageUrl) {
             const localImgPath = resolveLocalMediaFile(slide.imageUrl);
             if (localImgPath) {
-                const ext = path.extname(localImgPath) || '.png';
-                const relativeName = `images/slide_${String(slide.slideIndex).padStart(2, '0')}${ext}`;
-                archive.file(localImgPath, { name: relativeName });
-                slide.imageUrl = relativeName;
-                assetFiles.push(relativeName);
+                const imgSha1 = slide.layoutType !== 'full_slide_canvas'
+                    ? computeFileSha1Safe(localImgPath)
+                    : null;
+                if (imgSha1 && bgImageSha1Set.has(imgSha1)) {
+                    slide.imageUrl = '';
+                } else {
+                    const ext = path.extname(localImgPath) || '.png';
+                    const relativeName = `images/slide_${String(slide.slideIndex).padStart(2, '0')}${ext}`;
+                    archive.file(localImgPath, { name: relativeName });
+                    slide.imageUrl = relativeName;
+                    assetFiles.push(relativeName);
+                }
+            } else if (!/^https?:\/\//i.test(String(slide.imageUrl || '').trim())) {
+                slide.imageUrl = '';
             }
         }
 
