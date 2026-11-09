@@ -3300,6 +3300,180 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         return changed || purged;
     }
 
+    private static readonly STDLIB_PPTX_TEXT_EXTRACT_SCRIPT = [
+        'import sys, os, re, json, zipfile, xml.etree.ElementTree as ET',
+        'pptx_path = sys.argv[1]',
+        'A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"',
+        'P_NS = "{http://schemas.openxmlformats.org/presentationml/2006/main}"',
+        'def is_slide_num(text, ph_type=""):',
+        '    c = (text or "").strip()',
+        '    if not c: return True',
+        '    if ph_type in ("sldNum", "dt", "hdr"): return True',
+        '    if c.isdigit() and len(c) <= 3: return True',
+        '    return False',
+        'slides_out = []',
+        'with zipfile.ZipFile(pptx_path, "r") as zf:',
+        '    sfiles = sorted([f for f in zf.namelist() if re.match(r"^ppt/slides/slide\\d+\\.xml$", f)], key=lambda x: int(re.search(r"slide(\\d+)\\.xml", x).group(1)))',
+        '    for s_idx, sf in enumerate(sfiles):',
+        '        root = ET.fromstring(zf.read(sf))',
+        '        spTree = root.find(f".//{P_NS}cSld/{P_NS}spTree")',
+        '        if spTree is None:',
+        '            slides_out.append({"index": s_idx, "title": f"Slide {s_idx+1}", "content": []})',
+        '            continue',
+        '        items, z_cnt = [], [0]',
+        '        def walk(container, px=0, py=0):',
+        '            for elem in container:',
+        '                tag = elem.tag.split("}")[-1]',
+        '                z_cnt[0] += 1',
+        '                cz = z_cnt[0]',
+        '                if tag == "grpSp":',
+        '                    off = elem.find(f"./{P_NS}grpSpPr/{A_NS}xfrm/{A_NS}off")',
+        '                    gx = int(off.attrib.get("x", 0)) if off is not None else px',
+        '                    gy = int(off.attrib.get("y", 0)) if off is not None else py',
+        '                    walk(elem, gx, gy)',
+        '                elif tag == "sp":',
+        '                    ph = elem.find(f"./{P_NS}nvSpPr/{P_NS}nvPr/{P_NS}ph")',
+        '                    ph_type = ph.attrib.get("type", "body") if ph is not None else "no-ph"',
+        '                    if ph_type in ("sldNum", "dt", "hdr"): continue',
+        '                    if s_idx > 0 and ph_type == "ftr": continue',
+        '                    off = elem.find(f"./{P_NS}spPr/{A_NS}xfrm/{A_NS}off")',
+        '                    rx = int(off.attrib.get("x", -1)) if off is not None else -1',
+        '                    ry = int(off.attrib.get("y", -1)) if off is not None else -1',
+        '                    if ry < 0:',
+        '                        eff_y = -200000 if ph_type in ("title", "ctrTitle") else (2500000 if ph_type == "subTitle" else (9000000 if ph_type == "ftr" else 1400000))',
+        '                    else: eff_y = ry',
+        '                    eff_x = rx if rx >= 0 else px',
+        '                    lines = []',
+        '                    for p in elem.findall(f".//{A_NS}p"):',
+        '                        parts, cur = [], []',
+        '                        for ch in p:',
+        '                            ctag = ch.tag.split("}")[-1]',
+        '                            if ctag in ("r", "fld"):',
+        '                                t = ch.find(f"{A_NS}t")',
+        '                                if t is not None and t.text: cur.append(t.text)',
+        '                            elif ctag == "br":',
+        '                                seg = " ".join("".join(cur).replace("\\x0b", " ").split()).strip()',
+        '                                if seg: parts.append(seg)',
+        '                                cur = []',
+        '                        seg = " ".join("".join(cur).replace("\\x0b", " ").split()).strip()',
+        '                        if seg: parts.append(seg)',
+        '                        for pt in parts:',
+        '                            for sub in re.split(r"[\\r\\n]+", pt):',
+        '                                s_clean = " ".join(sub.split()).strip()',
+        '                                if s_clean and not is_slide_num(s_clean, ph_type): lines.append(s_clean)',
+        '                    if lines:',
+        '                        items.append({"kind": "text", "ph_type": ph_type, "y": eff_y, "x": eff_x, "z": cz, "lines": lines})',
+        '                elif tag == "graphicFrame":',
+        '                    tbl = elem.find(f".//{A_NS}tbl")',
+        '                    if tbl is not None:',
+        '                        off = elem.find(f"./{P_NS}xfrm/{A_NS}off")',
+        '                        eff_x = int(off.attrib.get("x", 0)) if off is not None else px',
+        '                        eff_y = int(off.attrib.get("y", 3000000)) if off is not None else 3000000',
+        '                        trows = []',
+        '                        for tr in tbl.findall(f"{A_NS}tr"):',
+        '                            cells = []',
+        '                            for tc in tr.findall(f"{A_NS}tc"):',
+        '                                clines = []',
+        '                                for p in tc.findall(f".//{A_NS}p"):',
+        '                                    raw_p = "".join([t.text for t in p.findall(f".//{A_NS}t") if t.text]).replace("\\x0b", "\\n")',
+        '                                    for sub in re.split(r"[\\r\\n]+", raw_p):',
+        '                                        sc = " ".join(sub.split()).strip()',
+        '                                        if sc: clines.append(sc)',
+        '                                cells.append(" ⟦BR⟧ ".join(clines).strip())',
+        '                            if any(c for c in cells):',
+        '                                rstr = " | ".join(cells)',
+        '                                if not trows or trows[-1] != rstr: trows.append(rstr)',
+        '                        if trows:',
+        '                            items.append({"kind": "table", "ph_type": "table", "y": eff_y, "x": eff_x, "z": cz, "lines": ["[Bảng dữ liệu]: " + " ; ".join(trows)]})',
+        '        walk(spTree)',
+        '        items.sort(key=lambda it: (it["y"], it["x"], it["z"]))',
+        '        title, t_idx = "", -1',
+        '        for idx_it, it in enumerate(items):',
+        '            if it["kind"] == "text" and it["ph_type"] in ("title", "ctrTitle") and it["lines"]:',
+        '                title, t_idx = it["lines"][0], idx_it',
+        '                break',
+        '        if not title:',
+        '            for idx_it, it in enumerate(items):',
+        '                if it["kind"] == "text" and it["lines"]:',
+        '                    title, t_idx = it["lines"][0], idx_it',
+        '                    break',
+        '        content = []',
+        '        for idx_it, it in enumerate(items):',
+        '            start = 1 if idx_it == t_idx else 0',
+        '            for ln in it["lines"][start:]:',
+        '                if ln != title and ln not in content: content.append(ln)',
+        '        slides_out.append({"index": s_idx, "title": title or f"Slide {s_idx+1}", "content": content})',
+        'print(json.dumps(slides_out, ensure_ascii=False))',
+    ].join('\n');
+
+    private async ensureAccurateSlideTextsForSession(
+        sessionId: string,
+        candidatePptxPath: string,
+        slides: ParsedSlide[],
+    ): Promise<boolean> {
+        const sessionDir = this.getSessionDir(sessionId);
+        const markerV4Path = path.join(sessionDir, '.text_extracted_v4');
+        if (fs.existsSync(markerV4Path) || !fs.existsSync(candidatePptxPath)) {
+            return false;
+        }
+        try {
+            const { stdout } = await execFileAsync(
+                'python3',
+                ['-c', PptxAudioToolService.STDLIB_PPTX_TEXT_EXTRACT_SCRIPT, candidatePptxPath],
+                { timeout: 45000, maxBuffer: 10 * 1024 * 1024 },
+            );
+            const extractedList = JSON.parse(String(stdout || '[]')) as Array<{
+                index: number;
+                title: string;
+                content: string[];
+            }>;
+            if (!Array.isArray(extractedList) || extractedList.length === 0) {
+                return false;
+            }
+            const byIndex = new Map<number, { title: string; content: string[] }>();
+            for (const item of extractedList) {
+                if (typeof item.index === 'number') {
+                    byIndex.set(item.index, {
+                        title: String(item.title || `Slide ${item.index + 1}`),
+                        content: Array.isArray(item.content) ? item.content : [],
+                    });
+                }
+            }
+
+            let changed = false;
+            for (const s of slides) {
+                const origIdx = s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index;
+                if (origIdx === null || origIdx === undefined || origIdx < 0) continue;
+                const isInteractiveSpecial =
+                    s.slideType === 'interactive' ||
+                    s.slideType === 'checkpoint_quiz' ||
+                    s.slideType === 'interactive_audio';
+                if (isInteractiveSpecial) continue;
+
+                const fresh = byIndex.get(origIdx);
+                if (!fresh) continue;
+
+                if (s.title !== fresh.title) {
+                    s.title = fresh.title;
+                    changed = true;
+                }
+                const oldContentJson = JSON.stringify(s.content || []);
+                const newContentJson = JSON.stringify(fresh.content || []);
+                if (oldContentJson !== newContentJson) {
+                    s.content = fresh.content;
+                    changed = true;
+                }
+            }
+
+            fs.mkdirSync(sessionDir, { recursive: true });
+            fs.writeFileSync(markerV4Path, 'v4\n', 'utf-8');
+            return changed;
+        } catch (err: any) {
+            this.logger.warn(`Slide text v4 re-extraction warning for ${sessionId}: ${err?.message || err}`);
+            return false;
+        }
+    }
+
     async ensureRenderedSlidesForSession(sessionId: string): Promise<ParsedSlide[]> {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
@@ -3328,6 +3502,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             : path.join(sessionDir, 'original.pptx');
 
         const reExtractedV3 = await this.ensureForegroundImagesForSession(sessionId, candidatePptxPath);
+        const reExtractedTextV4 = await this.ensureAccurateSlideTextsForSession(sessionId, candidatePptxPath, slides);
 
         const missingOnDisk = origSlides.some(s => {
             const origIdx = (s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index) as number;
@@ -3409,7 +3584,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             }
         }
 
-        if (updated) {
+        if (updated || reExtractedTextV4) {
             await this.saveSlidesAndSyncContent(sessionId, slides);
         }
 

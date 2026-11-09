@@ -1652,22 +1652,31 @@ export function PptxAudioToolPage() {
             return slide.optimizedContent;
         }
         if (Array.isArray(slide.content) && slide.content.length > 0) {
-            return slide.content.map(line => {
-                const str = String(line || '').trim();
-                const colonIdx = str.indexOf(':');
-                if (colonIdx > 0 && colonIdx < 60) {
+            return slide.content
+                .map(line => String(line || '').trim())
+                .filter(str => Boolean(str) && !/^\d{1,3}$/.test(str))
+                .map(str => {
+                    if (/^\[Bảng dữ liệu\]:/i.test(str) || /^(Word\s*box|Từ\s*vựng|Kho\s*từ)\s*:/i.test(str)) {
+                        return {
+                            emoji: '',
+                            point: str,
+                            description: '',
+                        };
+                    }
+                    const colonIdx = str.indexOf(':');
+                    if (colonIdx > 0 && colonIdx < 48 && !/^https?$/i.test(str.substring(0, colonIdx).trim())) {
+                        return {
+                            emoji: '',
+                            point: str.substring(0, colonIdx).trim(),
+                            description: str.substring(colonIdx + 1).trim(),
+                        };
+                    }
                     return {
-                        emoji: '•',
-                        point: str.substring(0, colonIdx).trim(),
-                        description: str.substring(colonIdx + 1).trim(),
+                        emoji: '',
+                        point: str,
+                        description: '',
                     };
-                }
-                return {
-                    emoji: '•',
-                    point: str,
-                    description: '',
-                };
-            });
+                });
         }
         return [];
     };
@@ -4397,15 +4406,61 @@ export function PptxAudioToolPage() {
                                                                     ) : bullets.length > 0 ? (
                                                                         <div className="optimized-content-wrapper">
                                                                             <ul className="bullet-list">
-                                                                                {bullets.map((b, bIdx) => (
-                                                                                    <li key={bIdx}>
-                                                                                        <span className="emoji">{b.emoji || '📌'}</span>
-                                                                                        <strong>{b.point}</strong>
-                                                                                        {b.description && (
-                                                                                            <span className="description"> - {b.description}</span>
-                                                                                        )}
-                                                                                    </li>
-                                                                                ))}
+                                                                                {bullets.map((b, bIdx) => {
+                                                                                    const rawPoint = String(b.point || '').trim();
+                                                                                    const tableMatch = rawPoint.match(/^\[Bảng dữ liệu\]:\s*(.+)$/i);
+                                                                                    if (tableMatch) {
+                                                                                        const rows = tableMatch[1]
+                                                                                            .split(/\s*;\s*/)
+                                                                                            .map(r => r.split(/\s*\|\s*/).map(c => c.trim()))
+                                                                                            .filter(r => r.some(Boolean));
+                                                                                        return (
+                                                                                            <li key={bIdx} style={{ listStyle: 'none', padding: '4px 0' }}>
+                                                                                                <div style={{ overflowX: 'auto', border: '1px solid #cbd5e1', borderRadius: 8 }}>
+                                                                                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.88rem' }}>
+                                                                                                        <tbody>
+                                                                                                            {rows.map((r, rIdx) => (
+                                                                                                                <tr key={rIdx}>
+                                                                                                                    {r.map((cell, cIdx) => (
+                                                                                                                        <td
+                                                                                                                            key={cIdx}
+                                                                                                                            style={{
+                                                                                                                                border: '1px solid #e2e8f0',
+                                                                                                                                padding: '6px 10px',
+                                                                                                                                verticalAlign: 'top',
+                                                                                                                                background: rIdx === 0 && rows.length > 1 ? '#f8fafc' : '#ffffff',
+                                                                                                                                fontWeight: rIdx === 0 && rows.length > 1 ? 600 : 400,
+                                                                                                                            }}
+                                                                                                                        >
+                                                                                                                            {cell.split(/\s*⟦BR⟧\s*|\r?\n/).map((ln, lIdx) => (
+                                                                                                                                <div key={lIdx}>{ln}</div>
+                                                                                                                            ))}
+                                                                                                                        </td>
+                                                                                                                    ))}
+                                                                                                                </tr>
+                                                                                                            ))}
+                                                                                                        </tbody>
+                                                                                                    </table>
+                                                                                                </div>
+                                                                                            </li>
+                                                                                        );
+                                                                                    }
+                                                                                    return (
+                                                                                        <li key={bIdx}>
+                                                                                            {b.emoji ? <span className="emoji">{b.emoji}</span> : null}
+                                                                                            {b.description ? (
+                                                                                                <>
+                                                                                                    <strong>{b.point}:</strong>
+                                                                                                    <span className="description"> {b.description}</span>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <span style={{ fontWeight: bIdx === 0 && rawPoint === rawPoint.toUpperCase() && rawPoint.length > 3 ? 700 : 500 }}>
+                                                                                                    {b.point}
+                                                                                                </span>
+                                                                                            )}
+                                                                                        </li>
+                                                                                    );
+                                                                                })}
                                                                             </ul>
                                                                         </div>
                                                                     ) : slide.content ? (

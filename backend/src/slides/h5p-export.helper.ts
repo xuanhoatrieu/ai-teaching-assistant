@@ -12,6 +12,8 @@ import {
     resolveLocalMediaFile,
     computeFileSha1Safe,
     collectTemplateAndRepeatedBgHashes,
+    parseBulletsFromRawSlideContent,
+    StructuredSlideBullet,
 } from './scorm-export.helper';
 import { normalizeInteractiveQuestions } from '../questions/moodle-xml.helper';
 import { detectTextLanguage } from '../ai/language-instruction';
@@ -97,7 +99,9 @@ export function generateH5pJson(lessonTitle: string): string {
 export function generateH5pContentJson(lessonTitle: string, slides: any[], options?: H5pExportOptions): string {
     const isDarkTheme = options?.theme === 'dark';
     const isMinimal = options?.bgOption === 'minimal';
-    const isTuafBranded = !options?.bgOption || options?.bgOption === 'tuaf_clean' || options?.bgOption === 'tuaf_full';
+    const isCustomTemplate = options?.bgOption === 'custom';
+    const isTuafNamedTemplate = /tuaf|nông\s*lâm|nong\s*lam|thái\s*nguyên|thai\s*nguyen/i.test(String(options?.templateName || ''));
+    const isTuafBranded = !options?.bgOption || options?.bgOption === 'tuaf_clean' || options?.bgOption === 'tuaf_full' || (isCustomTemplate && isTuafNamedTemplate);
     const isFullBgTemplate = options?.bgOption === 'tuaf_full' || options?.bgOption === 'custom';
     const isTuafFullTitle = isFullBgTemplate && Boolean(options?.hasTitleBg);
     const isTuafFullContent = isFullBgTemplate && Boolean(options?.hasContentBg);
@@ -136,7 +140,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         const layoutType = s.layoutType || (isCheckpoint ? 'checkpoint_gate' : (s.extraAudioUrl ? 'audio_lab' : 'split_standard'));
 
         // 2. Extract bullets / text content
-        let bullets: Array<{ emoji?: string; point: string; description?: string }> = [];
+        let bullets: StructuredSlideBullet[] = [];
         if (Array.isArray(s.bullets)) {
             bullets = s.bullets;
         } else if (s.optimizedContentJson) {
@@ -147,14 +151,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
             } catch (e) {}
         }
         if (bullets.length === 0 && s.content) {
-            const lines = Array.isArray(s.content) ? s.content : (typeof s.content === 'string' ? s.content.split('\n') : []);
-            bullets = lines
-                .filter((l: any) => typeof l === 'string' && l.trim())
-                .map((l: string) => ({
-                    emoji: '📌',
-                    point: l.replace(/^[-*•]\s*/, '').trim(),
-                    description: '',
-                }));
+            bullets = parseBulletsFromRawSlideContent(s.content, s.title, idx);
         }
 
         const suppressCoverAiImage = isTuafFullTitle && idx === 0 && layoutType !== 'full_slide_canvas';
@@ -409,11 +406,24 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         }
 
         // Special Layout for Slide 1 with TUAF Original Cover Background #1 (tuaf_full):
-        // Suppress AI image, badge, and subtitles; display ONLY lesson title centered in middle green stage (matching PPTX _add_title_slide)
+        // Suppress AI image and badge; display lesson title + non-objective cover subtitles centered in middle green stage
         if (idx === 0 && isTuafFullTitle && !hasQuiz) {
             const coverTitleText = (s.title && !/^slide\s*1$/i.test(String(s.title).trim()))
                 ? s.title
                 : (lessonTitle || slideTitleText);
+            const coverSubLines = bullets
+                .map(b => {
+                    const pt = String(b.point || '').trim();
+                    const ds = String(b.description || '').trim();
+                    if (!pt && !ds) return '';
+                    if (/^mục\s*tiêu\b/i.test(pt)) return '';
+                    if (pt.toLowerCase() === String(coverTitleText || '').trim().toLowerCase()) return '';
+                    return (ds && ds.toLowerCase() !== pt.toLowerCase()) ? (pt ? `${pt} — ${ds}` : ds) : pt;
+                })
+                .filter(Boolean);
+            const coverSubHtml = coverSubLines.length > 0
+                ? `<div style="margin-top: 10px;">${coverSubLines.map(l => `<p style="margin: 4px 0 0 0; font-size: 1.55em; line-height: 1.3; color: #ffffff; font-weight: 700; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);">${escapeHtml(l)}</p>`).join('')}</div>`
+                : '';
 
             elements.push({
                 x: 10,
@@ -423,8 +433,9 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 action: {
                     library: 'H5P.AdvancedText 1.1',
                     params: {
-                        text: `<div style="height: 100%; min-height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; background: transparent; font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+                        text: `<div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: transparent; font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
                             <h1 style="margin: 0; padding: 0; font-size: 2.35em; line-height: 1.3; color: #ffffff; font-weight: 700; text-shadow: 0 2px 6px rgba(0, 0, 0, 0.22);">${escapeHtml(coverTitleText)}</h1>
+                            ${coverSubHtml}
                         </div>`
                     },
                     subContentId: `title_${idx}`
@@ -449,7 +460,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 }).join('')}</div>`
                 : '';
 
-            const titleBadgeLabel = isMinimal
+            const titleBadgeLabel = !isTuafBranded
                 ? '🎓 HỌC LIỆU SỐ TƯƠNG TÁC • BÀI GIẢNG ĐIỆN TỬ'
                 : '🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN • BÀI GIẢNG ĐIỆN TỬ';
 
@@ -518,26 +529,82 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
         // and avoid printing duplicate description when identical to point
         let contentHtml = '';
         if (hasBullets) {
-            const bulletGap = bullets.length <= 3 ? '22px' : '14px';
+            const bulletGap = bullets.length <= 3 ? '16px' : '10px';
             const itemsHtml = bullets.map(b => {
+                const kind = b.kind || (b.emoji ? 'card' : (b.description ? 'keyval' : 'card'));
                 const point = (b.point || '').trim();
                 const desc = (b.description || '').trim();
                 const isDistinct = desc && desc.toLowerCase() !== point.toLowerCase();
-                const emoji = b.emoji || '📌';
+                const safeDescHtml = isDistinct ? escapeHtml(desc).replace(/\n/g, '<br>') : '';
 
+                if (kind === 'table' && Array.isArray(b.rows) && b.rows.length > 0) {
+                    const hasHeaderRow = b.rows.length >= 2 && b.rows[0].every(cell => String(cell || '').length <= 48);
+                    const trs = b.rows.map((row, rIdx) => {
+                        const tag = (hasHeaderRow && rIdx === 0) ? 'th' : 'td';
+                        const bgStyle = (hasHeaderRow && rIdx === 0) ? 'background: rgba(15, 81, 50, 0.1); font-weight: 700;' : '';
+                        const tds = (row || []).map(c => {
+                            const cellHtml = escapeHtml(String(c || '')).replace(/\s*⟦BR⟧\s*|\r?\n/g, '<br>');
+                            return `<${tag} style="border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; vertical-align: top; ${bgStyle}">${cellHtml}</${tag}>`;
+                        }).join('');
+                        return `<tr>${tds}</tr>`;
+                    }).join('');
+                    return `<div style="margin-bottom: ${bulletGap}; overflow-x: auto;"><table style="width: 100%; border-collapse: collapse; font-size: 0.9em; color: ${pointColor};"><tbody>${trs}</tbody></table></div>`;
+                }
+
+                if (kind === 'heading') {
+                    return `
+                        <div style="margin-bottom: ${bulletGap}; line-height: 1.45; color: ${titleColor}; font-weight: 700; font-size: 1.05em;">
+                            <div>${escapeHtml(point)}</div>
+                            ${safeDescHtml ? `<div style="font-weight: 500; font-size: 0.9em; color: ${descColor}; margin-top: 2px;">${safeDescHtml}</div>` : ''}
+                        </div>
+                    `;
+                }
+
+                if (kind === 'wordbox') {
+                    return `<div style="margin-bottom: ${bulletGap}; padding: 8px 14px; border: 1.5px dashed #16a34a; border-radius: 8px; background: rgba(22, 163, 74, 0.08); font-weight: 600; text-align: center; color: ${pointColor};">${escapeHtml(point)}</div>`;
+                }
+
+                if (kind === 'dialogue') {
+                    return `
+                        <div style="margin-bottom: ${bulletGap}; line-height: 1.48; color: ${textColor};">
+                            <p style="margin: 0; font-size: 1em;"><strong style="color: ${titleColor};">${escapeHtml(b.speaker || '')}:</strong> <span style="color: ${pointColor};">${escapeHtml(point)}</span></p>
+                            ${safeDescHtml ? `<p style="margin: 2px 0 0 18px; font-size: 0.9em; color: ${descColor}; font-style: italic;">${safeDescHtml}</p>` : ''}
+                        </div>
+                    `;
+                }
+
+                if (kind === 'numbered' || kind === 'bullet') {
+                    return `
+                        <div style="margin-bottom: ${bulletGap}; line-height: 1.48; color: ${textColor};">
+                            <p style="margin: 0; font-size: 1em;"><strong style="color: ${titleColor}; margin-right: 6px;">${escapeHtml(b.marker || '•')}</strong><span style="color: ${pointColor}; font-weight: ${safeDescHtml ? '600' : '500'};">${escapeHtml(point)}</span></p>
+                            ${safeDescHtml ? `<p style="margin: 2px 0 0 20px; font-size: 0.9em; color: ${descColor};">${safeDescHtml}</p>` : ''}
+                        </div>
+                    `;
+                }
+
+                if (kind === 'text' || kind === 'cover_subtitle') {
+                    return `
+                        <div style="margin-bottom: ${bulletGap}; line-height: 1.48; color: ${textColor};">
+                            <p style="margin: 0; font-size: 1em; color: ${pointColor}; font-weight: ${safeDescHtml ? '600' : '500'};">${escapeHtml(point)}</p>
+                            ${safeDescHtml ? `<p style="margin: 2px 0 0 0; font-size: 0.9em; color: ${descColor}; font-style: italic;">${safeDescHtml}</p>` : ''}
+                        </div>
+                    `;
+                }
+
+                const emoji = b.emoji || (kind === 'keyval' ? '' : '📌');
                 return `
                     <div style="margin-bottom: ${bulletGap}; line-height: 1.5; color: ${textColor};">
                         <p style="margin: 0 0 4px 0; font-size: 1.05em; line-height: 1.35;">
-                            <span style="font-size: 1.15em; margin-right: 6px;">${emoji}</span>
+                            ${emoji ? `<span style="font-size: 1.15em; margin-right: 6px;">${escapeHtml(emoji)}</span>` : ''}
                             <strong style="color: ${pointColor};">${escapeHtml(point)}</strong>
                         </p>
-                        ${isDistinct ? `<p style="margin: 0 0 0 26px; font-size: 0.9em; color: ${descColor}; line-height: 1.45;">${escapeHtml(desc)}</p>` : ''}
+                        ${safeDescHtml ? `<p style="margin: 0 0 0 ${emoji ? '26px' : '0'}; font-size: 0.9em; color: ${descColor}; line-height: 1.45;">${safeDescHtml}</p>` : ''}
                     </div>
                 `;
             }).join('');
 
             contentHtml = `
-                <div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; padding-top: 4px;">
+                <div style="height: 100%; min-height: 100%; display: flex; flex-direction: column; justify-content: flex-start; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-sizing: border-box; padding-top: 4px;">
                     ${itemsHtml}
                 </div>
             `;

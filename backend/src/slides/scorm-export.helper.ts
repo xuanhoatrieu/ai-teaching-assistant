@@ -191,10 +191,268 @@ ${fileEntries}
 </manifest>`;
 }
 
+export interface StructuredSlideBullet {
+    kind?: 'cover_subtitle' | 'heading' | 'table' | 'wordbox' | 'dialogue' | 'numbered' | 'keyval' | 'card' | 'bullet' | 'text';
+    emoji: string;
+    point: string;
+    description: string;
+    marker?: string;
+    speaker?: string;
+    rows?: string[][];
+    tableRows?: string[][][];
+}
+
+export function parseBulletsFromRawSlideContent(
+    rawContent: any,
+    slideTitle = '',
+    slideIdxOrIsCover: number | boolean = false,
+): StructuredSlideBullet[] {
+    const isCoverSlide = typeof slideIdxOrIsCover === 'number'
+        ? slideIdxOrIsCover === 0
+        : Boolean(slideIdxOrIsCover);
+    const rawArray: string[] = Array.isArray(rawContent)
+        ? rawContent.filter((l: any) => typeof l === 'string')
+        : typeof rawContent === 'string'
+            ? rawContent.split(/\r?\n/)
+            : [];
+
+    const cleanTitle = String(slideTitle || '').replace(/\s+/g, ' ').trim();
+    const expandedLines: string[] = [];
+
+    for (const rawEntry of rawArray) {
+        const trimmedEntry = String(rawEntry || '').trim();
+        if (!trimmedEntry) continue;
+
+        if (/^\[Bảng dữ liệu\]:/i.test(trimmedEntry)) {
+            const normalizedTable = trimmedEntry
+                .replace(/[\x0b\r\n]+/g, ' ⟦BR⟧ ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            expandedLines.push(normalizedTable);
+            continue;
+        }
+
+        const subParts = trimmedEntry.split(/[\x0b\r\n]+/);
+        for (const sub of subParts) {
+            const cleaned = sub.replace(/\s+/g, ' ').trim();
+            if (!cleaned) continue;
+            // Skip standalone 1-3 digit slide numbers (e.g. "6", "20", "27")
+            if (/^\d{1,3}$/.test(cleaned)) continue;
+            // Skip repeated running course footer on content slides
+            if (!isCoverSlide && /^đọc\s*[-–—]\s*viết\s*\d+$/i.test(cleaned)) continue;
+            // Skip exact duplicate of slide title
+            if (cleanTitle && cleaned.toLowerCase() === cleanTitle.toLowerCase()) continue;
+            if (!expandedLines.includes(cleaned)) {
+                expandedLines.push(cleaned);
+            }
+        }
+    }
+
+    if (isCoverSlide) {
+        return expandedLines
+            .filter((line) => {
+                // Filter out auto-generated redundant cover subtitle like "📝 Lesson 01: Lesson 01" when title already starts with "Lesson 01:"
+                const stripped = line.replace(/^[^\wÀ-ỹ]+/, '').trim();
+                const prefixMatch = cleanTitle.match(/^((?:lesson|unit|bài|chương)\s*\d+)\s*:/i);
+                if (prefixMatch) {
+                    const pfx = prefixMatch[1].toLowerCase();
+                    if (stripped.toLowerCase() === `${pfx}: ${pfx}`) return false;
+                }
+                return true;
+            })
+            .map((line) => ({
+                kind: 'cover_subtitle',
+                emoji: '',
+                point: line,
+                description: '',
+            }));
+    }
+
+    const isSectionBannerTitle = /^(content(\s+lesson\s*\d+)?|further\s+practice|my\s+review|lesson\s+\d+|unit\s+\d+|part\s+\d+|section\s+\d+|chương\s+\d+|phần\s+\d+)$/i.test(cleanTitle);
+    const bullets: StructuredSlideBullet[] = [];
+
+    for (let i = 0; i < expandedLines.length; i++) {
+        const line = expandedLines[i];
+
+        // 1. Table block: [Bảng dữ liệu]: row1_c1 | row1_c2 ; row2_c1 | row2_c2
+        const tableMatch = line.match(/^\[Bảng dữ liệu\]:\s*(.+)$/i);
+        if (tableMatch) {
+            const rawRows = tableMatch[1]
+                .split(/\s*;\s*/)
+                .map((r) => r.trim())
+                .filter(Boolean);
+            const rows: string[][] = rawRows.map((rowStr) =>
+                rowStr.split(/\s*\|\s*/).map((cellStr) => cellStr.trim()),
+            );
+            const tableRows: string[][][] = rows.map((rowArr) =>
+                rowArr.map((cellStr) =>
+                    cellStr
+                        .split(/\s*⟦BR⟧\s*/)
+                        .map((cl) => cl.trim())
+                        .filter(Boolean),
+                ),
+            );
+            bullets.push({
+                kind: 'table',
+                emoji: '',
+                point: line,
+                description: '',
+                rows,
+                tableRows,
+            });
+            continue;
+        }
+
+        // 2. Parenthetical translation/note line: "(Mô tả vị trí môi...)" -> attach to previous item
+        if (/^\([^)]+\)\.?$/.test(line) && bullets.length > 0 && bullets[bullets.length - 1].kind !== 'table') {
+            const prev = bullets[bullets.length - 1];
+            prev.description = prev.description ? `${prev.description}\n${line}` : line;
+            continue;
+        }
+
+        // 3. First line on slide acting as Slide Subheading (under a section banner or Exercise heading)
+        const isExerciseOrTranscribeHeading =
+            /^(exercise|bài\s*tập|activity|task)\s*\d*\s*[:.]/i.test(line) ||
+            /^transcribe\s+the\s+following/i.test(line);
+        const isAllCapsHeading =
+            line.length >= 4 &&
+            line.length <= 85 &&
+            /[A-ZÀ-Ỹ]/.test(line) &&
+            line === line.toUpperCase() &&
+            !/^[A-Z]+:\s/.test(line) &&
+            expandedLines.length > 1;
+
+        if (i === 0 && (isSectionBannerTitle || isExerciseOrTranscribeHeading || isAllCapsHeading)) {
+            bullets.push({
+                kind: 'heading',
+                emoji: '',
+                point: line,
+                description: '',
+            });
+            continue;
+        }
+
+        // 4. Emoji Heading + Next Line Description pair (e.g. "💡 Affirmative" followed by "Subject + am/is/are + V-ing")
+        const leadingEmojiOnlyMatch = line.match(
+            /^((?:[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF])(?:\uFE0F|\u200D(?:[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF]))*)\s+(.+)$/,
+        );
+        if (
+            leadingEmojiOnlyMatch &&
+            !line.includes(':') &&
+            leadingEmojiOnlyMatch[2].length <= 55 &&
+            !/[.?!]$/.test(leadingEmojiOnlyMatch[2].trim()) &&
+            i + 1 < expandedLines.length
+        ) {
+            const nextLine = expandedLines[i + 1];
+            const nextStartsWithMarker =
+                /^[-*•]\s*/.test(nextLine) ||
+                /^\d+[\.\)]\s+/.test(nextLine) ||
+                /^\[Bảng dữ liệu\]:/i.test(nextLine) ||
+                /^\([^)]+\)\.?$/.test(nextLine) ||
+                /^((?:[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF]))/.test(nextLine);
+            if (!nextStartsWithMarker) {
+                bullets.push({
+                    kind: 'card',
+                    emoji: leadingEmojiOnlyMatch[1],
+                    point: leadingEmojiOnlyMatch[2].trim(),
+                    description: nextLine.trim(),
+                });
+                i++;
+                continue;
+            }
+        }
+
+        // 5. Word box line: "Word box: cheese · Peter · eat..."
+        const wordBoxMatch = line.match(/^(Word\s*box|Từ\s*vựng|Kho\s*từ)\s*:\s*(.+)$/i);
+        if (wordBoxMatch) {
+            bullets.push({
+                kind: 'wordbox',
+                emoji: '🔤',
+                point: `${wordBoxMatch[1].trim()}: ${wordBoxMatch[2].trim()}`,
+                description: '',
+            });
+            continue;
+        }
+
+        // 6. Dialogue speaker line: "CHRISTINA: What would you like to eat..."
+        const dialogueMatch = line.match(/^([A-ZÀ-Ỹ][A-ZÀ-Ỹ\s\.]{1,22}):\s+(.+)$/);
+        if (dialogueMatch && dialogueMatch[1] === dialogueMatch[1].toUpperCase()) {
+            bullets.push({
+                kind: 'dialogue',
+                emoji: '',
+                speaker: dialogueMatch[1].trim(),
+                point: dialogueMatch[2].trim(),
+                description: '',
+            });
+            continue;
+        }
+
+        // 7. Numbered or lettered step: "1. /i/ is a long sound"
+        const numberedMatch = line.match(/^(\d+[\.\)]|[a-zA-Z]\))\s+(.+)$/);
+        if (numberedMatch) {
+            bullets.push({
+                kind: 'numbered',
+                emoji: numberedMatch[1].trim(),
+                marker: numberedMatch[1].trim(),
+                point: numberedMatch[2].trim(),
+                description: '',
+            });
+            continue;
+        }
+
+        // 8. Bullet / Emoji / Key-Value / Plain line
+        const hadBulletChar = /^[-*•]\s*/.test(line);
+        let rest = line.replace(/^[-*•]\s*/, '').trim();
+        let emoji = '';
+
+        const innerEmojiMatch = rest.match(
+            /^((?:[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF])(?:\uFE0F|\u200D(?:[\u2600-\u27BF]|[\uD83C-\uDBFF][\uDC00-\uDFFF]))*)\s+(.+)$/,
+        );
+        if (innerEmojiMatch) {
+            emoji = innerEmojiMatch[1];
+            rest = innerEmojiMatch[2].trim();
+        }
+
+        const kvMatch = rest.match(/^([^:]{2,48}):\s+(.+)$/);
+        if (kvMatch && !/^\d+$/.test(kvMatch[1].trim()) && !/^https?$/i.test(kvMatch[1].trim())) {
+            bullets.push({
+                kind: 'keyval',
+                emoji,
+                point: kvMatch[1].trim(),
+                description: kvMatch[2].trim(),
+            });
+            continue;
+        }
+
+        if (emoji) {
+            bullets.push({
+                kind: 'card',
+                emoji,
+                point: rest,
+                description: '',
+            });
+            continue;
+        }
+
+        bullets.push({
+            kind: hadBulletChar ? 'bullet' : 'text',
+            emoji: '',
+            marker: hadBulletChar ? '•' : '',
+            point: rest,
+            description: '',
+        });
+    }
+
+    return bullets;
+}
+
 export function generateScormPlayerHtml(lessonTitle: string, slides: any[], options?: ScormExportOptions): string {
     const bgOption = options?.bgOption || 'tuaf_clean';
     const initialTheme = (options?.theme === 'dark') ? 'dark' : 'light';
     const isMinimal = bgOption === 'minimal';
+    const isCustomTemplate = bgOption === 'custom';
+    const isTuafTemplateName = /tuaf|nông\s*lâm/i.test(String(options?.templateName || ''));
+    const isTuafBrand = bgOption === 'tuaf_clean' || bgOption === 'tuaf_full' || (isCustomTemplate && isTuafTemplateName);
     const isFullBgTemplate = bgOption === 'tuaf_full' || bgOption === 'custom';
     const isImageBg = isFullBgTemplate && (options?.hasTitleBg || options?.hasContentBg);
     const isTuafFullTitle = isFullBgTemplate && Boolean(options?.hasTitleBg);
@@ -214,12 +472,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
             } catch (e) {}
         }
         if (bullets.length === 0 && s.content) {
-            const lines = Array.isArray(s.content) ? s.content : (typeof s.content === 'string' ? s.content.split('\n') : []);
-            bullets = lines.filter((l: any) => typeof l === 'string' && l.trim()).map((l: string) => ({
-                emoji: '📌',
-                point: l.replace(/^[-*•]\s*/, '').trim(),
-                description: '',
-            }));
+            bullets = parseBulletsFromRawSlideContent(s.content, s.title || '', idx === 0);
         }
 
         let interaction: any = null;
@@ -2068,8 +2321,10 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       left: 10%;
       right: 15%;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
+      gap: 10px;
       text-align: center;
       padding: 0 18px;
       z-index: 4;
@@ -2085,6 +2340,179 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       background: transparent !important;
       border: none !important;
       text-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+    }
+    .tuaf-cover-subtitles {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+      max-width: 92%;
+    }
+    .tuaf-cover-subtitle {
+      color: #ffffff !important;
+      font-family: Arial, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: clamp(1.15rem, 2.45vw, 2.05rem);
+      font-weight: 700;
+      line-height: 1.32;
+      margin: 0;
+      padding: 0;
+      text-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+    }
+
+    /* Faithful PPTX Slide Content Elements (Headings, Tables, Wordbox, Dialogues, Compact Lists, Stacked Media) */
+    .slide-content-grid.stacked-media {
+      grid-template-columns: 1fr !important;
+      gap: 14px;
+      align-items: stretch;
+    }
+    .slide-content-grid.stacked-media .slide-media-box {
+      max-width: 860px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    .slide-content-grid.stacked-media .slide-media-box img {
+      max-height: 410px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+    }
+    .bullets-list.has-compact-items {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 10px 14px;
+      align-items: start;
+    }
+    .bullets-list.has-compact-items .slide-body-heading,
+    .bullets-list.has-compact-items .slide-wordbox,
+    .bullets-list.has-compact-items .scorm-table-wrap {
+      grid-column: 1 / -1;
+    }
+    .slide-body-heading {
+      font-size: 1.06rem;
+      font-weight: 700;
+      color: var(--primary-light, #0284c7);
+      padding: 6px 4px 2px 4px;
+      margin-top: 2px;
+      line-height: 1.4;
+      border-bottom: 2px solid rgba(2, 132, 199, 0.18);
+    }
+    body.theme-light .slide-body-heading,
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-body-heading {
+      color: #0f5132;
+      border-bottom-color: rgba(15, 81, 50, 0.2);
+    }
+    .slide-wordbox {
+      background: rgba(14, 165, 233, 0.1);
+      border: 1.5px dashed rgba(14, 165, 233, 0.45);
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-weight: 600;
+      font-size: 0.98rem;
+      color: var(--text-main);
+      text-align: center;
+      line-height: 1.5;
+    }
+    body.theme-light .slide-wordbox,
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-wordbox {
+      background: #f0fdf4;
+      border-color: #16a34a;
+      color: #0f172a;
+    }
+    .scorm-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+    }
+    .scorm-slide-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.93rem;
+      line-height: 1.48;
+    }
+    .scorm-slide-table th,
+    .scorm-slide-table td {
+      padding: 9px 13px;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+      color: var(--text-main);
+    }
+    .scorm-slide-table th {
+      background: rgba(14, 165, 233, 0.14);
+      font-weight: 700;
+      color: var(--text-main);
+    }
+    body.theme-light .scorm-slide-table th,
+    body.has-tuaf-content-bg .slide-card.is-content-slide .scorm-slide-table th {
+      background: #ecfdf5;
+      color: #065f46;
+      border-color: #cbd5e1;
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .scorm-slide-table td {
+      background: rgba(255, 255, 255, 0.96);
+      color: #0f172a;
+      border-color: #cbd5e1;
+    }
+    .bullet-item.is-plain-line {
+      padding: 9px 14px;
+    }
+    .bullet-item.is-plain-line .bullet-point {
+      font-weight: 500;
+      font-size: 0.98rem;
+      line-height: 1.5;
+    }
+    .bullet-item.is-plain-line.has-sub-desc .bullet-point {
+      font-weight: 600;
+    }
+    .bullet-item.is-plain-line .bullet-desc {
+      margin-top: 3px;
+      font-style: italic;
+      font-size: 0.91rem;
+    }
+    .bullet-num-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 26px;
+      height: 26px;
+      padding: 0 7px;
+      border-radius: 999px;
+      background: rgba(14, 165, 233, 0.16);
+      color: var(--primary-light, #0284c7);
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    body.theme-light .bullet-num-badge,
+    body.has-tuaf-content-bg .slide-card.is-content-slide .bullet-num-badge {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .bullet-marker-dot {
+      color: var(--primary-light, #0284c7);
+      font-weight: 900;
+      font-size: 1.15rem;
+      line-height: 1.3;
+      flex-shrink: 0;
+      padding: 0 2px;
+    }
+    body.theme-light .bullet-marker-dot,
+    body.has-tuaf-content-bg .slide-card.is-content-slide .bullet-marker-dot {
+      color: #15803d;
+    }
+    .dialogue-speaker-tag {
+      font-weight: 700;
+      color: var(--primary-light, #0284c7);
+      margin-right: 6px;
+    }
+    body.theme-light .dialogue-speaker-tag,
+    body.has-tuaf-content-bg .slide-card.is-content-slide .dialogue-speaker-tag {
+      color: #0f5132;
     }
 
     body.has-tuaf-content-bg .slide-card.is-content-slide {
@@ -2193,7 +2621,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
 
   <!-- Header -->
   <header>
-    ${!isMinimal ? `
+    ${isTuafBrand ? `
     <div class="header-title-wrapper">
       <div class="tuaf-header-brand">
         <span class="tuaf-brand-icon">🌿</span>
@@ -2555,18 +2983,125 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
 
 
 
-      // Bullets
+      // Bullets & Structured Slide Body Items
       let bulletsHtml = '';
+      let isCompactList = false;
       if (slide.bullets && slide.bullets.length > 0) {
-        bulletsHtml = slide.bullets.map(b => \`
-          <div class="bullet-item">
-            <span class="bullet-icon">\${b.emoji || '📌'}</span>
-            <div class="bullet-text">
-              <span class="bullet-point">\${b.point || ''}</span>
-              \${(b.description && b.description.trim().toLowerCase() !== (b.point || '').trim().toLowerCase()) ? \`<span class="bullet-desc">\${b.description}</span>\` : ''}
+        const shortPlainCount = slide.bullets.filter(b => {
+          const k = b.kind || 'text';
+          return (k === 'text' || k === 'bullet') && !b.description && String(b.point || '').length <= 44;
+        }).length;
+        isCompactList = shortPlainCount >= 6 && shortPlainCount >= slide.bullets.length - 2;
+
+        bulletsHtml = slide.bullets.map(b => {
+          const kind = b.kind || (b.emoji ? 'card' : (b.description ? 'keyval' : 'card'));
+          const safePoint = escapeScormHtml(b.point || '');
+          const rawDesc = (b.description && b.description.trim().toLowerCase() !== String(b.point || '').trim().toLowerCase())
+            ? String(b.description)
+            : '';
+          const safeDescHtml = rawDesc ? escapeScormHtml(rawDesc).replace(/\\n/g, '<br>') : '';
+
+          if (kind === 'table' && Array.isArray(b.rows) && b.rows.length > 0) {
+            const hasHeaderRow = b.rows.length >= 2 && b.rows[0].every(cell => String(cell || '').length <= 48);
+            const tableRowsHtml = b.rows.map((row, rIdx) => {
+              const tag = (hasHeaderRow && rIdx === 0) ? 'th' : 'td';
+              const cellsHtml = (row || []).map(cell => {
+                const cellLines = String(cell || '').split(/\\s*⟦BR⟧\\s*|\\r?\\n/).filter(Boolean);
+                const cellInner = cellLines.map(cl => {
+                  const spk = cl.match(/^([A-Za-zÀ-ỹ][A-Za-z0-9_.\\sÀ-ỹ]{0,18}):\\s+(.+)$/);
+                  if (spk) {
+                    return '<strong>' + escapeScormHtml(spk[1]) + ':</strong> ' + escapeScormHtml(spk[2]);
+                  }
+                  return escapeScormHtml(cl);
+                }).join('<br>');
+                return '<' + tag + '>' + cellInner + '</' + tag + '>';
+              }).join('');
+              return '<tr>' + cellsHtml + '</tr>';
+            }).join('');
+            return '<div class="scorm-table-wrap"><table class="scorm-slide-table"><tbody>' + tableRowsHtml + '</tbody></table></div>';
+          }
+
+          if (kind === 'heading') {
+            return \`
+              <div class="slide-body-heading">
+                <span>\${safePoint}</span>
+                \${safeDescHtml ? \`<div class="bullet-desc" style="font-weight: 500; font-size: 0.92rem; margin-top: 2px;">\${safeDescHtml}</div>\` : ''}
+              </div>
+            \`;
+          }
+
+          if (kind === 'wordbox') {
+            return \`<div class="slide-wordbox">\${safePoint}</div>\`;
+          }
+
+          if (kind === 'dialogue') {
+            return \`
+              <div class="bullet-item is-plain-line is-dialogue-line">
+                <div class="bullet-text">
+                  <span class="bullet-point"><span class="dialogue-speaker-tag">\${escapeScormHtml(b.speaker || '')}:</span>\${safePoint}</span>
+                  \${safeDescHtml ? \`<span class="bullet-desc">\${safeDescHtml}</span>\` : ''}
+                </div>
+              </div>
+            \`;
+          }
+
+          if (kind === 'numbered') {
+            return \`
+              <div class="bullet-item is-plain-line is-numbered-line">
+                <span class="bullet-num-badge">\${escapeScormHtml(b.marker || '•')}</span>
+                <div class="bullet-text">
+                  <span class="bullet-point">\${safePoint}</span>
+                  \${safeDescHtml ? \`<span class="bullet-desc">\${safeDescHtml}</span>\` : ''}
+                </div>
+              </div>
+            \`;
+          }
+
+          if (kind === 'bullet') {
+            return \`
+              <div class="bullet-item is-plain-line \${safeDescHtml ? 'has-sub-desc' : ''}">
+                <span class="bullet-marker-dot">\${escapeScormHtml(b.marker || '•')}</span>
+                <div class="bullet-text">
+                  <span class="bullet-point">\${safePoint}</span>
+                  \${safeDescHtml ? \`<span class="bullet-desc">\${safeDescHtml}</span>\` : ''}
+                </div>
+              </div>
+            \`;
+          }
+
+          if (kind === 'text' || kind === 'cover_subtitle') {
+            return \`
+              <div class="bullet-item is-plain-line \${safeDescHtml ? 'has-sub-desc' : ''}">
+                <div class="bullet-text">
+                  <span class="bullet-point">\${safePoint}</span>
+                  \${safeDescHtml ? \`<span class="bullet-desc">\${safeDescHtml}</span>\` : ''}
+                </div>
+              </div>
+            \`;
+          }
+
+          if (kind === 'keyval') {
+            return \`
+              <div class="bullet-item">
+                \${b.emoji ? \`<span class="bullet-icon">\${escapeScormHtml(b.emoji)}</span>\` : ''}
+                <div class="bullet-text">
+                  <span class="bullet-point">\${safePoint}</span>
+                  \${safeDescHtml ? \`<span class="bullet-desc">\${safeDescHtml}</span>\` : ''}
+                </div>
+              </div>
+            \`;
+          }
+
+          return \`
+            <div class="bullet-item">
+              <span class="bullet-icon">\${escapeScormHtml(b.emoji || '📌')}</span>
+              <div class="bullet-text">
+                <span class="bullet-point">\${safePoint}</span>
+                \${safeDescHtml ? \`<span class="bullet-desc">\${safeDescHtml}</span>\` : ''}
+              </div>
             </div>
-          </div>
-        \`).join('');
+          \`;
+        }).join('');
       }
 
       // Image
@@ -3044,13 +3579,17 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
 
       // Multi-Layout Builder
       const layoutType = slide.layoutType || 'split_standard';
+      const totalBulletChars = (slide.bullets || []).reduce((acc, b) => acc + String(b.point || '').length + String(b.description || '').length, 0);
+      const hasTableBullet = (slide.bullets || []).some(b => b.kind === 'table');
+      const useStackedMedia = Boolean(mediaHtml) && Boolean(bulletsHtml) && !hasTableBullet && (slide.bullets || []).length <= 2 && totalBulletChars <= 220;
+      const bulletsListClass = 'bullets-list' + (isCompactList ? ' has-compact-items' : '');
       let layoutBodyHtml = '';
 
       if (layoutType === 'split_reversed') {
         layoutBodyHtml = \`
-          <div class="slide-content-grid layout-split-reversed \${!mediaHtml ? 'no-media' : ''}">
+          <div class="slide-content-grid layout-split-reversed \${!mediaHtml ? 'no-media' : ''} \${useStackedMedia ? 'stacked-media' : ''}">
             \${mediaHtml}
-            \${bulletsHtml ? \`<div class="bullets-list">\${bulletsHtml}</div>\` : ''}
+            \${bulletsHtml ? \`<div class="\${bulletsListClass}">\${bulletsHtml}</div>\` : ''}
           </div>
           \${sampleAudioHtml}
           \${interactionHtml}
@@ -3104,7 +3643,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         layoutBodyHtml = \`
           <div class="audio-lab-container">
             \${sampleAudioHtml}
-            \${bulletsHtml ? \`<div class="bullets-list">\${bulletsHtml}</div>\` : ''}
+            \${bulletsHtml ? \`<div class="\${bulletsListClass}">\${bulletsHtml}</div>\` : ''}
             \${interactionHtml}
           </div>
         \`;
@@ -3125,8 +3664,8 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       } else {
         // split_standard (Default)
         layoutBodyHtml = \`
-          <div class="\${bulletsHtml ? 'slide-content-grid' : 'slide-content-grid single-media'} \${!mediaHtml ? 'no-media' : ''}">
-            \${bulletsHtml ? \`<div class="bullets-list">\${bulletsHtml}</div>\` : ''}
+          <div class="\${bulletsHtml ? 'slide-content-grid' : 'slide-content-grid single-media'} \${!mediaHtml ? 'no-media' : ''} \${useStackedMedia ? 'stacked-media' : ''}">
+            \${bulletsHtml ? \`<div class="\${bulletsListClass}">\${bulletsHtml}</div>\` : ''}
             \${mediaHtml}
           </div>
           \${sampleAudioHtml}
@@ -3160,13 +3699,27 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         \`;
       } else if (idx === 0 && IS_TUAF_FULL_TITLE) {
         slideCard.className = 'slide-card is-title-slide is-tuaf-full-cover';
-        const coverTitleText = (slide.title && !/^slide\s*1$/i.test(String(slide.title).trim()))
+        const coverTitleText = (slide.title && !/^slide\\s*1$/i.test(String(slide.title).trim()))
           ? slide.title
           : (LESSON_TITLE || slide.title || '');
+        const coverSubtitleLines = (slide.bullets || [])
+          .map(b => {
+            const pt = String(b.point || '').trim();
+            const ds = String(b.description || '').trim();
+            if (!pt && !ds) return '';
+            if (/^mục\\s*tiêu\\b/i.test(pt)) return '';
+            if (pt.toLowerCase() === String(coverTitleText || '').trim().toLowerCase()) return '';
+            return (ds && ds.toLowerCase() !== pt.toLowerCase()) ? (pt ? pt + ' — ' + ds : ds) : pt;
+          })
+          .filter(Boolean);
+        const tuafCoverSubtitlesHtml = coverSubtitleLines.length > 0
+          ? \`<div class="tuaf-cover-subtitles">\${coverSubtitleLines.map(line => \`<p class="tuaf-cover-subtitle">\${escapeHtmlClient(line)}</p>\`).join('')}</div>\`
+          : '';
         slideCard.innerHTML = \`
           \${speakerBtnHtml ? \`<div class="tuaf-cover-speaker-wrap">\${speakerBtnHtml}</div>\` : ''}
           <div class="tuaf-cover-stage">
             <h1 class="tuaf-cover-heading">\${escapeHtmlClient(coverTitleText)}</h1>
+            \${tuafCoverSubtitlesHtml}
           </div>
         \`;
       } else if (idx === 0) {
@@ -3182,7 +3735,7 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
         slideCard.innerHTML = \`
           <div class="slide-top-header title-slide-top">
             <div class="title-slide-badge">
-              ${isMinimal ? '<span>🎓 HỌC LIỆU SỐ TƯƠNG TÁC</span>' : '<span>🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN</span>'}
+              ${!isTuafBrand ? '<span>🎓 HỌC LIỆU SỐ TƯƠNG TÁC</span>' : '<span>🌱 ĐẠI HỌC NÔNG LÂM THÁI NGUYÊN</span>'}
               <span class="badge-sub">BÀI GIẢNG ĐIỆN TỬ</span>
             </div>
             \${speakerBtnHtml}

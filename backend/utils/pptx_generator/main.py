@@ -292,18 +292,26 @@ import subprocess
 from pptx import Presentation as PptxPresentation
 
 
-def _is_slide_number_shape(shape, text: str) -> bool:
-    """Detect slide-number placeholders or standalone 1-3 digit page number badges."""
+def _get_placeholder_type_id(shape) -> int:
+    try:
+        if getattr(shape, "is_placeholder", False) and shape.placeholder_format is not None:
+            return int(shape.placeholder_format.type)
+    except Exception:
+        pass
+    return -1
+
+
+def _is_slide_number_shape(shape, text: str, slide_idx: int = 0) -> bool:
+    """Detect slide-number/date/header placeholders, content-slide footers, or standalone 1-3 digit page number badges."""
     cleaned = (text or "").strip()
     if not cleaned:
         return True
-    try:
-        if getattr(shape, "is_placeholder", False) and shape.placeholder_format is not None:
-            # PP_PLACEHOLDER.SLIDE_NUMBER == 13
-            if int(shape.placeholder_format.type) == 13:
-                return True
-    except Exception:
-        pass
+    ph_id = _get_placeholder_type_id(shape)
+    # PP_PLACEHOLDER: SLIDE_NUMBER=13, HEADER=14, FOOTER=15, DATE=16
+    if ph_id in (13, 14, 16):
+        return True
+    if slide_idx > 0 and ph_id == 15:
+        return True
     if cleaned.isdigit() and len(cleaned) <= 3:
         return True
     return False
@@ -498,49 +506,100 @@ def _split_bilingual_notes(note_text: str) -> dict:
         }
 
 
-def _extract_shapes_recursive(shapes, title_shape, title_text: str, slide_content: list, pictures: list):
-    """Recursively extract text from text frames, tables, group shapes, and collect pictures."""
-    for z_idx, shape in enumerate(shapes):
+def _extract_paragraph_lines(para) -> list:
+    """Extract lines from a python-pptx paragraph, splitting soft line breaks (<a:br/> / \\x0b / \\n)."""
+    raw_text = (para.text or "").replace("\x0b", "\n")
+    lines = []
+    for part in re.split(r"[\r\n]+", raw_text):
+        cleaned = " ".join(part.split()).strip()
+        if cleaned:
+            lines.append(cleaned)
+    return lines
+
+
+def _collect_slide_blocks_and_pictures(shapes, slide_idx: int, blocks: list, pictures: list, z_counter: list):
+    """Recursively collect positioned text/table blocks and picture shapes."""
+    for shape in shapes:
+        z_counter[0] += 1
+        cur_z = z_counter[0]
+
         # 1. Group shape -> recurse into child shapes
         if hasattr(shape, "shapes"):
             try:
-                _extract_shapes_recursive(shape.shapes, title_shape, title_text, slide_content, pictures)
+                _collect_slide_blocks_and_pictures(shape.shapes, slide_idx, blocks, pictures, z_counter)
             except Exception as e:
                 logger.debug(f"Could not recurse into group shape: {e}")
 
-        # 2. Table shape -> format rows with pipe separator
+        ph_id = _get_placeholder_type_id(shape)
+        raw_top = getattr(shape, "top", None)
+        raw_left = getattr(shape, "left", None)
+        # PP_PLACEHOLDER: TITLE=1, BODY=2, CENTER_TITLE=3, SUBTITLE=4, FOOTER=15
+        if raw_top is None or int(raw_top) < 0:
+            if ph_id in (1, 3):
+                eff_y = -200000
+            elif ph_id == 4:
+                eff_y = 2500000
+            elif ph_id == 15:
+                eff_y = 9000000
+            else:
+                eff_y = 1400000
+        else:
+            eff_y = int(raw_top)
+        eff_x = int(raw_left) if (raw_left is not None and int(raw_left) >= 0) else 0
+
+        # 2. Table shape -> format rows with pipe separator and preserve multi-line cells via ⟦BR⟧
         if getattr(shape, "has_table", False):
             try:
                 table_rows = []
                 for row in shape.table.rows:
                     cells = []
                     for cell in row.cells:
-                        c_text = " ".join(cell.text.strip().split())
-                        if c_text:
-                            cells.append(c_text)
-                    if cells:
-                        RowStr = " | ".join(cells)
-                        if not table_rows or table_rows[-1] != RowStr:
-                            table_rows.append(RowStr)
+                        cell_lines = []
+                        if getattr(cell, "text_frame", None):
+                            for para in cell.text_frame.paragraphs:
+                                cell_lines.extend(_extract_paragraph_lines(para))
+                        else:
+                            for part in re.split(r"[\x0b\r\n]+", cell.text or ""):
+                                c_part = " ".join(part.split()).strip()
+                                if c_part:
+                                    cell_lines.append(c_part)
+                        cells.append(" ⟦BR⟧ ".join(cell_lines).strip())
+                    if any(c for c in cells):
+                        row_str = " | ".join(cells)
+                        if not table_rows or table_rows[-1] != row_str:
+                            table_rows.append(row_str)
                 if table_rows:
-                    slide_content.append("[Bảng dữ liệu]: " + " ; ".join(table_rows))
+                    blocks.append({
+                        "kind": "table",
+                        "is_title_ph": False,
+                        "y": eff_y,
+                        "x": eff_x,
+                        "z": cur_z,
+                        "lines": ["[Bảng dữ liệu]: " + " ; ".join(table_rows)],
+                    })
             except Exception as e:
                 logger.debug(f"Could not extract table: {e}")
 
         # 3. Text frame
-        if getattr(shape, "has_text_frame", False) and shape != title_shape:
+        if getattr(shape, "has_text_frame", False):
             try:
                 full_frame_text = shape.text_frame.text.replace("\x0b", " ").strip()
-                if not _is_slide_number_shape(shape, full_frame_text):
+                if not _is_slide_number_shape(shape, full_frame_text, slide_idx):
+                    lines = []
                     for para in shape.text_frame.paragraphs:
-                        text = para.text.replace("\x0b", " ").strip()
-                        if (
-                            text
-                            and not _is_slide_number_shape(shape, text)
-                            and text != title_text
-                            and text not in slide_content
-                        ):
-                            slide_content.append(text)
+                        for ln in _extract_paragraph_lines(para):
+                            if not _is_slide_number_shape(shape, ln, slide_idx):
+                                lines.append(ln)
+                    if lines:
+                        is_title_ph = ph_id in (1, 3)
+                        blocks.append({
+                            "kind": "text",
+                            "is_title_ph": is_title_ph,
+                            "y": eff_y,
+                            "x": eff_x,
+                            "z": cur_z,
+                            "lines": lines,
+                        })
             except Exception as e:
                 logger.debug(f"Could not extract text frame: {e}")
 
@@ -562,7 +621,7 @@ def _extract_shapes_recursive(shapes, title_shape, title_text: str, slide_conten
                         "sha1": sha1,
                         "ext": (img.ext or "png").lower(),
                         "blob": img.blob,
-                        "z": z_idx,
+                        "z": cur_z,
                     })
             except Exception:
                 pass
@@ -658,30 +717,34 @@ def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> l
         os.makedirs(output_images_dir, exist_ok=True)
 
     for i, slide in enumerate(prs.slides):
-        # Extract title (first non-slide-number text shape or placeholder title)
-        title = ""
-        title_shape = None
-        if slide.shapes.title and slide.shapes.title.has_text_frame:
-            candidate_title = slide.shapes.title.text_frame.text.replace("\x0b", " ").strip()
-            if candidate_title and not _is_slide_number_shape(slide.shapes.title, candidate_title):
-                title = candidate_title
-                title_shape = slide.shapes.title
-
-        if not title:
-            # Fallback: find first meaningful non-page-number text shape
-            for shape in slide.shapes:
-                if getattr(shape, "has_text_frame", False):
-                    candidate = shape.text_frame.text.replace("\x0b", " ").strip()
-                    if candidate and not _is_slide_number_shape(shape, candidate):
-                        title = candidate
-                        title_shape = shape
-                        break
-
-        # Extract content (all non-title text shapes, tables, group shapes) and pictures
-        slide_content = []
+        blocks = []
         pictures = []
-        _extract_shapes_recursive(slide.shapes, title_shape, title, slide_content, pictures)
+        _collect_slide_blocks_and_pictures(slide.shapes, i, blocks, pictures, [0])
         raw_pictures_per_slide.append(pictures)
+
+        # Sort blocks in visual reading order (top-to-bottom, left-to-right, then z-order)
+        blocks.sort(key=lambda b: (b["y"], b["x"], b["z"]))
+
+        title = ""
+        title_block_idx = -1
+        for b_idx, blk in enumerate(blocks):
+            if blk["kind"] == "text" and blk["is_title_ph"] and blk["lines"]:
+                title = blk["lines"][0]
+                title_block_idx = b_idx
+                break
+        if not title:
+            for b_idx, blk in enumerate(blocks):
+                if blk["kind"] == "text" and blk["lines"]:
+                    title = blk["lines"][0]
+                    title_block_idx = b_idx
+                    break
+
+        slide_content = []
+        for b_idx, blk in enumerate(blocks):
+            start_line = 1 if b_idx == title_block_idx else 0
+            for ln in blk["lines"][start_line:]:
+                if ln != title and ln not in slide_content:
+                    slide_content.append(ln)
 
         # Extract speaker notes
         note_full = ""

@@ -6,6 +6,7 @@ import {
     resolveLocalMediaFile,
     computeFileSha1Safe,
     collectTemplateAndRepeatedBgHashes,
+    parseBulletsFromRawSlideContent,
 } from './scorm-export.helper';
 import {
     generateH5pContentJson,
@@ -650,6 +651,261 @@ describe('SCORM 1.2 & H5P Full-Slide Canvas and Media Security Helpers', () => {
             } finally {
                 fs.rmSync(tmpBgDir, { recursive: true, force: true });
             }
+        });
+
+        it('suppresses TUAF branding in SCORM & H5P when a non-TUAF custom template (e.g. kqt) is selected while preserving cover subtitles (HỌC PHẦN / LUYỆN ÂM / ĐỌC - VIẾT 1)', () => {
+            const vm = require('vm');
+            const kqtSlides = [
+                {
+                    slideIndex: 1,
+                    slideType: 'title',
+                    title: 'HỌC PHẦN',
+                    content: ['LUYỆN ÂM', 'ĐỌC - VIẾT 1'],
+                },
+                {
+                    slideIndex: 2,
+                    slideType: 'content',
+                    title: 'UNIT 1: /i:/ and /i/ sounds',
+                    content: [],
+                },
+            ];
+
+            const scormKqt = generateScormPlayerHtml('UNIT 1_LESSON 1 AND 2', kqtSlides, {
+                bgOption: 'custom',
+                templateName: 'kqt',
+                hasTitleBg: true,
+                hasContentBg: true,
+                theme: 'light',
+            });
+
+            // Negative proof: No TUAF branding in SCORM header when templateName is 'kqt'
+            expect(scormKqt).not.toMatch(/đại học nông lâm|nông lâm thái nguyên|học liệu số tương tác\s*•\s*tuaf/i);
+            expect(scormKqt).not.toContain('<div class="tuaf-header-brand">');
+
+            // Positive proof: Cover slide renders both HỌC PHẦN and subtitle lines LUYỆN ÂM / ĐỌC - VIẾT 1
+            const scriptMatch = scormKqt.match(/<script>([\s\S]*?)<\/script>/);
+            expect(scriptMatch).not.toBeNull();
+            const elements: Record<string, any> = {};
+            const getEl = (id: string) => {
+                if (id === 'tuaf-widget-bubble' || id === 'tuaf-widget-popup') return null;
+                if (!elements[id]) {
+                    elements[id] = {
+                        id,
+                        innerText: '',
+                        innerHTML: '',
+                        className: '',
+                        disabled: false,
+                        checked: false,
+                        src: '',
+                        title: '',
+                        style: { width: '0%', display: '' },
+                        classList: { add: () => {}, remove: () => {} },
+                        addEventListener: () => {},
+                        remove: () => {},
+                        pause: () => {},
+                        play: () => Promise.resolve(),
+                    };
+                }
+                return elements[id];
+            };
+            let domReadyCb: (() => void) | null = null;
+            const sandbox: any = {
+                console: { log: () => {}, warn: () => {} },
+                encodeURIComponent,
+                decodeURIComponent,
+                parseInt,
+                Math,
+                Number,
+                String,
+                Object,
+                Array,
+                JSON,
+                setInterval: () => 1,
+                clearInterval: () => {},
+                alert: () => {},
+                sessionStorage: { getItem: () => null, setItem: () => {} },
+                document: {
+                    getElementById: getEl,
+                    body: { classList: { add: () => {}, remove: () => {} } },
+                },
+                window: {
+                    addEventListener: (evt: string, cb: () => void) => {
+                        if (evt === 'DOMContentLoaded') domReadyCb = cb;
+                    },
+                },
+            };
+            vm.runInNewContext(scriptMatch![1], sandbox);
+            domReadyCb!();
+
+            const coverHtml = getEl('slideCard').innerHTML;
+            expect(coverHtml).toContain('HỌC PHẦN');
+            expect(coverHtml).toContain('LUYỆN ÂM');
+            expect(coverHtml).toContain('ĐỌC - VIẾT 1');
+
+            // H5P also includes cover subtitles and avoids TUAF branding for 'kqt'
+            const h5pKqtRaw = generateH5pContentJson('UNIT 1_LESSON 1 AND 2', kqtSlides, {
+                bgOption: 'custom',
+                templateName: 'kqt',
+                hasTitleBg: true,
+                hasContentBg: true,
+                titleBgFilename: 'images/bg_title.png',
+                contentBgFilename: 'images/bg_content.png',
+            });
+            expect(h5pKqtRaw).not.toMatch(/đại học nông lâm|nông lâm thái nguyên/i);
+            expect(h5pKqtRaw).toContain('HỌC PHẦN');
+            expect(h5pKqtRaw).toContain('LUYỆN ÂM');
+            expect(h5pKqtRaw).toContain('ĐỌC - VIẾT 1');
+        });
+
+        it('preserves 100% PPTX slide content presentation (tables, headings, wordbox, dialogues, compact grid, stacked media, and no 📌 or page numbers)', () => {
+            const vm = require('vm');
+            // 1. Direct parser verification
+            const parsedDialogue = parseBulletsFromRawSlideContent(
+                [
+                    '6',
+                    'EXAMPLE – DIALOGUE',
+                    'Listen to the dialogue and fill the gaps (1–10).',
+                    'Word box: cheese · Peter · eat · please · tea',
+                    '[Bảng dữ liệu]: Waitress: What would you like to (1)________, (2)________? ⟦BR⟧ Peter: A cheese sandwich, (3)_________.',
+                    'ĐỌC - VIẾT 1',
+                ],
+                'CONTENT LESSON 1',
+                8,
+            );
+            // Standalone page number '6' and running footer 'ĐỌC - VIẾT 1' stripped
+            expect(parsedDialogue.some((b) => b.point === '6')).toBe(false);
+            expect(parsedDialogue.some((b) => b.point === 'ĐỌC - VIẾT 1')).toBe(false);
+            expect(parsedDialogue[0]).toMatchObject({ kind: 'heading', point: 'EXAMPLE – DIALOGUE' });
+            expect(parsedDialogue[1]).toMatchObject({ kind: 'text', point: 'Listen to the dialogue and fill the gaps (1–10).' });
+            expect(parsedDialogue[2]).toMatchObject({ kind: 'wordbox' });
+            expect(parsedDialogue[3]).toMatchObject({ kind: 'table' });
+            expect(parsedDialogue[3].rows?.[0]?.[0]).toContain('Waitress:');
+
+            // 2. Full SCORM player DOM rendering verification across slide types
+            const slides = [
+                {
+                    slideIndex: 1,
+                    slideType: 'title',
+                    title: 'HỌC PHẦN',
+                    content: ['LUYỆN ÂM', 'ĐỌC - VIẾT 1'],
+                },
+                {
+                    slideIndex: 7,
+                    slideType: 'content',
+                    title: 'CONTENT LESSON 1',
+                    content: ['6', 'EXAMPLE – WORDS', 'Read these words aloud'],
+                    imageUrl: 'images/slide_06.png',
+                },
+                {
+                    slideIndex: 9,
+                    slideType: 'content',
+                    title: 'CONTENT LESSON 1',
+                    content: [
+                        'EXAMPLE – DIALOGUE',
+                        'Word box: cheese · Peter · eat · please',
+                        '[Bảng dữ liệu]: Waitress: What would you like? ⟦BR⟧ Peter: Tea, please.',
+                    ],
+                },
+                {
+                    slideIndex: 12,
+                    slideType: 'content',
+                    title: 'CONTENT LESSON 1',
+                    content: [
+                        'Transcribe the following words containing /iː/ into IPA.',
+                        'see → /____________/',
+                        'tea → /____________/',
+                        'eat → /____________/',
+                        'seat → /____________/',
+                        'green → /____________/',
+                        'tree → /____________/',
+                        'cheese → /____________/',
+                    ],
+                },
+            ];
+
+            const html = generateScormPlayerHtml('UNIT 1', slides, {
+                bgOption: 'custom',
+                templateName: 'kqt',
+                hasTitleBg: true,
+                hasContentBg: true,
+            });
+
+            const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
+            const elements: Record<string, any> = {};
+            const getEl = (id: string) => {
+                if (id === 'tuaf-widget-bubble' || id === 'tuaf-widget-popup') return null;
+                if (!elements[id]) {
+                    elements[id] = {
+                        id,
+                        innerText: '',
+                        innerHTML: '',
+                        className: '',
+                        disabled: false,
+                        checked: false,
+                        src: '',
+                        title: '',
+                        style: { width: '0%', display: '' },
+                        classList: { add: () => {}, remove: () => {} },
+                        addEventListener: () => {},
+                        remove: () => {},
+                        pause: () => {},
+                        play: () => Promise.resolve(),
+                    };
+                }
+                return elements[id];
+            };
+            let domReadyCb: (() => void) | null = null;
+            const sandbox: any = {
+                console: { log: () => {}, warn: () => {} },
+                encodeURIComponent,
+                decodeURIComponent,
+                parseInt,
+                Math,
+                Number,
+                String,
+                Object,
+                Array,
+                JSON,
+                setInterval: () => 1,
+                clearInterval: () => {},
+                alert: () => {},
+                sessionStorage: { getItem: () => null, setItem: () => {} },
+                document: {
+                    getElementById: getEl,
+                    body: { classList: { add: () => {}, remove: () => {} } },
+                },
+                window: {
+                    addEventListener: (evt: string, cb: () => void) => {
+                        if (evt === 'DOMContentLoaded') domReadyCb = cb;
+                    },
+                },
+            };
+            vm.runInNewContext(scriptMatch![1], sandbox);
+            domReadyCb!();
+
+            // Slide 2 (idx=1): Short instruction + image -> stacked-media layout, no 📌, no '6'
+            sandbox.renderSlide(1);
+            const slide2Html = getEl('slideCard').innerHTML;
+            expect(slide2Html).toContain('stacked-media');
+            expect(slide2Html).toContain('slide-body-heading');
+            expect(slide2Html).toContain('EXAMPLE – WORDS');
+            expect(slide2Html).not.toContain('📌');
+
+            // Slide 3 (idx=2): Word box + Table -> renders .slide-wordbox and <table class="scorm-slide-table">
+            sandbox.renderSlide(2);
+            const slide3Html = getEl('slideCard').innerHTML;
+            expect(slide3Html).toContain('slide-wordbox');
+            expect(slide3Html).toContain('scorm-slide-table');
+            expect(slide3Html).toContain('<strong>Waitress:</strong>');
+            expect(slide3Html).not.toContain('[Bảng dữ liệu]');
+            expect(slide3Html).not.toContain('📌');
+
+            // Slide 4 (idx=3): 7 short transcription items -> renders 2-column compact grid (.has-compact-items)
+            sandbox.renderSlide(3);
+            const slide4Html = getEl('slideCard').innerHTML;
+            expect(slide4Html).toContain('has-compact-items');
+            expect(slide4Html).toContain('see → /____________/');
+            expect(slide4Html).not.toContain('📌');
         });
     });
 });
