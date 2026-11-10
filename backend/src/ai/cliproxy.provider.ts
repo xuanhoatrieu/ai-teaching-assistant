@@ -348,15 +348,15 @@ export class CLIProxyProvider {
      * - gpt-image-* / dall-e-* → /v1/images/generations (OpenAI Images API)
      * - Other models → /v1/chat/completions (multimodal chat)
      */
-    async generateImage(prompt: string, model?: string): Promise<string> {
+    async generateImage(prompt: string, model?: string, size: string = '1024x1024'): Promise<string> {
         const config = await this.getConfig();
         const modelName = model || config.defaultImageModel;
 
-        this.logger.log(`CLIProxy image generation: model=${modelName}`);
+        this.logger.log(`CLIProxy image generation: model=${modelName}, size=${size}`);
 
         // Route gpt-image-* and dall-e-* to /v1/images/generations
         if (this.isOpenAIImageModel(modelName)) {
-            return this.generateImageViaImagesAPI(prompt, modelName, config);
+            return this.generateImageViaImagesAPI(prompt, modelName, config, size);
         }
 
         // All other models use /v1/chat/completions (multimodal)
@@ -371,8 +371,9 @@ export class CLIProxyProvider {
         prompt: string,
         modelName: string,
         config: CLIProxyConfig,
+        size: string = '1024x1024',
     ): Promise<string> {
-        this.logger.log(`Using /v1/images/generations for model=${modelName}`);
+        this.logger.log(`Using /v1/images/generations for model=${modelName}, size=${size}`);
 
         const response = await fetch(`${config.url}/v1/images/generations`, {
             method: 'POST',
@@ -383,7 +384,7 @@ export class CLIProxyProvider {
             body: JSON.stringify({
                 model: modelName,
                 prompt,
-                size: '1024x1024',
+                size,
                 quality: 'high',
             }),
             // No timeout - image generation can take 2-5 minutes for complex prompts

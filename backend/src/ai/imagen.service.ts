@@ -147,9 +147,9 @@ export class ImagenService {
         }
 
         if (isCliproxyModel || (!hasValidApiKey && this.cliproxy)) {
-            this.logger.log(`Trying CLIProxy for image generation (model=${effectiveModel})`);
+            this.logger.log(`Trying CLIProxy for image generation (model=${effectiveModel}, aspectRatio=${aspectRatio})`);
             try {
-                const result = await this.generateImageViaCLIProxy(prompt, effectiveModel);
+                const result = await this.generateImageViaCLIProxy(prompt, effectiveModel, aspectRatio);
                 if (result.mimeType !== 'image/svg+xml') {
                     return result;
                 }
@@ -280,11 +280,18 @@ export class ImagenService {
      * Build optimized prompt for image generation
      */
     private buildImageGenerationPrompt(visualIdea: string, aspectRatio: string): string {
-        return `Generate a high-quality educational illustration for a presentation slide.
+        const normalizedRatio = (aspectRatio || '1:1').trim();
+        const orientationHint = normalizedRatio === '1:1'
+            ? 'strict square 1:1 composition, centered subject'
+            : (normalizedRatio === '9:16' || normalizedRatio === '3:4')
+                ? 'vertical portrait composition'
+                : 'widescreen landscape composition';
+
+        return `Generate a high-quality educational illustration.
 
 Requirements:
-- Style: Clean, professional, suitable for academic presentation
-- Aspect ratio: ${aspectRatio} (landscape, suitable for PowerPoint slides)
+- Style: Clean, professional, suitable for academic teaching material
+- Aspect ratio: ${normalizedRatio} (${orientationHint})
 - No text or letters in the image
 - High quality, vibrant colors
 
@@ -512,7 +519,7 @@ Generate the image now.`;
      * Uses CLIProxy image model with automatic fallback chain.
      * If the primary model fails (502, error), tries alternative models.
      */
-    async generateImageViaCLIProxy(prompt: string, modelName?: string): Promise<GeneratedImage> {
+    async generateImageViaCLIProxy(prompt: string, modelName?: string, aspectRatio: string = '1:1'): Promise<GeneratedImage> {
         if (!this.cliproxy) {
             this.logger.warn('CLIProxy not available, falling back to placeholder');
             return this.generatePlaceholder(prompt);
@@ -525,7 +532,13 @@ Generate the image now.`;
                 return this.generatePlaceholder(prompt);
             }
 
-            const imagePrompt = this.buildImageGenerationPrompt(prompt, '1:1');
+            const normalizedRatio = (aspectRatio || '1:1').trim();
+            const openAiSize = normalizedRatio === '1:1'
+                ? '1024x1024'
+                : (normalizedRatio === '9:16' || normalizedRatio === '3:4')
+                    ? '1024x1536'
+                    : '1536x1024';
+            const imagePrompt = this.buildImageGenerationPrompt(prompt, normalizedRatio);
 
             // Strip cliproxy: prefix if present
             let model = modelName;
@@ -534,7 +547,7 @@ Generate the image now.`;
             }
 
             // Try primary model first
-            const result = await this.tryGenerateWithModel(imagePrompt, model);
+            const result = await this.tryGenerateWithModel(imagePrompt, model, openAiSize);
             if (result) return result;
 
             // Primary failed → try fallback models
@@ -542,7 +555,7 @@ Generate the image now.`;
             const fallbacks = await this.cliproxy.getModelFallbacks('image', model);
             for (const fallbackModel of fallbacks) {
                 this.logger.log(`Trying fallback model: ${fallbackModel}`);
-                const fallbackResult = await this.tryGenerateWithModel(imagePrompt, fallbackModel);
+                const fallbackResult = await this.tryGenerateWithModel(imagePrompt, fallbackModel, openAiSize);
                 if (fallbackResult) {
                     this.logger.log(`✅ Fallback model "${fallbackModel}" succeeded`);
                     return fallbackResult;
@@ -562,9 +575,9 @@ Generate the image now.`;
      * Try to generate an image with a specific CLIProxy model.
      * Returns GeneratedImage on success, null on failure.
      */
-    private async tryGenerateWithModel(imagePrompt: string, model?: string): Promise<GeneratedImage | null> {
+    private async tryGenerateWithModel(imagePrompt: string, model?: string, size: string = '1024x1024'): Promise<GeneratedImage | null> {
         try {
-            const response = await this.cliproxy!.generateImage(imagePrompt, model);
+            const response = await this.cliproxy!.generateImage(imagePrompt, model, size);
 
             // Handle data URI format: "data:image/png;base64,iVBORw0KGgo..."
             if (response.startsWith('data:') && response.includes('base64,')) {

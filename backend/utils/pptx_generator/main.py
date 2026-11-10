@@ -708,7 +708,171 @@ def _select_foreground_pictures_across_slides(prs, raw_pictures_per_slide: list)
     return chosen_map
 
 
+def _detect_and_crop_vector_canvas_slides(
+    pptx_path: str,
+    slides_data: list,
+    images_dir: Optional[str] = None,
+    rendered_dir: Optional[str] = None,
+) -> set:
+    """
+    Detect slides built from native PowerPoint vector AutoShapes / 2D card layouts
+    (e.g. circles, arrows, bar charts, multi-column cards with zero <p:pic> images).
+    When rendered_slides/full_slide_XX.png is available, generate a spotless #FFFFFF
+    shape-masked body canvas PNG in images/slide_XX.png so 100% of the visual layout
+    is preserved on both PPTX Tools UI and SCORM/H5P exports (including custom templates).
+    """
+    import zipfile
+    import xml.etree.ElementTree as ET
+    try:
+        from PIL import Image, ImageDraw
+    except Exception:
+        Image = None
+        ImageDraw = None
+
+    P_NS = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+    A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    detected_indices = set()
+
+    if not pptx_path or not os.path.isfile(pptx_path):
+        return detected_indices
+
+    try:
+        with zipfile.ZipFile(pptx_path, "r") as zf:
+            pres = ET.fromstring(zf.read("ppt/presentation.xml"))
+            sldSz = pres.find(f".//{P_NS}sldSz")
+            sw = int(sldSz.attrib.get("cx", 9144000)) if sldSz is not None else 9144000
+            sh = int(sldSz.attrib.get("cy", 5143500)) if sldSz is not None else 5143500
+
+            sfiles = sorted(
+                [n for n in zf.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")],
+                key=lambda x: int("".join(filter(str.isdigit, os.path.basename(x))) or 0),
+            )
+
+            slide_map = {s.get("index", idx): s for idx, s in enumerate(slides_data)}
+
+            for idx, sf in enumerate(sfiles):
+                s_entry = slide_map.get(idx)
+                if s_entry is not None and "isVectorCanvas" not in s_entry:
+                    s_entry["isVectorCanvas"] = False
+                if idx == 0:
+                    continue
+                # Skip slides that already have a real extracted foreground raster picture
+                if s_entry and s_entry.get("imageFileName"):
+                    continue
+
+                root = ET.fromstring(zf.read(sf))
+                spTree = root.find(f".//{P_NS}spTree")
+                if spTree is None:
+                    continue
+
+                geom_count = 0
+                text_boxes = []
+                fg_rects = []
+
+                for elem in spTree.iter():
+                    tag = elem.tag.split("}")[-1]
+                    if tag not in ("sp", "cxnSp", "graphicFrame", "pic"):
+                        continue
+                    ph = elem.find(f".//{P_NS}ph")
+                    if ph is not None and ph.attrib.get("type", "") in ("sldNum", "ftr", "dt", "hdr", "title", "ctrTitle"):
+                        continue
+                    off = elem.find(f".//{A_NS}off")
+                    ext = elem.find(f".//{A_NS}ext")
+                    if off is None or ext is None:
+                        continue
+                    x = int(off.attrib.get("x", 0))
+                    y = int(off.attrib.get("y", 0))
+                    cx = int(ext.attrib.get("cx", 0))
+                    cy = int(ext.attrib.get("cy", 0))
+                    if y < sh * 0.145:
+                        continue
+                    txt = "".join([t.text for t in elem.findall(f".//{A_NS}t") if t.text]).strip()
+                    if txt.isdigit() and len(txt) <= 3 and y > sh * 0.85:
+                        continue
+                    if cx >= sw * 0.96 and cy >= sh * 0.80:
+                        continue
+
+                    fg_rects.append((x, y, cx, cy))
+
+                    if tag == "sp" and ph is None:
+                        prst = elem.find(f".//{A_NS}prstGeom")
+                        prst_name = prst.attrib.get("prst", "") if prst is not None else ""
+                        has_fill = (
+                            elem.find(f"./{P_NS}spPr/{A_NS}solidFill") is not None
+                            or elem.find(f"./{P_NS}spPr/{A_NS}gradFill") is not None
+                        )
+                        has_ln = elem.find(f"./{P_NS}spPr/{A_NS}ln/{A_NS}solidFill") is not None
+                        if not txt:
+                            if cx < sw * 0.96 and cy < sh * 0.90 and (has_fill or has_ln or prst_name not in ("", "rect")):
+                                geom_count += 1
+                        elif not txt.isdigit():
+                            text_boxes.append((x, y, cx, cy))
+
+                cxn_count = len(spTree.findall(f".//{P_NS}cxnSp"))
+                has_left_col = any(tb[0] < sw * 0.35 for tb in text_boxes)
+                has_right_col = any(tb[0] >= sw * 0.42 for tb in text_boxes)
+                is_vec = (geom_count + cxn_count >= 3) or (len(text_boxes) >= 5 and has_left_col and has_right_col)
+                if not is_vec:
+                    continue
+
+                detected_indices.add(idx)
+                if s_entry is not None:
+                    s_entry["isVectorCanvas"] = True
+
+                if (
+                    Image is not None
+                    and images_dir
+                    and rendered_dir
+                    and fg_rects
+                    and os.path.isfile(os.path.join(rendered_dir, f"full_slide_{idx:02d}.png"))
+                ):
+                    try:
+                        os.makedirs(images_dir, exist_ok=True)
+                        src_img = Image.open(os.path.join(rendered_dir, f"full_slide_{idx:02d}.png")).convert("RGB")
+                        iw, ih = src_img.size
+                        clean_canvas = Image.new("RGB", (iw, ih), (255, 255, 255))
+                        shape_pad = max(5, int(iw * 0.005))
+                        header_cut_px = int(ih * 0.1555)
+                        min_x, min_y, max_x, max_y = iw, ih, 0, 0
+                        max_exact_right_px = 0
+
+                        for (rx, ry, rcx, rcy) in fg_rects:
+                            exact_r = int(((rx + rcx) / sw) * iw)
+                            max_exact_right_px = max(max_exact_right_px, exact_r)
+                            sx1 = max(0, int((rx / sw) * iw) - shape_pad)
+                            sy1 = max(header_cut_px, int((ry / sh) * ih) - (shape_pad if ry > sh * 0.165 else 0))
+                            sx2 = min(iw, exact_r + shape_pad)
+                            sy2 = min(ih, int(((ry + rcy) / sh) * ih) + shape_pad)
+                            if sx2 > sx1 and sy2 > sy1:
+                                clean_canvas.paste(src_img.crop((sx1, sy1, sx2, sy2)), (sx1, sy1))
+                                min_x = min(min_x, sx1)
+                                min_y = min(min_y, sy1)
+                                max_x = max(max_x, sx2)
+                                max_y = max(max_y, sy2)
+
+                        if max_x > min_x and max_y > min_y:
+                            if ImageDraw is not None and max_exact_right_px + 2 < iw:
+                                draw = ImageDraw.Draw(clean_canvas)
+                                draw.rectangle([max_exact_right_px + 2, int(ih * 0.92), iw, ih], fill=(255, 255, 255))
+                            outer_pad = int(iw * 0.008)
+                            cx1 = max(0, min_x - outer_pad)
+                            cy1 = max(0, min_y - outer_pad)
+                            cx2 = min(iw, max_x + outer_pad)
+                            cy2 = min(ih, max_y + outer_pad)
+                            out_fname = f"slide_{idx:02d}.png"
+                            clean_canvas.crop((cx1, cy1, cx2, cy2)).save(os.path.join(images_dir, out_fname))
+                            if s_entry is not None:
+                                s_entry["imageFileName"] = out_fname
+                    except Exception as crop_err:
+                        logger.warning(f"Vector canvas crop failed for slide {idx}: {crop_err}")
+    except Exception as err:
+        logger.warning(f"Vector canvas detection warning: {err}")
+
+    return detected_indices
+
+
 def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> list:
+    pptx_source_path = prs if isinstance(prs, str) else None
     if isinstance(prs, str):
         prs = PptxPresentation(prs)
     slides_data = []
@@ -799,6 +963,19 @@ def _extract_slides_from_pptx(prs, output_images_dir: Optional[str] = None) -> l
         except Exception:
             pass
 
+    if pptx_source_path:
+        rendered_guess = (
+            os.path.join(os.path.dirname(output_images_dir), "rendered_slides")
+            if output_images_dir
+            else None
+        )
+        _detect_and_crop_vector_canvas_slides(
+            pptx_source_path,
+            slides_data,
+            images_dir=output_images_dir,
+            rendered_dir=rendered_guess,
+        )
+
     return slides_data
 
 
@@ -858,6 +1035,12 @@ async def parse_pptx_local(request: ParseLocalRequest):
             real_path,
             rendered_dir,
             expected_count=len(slides_data),
+        )
+        _detect_and_crop_vector_canvas_slides(
+            real_path,
+            slides_data,
+            images_dir=images_dir,
+            rendered_dir=rendered_dir,
         )
         for s in slides_data:
             s["renderedSlideFileName"] = rendered_map.get(s["index"])
@@ -935,10 +1118,32 @@ async def render_pptx_slides(request: RenderLocalSlidesRequest):
             dpi=request.dpi,
             force=request.force,
         )
+        temp_entries = [
+            {
+                "index": idx,
+                "imageFileName": next(
+                    (
+                        f"slide_{idx:02d}.{ext}"
+                        for ext in ("png", "jpg", "jpeg", "webp", "gif")
+                        if os.path.isfile(os.path.join(images_dir, f"slide_{idx:02d}.{ext}"))
+                    ),
+                    None,
+                ),
+            }
+            for idx in range(total_slides)
+        ]
+        _detect_and_crop_vector_canvas_slides(
+            real_path,
+            temp_entries,
+            images_dir=images_dir,
+            rendered_dir=rendered_dir,
+        )
         slides = [
             {
                 "index": idx,
                 "renderedSlideFileName": rendered_map.get(idx),
+                "isVectorCanvas": bool(temp_entries[idx].get("isVectorCanvas")),
+                "imageFileName": temp_entries[idx].get("imageFileName"),
             }
             for idx in range(total_slides)
         ]

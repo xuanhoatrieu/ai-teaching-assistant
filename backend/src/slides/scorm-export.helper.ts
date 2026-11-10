@@ -2360,7 +2360,42 @@ export function generateScormPlayerHtml(lessonTitle: string, slides: any[], opti
       text-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
     }
 
-    /* Faithful PPTX Slide Content Elements (Headings, Tables, Wordbox, Dialogues, Compact Lists, Stacked Media) */
+    /* Faithful PPTX Slide Content Elements (Headings, Tables, Wordbox, Dialogues, Compact Lists, Stacked Media, Single-Media Vector Canvas) */
+    .slide-content-grid.single-media {
+      grid-template-columns: 1fr !important;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-items: center;
+    }
+    .slide-content-grid.single-media .slide-media-box {
+      max-width: 100%;
+      max-height: 100%;
+      width: 100%;
+      background: #ffffff;
+      border: none;
+      box-shadow: none;
+      padding: 4px;
+    }
+    .slide-content-grid.single-media .slide-media-box img {
+      width: 100%;
+      max-height: 540px;
+      height: auto;
+      object-fit: contain;
+      border-radius: 6px;
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-content-grid.single-media .slide-media-box {
+      background: transparent !important;
+      border: none !important;
+      padding: 0;
+      height: 100%;
+    }
+    body.has-tuaf-content-bg .slide-card.is-content-slide .slide-content-grid.single-media .slide-media-box img {
+      max-height: 100%;
+      height: 100%;
+      width: 100%;
+      object-fit: contain;
+    }
     .slide-content-grid.stacked-media {
       grid-template-columns: 1fr !important;
       gap: 14px;

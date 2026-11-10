@@ -278,6 +278,7 @@ interface ParsedSlide {
     hasDual: boolean;
     imageUrl?: string | null;
     renderedSlideUrl?: string | null;
+    isVectorCanvas?: boolean;
     hasCustomImage?: boolean;
     audioUrl: string | null;
     audioDuration: number | null;
@@ -4305,9 +4306,90 @@ export function PptxAudioToolPage() {
                                                         );
                                                     }
 
-                                                    // Standard 2-Column Slide Card Body (Content Left + Image Right)
+                                                    const isCanvasDiagramView =
+                                                        !isEditingThisContent &&
+                                                        ((slide.layoutType === 'full_slide_canvas' && Boolean(slide.renderedSlideUrl || fullImageUrl)) ||
+                                                            (Boolean(slide.isVectorCanvas) && !hasOptimizedBullets && Boolean(fullImageUrl || slide.renderedSlideUrl)));
+                                                    const canvasPreviewUrl = slide.layoutType === 'full_slide_canvas'
+                                                        ? (slide.renderedSlideUrl ? getFullAudioUrl(slide.renderedSlideUrl) : fullImageUrl)
+                                                        : (fullImageUrl || (slide.renderedSlideUrl ? getFullAudioUrl(slide.renderedSlideUrl) : undefined));
+
+                                                    // Standard 2-Column Slide Card Body (or Full-Width Vector/Diagram Canvas Body)
                                                     return (
                                                         <>
+                                                            {isCanvasDiagramView && canvasPreviewUrl ? (
+                                                                <div
+                                                                    className="slide-card-body layout-vector-canvas"
+                                                                    style={{
+                                                                        display: 'flex',
+                                                                        flexDirection: 'column',
+                                                                        gap: '10px',
+                                                                        padding: '14px 18px',
+                                                                    }}
+                                                                >
+                                                                    <div
+                                                                        style={{
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'space-between',
+                                                                            flexWrap: 'wrap',
+                                                                            gap: '8px',
+                                                                        }}
+                                                                    >
+                                                                        <span
+                                                                            style={{
+                                                                                display: 'inline-flex',
+                                                                                alignItems: 'center',
+                                                                                gap: '6px',
+                                                                                fontSize: '0.82rem',
+                                                                                fontWeight: 600,
+                                                                                color: '#0369a1',
+                                                                                background: '#e0f2fe',
+                                                                                border: '1px solid #bae6fd',
+                                                                                padding: '4px 10px',
+                                                                                borderRadius: '999px',
+                                                                            }}
+                                                                        >
+                                                                            {slide.layoutType === 'full_slide_canvas'
+                                                                                ? '🖥️ Bố cục Slide PowerPoint gốc 16:9'
+                                                                                : '🎨 Bố cục Sơ đồ / Đồ họa gốc (Tự động giữ nguyên 100%)'}
+                                                                        </span>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn-small btn-action-edit"
+                                                                            onClick={() => startEditingSlideContent(slide)}
+                                                                            style={{ fontSize: '0.8rem', padding: '4px 10px' }}
+                                                                        >
+                                                                            ✏️ Sửa sang dạng văn bản
+                                                                        </button>
+                                                                    </div>
+                                                                    <div
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            background: '#ffffff',
+                                                                            border: '1px solid #e2e8f0',
+                                                                            borderRadius: '10px',
+                                                                            padding: '10px',
+                                                                            display: 'flex',
+                                                                            justifyContent: 'center',
+                                                                            alignItems: 'center',
+                                                                        }}
+                                                                    >
+                                                                        <img
+                                                                            src={canvasPreviewUrl}
+                                                                            alt={`Slide ${oneBasedIdx} - ${slide.title}`}
+                                                                            style={{
+                                                                                maxWidth: '100%',
+                                                                                maxHeight: '420px',
+                                                                                width: 'auto',
+                                                                                height: 'auto',
+                                                                                objectFit: 'contain',
+                                                                                borderRadius: '6px',
+                                                                            }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
                                                             <div className={`slide-card-body layout-${slide.layoutType || 'split_standard'}`}>
                                                                 {/* Content Column */}
                                                                 <div className="slide-content-col">
@@ -4534,6 +4616,7 @@ export function PptxAudioToolPage() {
                                                                     </div>
                                                                 </div>
                                                             </div>
+                                                            )}
 
                                                             {/* Extra Audio Bar if attached */}
                                                             {slide.extraAudioUrl && fullExtraAudioUrl && (

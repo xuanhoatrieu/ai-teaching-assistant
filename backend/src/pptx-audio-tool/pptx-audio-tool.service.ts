@@ -71,6 +71,7 @@ export interface ParsedSlide {
     hasDual: boolean;
     imageUrl?: string | null;
     renderedSlideUrl?: string | null;
+    isVectorCanvas?: boolean;
     hasCustomImage?: boolean;
     audioUrl: string | null;
     audioDuration: number | null;
@@ -562,6 +563,7 @@ export class PptxAudioToolService {
                     hasDual: s.hasDual || false,
                     imageUrl: extractedImgUrl,
                     renderedSlideUrl,
+                    isVectorCanvas: Boolean(s.isVectorCanvas),
                     hasCustomImage: false,
                     audioUrl: null,
                     audioDuration: null,
@@ -3474,6 +3476,134 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
         }
     }
 
+    private static readonly VECTOR_CANVAS_CROP_SCRIPT = [
+        'import sys, os, json, zipfile, xml.etree.ElementTree as ET',
+        'try:',
+        '    from PIL import Image, ImageDraw',
+        'except Exception:',
+        '    Image = None; ImageDraw = None',
+        'pptx_path, images_dir, rendered_dir = sys.argv[1], sys.argv[2], sys.argv[3]',
+        'P_NS = "{http://schemas.openxmlformats.org/presentationml/2006/main}"',
+        'A_NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"',
+        'vec_indices = []',
+        'with zipfile.ZipFile(pptx_path, "r") as zf:',
+        '    pres = ET.fromstring(zf.read("ppt/presentation.xml"))',
+        '    sldSz = pres.find(f".//{P_NS}sldSz")',
+        '    sw = int(sldSz.attrib.get("cx", 9144000)) if sldSz is not None else 9144000',
+        '    sh = int(sldSz.attrib.get("cy", 5143500)) if sldSz is not None else 5143500',
+        '    sfiles = sorted([n for n in zf.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")], key=lambda x: int("".join(filter(str.isdigit, os.path.basename(x))) or 0))',
+        '    for idx, sf in enumerate(sfiles):',
+        '        if idx == 0: continue',
+        '        has_existing_pic = any(os.path.isfile(os.path.join(images_dir, f"slide_{idx:02d}.{ext}")) for ext in ("jpg", "jpeg", "webp", "gif"))',
+        '        root = ET.fromstring(zf.read(sf))',
+        '        spTree = root.find(f".//{P_NS}spTree")',
+        '        if spTree is None: continue',
+        '        # Check if slide has a real foreground <p:pic> (non-full-bleed)',
+        '        fg_pics = 0',
+        '        for pic in spTree.findall(f".//{P_NS}pic"):',
+        '            off = pic.find(f".//{A_NS}off"); ext = pic.find(f".//{A_NS}ext")',
+        '            if off is not None and ext is not None:',
+        '                pcx, pcy = int(ext.attrib.get("cx", 0)), int(ext.attrib.get("cy", 0))',
+        '                py = int(off.attrib.get("y", 0))',
+        '                if pcx < sw * 0.90 and pcy < sh * 0.90 and py >= sh * 0.12: fg_pics += 1',
+        '        if fg_pics > 0 or has_existing_pic: continue',
+        '        geom_count = 0; text_boxes = []; fg_rects = []',
+        '        for elem in spTree.iter():',
+        '            tag = elem.tag.split("}")[-1]',
+        '            if tag not in ("sp", "cxnSp", "graphicFrame", "pic"): continue',
+        '            ph = elem.find(f".//{P_NS}ph")',
+        '            if ph is not None and ph.attrib.get("type", "") in ("sldNum", "ftr", "dt", "hdr", "title", "ctrTitle"): continue',
+        '            off = elem.find(f".//{A_NS}off"); ext = elem.find(f".//{A_NS}ext")',
+        '            if off is None or ext is None: continue',
+        '            x, y = int(off.attrib.get("x", 0)), int(off.attrib.get("y", 0))',
+        '            cx, cy = int(ext.attrib.get("cx", 0)), int(ext.attrib.get("cy", 0))',
+        '            if y < sh * 0.145: continue',
+        '            txt = "".join([t.text for t in elem.findall(f".//{A_NS}t") if t.text]).strip()',
+        '            if txt.isdigit() and len(txt) <= 3 and y > sh * 0.85: continue',
+        '            if cx >= sw * 0.96 and cy >= sh * 0.80: continue',
+        '            fg_rects.append((x, y, cx, cy))',
+        '            if tag == "sp" and ph is None:',
+        '                prst = elem.find(f".//{A_NS}prstGeom")',
+        '                prst_name = prst.attrib.get("prst", "") if prst is not None else ""',
+        '                has_fill = elem.find(f"./{P_NS}spPr/{A_NS}solidFill") is not None or elem.find(f"./{P_NS}spPr/{A_NS}gradFill") is not None',
+        '                has_ln = elem.find(f"./{P_NS}spPr/{A_NS}ln/{A_NS}solidFill") is not None',
+        '                if not txt:',
+        '                    if cx < sw * 0.96 and cy < sh * 0.90 and (has_fill or has_ln or prst_name not in ("", "rect")): geom_count += 1',
+        '                elif not txt.isdigit(): text_boxes.append((x, y, cx, cy))',
+        '        cxn_count = len(spTree.findall(f".//{P_NS}cxnSp"))',
+        '        has_left = any(tb[0] < sw * 0.35 for tb in text_boxes)',
+        '        has_right = any(tb[0] >= sw * 0.42 for tb in text_boxes)',
+        '        if not ((geom_count + cxn_count >= 3) or (len(text_boxes) >= 5 and has_left and has_right)): continue',
+        '        vec_indices.append(idx)',
+        '        full_png = os.path.join(rendered_dir, f"full_slide_{idx:02d}.png")',
+        '        if Image is not None and fg_rects and os.path.isfile(full_png):',
+        '            os.makedirs(images_dir, exist_ok=True)',
+        '            src_img = Image.open(full_png).convert("RGB")',
+        '            iw, ih = src_img.size',
+        '            clean_canvas = Image.new("RGB", (iw, ih), (255, 255, 255))',
+        '            shape_pad = max(5, int(iw * 0.005)); header_cut_px = int(ih * 0.1555)',
+        '            min_x, min_y, max_x, max_y = iw, ih, 0, 0; max_exact_r = 0',
+        '            for (rx, ry, rcx, rcy) in fg_rects:',
+        '                er = int(((rx + rcx) / sw) * iw); max_exact_r = max(max_exact_r, er)',
+        '                sx1 = max(0, int((rx / sw) * iw) - shape_pad)',
+        '                sy1 = max(header_cut_px, int((ry / sh) * ih) - (shape_pad if ry > sh * 0.165 else 0))',
+        '                sx2 = min(iw, er + shape_pad); sy2 = min(ih, int(((ry + rcy) / sh) * ih) + shape_pad)',
+        '                if sx2 > sx1 and sy2 > sy1:',
+        '                    clean_canvas.paste(src_img.crop((sx1, sy1, sx2, sy2)), (sx1, sy1))',
+        '                    min_x = min(min_x, sx1); min_y = min(min_y, sy1); max_x = max(max_x, sx2); max_y = max(max_y, sy2)',
+        '            if max_x > min_x and max_y > min_y:',
+        '                if ImageDraw is not None and max_exact_r + 2 < iw:',
+        '                    ImageDraw.Draw(clean_canvas).rectangle([max_exact_r + 2, int(ih * 0.92), iw, ih], fill=(255, 255, 255))',
+        '                op = int(iw * 0.008)',
+        '                clean_canvas.crop((max(0, min_x - op), max(0, min_y - op), min(iw, max_x + op), min(ih, max_y + op))).save(os.path.join(images_dir, f"slide_{idx:02d}.png"))',
+        'print(json.dumps({"vectorIndices": vec_indices}))',
+    ].join('\n');
+
+    private async ensureVectorCanvasSlidesForSession(
+        sessionId: string,
+        candidatePptxPath: string,
+        slides: ParsedSlide[],
+    ): Promise<boolean> {
+        const sessionDir = this.getSessionDir(sessionId);
+        const imagesDir = path.join(sessionDir, 'images');
+        const renderedDir = path.join(sessionDir, 'rendered_slides');
+        const markerPath = path.join(sessionDir, '.vector_canvas_v1');
+        if (fs.existsSync(markerPath) || !fs.existsSync(candidatePptxPath)) {
+            return false;
+        }
+        const pythonCandidates = [
+            path.resolve(process.cwd(), 'utils', 'pptx_generator', 'venv', 'bin', 'python3'),
+            '/opt/anaconda3/bin/python3',
+            'python3',
+        ];
+        const pyBin = pythonCandidates.find(p => p === 'python3' || fs.existsSync(p)) || 'python3';
+        try {
+            const { stdout } = await execFileAsync(
+                pyBin,
+                ['-c', PptxAudioToolService.VECTOR_CANVAS_CROP_SCRIPT, candidatePptxPath, imagesDir, renderedDir],
+                { timeout: 60000, maxBuffer: 10 * 1024 * 1024 },
+            );
+            const parsed = JSON.parse(String(stdout || '{}')) as { vectorIndices?: number[] };
+            const vecSet = new Set<number>(Array.isArray(parsed.vectorIndices) ? parsed.vectorIndices : []);
+            let changed = false;
+            for (const s of slides) {
+                const origIdx = s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index;
+                if (origIdx === null || origIdx === undefined || origIdx < 0) continue;
+                const shouldBeVec = vecSet.has(origIdx);
+                if (Boolean(s.isVectorCanvas) !== shouldBeVec) {
+                    s.isVectorCanvas = shouldBeVec;
+                    changed = true;
+                }
+            }
+            fs.mkdirSync(sessionDir, { recursive: true });
+            fs.writeFileSync(markerPath, 'v1\n', 'utf-8');
+            return changed;
+        } catch (err: any) {
+            this.logger.warn(`Vector canvas detection/crop warning for ${sessionId}: ${err?.message || err}`);
+            return false;
+        }
+    }
+
     async ensureRenderedSlidesForSession(sessionId: string): Promise<ParsedSlide[]> {
         const session = await this.prisma.pptxAudioSession.findUnique({
             where: { id: sessionId },
@@ -3533,6 +3663,8 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             }
         }
 
+        const reExtractedVecV1 = await this.ensureVectorCanvasSlidesForSession(sessionId, candidatePptxPath, slides);
+
         let updated = false;
         for (const s of slides) {
             const origIdx = s.originalSlideIndex !== undefined ? s.originalSlideIndex : s.index;
@@ -3584,7 +3716,7 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             }
         }
 
-        if (updated || reExtractedTextV4) {
+        if (updated || reExtractedTextV4 || reExtractedVecV1) {
             await this.saveSlidesAndSyncContent(sessionId, slides);
         }
 
@@ -3686,10 +3818,14 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
                 !isTemplateBgMode &&
                 Boolean(effectiveRenderedUrl) &&
                 s.layoutType === 'full_slide_canvas' &&
-                !illustrationUrl &&
-                !hasRawContent &&
-                !hasOptimizedBullets &&
                 !isSpecialInteractiveSlide;
+
+            const isVectorCanvasSlide =
+                Boolean(s.isVectorCanvas) &&
+                Boolean(illustrationUrl) &&
+                !hasOptimizedBullets &&
+                !isSpecialInteractiveSlide &&
+                idx > 0;
 
             const effectiveLayoutType = useFullSlideCanvas
                 ? 'full_slide_canvas'
@@ -3703,10 +3839,10 @@ YÊU CẦU ĐẦU RA (CHỈ TRẢ VỀ JSON HỢP LỆ):
             return {
                 slideIndex: idx + 1,
                 slideType: s.slideType || (idx === 0 ? 'title' : 'content'),
-                layoutType: effectiveLayoutType,
+                layoutType: isVectorCanvasSlide ? 'split_standard' : effectiveLayoutType,
                 title: s.title || `Slide ${idx + 1}`,
-                content: Array.isArray(s.content) ? s.content : [],
-                optimizedContentJson: hasOptimizedBullets
+                content: (useFullSlideCanvas || isVectorCanvasSlide) ? [] : (Array.isArray(s.content) ? s.content : []),
+                optimizedContentJson: (!useFullSlideCanvas && hasOptimizedBullets)
                     ? JSON.stringify(s.optimizedContent)
                     : null,
                 speakerNote,

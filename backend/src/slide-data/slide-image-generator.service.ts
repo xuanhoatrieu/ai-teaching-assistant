@@ -60,7 +60,7 @@ export class SlideImageGeneratorService {
         // Build image prompt from visualSource and title
         let imagePrompt = visualSource
             ? this.buildImagePrompt(visualSource, slide.title)
-            : `Educational slide illustration for "${slide.title}". Style: Clean, professional, suitable for academic presentation.`;
+            : `Square 1:1 educational illustration for "${slide.title}". Style: Clean, professional, centered composition, suitable for academic teaching material.`;
 
         // Get model config and API key for IMAGE task
         const modelConfig = await this.modelConfigService.getModelForTask(userId, 'IMAGE');
@@ -253,8 +253,8 @@ export class SlideImageGeneratorService {
             .replace(/^\*\*\[Visual Idea\]\*\*:\s*/i, '')
             .trim();
 
-        // Add educational context and style hints
-        const prompt = `Educational slide illustration for "${slideTitle}": ${cleanVisualIdea}. Style: Clean, professional, suitable for academic presentation, high quality illustration.`;
+        // Add educational context and style hints (enforce square 1:1 composition)
+        const prompt = `Square 1:1 educational illustration about "${slideTitle}": ${cleanVisualIdea}. Style: Clean, professional, centered 1:1 square composition, high quality academic illustration.`;
 
         return prompt;
     }

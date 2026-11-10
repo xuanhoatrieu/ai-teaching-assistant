@@ -78,10 +78,10 @@ class PPTXGeneratorService:
         if template_path and os.path.exists(template_path) and template_path != 'blank':
             prs = Presentation(template_path)
         else:
-            # Create blank presentation - MATCH pptx_creator.py exactly
             prs = Presentation()
-            prs.slide_width = Inches(10)      # Match pptx_creator.py line 51
-            prs.slide_height = Inches(5.625)  # Match pptx_creator.py line 52
+        # Enforce 16:9 coordinate system (10" x 5.625") matching all layout renderers
+        prs.slide_width = Inches(10)
+        prs.slide_height = Inches(5.625)
         
         # Clear existing slides if using template (keep layouts)
         while len(prs.slides) > 0:
@@ -158,8 +158,8 @@ class PPTXGeneratorService:
             prs = Presentation(template_path)
         else:
             prs = Presentation()
-            prs.slide_width = Inches(10)
-            prs.slide_height = Inches(5.625)
+        prs.slide_width = Inches(10)
+        prs.slide_height = Inches(5.625)
 
         # Clear existing slides if using template
         while len(prs.slides) > 0:
@@ -463,14 +463,56 @@ class PPTXGeneratorService:
             p.font.color.rgb = RGBColor(58, 102, 77)
             p.space_after = Pt(12)
         
-        # Add image on RIGHT if exists - 1:1 square ratio (4.5\" x 4.5\")
+        # Add image on RIGHT if exists - fit cleanly inside (5.2", 1.0", 4.5" x 4.4") regardless of aspect ratio
         if has_image:
             try:
-                # Image starts right after title (Y=1.0\")
-                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.5))
+                self._add_picture_fit_box(slide, image_path, 5.2, 1.0, 4.5, 4.4)
                 print(f"[PPTX] Agenda slide image added: {image_path}")
             except Exception as e:
                 print(f"[PPTX] Could not add agenda image: {e}")
+
+    def _add_picture_fit_box(
+        self,
+        slide,
+        image_path: str,
+        box_left_in: float,
+        box_top_in: float,
+        box_w_in: float,
+        box_h_in: float,
+    ):
+        """
+        Insert picture scaled proportionally (object-fit: contain) and centered
+        inside [box_left_in, box_top_in, box_w_in, box_h_in] so 1:1, 3:2 (1536x1024),
+        16:9, or portrait images NEVER overflow slide boundaries.
+        """
+        img_w, img_h = 0, 0
+        try:
+            from PIL import Image
+            with Image.open(image_path) as im:
+                img_w, img_h = im.size
+        except Exception:
+            img_w, img_h = 0, 0
+
+        if img_w > 0 and img_h > 0:
+            scale = min(box_w_in / float(img_w), box_h_in / float(img_h))
+            final_w = float(img_w) * scale
+            final_h = float(img_h) * scale
+            left_in = box_left_in + (box_w_in - final_w) / 2.0
+            top_in = box_top_in + (box_h_in - final_h) / 2.0
+            return slide.shapes.add_picture(
+                image_path,
+                Inches(left_in),
+                Inches(top_in),
+                width=Inches(final_w),
+                height=Inches(final_h),
+            )
+
+        return slide.shapes.add_picture(
+            image_path,
+            Inches(box_left_in),
+            Inches(box_top_in),
+            width=Inches(box_w_in),
+        )
     
     def _populate_bullets_or_content(self, text_frame, bullets, content, title_pt=20, desc_pt=16):
         """Helper to render formatted bullets or fallback string content into a text frame"""
@@ -518,7 +560,15 @@ class PPTXGeneratorService:
                 p.space_after = Pt(6)
 
     def _render_layout_split_standard(self, slide, title, bullets, content, image_path, has_image):
-        """1. Split Standard: Text trái 4.5\", Image phải 4.5\""""
+        """1. Split Standard: Text trái 4.5", Image phải fit trong khung 4.5" x 4.4" (hoặc full-width nếu không có chữ)"""
+        has_text = bool(bullets) or bool(content)
+        if not has_text and has_image:
+            try:
+                self._add_picture_fit_box(slide, image_path, 0.4, 1.0, 9.2, 4.4)
+            except Exception as e:
+                print(f"[PPTX] Could not add full-body picture {image_path}: {e}")
+            return
+
         if has_image:
             content_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.2), Inches(4.5), Inches(4.0))
         else:
@@ -526,15 +576,15 @@ class PPTXGeneratorService:
         self._populate_bullets_or_content(content_shape.text_frame, bullets, content, title_pt=21, desc_pt=17)
         if has_image:
             try:
-                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.5))
+                self._add_picture_fit_box(slide, image_path, 5.2, 1.0, 4.5, 4.4)
             except Exception as e:
                 print(f"[PPTX] Could not add picture {image_path}: {e}")
 
     def _render_layout_split_reversed(self, slide, title, bullets, content, image_path, has_image):
-        """2. Split Reversed: Image trái 4.5\", Text phải 4.5\""""
+        """2. Split Reversed: Image trái fit trong khung 4.5" x 4.4", Text phải 4.5\""""
         if has_image:
             try:
-                slide.shapes.add_picture(image_path, Inches(0.5), Inches(1.0), height=Inches(4.5))
+                self._add_picture_fit_box(slide, image_path, 0.5, 1.0, 4.5, 4.4)
             except Exception as e:
                 print(f"[PPTX] Could not add picture {image_path}: {e}")
             content_shape = slide.shapes.add_textbox(Inches(5.2), Inches(1.2), Inches(4.5), Inches(4.0))
@@ -596,7 +646,7 @@ class PPTXGeneratorService:
         """4. Hero Infographic: Visual/Hero lớn trên, 3 thẻ takeaways dưới"""
         if has_image:
             try:
-                slide.shapes.add_picture(image_path, Inches(2.2), Inches(1.1), height=Inches(2.3))
+                self._add_picture_fit_box(slide, image_path, 0.8, 1.05, 8.4, 2.35)
             except Exception as e:
                 print(f"[PPTX] Hero infographic picture failed: {e}")
         else:
@@ -695,7 +745,7 @@ class PPTXGeneratorService:
         # Right side: Visual or summary box
         if has_image:
             try:
-                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.0), height=Inches(4.4))
+                self._add_picture_fit_box(slide, image_path, 5.2, 1.0, 4.5, 4.4)
             except Exception as e:
                 print(f"[PPTX] Process steps image failed: {e}")
         else:
@@ -761,7 +811,7 @@ class PPTXGeneratorService:
         
         if has_image:
             try:
-                slide.shapes.add_picture(image_path, Inches(5.2), Inches(1.7), height=Inches(3.5))
+                self._add_picture_fit_box(slide, image_path, 5.2, 1.7, 4.5, 3.5)
             except Exception as e:
                 print(f"[PPTX] Audio lab picture failed: {e}")
 
@@ -1050,20 +1100,12 @@ class PPTXGeneratorService:
             self._add_image(slide, image_path, has_content=bool(content or bullets))
     
     def _add_image(self, slide, image_path: str, has_content: bool = False):
-        """Add image to slide"""
+        """Add image to slide bounded cleanly within 10x5.625 slide coordinates"""
         try:
             if has_content:
-                # Image on right side
-                left = Inches(7)
-                top = Inches(1.5)
-                width = Inches(5.5)
+                self._add_picture_fit_box(slide, image_path, 5.2, 1.0, 4.5, 4.4)
             else:
-                # Image centered
-                left = Inches(1.5)
-                top = Inches(1.5)
-                width = Inches(10)
-            
-            slide.shapes.add_picture(image_path, left, top, width=width)
+                self._add_picture_fit_box(slide, image_path, 0.8, 1.05, 8.4, 4.3)
         except Exception as e:
             print(f"Warning: Could not add image: {e}")
     

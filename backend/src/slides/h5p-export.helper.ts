@@ -846,7 +846,7 @@ export function generateH5pContentJson(lessonTitle: string, slides: any[], optio
                 });
                 addImageElement(52, bodyTopY, 44, bodyHeight);
             } else if (hasImage) {
-                addImageElement(8, bodyTopY, 84, bodyHeight);
+                addImageElement(4, bodyTopY, 92, bodyHeight);
             } else if (hasBullets) {
                 elements.push({
                     x: 10,
