@@ -1,6 +1,7 @@
 import {
     stripOptionPrefix,
     cleanExplanation,
+    cleanQuestionText,
     buildMoodleXml,
     ReviewQuestionData,
     isMatchingQuestionText,
@@ -517,6 +518,44 @@ describe('moodle-xml.helper', () => {
             expect(engExamXml).toContain('<name><text>B01-TRUEFALSE-02: ');
             expect(engExamXml).toContain('<name><text>B02-MATCH-03: ');
             expect(engExamXml).not.toContain('Midterm_EN-B-01');
+        });
+    });
+
+    describe('cleanQuestionText', () => {
+        it('strips Vietnamese meta-reference filler phrases while capitalizing cleanly', () => {
+            expect(cleanQuestionText('Theo nội dung bài, hệ điều hành đảm nhiệm chức năng nào?')).toBe(
+                'Hệ điều hành đảm nhiệm chức năng nào?',
+            );
+            expect(cleanQuestionText('Theo kết quả, thuật toán nào có độ phức tạp O(n log n)?')).toBe(
+                'Thuật toán nào có độ phức tạp O(n log n)?',
+            );
+            expect(cleanQuestionText('Theo kết quả trên: giá trị tối ưu bằng bao nhiêu?')).toBe(
+                'Giá trị tối ưu bằng bao nhiêu?',
+            );
+            expect(cleanQuestionText('Câu 1: Dựa vào nội dung bài giảng, Python là ngôn ngữ thuộc loại nào?')).toBe(
+                'Python là ngôn ngữ thuộc loại nào?',
+            );
+            expect(cleanQuestionText('Phương pháp nào hiệu quả nhất (theo nội dung bài)?')).toBe(
+                'Phương pháp nào hiệu quả nhất?',
+            );
+        });
+
+        it('strips English meta-reference filler phrases', () => {
+            expect(cleanQuestionText('According to the lesson, which phoneme is a voiceless affricate?')).toBe(
+                'Which phoneme is a voiceless affricate?',
+            );
+            expect(cleanQuestionText('Based on the above results, what is the optimal learning rate?')).toBe(
+                'What is the optimal learning rate?',
+            );
+        });
+
+        it('preserves valid standalone scientific or legal premises', () => {
+            expect(cleanQuestionText('Theo định luật Ohm, cường độ dòng điện tỉ lệ thuận với đại lượng nào?')).toBe(
+                'Theo định luật Ohm, cường độ dòng điện tỉ lệ thuận với đại lượng nào?',
+            );
+            expect(cleanQuestionText('Trong mạng IPv4, lớp địa chỉ C có subnet mask mặc định là bao nhiêu?')).toBe(
+                'Trong mạng IPv4, lớp địa chỉ C có subnet mask mặc định là bao nhiêu?',
+            );
         });
     });
 });

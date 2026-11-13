@@ -30,6 +30,11 @@ export interface SyllabusLessonItem {
     textbookPhase?: string | null;
     textbookPlan?: string | null;
     textbookImages?: Array<{ url: string; caption: string; type: string }> | null;
+    practiceContent: string | null;
+    practiceStatus: string;
+    practicePhase?: string | null;
+    practicePlan?: string | null;
+    practiceImages?: Array<{ url: string; caption: string; type: string }> | null;
     lessonId: string | null;
     lesson?: { id: string; title: string; status: string } | null;
 }
@@ -40,6 +45,8 @@ export interface TextbookStatus {
     progress: number;
     message: string;
 }
+
+export type PracticeStatus = TextbookStatus;
 
 export interface Syllabus {
     id: string;
@@ -136,4 +143,24 @@ export const syllabusApi = {
 
     exportSingleLessonDocx: (syllabusId: string, lessonId: string) =>
         api.get(`/syllabus/${syllabusId}/lessons/${lessonId}/export/docx`, { responseType: 'blob' }),
+
+    // Practice Guide (parallel to Textbook PRO)
+    generatePracticeGuide: (syllabusId: string, lessonId: string) =>
+        api.post<{ started: boolean; phase: string; status: string }>(
+            `/syllabus/${syllabusId}/lessons/${lessonId}/practice-guide`,
+            {},
+            { timeout: 0 },
+        ),
+
+    getPracticeStatus: (syllabusId: string, lessonId: string) =>
+        api.get<PracticeStatus>(`/syllabus/${syllabusId}/lessons/${lessonId}/practice-status`),
+
+    savePracticeContent: (syllabusId: string, lessonId: string, practiceContent: string) =>
+        api.put<SyllabusLessonItem>(`/syllabus/${syllabusId}/lessons/${lessonId}/practice-guide`, { practiceContent }),
+
+    exportPracticeDocx: (subjectId: string) =>
+        api.get(`/subjects/${subjectId}/syllabus/practice/export/docx`, { responseType: 'blob' }),
+
+    exportSinglePracticeDocx: (syllabusId: string, lessonId: string) =>
+        api.get(`/syllabus/${syllabusId}/lessons/${lessonId}/export/practice-docx`, { responseType: 'blob' }),
 };

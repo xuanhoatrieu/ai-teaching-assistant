@@ -423,6 +423,143 @@ export class SyllabusController {
         const filename = `Bai_${paddedNum}_${safeName}.docx`;
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
         res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.send(buffer);
+    }
+
+    // ==================== Practice Guide routes (Parallel to Textbook) ====================
+
+    /**
+     * POST /syllabus/:syllabusId/lessons/:lessonId/practice-guide
+     * 1-click AI generation of domain-adaptive Practice Guide (5-step background pipeline).
+     */
+    @Post('syllabus/:syllabusId/lessons/:lessonId/practice-guide')
+    async generatePracticeGuide(
+        @Param('lessonId') lessonId: string,
+        @CurrentUser() user: { id: string },
+    ) {
+        const modelConfig = await this.modelConfigService.getModelForTask(user.id, 'OUTLINE');
+
+        let imageModelName: string | undefined;
+        try {
+            const imgConfig = await this.modelConfigService.getModelForTask(user.id, 'IMAGE');
+            imageModelName = imgConfig?.modelName;
+        } catch { /* image model is optional */ }
+
+        let embeddingModelName: string | undefined;
+        try {
+            const embConfig = await this.modelConfigService.getModelForTask(user.id, 'EMBEDDING');
+            embeddingModelName = embConfig?.modelName;
+        } catch { /* embedding model is optional */ }
+
+        return this.syllabusService.startPracticeGuide(
+            lessonId,
+            modelConfig.modelName,
+            imageModelName,
+            user.id,
+            embeddingModelName,
+        );
+    }
+
+    /**
+     * GET /syllabus/:syllabusId/lessons/:lessonId/practice-status
+     * Poll practice guide generation progress.
+     */
+    @Get('syllabus/:syllabusId/lessons/:lessonId/practice-status')
+    async getPracticeStatus(
+        @Param('lessonId') lessonId: string,
+        @CurrentUser() user: { id: string },
+    ) {
+        return this.syllabusService.getPracticeStatus(lessonId, user.id);
+    }
+
+    /**
+     * PUT /syllabus/:syllabusId/lessons/:lessonId/practice-guide
+     * Save edited practice guide Markdown content.
+     */
+    @Put('syllabus/:syllabusId/lessons/:lessonId/practice-guide')
+    async savePracticeContent(
+        @Param('lessonId') lessonId: string,
+        @Body() body: { practiceContent: string },
+        @CurrentUser() user: { id: string },
+    ) {
+        return this.syllabusService.savePracticeContent(lessonId, body.practiceContent, user.id);
+    }
+
+    /**
+     * GET /subjects/:subjectId/syllabus/practice/export/docx
+     * Export all lessons' practice guides as a single combined DOCX.
+     */
+    @Get('subjects/:subjectId/syllabus/practice/export/docx')
+    async exportPracticeDocx(
+        @Param('subjectId') subjectId: string,
+        @CurrentUser() user: { id: string },
+        @Res() res: Response,
+    ) {
+        const subjectRecord = await this.syllabusService.verifySubjectOwnership(subjectId, user.id);
+
+        const syllabus = await this.syllabusService.getSyllabus(subjectId);
+        if (!syllabus) {
+            throw new NotFoundException('Chưa tạo đề cương cho môn học này');
+        }
+
+        const lessonsWithPractice = syllabus.lessons
+            .filter((l) => l.practiceContent?.trim())
+            .sort((a, b) => a.sortOrder - b.sortOrder);
+
+        if (lessonsWithPractice.length === 0) {
+            throw new NotFoundException('Chưa có bài nào có nội dung hướng dẫn thực hành');
+        }
+
+        const buffer = await this.exportService.generatePracticeDocx(
+            lessonsWithPractice.map((l) => ({
+                title: l.title,
+                sortOrder: l.sortOrder,
+                practiceContent: l.practiceContent,
+            })),
+            subjectRecord.name,
+        );
+
+        const safeSubject = subjectRecord.name.replace(/[/\\?%*:|"<>\s]+/g, '_').substring(0, 60);
+        const filename = `Huong_dan_thuc_hanh_${safeSubject}.docx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.send(buffer);
+    }
+
+    /**
+     * GET /syllabus/:syllabusId/lessons/:lessonId/export/practice-docx
+     * Export a single lesson's practice guide as DOCX.
+     */
+    @Get('syllabus/:syllabusId/lessons/:lessonId/export/practice-docx')
+    async exportSinglePracticeDocx(
+        @Param('lessonId') lessonId: string,
+        @CurrentUser() user: { id: string },
+        @Res() res: Response,
+    ) {
+        const lesson = await this.syllabusService.verifyLessonOwnership(lessonId, user.id);
+        if (!lesson.practiceContent?.trim()) {
+            throw new NotFoundException('Bài này chưa có nội dung hướng dẫn thực hành');
+        }
+
+        const subjectName = lesson.syllabus?.subject?.name || '';
+
+        const buffer = await this.exportService.generatePracticeDocx(
+            [{
+                title: lesson.title,
+                sortOrder: lesson.sortOrder,
+                practiceContent: lesson.practiceContent,
+            }],
+            subjectName,
+        );
+
+        const paddedNum = String(lesson.sortOrder + 1).padStart(2, '0');
+        const safeName = lesson.title.replace(/[/\\?%*:|"<>\s]+/g, '_').substring(0, 50);
+        const filename = `Huong_dan_TH_Bai_${paddedNum}_${safeName}.docx`;
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
         res.send(buffer);
     }
 }

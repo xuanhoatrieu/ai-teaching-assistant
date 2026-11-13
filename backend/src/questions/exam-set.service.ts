@@ -14,6 +14,7 @@ import type { Response } from 'express';
 import {
     stripOptionPrefix,
     cleanExplanation,
+    cleanQuestionText,
     isMatchingQuestionText,
     extractMatchPairs,
     toMoodleCategorySlug,
@@ -161,6 +162,8 @@ export class ExamSetService implements OnModuleInit {
                                     outline: true,
                                     textbookContent: true,
                                     textbookPlan: true,
+                                    practiceContent: true,
+                                    practicePlan: true,
                                     lessonId: true,
                                 },
                             },
@@ -185,6 +188,8 @@ export class ExamSetService implements OnModuleInit {
                                     outline: true,
                                     textbookContent: true,
                                     textbookPlan: true,
+                                    practiceContent: true,
+                                    practicePlan: true,
                                 },
                             },
                             questionBank: {
@@ -431,6 +436,9 @@ export class ExamSetService implements OnModuleInit {
         const hasTextbook = Boolean(
             syllabusLesson?.textbookContent?.trim() || syllabusLesson?.textbookPlan?.trim(),
         );
+        const hasPracticeGuide = Boolean(
+            syllabusLesson?.practiceContent?.trim() || syllabusLesson?.practicePlan?.trim(),
+        );
         const hasSyllabusOutline = Boolean(syllabusLesson?.outline?.trim());
         const hasLessonOutline = Boolean(
             lesson?.detailedOutline?.trim() || lesson?.outlineRaw?.trim(),
@@ -456,6 +464,7 @@ export class ExamSetService implements OnModuleInit {
             slideCount > 0 ||
             slideAudioCount > 0 ||
             hasTextbook ||
+            hasPracticeGuide ||
             hasOutline ||
             hasScript ||
             hasHandout ||
@@ -468,6 +477,10 @@ export class ExamSetService implements OnModuleInit {
         if (hasTextbook) {
             summaryParts.push('Giáo trình');
             sourceBadges.push('📗 Giáo trình');
+        }
+        if (hasPracticeGuide) {
+            summaryParts.push('HD Thực hành');
+            sourceBadges.push('🛠️ HD Thực hành');
         }
         if (slideCount > 0) {
             summaryParts.push(`${slideCount} slides`);
@@ -1154,6 +1167,14 @@ export class ExamSetService implements OnModuleInit {
                             planFormatted.substring(0, 4000),
                     );
                 }
+            }
+
+            // 1b. Tài liệu hướng dẫn thực hành bài học (Practice Guide — song song với Giáo trình)
+            if (syllabusLesson?.practiceContent?.trim()) {
+                contentSections.push(
+                    `=== TÀI LIỆU HƯỚNG DẪN THỰC HÀNH BÀI HỌC (${displayTitle}) ===\n` +
+                        syllabusLesson.practiceContent.trim().substring(0, 24000),
+                );
             }
 
             // 2. Slide bài giảng (bao gồm cả Slide.content + Slide.optimizedContentJson + SlideAudio.speakerNote)
@@ -1957,9 +1978,15 @@ QUY TẮC KHẢO THÍ TỐI THƯỢNG (BẮT BUỘC TUÂN THỦ 100%):
      + Mức 2 (Hiểu / Understand): ${quota.level2} câu
      + Mức 3 (Vận dụng / Apply): ${quota.level3} câu
    - Mỗi câu gồm: "correctAnswer" (1 đáp án đúng duy nhất) và 3 phương án nhiễu ("optionB", "optionC", "optionD") có độ dài và cấu trúc ngữ pháp tương đương.
-   - TUYỆT ĐỐI KHÔNG gắn tiền tố "A.", "B.", "C.", "D." vào đầu nội dung các phương án.
+   - TUYỆT ĐỐI KHÔNG gắn tiền tố "A.", "B.", "C.", "D.", "Câu 1:" vào đầu nội dung câu hỏi hoặc các phương án.
    - Trường "explanation": Giải thích rõ bản chất vì sao đáp án đúng dựa vào kiến thức bài học. TUYỆT ĐỐI KHÔNG dùng cụm từ "Đáp án A đúng vì..." hay "Chọn B vì..." (do LMS sẽ xáo trộn thứ tự đáp án).
-${quota.customInstructions ? `5. YÊU CẦU BỔ SUNG TỪ GIẢNG VIÊN:\n   ${quota.customInstructions}` : ''}
+5. CÂU HỎI ĐỘC LẬP, CHỈ TẠO NỘI DUNG CÂU HỎI VÀ ĐÁP ÁN — CẤM TỪ THỪA:
+   - Trường "question" CHỈ chứa nội dung câu hỏi trực tiếp và thuần túy; các phương án CHỈ chứa nội dung đáp án thuần túy.
+   - TUYỆT ĐỐI KHÔNG chèn các cụm từ dẫn nguồn/từ thừa vào nội dung câu hỏi hoặc đáp án như: "Theo nội dung bài", "Theo nội dung bài học", "Theo kết quả", "Theo kết quả trên", "Theo bài giảng", "Theo tài liệu", "Theo giáo trình", "Trong bài học", "Slide X trình bày", "Dựa vào bài/kết quả/nội dung trên", "Như đã học", "Được đề cập trong bài".
+   - Câu hỏi phải tự đủ ngữ cảnh và đứng độc lập hoàn toàn (nếu là bài toán/tình huống thì nêu trực tiếp điều kiện ngay trong câu hỏi, không quy chiếu ngược về "bài học" hay "kết quả trên").
+     + ❌ SAI: "Theo nội dung bài, hệ điều hành làm nhiệm vụ gì?" hoặc "Theo kết quả trên, thuật toán nào nhanh nhất?"
+     + ✅ ĐÚNG: "Hệ điều hành đảm nhiệm chức năng nào đối với tài nguyên phần cứng?"
+${quota.customInstructions ? `6. YÊU CẦU BỔ SUNG TỪ GIẢNG VIÊN:\n   ${quota.customInstructions}` : ''}
 =====================================================================
 ${excludedGuardBlock}
 [NGÂN HÀNG CÂU HỎI ĐÃ CÓ CỦA BÀI HỌC "${ctx.displayTitle}" (DÙNG ĐỂ NẮM TRỌNG TÂM KIẾN THỨC & TẠO THÊM CÂU HỎI MỚI KHÔNG TRÙNG LẶP)]:
@@ -1995,7 +2022,7 @@ Hãy trả lời CHỈ BẰNG JSON HỢP LỆ theo đúng cấu trúc sau (khôn
         const results: ExamReviewQuestionData[] = [];
         for (let i = 0; i < parsedList.length && results.length < quota.total; i++) {
             const raw = parsedList[i];
-            const questionText = String(raw.question || raw.questionText || '').trim();
+            const questionText = cleanQuestionText(String(raw.question || raw.questionText || ''));
             const correctAnswer = stripOptionPrefix(String(raw.correctAnswer || ''));
             const optionB = stripOptionPrefix(String(raw.optionB || ''));
             const optionC = stripOptionPrefix(String(raw.optionC || ''));
@@ -2088,7 +2115,11 @@ STRICT ASSESSMENT & GROUNDING RULES (100% MANDATORY):
        "data": { "clozeText": "Passage with {1:MULTICHOICE_S:=correct~wrong1~wrong2~wrong3} embedded.", "answers": [ { "position": 1, "acceptableAnswers": ["correct"], "distractors": ["wrong1", "wrong2", "wrong3"] } ] }
      * "TRUEFALSE":
        "data": { "correctAnswer": true } (or false)
-${quota.customInstructions ? `5. ADDITIONAL INSTRUCTOR INSTRUCTIONS:\n   ${quota.customInstructions}` : ''}
+5. PURE, SELF-CONTAINED QUESTIONS & OPTIONS ONLY (NO FILLER PHRASES):
+   - "questionText" MUST contain ONLY the clean, self-contained question stem; every option MUST contain ONLY the answer text (no "A./B./C./D." or "Question 1:" prefixes).
+   - STRICTLY FORBIDDEN filler/meta-reference phrases in any question stem or option: NEVER write "According to the lesson...", "According to the content...", "According to the result(s)...", "Based on the slide/passage/lecture above...", "As mentioned in the lesson...", "In this lesson...", or Vietnamese equivalents like "Theo nội dung bài...", "Theo kết quả...", "Theo bài giảng...", "Dựa vào bài trên...".
+   - Every question must stand completely on its own without referring back to the source material or previous results.
+${quota.customInstructions ? `6. ADDITIONAL INSTRUCTOR INSTRUCTIONS:\n   ${quota.customInstructions}` : ''}
 =====================================================================
 ${excludedGuardBlock}
 [EXISTING LESSON QUESTION BANK FOR "${ctx.displayTitle}" (USE TO ALIGN ASSESSMENT FOCUS & CREATE 100% NEW NON-DUPLICATE QUESTIONS)]:
@@ -2133,7 +2164,7 @@ Respond ONLY with valid JSON in the exact format below:
         for (let i = 0; i < parsedList.length && results.length < quota.total; i++) {
             const item = parsedList[i];
             let qType = String(item.questionType || 'MC').toUpperCase();
-            const questionText = String(item.questionText || item.question || '').trim();
+            const questionText = cleanQuestionText(String(item.questionText || item.question || ''));
             if (!questionText) continue;
 
             let parsedData: any = {};

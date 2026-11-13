@@ -530,6 +530,7 @@ Return JSON only.`,
 - Mỗi câu hỏi: 1 điểm
 - Feedback rõ ràng, ngắn gọn
 - Nếu không có Image/Video/Audio thì để trống
+- Chỉ tạo nội dung câu hỏi đứng độc lập và các đáp án thuần túy (KHÔNG tiền tố A./B./C./D., KHÔNG dùng từ thừa như "Theo nội dung bài", "Theo kết quả", "Theo bài giảng", "Theo tài liệu", "Dựa vào nội dung trên")
 
 **Định dạng đầu ra (JSON):**
 {
@@ -603,13 +604,14 @@ Chỉ trả về JSON.`,
 - Thêm thông tin, số liệu, ví dụ không được đề cập trong bài giảng
 - Suy diễn hoặc mở rộng kiến thức ngoài phạm vi bài học
 - Tạo câu hỏi về kiến thức nền tảng chung không được giảng dạy
-- Sử dụng cụm từ trích dẫn/tham chiếu ngược đến bài giảng trong câu hỏi, đáp án hoặc giải thích.
-  CẤM HOÀN TOÀN các cụm từ: "Theo bài giảng", "Trong bài học", "Được nhắc đến trong",
+- Sử dụng cụm từ trích dẫn/tham chiếu ngược đến bài giảng hoặc kết quả trong câu hỏi, đáp án hoặc giải thích.
+  CẤM HOÀN TOÀN các cụm từ: "Theo nội dung bài", "Theo nội dung bài học", "Theo kết quả", "Theo kết quả trên",
+  "Theo bài giảng", "Theo tài liệu", "Theo giáo trình", "Trong bài học", "Được nhắc đến trong",
   "Bài giảng nhấn mạnh", "Giảng viên hướng dẫn", "Trong phần X của bài", "Slide X trình bày",
-  "Như đã học", "Được đề cập", "Theo nội dung bài"
-  → Câu hỏi phải đứng ĐỘC LẬP như một câu hỏi kiểm tra kiến thức thông thường.
+  "Dựa vào bài/kết quả/tài liệu trên", "Như đã học", "Được đề cập"
+  → Chỉ tạo nội dung câu hỏi đứng ĐỘC LẬP và các đáp án thuần túy (không tiền tố A./B./C./D., không câu dẫn thừa).
   Ví dụ:
-    ❌ SAI: "Theo bài giảng, Python là ngôn ngữ thuộc loại nào?"
+    ❌ SAI: "Theo bài giảng, Python là ngôn ngữ thuộc loại nào?" hoặc "Theo kết quả trên, thuật toán nào tối ưu?"
     ✅ ĐÚNG: "Python là ngôn ngữ lập trình thuộc loại nào?"
 
 ### ✅ CHỈ ĐƯỢC PHÉP:
@@ -707,7 +709,7 @@ Chỉ trả về JSON.`,
 ---
 
 ## 🎯 MANDATORY ACADEMIC RULES:
-1. Grounding: All questions must be grounded in the provided lesson content. Do NOT invent facts or cite external topics outside the lesson scope.
+1. Grounding & Standalone Clarity: All questions must be grounded in the provided lesson content, WITHOUT inventing external topics. However, generate ONLY pure, self-contained question stems and clean options (no "A./B./C./D." or "Question 1:" prefixes). STRICTLY FORBIDDEN filler/meta-reference phrases: "According to the lesson...", "According to the content...", "According to the result(s)...", "Based on the slide/passage/lecture above...", "As mentioned in the lesson...", "Theo nội dung bài...", "Theo kết quả...".
 2. Academic Rigor: Use precise terminology suitable for undergraduate English majors:
    - For Phonetics & Phonology: Use exact Unicode IPA symbols (/θ/, /ð/, /ʃ/, /tʃ/, /dʒ/, /ŋ/, /æ/, /ʌ/, /ə/, etc.) and precise articulatory terms (voicing, place, manner).
    - For Morphology: Clearly identify roots, affixes, inflectional vs derivational morphemes, allomorphs, and word-formation processes (blending, clipping, compounding).

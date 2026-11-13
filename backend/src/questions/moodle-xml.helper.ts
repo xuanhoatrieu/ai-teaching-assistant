@@ -124,6 +124,71 @@ export function cleanExplanation(text: any): string {
 }
 
 /**
+ * Strips redundant meta-reference filler phrases from a generated question stem
+ * (e.g. "Theo nội dung bài, ...", "Theo kết quả, ...", "Theo bài giảng trên, ...",
+ * "Dựa vào tài liệu trên, ...", "According to the lesson, ...", "Câu 1: ...")
+ * so questions remain pure and self-contained while preserving valid domain premises
+ * like "Theo định luật Ohm, ...".
+ */
+export function cleanQuestionText(text: any): string {
+    if (text === null || text === undefined) return '';
+    const original = (typeof text === 'object' ? JSON.stringify(text) : String(text)).trim();
+    if (!original) return '';
+
+    const viScopeNoun =
+        '(?:nội\\s+dung\\s+(?:bài(?:\\s+(?:học|giảng|thực\\s+hành|viết|đọc))?|tài\\s+liệu|giáo\\s+trình|slide(?:\\s+số\\s*\\d+)?|chương|mục|trên|đã\\s+học)|' +
+        'bài(?:\\s+(?:học|giảng|thực\\s+hành|viết|đọc|này|trên|vừa\\s+học))?|' +
+        'kết\\s+quả(?:\\s+(?:của\\s+bài|trong\\s+bài|bài\\s+học|thực\\s+hành|trên|vừa\\s+nêu|đã\\s+nêu|nghiên\\s+cứu\\s+trên))?|' +
+        'tài\\s+liệu(?:\\s+(?:trên|này|được\\s+cung\\s+cấp|học\\s+tập))?|' +
+        'giáo\\s+trình(?:\\s+(?:trên|này))?|' +
+        'slide(?:\\s+(?:số\\s*)?\\d+|\\s+trên|\\s+bài\\s+giảng)?|' +
+        'đoạn\\s+(?:văn|trích)(?:\\s+trên)?|' +
+        'bảng\\s+(?:số\\s+liệu|dữ\\s+liệu)?\\s*trên|' +
+        'ví\\s+dụ\\s+(?:trong\\s+bài|trên)|' +
+        'những\\s+gì\\s+đã\\s+học)';
+
+    const leadingPatterns: RegExp[] = [
+        // Numbered labels: "Câu 1: ...", "Câu hỏi 2. ...", "Question 1: ..."
+        /^(?:Câu(?:\s+hỏi)?|Question|Q)\s*\d*\s*[:\.\)\-]\s+/i,
+        // Vietnamese meta-reference clauses at start followed by comma/colon/whitespace-after-clause
+        new RegExp(`^(?:theo|dựa\\s+(?:vào|trên|theo)|từ|qua|căn\\s+cứ\\s+(?:vào|trên))\\s+${viScopeNoun}(?:\\s+(?:trên|này|đã\\s+nêu|vừa\\s+nêu|được\\s+trình\\s+bày|được\\s+đề\\s+cập|được\\s+cung\\s+cấp))?\\s*[,:\\-]\\s*`, 'i'),
+        new RegExp(`^(?:trong|ở)\\s+(?:phạm\\s+vi\\s+)?${viScopeNoun}(?:\\s+(?:trên|này))?\\s*[,:\\-]\\s*`, 'i'),
+        /^(?:như\s+(?:đã\s+(?:học|trình\s+bày|nêu|đề\s+cập)|được\s+(?:nhắc|đề\s+cập|trình\s+bày))(?:\s+(?:trong|ở)\s+(?:bài(?:\s+(?:học|giảng))?|tài\s+liệu|slide|trên))?)\s*[,:\-]\s*/i,
+        // English meta-reference clauses at start
+        /^(?:according\s+to|based\s+on|from)\s+(?:the\s+|this\s+)?(?:(?:lesson|lecture|slide|material|reading|passage|text|document|chapter|section|result|results)(?:\s+(?:content|above|provided|given|mentioned|in\s+the\s+lesson))?|above\s+(?:lesson|lecture|content|material|results?|passage|text))\s*[,:\-]\s*/i,
+        /^(?:in\s+(?:the|this)\s+(?:lesson|lecture|reading|passage|text|slide(?:\s+\d+)?|chapter|section)|as\s+(?:mentioned|stated|discussed|noted|described|learned|taught)(?:\s+in\s+(?:the\s+|this\s+)?(?:lesson|lecture|slide|text|material|reading))?)\s*[,:\-]\s*/i,
+    ];
+
+    const inlineParenPattern = new RegExp(
+        `\\s*\\(\\s*(?:theo|trong|dựa\\s+(?:vào|trên))\\s+${viScopeNoun}\\s*\\)\\s*`,
+        'gi',
+    );
+    const midCommaPattern = new RegExp(
+        `,\\s*(?:theo|trong|dựa\\s+(?:vào|trên))\\s+${viScopeNoun}\\s*,`,
+        'gi',
+    );
+    const trailingPattern = new RegExp(
+        `[,\\s]+(?:theo|trong|như\\s+đã\\s+học\\s+ở)\\s+(?:nội\\s+dung\\s+(?:bài(?:\\s+(?:học|giảng))?|tài\\s+liệu)|bài(?:\\s+(?:học|giảng))?|kết\\s+quả(?:\\s+trên|\\s+trong\\s+bài)?)(?=\\s*[?.!:,]?$)`,
+        'gi',
+    );
+
+    let cur = original;
+    let prev = '';
+    while (cur !== prev) {
+        prev = cur;
+        for (const pat of leadingPatterns) {
+            cur = cur.replace(pat, '').trim();
+        }
+        cur = cur.replace(inlineParenPattern, ' ').replace(midCommaPattern, ',');
+        cur = cur.replace(trailingPattern, '');
+        cur = cur.replace(/\s+([?.!,:;])/g, '$1').replace(/\s{2,}/g, ' ').trim();
+    }
+
+    if (!cur) return original;
+    return cur.charAt(0).toUpperCase() + cur.slice(1);
+}
+
+/**
  * Build a single multichoice question XML block.
  */
 function buildQuestionXml(q: ReviewQuestionData): string {

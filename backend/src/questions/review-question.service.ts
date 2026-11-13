@@ -5,7 +5,7 @@ import { ApiKeysService } from '../api-keys/api-keys.service';
 import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { ReviewQuestion } from '@prisma/client';
-import { stripOptionPrefix, cleanExplanation } from './moodle-xml.helper';
+import { stripOptionPrefix, cleanExplanation, cleanQuestionText } from './moodle-xml.helper';
 
 interface LevelCounts {
     level1: number; // Biết (Remember)
@@ -246,12 +246,12 @@ export class ReviewQuestionService {
 
                 const created = await this.createQuestion(lessonId, lessonNumber, {
                     level,
-                    question: q.question,
-                    correctAnswer: q.correctAnswer,
-                    optionB: q.optionB,
-                    optionC: q.optionC,
-                    optionD: q.optionD,
-                    explanation: q.explanation,
+                    question: cleanQuestionText(q.question),
+                    correctAnswer: stripOptionPrefix(q.correctAnswer),
+                    optionB: stripOptionPrefix(q.optionB),
+                    optionC: stripOptionPrefix(q.optionC),
+                    optionD: stripOptionPrefix(q.optionD),
+                    explanation: cleanExplanation(q.explanation),
                 });
                 createdQuestions.push(created);
             }

@@ -61,8 +61,12 @@ export class PromptComposerService {
         };
         const taskPrompt = await this.promptsService.renderPrompt(taskSlug, enrichedVariables);
 
-        // 5. Combine: Role + Language + Separator + Task
-        const fullPrompt = `${rolePrompt}\n\n${languageInstruction}\n\n---\n\n${taskPrompt}`;
+        // 5. Combine: Role + Language + Separator + Task (+ standalone rule for question tasks)
+        const questionPurityGuard = taskSlug.startsWith('questions.')
+            ? `\n\n========================================\n[QUY TẮC BẮT BUỘC VỀ NỘI DUNG CÂU HỎI & ĐÁP ÁN]:\n- CHỈ tạo nội dung câu hỏi trực tiếp và nội dung các đáp án thuần túy (KHÔNG tiền tố "A./B./C./D." hay "Câu 1:").\n- TUYỆT ĐỐI KHÔNG chèn các từ thừa tham chiếu nguồn vào câu hỏi hay đáp án như: "Theo nội dung bài", "Theo kết quả", "Theo bài giảng", "Theo tài liệu", "Trong bài học", "Dựa vào nội dung/bài/kết quả trên", "Như đã học", "According to the lesson/content/result", "Based on the slide/passage above".\n- Mọi câu hỏi phải đứng độc lập, trực diện, đủ ngữ cảnh tự thân.\n========================================`
+            : '';
+
+        const fullPrompt = `${rolePrompt}\n\n${languageInstruction}\n\n---\n\n${taskPrompt}${questionPurityGuard}`;
 
         this.logger.debug(`Full prompt length: ${fullPrompt.length} chars`);
         return fullPrompt;

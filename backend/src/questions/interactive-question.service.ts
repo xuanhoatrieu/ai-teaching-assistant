@@ -6,6 +6,7 @@ import { ModelConfigService } from '../model-config/model-config.service';
 import { PromptComposerService } from '../prompts/prompt-composer.service';
 import { InteractiveQuestion } from '@prisma/client';
 import { resolveQuestionLanguage } from '../ai/language-instruction';
+import { cleanQuestionText, stripOptionPrefix } from './moodle-xml.helper';
 
 interface CreateInteractiveQuestionDto {
     questionType?: string;
@@ -231,7 +232,7 @@ export class InteractiveQuestionService {
 
                 const created = await this.createQuestion(lessonId, {
                     questionType: q.questionType || 'MC',
-                    questionText: q.questionText,
+                    questionText: cleanQuestionText(q.questionText || q.question),
                     answers,
                     correctFeedback: q.correctFeedback,
                     incorrectFeedback: q.incorrectFeedback,
@@ -261,9 +262,13 @@ export class InteractiveQuestionService {
      */
     private parseAnswersFromAI(answers: any[]): string[] {
         return answers.map((a: any) => {
-            if (typeof a === 'string') return a;
+            if (typeof a === 'string') {
+                const isMarked = a.trim().startsWith('*');
+                const cleaned = stripOptionPrefix(a.replace(/^\*/, '').trim());
+                return isMarked ? `*${cleaned}` : cleaned;
+            }
             // Handle {text, isCorrect} format from DB prompt
-            const text = a.text?.replace(/^\*/, '') || '';
+            const text = stripOptionPrefix((a.text?.replace(/^\*/, '') || '').trim());
             return a.isCorrect ? `*${text}` : text;
         });
     }

@@ -24,26 +24,31 @@ export function SyllabusPanel({ subjectId }: Props) {
     const [isGenerating, setIsGenerating] = useState(false);
     const [expandedLesson, setExpandedLesson] = useState<string | null>(null);
     const [editingTextbook, setEditingTextbook] = useState<{ id: string; content: string } | null>(null);
+    const [editingPractice, setEditingPractice] = useState<{ id: string; content: string } | null>(null);
     const [numberOfLessons, setNumberOfLessons] = useState<string>('');
     const [theoryLessons, setTheoryLessons] = useState<string>('');
     const [practiceLessons, setPracticeLessons] = useState<string>('');
     const [generatingTextbookId, setGeneratingTextbookId] = useState<string | null>(null);
     const [proStatus, setProStatus] = useState<TextbookStatus | null>(null);
+    const [generatingPracticeId, setGeneratingPracticeId] = useState<string | null>(null);
+    const [practiceProStatus, setPracticeProStatus] = useState<TextbookStatus | null>(null);
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
     const [editingTitleValue, setEditingTitleValue] = useState('');
     const [editingOutlineId, setEditingOutlineId] = useState<string | null>(null);
     const [editingOutlineValue, setEditingOutlineValue] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const proPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const practicePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     useEffect(() => {
         loadSyllabus();
     }, [subjectId]);
 
-    // Stop textbook-pro polling on unmount to avoid leaks
+    // Stop textbook-pro and practice-guide polling on unmount to avoid leaks
     useEffect(() => {
         return () => {
             if (proPollRef.current) clearInterval(proPollRef.current);
+            if (practicePollRef.current) clearInterval(practicePollRef.current);
         };
     }, []);
 
@@ -283,27 +288,11 @@ export function SyllabusPanel({ subjectId }: Props) {
 
 
 
-    const handleGenerateTextbookPro = async (sl: { id: string; title: string }) => {
-        if (!syllabus) return;
-        setGeneratingTextbookId(sl.id);
-        setProStatus({ phase: 'extracting', status: 'generating', progress: 10, message: 'Trích xuất tài liệu tham khảo...' });
-        setMessage({ type: 'success', text: `🚀 Đang tạo textbook PRO (5 bước) cho "${sl.title}"...` });
-
-        try {
-            // Kick off background pipeline (returns immediately)
-            await syllabusApi.generateTextbookPro(syllabus.id, sl.id);
-        } catch (err: any) {
-            setMessage({ type: 'error', text: `❌ ${err.response?.data?.message || 'Không thể bắt đầu tạo textbook Pro'}` });
-            setGeneratingTextbookId(null);
-            setProStatus(null);
-            return;
-        }
-
-        // Poll status until done/error (pipeline runs in background on the server)
+    const startTextbookPolling = (syllabusId: string, sl: { id: string; title: string }) => {
         if (proPollRef.current) clearInterval(proPollRef.current);
         const pollInterval = setInterval(async () => {
             try {
-                const res = await syllabusApi.getTextbookStatus(syllabus.id, sl.id);
+                const res = await syllabusApi.getTextbookStatus(syllabusId, sl.id);
                 setProStatus(res.data);
                 if (res.data.phase === 'done') {
                     clearInterval(pollInterval);
@@ -325,6 +314,96 @@ export function SyllabusPanel({ subjectId }: Props) {
         proPollRef.current = pollInterval;
     };
 
+    const startPracticePolling = (syllabusId: string, sl: { id: string; title: string }) => {
+        if (practicePollRef.current) clearInterval(practicePollRef.current);
+        const pollInterval = setInterval(async () => {
+            try {
+                const res = await syllabusApi.getPracticeStatus(syllabusId, sl.id);
+                setPracticeProStatus(res.data);
+                if (res.data.phase === 'done') {
+                    clearInterval(pollInterval);
+                    practicePollRef.current = null;
+                    setMessage({ type: 'success', text: `✅ Hướng dẫn thực hành "${sl.title}" đã sẵn sàng!` });
+                    setGeneratingPracticeId(null);
+                    setPracticeProStatus(null);
+                    loadSyllabus(true);
+                } else if (res.data.phase === 'error') {
+                    clearInterval(pollInterval);
+                    practicePollRef.current = null;
+                    setMessage({ type: 'error', text: `❌ Lỗi tạo hướng dẫn thực hành cho "${sl.title}"` });
+                    setGeneratingPracticeId(null);
+                    setPracticeProStatus(null);
+                    loadSyllabus(true);
+                }
+            } catch { /* ignore transient poll errors */ }
+        }, 3000);
+        practicePollRef.current = pollInterval;
+    };
+
+    // Resume polling automatically if page reloads while a lesson is still generating on the server
+    useEffect(() => {
+        if (!syllabus) return;
+        if (!generatingTextbookId && !proPollRef.current) {
+            const activeTb = syllabus.lessons.find((l) => l.textbookStatus === 'generating');
+            if (activeTb) {
+                setGeneratingTextbookId(activeTb.id);
+                startTextbookPolling(syllabus.id, activeTb);
+            }
+        }
+        if (!generatingPracticeId && !practicePollRef.current) {
+            const activePr = syllabus.lessons.find((l) => l.practiceStatus === 'generating');
+            if (activePr) {
+                setGeneratingPracticeId(activePr.id);
+                startPracticePolling(syllabus.id, activePr);
+            }
+        }
+    }, [syllabus?.id, syllabus?.lessons]);
+
+    const handleGenerateTextbookPro = async (sl: { id: string; title: string }) => {
+        if (!syllabus) return;
+        setGeneratingTextbookId(sl.id);
+        setProStatus({ phase: 'extracting', status: 'generating', progress: 10, message: 'Trích xuất tài liệu tham khảo...' });
+        setMessage({ type: 'success', text: `🚀 Đang tạo textbook PRO (5 bước) cho "${sl.title}"...` });
+
+        try {
+            // Kick off background pipeline (returns immediately)
+            await syllabusApi.generateTextbookPro(syllabus.id, sl.id);
+        } catch (err: any) {
+            setMessage({ type: 'error', text: `❌ ${err.response?.data?.message || 'Không thể bắt đầu tạo textbook Pro'}` });
+            setGeneratingTextbookId(null);
+            setProStatus(null);
+            return;
+        }
+
+        startTextbookPolling(syllabus.id, sl);
+    };
+
+    const handleGeneratePracticeGuide = async (sl: { id: string; title: string }) => {
+        if (!syllabus) return;
+        setGeneratingPracticeId(sl.id);
+        setPracticeProStatus({
+            phase: 'extracting',
+            status: 'generating',
+            progress: 12,
+            message: 'Trích xuất đề cương & học liệu tham khảo...',
+        });
+        setMessage({ type: 'success', text: `🛠️ Đang tạo hướng dẫn thực hành cho "${sl.title}"...` });
+
+        try {
+            await syllabusApi.generatePracticeGuide(syllabus.id, sl.id);
+        } catch (err: any) {
+            setMessage({
+                type: 'error',
+                text: `❌ ${err.response?.data?.message || 'Không thể bắt đầu tạo hướng dẫn thực hành'}`,
+            });
+            setGeneratingPracticeId(null);
+            setPracticeProStatus(null);
+            return;
+        }
+
+        startPracticePolling(syllabus.id, sl);
+    };
+
     const handleSaveTextbook = async () => {
         if (!syllabus || !editingTextbook) return;
         try {
@@ -335,7 +414,7 @@ export function SyllabusPanel({ subjectId }: Props) {
                 return {
                     ...prev,
                     lessons: prev.lessons.map(l =>
-                        l.id === editingTextbook.id ? { ...l, textbookContent: editingTextbook.content } : l,
+                        l.id === editingTextbook.id ? { ...l, textbookContent: editingTextbook.content, textbookStatus: 'done' } : l,
                     ),
                 };
             });
@@ -343,6 +422,28 @@ export function SyllabusPanel({ subjectId }: Props) {
             setEditingTextbook(null);
         } catch {
             setMessage({ type: 'error', text: 'Lỗi lưu textbook' });
+        }
+    };
+
+    const handleSavePractice = async () => {
+        if (!syllabus || !editingPractice) return;
+        try {
+            await syllabusApi.savePracticeContent(syllabus.id, editingPractice.id, editingPractice.content);
+            setSyllabus(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    lessons: prev.lessons.map(l =>
+                        l.id === editingPractice.id
+                            ? { ...l, practiceContent: editingPractice.content, practiceStatus: 'done' }
+                            : l,
+                    ),
+                };
+            });
+            setMessage({ type: 'success', text: '✅ Đã lưu hướng dẫn thực hành' });
+            setEditingPractice(null);
+        } catch {
+            setMessage({ type: 'error', text: 'Lỗi lưu hướng dẫn thực hành' });
         }
     };
 
@@ -357,8 +458,26 @@ export function SyllabusPanel({ subjectId }: Props) {
             document.body.appendChild(link);
             link.click();
             link.remove();
+            URL.revokeObjectURL(url);
         } catch {
-            setMessage({ type: 'error', text: 'Không thể xuất giáo trình DOCX' });
+            setMessage({ type: 'error', text: 'Không thể xuất giáo trình DOCX (cần tạo ít nhất 1 bài textbook)' });
+        }
+    };
+
+    const handleExportPracticeDocx = async () => {
+        try {
+            const res = await syllabusApi.exportPracticeDocx(subjectId);
+            const blob = new Blob([res.data as any]);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', 'Huong_dan_thuc_hanh.docx');
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            setMessage({ type: 'error', text: 'Không thể xuất DOCX hướng dẫn thực hành (cần tạo ít nhất 1 bài thực hành)' });
         }
     };
 
@@ -376,9 +495,35 @@ export function SyllabusPanel({ subjectId }: Props) {
             document.body.appendChild(link);
             link.click();
             link.remove();
+            URL.revokeObjectURL(url);
         } catch {
             setMessage({ type: 'error', text: 'Không thể xuất DOCX cho bài này' });
         }
+    };
+
+    const handleExportSinglePracticeDocx = async (sl: { id: string; title: string; sortOrder: number }) => {
+        if (!syllabus) return;
+        try {
+            const res = await syllabusApi.exportSinglePracticeDocx(syllabus.id, sl.id);
+            const blob = new Blob([res.data as any]);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const paddedNum = String(sl.sortOrder + 1).padStart(2, '0');
+            const safeName = sl.title.replace(/[/\\?%*:|"<>]/g, '_').substring(0, 50);
+            link.href = url;
+            link.setAttribute('download', `Huong_dan_TH_Bai_${paddedNum}_${safeName}.docx`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } catch {
+            setMessage({ type: 'error', text: 'Không thể xuất hướng dẫn thực hành DOCX cho bài này' });
+        }
+    };
+
+    /** Detect if a lesson title/outline explicitly indicates a practice/lab/workshop lesson */
+    const isPracticeTopicLesson = (title: string) => {
+        return /(thực hành|thí nghiệm|thảo luận|bài tập|lab\b|workshop|case study|thực tập|rèn nghề)/i.test(title);
     };
 
     const handleSaveTitle = async (sl: { id: string }) => {
@@ -508,6 +653,12 @@ export function SyllabusPanel({ subjectId }: Props) {
                     >
                         📗 Xuất giáo trình DOCX
                     </button>
+                    <button
+                        className="btn-export btn-export-practice-header"
+                        onClick={handleExportPracticeDocx}
+                    >
+                        🛠️ Xuất HD thực hành DOCX
+                    </button>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -554,7 +705,7 @@ export function SyllabusPanel({ subjectId }: Props) {
 
             {/* Model Selection */}
             <div className="syllabus-model-config" style={{ display: 'flex', gap: '1rem', padding: '1rem', backgroundColor: 'var(--bg-card)', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--border-color)', flexWrap: 'wrap' }}>
-                <ModelSelector taskType="OUTLINE" label="🧠 Model sinh Nội dung (Đề cương & Textbook)" compact />
+                <ModelSelector taskType="OUTLINE" label="🧠 Model sinh Nội dung (Đề cương, Textbook & HD Thực hành)" compact />
                 <ModelSelector taskType="IMAGE" label="🖼️ Model tạo Ảnh minh họa" compact />
                 <ModelSelector taskType="EMBEDDING" label="🔎 Model embedding (RAG tài liệu)" compact />
             </div>
@@ -693,6 +844,14 @@ export function SyllabusPanel({ subjectId }: Props) {
                                     ) : (
                                         <>
                                             <span className="lesson-title">{cleanTitle(sl.title)}</span>
+                                            {isPracticeTopicLesson(sl.title) && (
+                                                <span
+                                                    className="lesson-practice-tag"
+                                                    title="Bài có nội dung thực hành / thí nghiệm / bài tập"
+                                                >
+                                                    Thực hành
+                                                </span>
+                                            )}
                                             <button
                                                 className="btn-inline-edit"
                                                 onClick={(e) => {
@@ -719,10 +878,37 @@ export function SyllabusPanel({ subjectId }: Props) {
                                             📥
                                         </button>
                                     )}
+                                    {sl.practiceContent && (
+                                        <button
+                                            className="btn-quick-download btn-quick-download-practice"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleExportSinglePracticeDocx(sl);
+                                            }}
+                                            title="Tải nhanh hướng dẫn thực hành DOCX"
+                                        >
+                                            🛠️📥
+                                        </button>
+                                    )}
                                     <span className="lesson-expand">{expandedLesson === sl.id ? '▲' : '▼'}</span>
-                                    {sl.textbookStatus === 'done' && <span className="lesson-tb-badge done">📗</span>}
-                                    {sl.textbookStatus === 'generating' && <span className="lesson-tb-badge gen">⏳</span>}
-                                    {sl.textbookStatus === 'error' && <span className="lesson-tb-badge err">⚠️</span>}
+                                    {sl.textbookStatus === 'done' && (
+                                        <span className="lesson-tb-badge done" title="Đã có Giáo trình (Textbook PRO)">📗</span>
+                                    )}
+                                    {sl.textbookStatus === 'generating' && (
+                                        <span className="lesson-tb-badge gen" title="Đang tạo Giáo trình">⏳</span>
+                                    )}
+                                    {sl.textbookStatus === 'error' && (
+                                        <span className="lesson-tb-badge err" title="Lỗi tạo Giáo trình">⚠️</span>
+                                    )}
+                                    {sl.practiceStatus === 'done' && (
+                                        <span className="lesson-tb-badge done" title="Đã có Hướng dẫn thực hành">🛠️</span>
+                                    )}
+                                    {sl.practiceStatus === 'generating' && (
+                                        <span className="lesson-tb-badge gen" title="Đang tạo Hướng dẫn thực hành">⏳</span>
+                                    )}
+                                    {sl.practiceStatus === 'error' && (
+                                        <span className="lesson-tb-badge err" title="Lỗi tạo Hướng dẫn thực hành">⚠️</span>
+                                    )}
                                 </div>
                                 {expandedLesson === sl.id && (
                                     <div className="lesson-outline-preview" onClick={(e) => e.stopPropagation()}>
@@ -781,21 +967,27 @@ export function SyllabusPanel({ subjectId }: Props) {
                                                 }}
                                                 title="Tạo textbook 5 bước: trích xuất ref → plan → viết → minh họa → review"
                                             >
-                                                {generatingTextbookId === sl.id
-                                                    ? '⏳ Đang xử lý...'
+                                                {generatingTextbookId === sl.id || sl.textbookStatus === 'generating'
+                                                    ? '⏳ Đang tạo Textbook...'
                                                     : sl.textbookStatus === 'done'
                                                         ? '🔄 Tạo lại textbook PRO'
                                                         : '🚀 Tạo textbook PRO'}
                                             </button>
-                                            {/* Progress bar for Pro mode */}
-                                            {generatingTextbookId === sl.id && proStatus && (
-                                                <div className="textbook-pro-progress">
-                                                    <div className="pro-progress-bar">
-                                                        <div className="pro-progress-fill" style={{ width: `${proStatus.progress}%` }} />
-                                                    </div>
-                                                    <span className="pro-progress-text">{proStatus.message}</span>
-                                                </div>
-                                            )}
+                                            <button
+                                                className={`btn-bridge btn-practice-guide ${sl.practiceStatus === 'done' ? 'is-done' : ''} ${generatingPracticeId === sl.id ? 'btn-generating' : ''}`}
+                                                disabled={generatingPracticeId === sl.id || sl.practiceStatus === 'generating'}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleGeneratePracticeGuide(sl);
+                                                }}
+                                                title="Bấm là tạo ngay tài liệu hướng dẫn sinh viên thực hành cụ thể theo chủ đề môn học"
+                                            >
+                                                {generatingPracticeId === sl.id || sl.practiceStatus === 'generating'
+                                                    ? '⏳ Đang tạo HD thực hành...'
+                                                    : sl.practiceStatus === 'done'
+                                                        ? '🔄 Tạo lại HD thực hành'
+                                                        : '🛠️ Tạo hướng dẫn thực hành'}
+                                            </button>
                                             {sl.textbookContent && (
                                                 <button
                                                     className="btn-bridge btn-export"
@@ -804,19 +996,58 @@ export function SyllabusPanel({ subjectId }: Props) {
                                                         handleExportSingleLessonDocx(sl);
                                                     }}
                                                 >
-                                                    📥 Xuất DOCX
+                                                    📥 Xuất Giáo trình DOCX
+                                                </button>
+                                            )}
+                                            {sl.practiceContent && (
+                                                <button
+                                                    className="btn-bridge btn-export-practice-inline"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleExportSinglePracticeDocx(sl);
+                                                    }}
+                                                >
+                                                    📥 Xuất HD Thực hành DOCX
                                                 </button>
                                             )}
                                         </div>
+
+                                        {/* Progress bar & indicator for Textbook PRO */}
+                                        {generatingTextbookId === sl.id && proStatus && (
+                                            <div className="textbook-pro-progress">
+                                                <div className="pro-progress-bar">
+                                                    <div className="pro-progress-fill" style={{ width: `${proStatus.progress}%` }} />
+                                                </div>
+                                                <span className="pro-progress-text">📗 Giáo trình: {proStatus.message}</span>
+                                            </div>
+                                        )}
                                         {generatingTextbookId === sl.id && (
                                             <div className="textbook-generating-indicator">
                                                 <div className="generating-spinner" />
                                                 <span>AI đang tạo nội dung textbook... Quá trình này có thể mất 1-3 phút.</span>
                                             </div>
                                         )}
+
+                                        {/* Progress bar & indicator for Practice Guide */}
+                                        {generatingPracticeId === sl.id && practiceProStatus && (
+                                            <div className="textbook-pro-progress practice-pro-progress">
+                                                <div className="pro-progress-bar">
+                                                    <div className="pro-progress-fill practice-progress-fill" style={{ width: `${practiceProStatus.progress}%` }} />
+                                                </div>
+                                                <span className="pro-progress-text practice-progress-text">🛠️ HD Thực hành: {practiceProStatus.message}</span>
+                                            </div>
+                                        )}
+                                        {generatingPracticeId === sl.id && (
+                                            <div className="textbook-generating-indicator practice-generating-indicator">
+                                                <div className="generating-spinner practice-spinner" />
+                                                <span>AI đang thiết kế kịch bản & biên soạn hướng dẫn thực hành từng bước... (khoảng 1-3 phút)</span>
+                                            </div>
+                                        )}
+
+                                        {/* Collapsible Textbook Preview & Editor */}
                                         {sl.textbookContent && (
                                             <details className="textbook-preview">
-                                                <summary>📖 Xem/sửa textbook ({Math.round(sl.textbookContent.length / 1000)}k ký tự)</summary>
+                                                <summary>📖 Xem/sửa textbook ({Math.max(1, Math.round(sl.textbookContent.length / 1000))}k ký tự)</summary>
                                                 {editingTextbook?.id === sl.id ? (
                                                     <div className="textbook-edit-area">
                                                         <textarea
@@ -839,6 +1070,40 @@ export function SyllabusPanel({ subjectId }: Props) {
                                                             className="btn-bridge btn-open"
                                                             style={{ margin: '0.5rem 0.75rem' }}
                                                             onClick={() => setEditingTextbook({ id: sl.id, content: sl.textbookContent! })}
+                                                        >
+                                                            ✏️ Chỉnh sửa Markdown
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </details>
+                                        )}
+
+                                        {/* Collapsible Practice Guide Preview & Editor (Parallel to Textbook) */}
+                                        {sl.practiceContent && (
+                                            <details className="textbook-preview practice-preview">
+                                                <summary>🛠️ Xem/sửa hướng dẫn thực hành ({Math.max(1, Math.round(sl.practiceContent.length / 1000))}k ký tự)</summary>
+                                                {editingPractice?.id === sl.id ? (
+                                                    <div className="textbook-edit-area">
+                                                        <textarea
+                                                            className="textbook-textarea"
+                                                            value={editingPractice.content}
+                                                            onChange={(e) => setEditingPractice({ id: sl.id, content: e.target.value })}
+                                                            rows={15}
+                                                        />
+                                                        <div className="textbook-edit-actions">
+                                                            <button className="btn-bridge btn-create" onClick={handleSavePractice}>💾 Lưu</button>
+                                                            <button className="btn-bridge btn-open" onClick={() => setEditingPractice(null)}>Hủy</button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div>
+                                                        <div className="markdown-content textbook-markdown">
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{sl.practiceContent}</ReactMarkdown>
+                                                        </div>
+                                                        <button
+                                                            className="btn-bridge btn-open"
+                                                            style={{ margin: '0.5rem 0.75rem' }}
+                                                            onClick={() => setEditingPractice({ id: sl.id, content: sl.practiceContent! })}
                                                         >
                                                             ✏️ Chỉnh sửa Markdown
                                                         </button>

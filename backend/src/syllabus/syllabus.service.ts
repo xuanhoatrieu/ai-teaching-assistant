@@ -8,6 +8,12 @@ import { FileStorageService } from '../file-storage/file-storage.service';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { ReferenceRagService } from './reference-rag.service';
 import { fixUtf8Filename } from '../common/string.util';
+import {
+    PRACTICE_PLAN_PROMPT,
+    PRACTICE_WRITE_PROMPT,
+    PRACTICE_ILLUSTRATE_PROMPT,
+    PRACTICE_REVIEW_FIX_PROMPT,
+} from './practice-guide.prompts';
 
 /** Default 10 blocks matching TUAF 2026 syllabus template */
 const DEFAULT_BLOCKS = [
@@ -1522,6 +1528,433 @@ export class SyllabusService {
         this.logger.log(`[TextbookPro] Illustrated: ${imageRecords.length} images added`);
         return result;
     }
+
+    // ==================== Practice Guide Pipeline (Parallel to Textbook) ====================
+
+    /**
+     * Verify ownership of a Subject before exporting or mutating subject-level resources.
+     */
+    async verifySubjectOwnership(subjectId: string, userId?: string) {
+        const subject = await this.prisma.subject.findUnique({
+            where: { id: subjectId },
+            select: { id: true, name: true, userId: true },
+        });
+        if (!subject) {
+            throw new BadRequestException('Không tìm thấy môn học.');
+        }
+        if (userId && subject.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền truy cập môn học này.');
+        }
+        return subject;
+    }
+
+    /**
+     * Verify ownership of a SyllabusLesson before reading/mutating practice guide data.
+     */
+    async verifyLessonOwnership(lessonId: string, userId?: string) {
+        const sl = await this.prisma.syllabusLesson.findUnique({
+            where: { id: lessonId },
+            include: {
+                syllabus: {
+                    include: {
+                        subject: { select: { id: true, name: true, userId: true } },
+                    },
+                },
+            },
+        });
+        if (!sl) {
+            throw new BadRequestException('Không tìm thấy bài học trong đề cương.');
+        }
+        if (userId && sl.syllabus.subject.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền truy cập bài học này.');
+        }
+        return sl;
+    }
+
+    /**
+     * Save edited practice guide Markdown content for a SyllabusLesson.
+     */
+    async savePracticeContent(lessonId: string, practiceContent: string, userId?: string) {
+        if (typeof practiceContent !== 'string') {
+            throw new BadRequestException('Nội dung hướng dẫn thực hành không hợp lệ.');
+        }
+        await this.verifyLessonOwnership(lessonId, userId);
+        return this.prisma.syllabusLesson.update({
+            where: { id: lessonId },
+            data: { practiceContent, practiceStatus: 'done', practicePhase: 'done' },
+        });
+    }
+
+    /**
+     * Get current practice guide generation status for polling.
+     */
+    async getPracticeStatus(lessonId: string, userId?: string) {
+        if (userId) {
+            await this.verifyLessonOwnership(lessonId, userId);
+        }
+        const sl = await this.prisma.syllabusLesson.findUnique({
+            where: { id: lessonId },
+            select: { practicePhase: true, practiceStatus: true },
+        });
+        if (!sl) return null;
+
+        const phaseProgress: Record<string, number> = {
+            extracting: 12,
+            planning: 32,
+            writing: 58,
+            illustrating: 78,
+            reviewing: 92,
+            done: 100,
+            error: 0,
+        };
+        const phaseMessages: Record<string, string> = {
+            extracting: 'Trích xuất đề cương & học liệu tham khảo...',
+            planning: 'Phân tích chủ đề & thiết kế kịch bản thực hành...',
+            writing: 'Biên soạn hướng dẫn thực hành từng bước...',
+            illustrating: 'Tạo sơ đồ quy trình & hình minh họa...',
+            reviewing: 'Rà soát tính khả thi & hoàn thiện tài liệu...',
+            done: 'Hoàn thành!',
+            error: 'Lỗi trong quá trình tạo hướng dẫn thực hành',
+        };
+
+        const phase = sl.practicePhase || 'none';
+        return {
+            phase,
+            status: sl.practiceStatus,
+            progress: phaseProgress[phase] ?? 0,
+            message: phaseMessages[phase] ?? '',
+        };
+    }
+
+    /**
+     * Kick off the Practice Guide 5-step pipeline in the background (1-click immediate start).
+     */
+    async startPracticeGuide(
+        lessonId: string,
+        modelName: string,
+        imageModelName: string | undefined,
+        userId?: string,
+        embeddingModelName?: string,
+    ) {
+        await this.verifyLessonOwnership(lessonId, userId);
+
+        await this.updatePracticePhase(lessonId, 'generating', 'extracting');
+
+        this.generatePracticeGuide(lessonId, modelName, imageModelName, userId, embeddingModelName).catch((err: any) => {
+            this.logger.error(`[PracticeGuide] background pipeline failed: ${err.message}`);
+        });
+
+        return { started: true, phase: 'extracting', status: 'generating' };
+    }
+
+    /**
+     * AI-generate domain-adaptive Practice Guide using 5-step pipeline:
+     * EXTRACT → PLAN (Archetype Classification + Task Design) → WRITE → ILLUSTRATE → REVIEW+FIX
+     */
+    async generatePracticeGuide(
+        syllabusLessonId: string,
+        modelName: string,
+        imageModelName?: string,
+        userId?: string,
+        embeddingModelName?: string,
+    ) {
+        this.logger.log(`[PracticeGuide] Starting 5-step pipeline for ${syllabusLessonId}`);
+
+        const sl = await this.prisma.syllabusLesson.findUnique({
+            where: { id: syllabusLessonId },
+            include: {
+                syllabus: {
+                    include: {
+                        subject: true,
+                        blocks: true,
+                        lessons: { select: { id: true } },
+                        references: {
+                            where: { status: 'done' },
+                            select: { id: true, markdownContent: true, fileName: true },
+                        },
+                    },
+                },
+            },
+        });
+
+        if (!sl) throw new BadRequestException('SyllabusLesson not found');
+        if (userId && sl.syllabus.subject.userId !== userId) {
+            throw new ForbiddenException('Bạn không có quyền truy cập bài học này.');
+        }
+
+        const syllabusId = sl.syllabusId;
+        const subject = sl.syllabus.subject;
+
+        await this.updatePracticePhase(syllabusLessonId, 'generating', 'extracting');
+
+        try {
+            // Build rich subject & syllabus context for domain adaptation
+            const infoBlock = sl.syllabus.blocks.find((b) => b.blockType === 'general_info');
+            const descBlock = sl.syllabus.blocks.find((b) => b.blockType === 'description');
+            const cloBlock = sl.syllabus.blocks.find((b) => b.blockType === 'clo');
+            const tasksBlock = sl.syllabus.blocks.find((b) => b.blockType === 'student_tasks');
+            const assessmentBlock = sl.syllabus.blocks.find((b) => b.blockType === 'assessment');
+
+            const subjectMetaLines: string[] = [
+                `- Tên môn học / Học phần: ${subject.courseName || subject.name}`,
+            ];
+            if (subject.majorName) subjectMetaLines.push(`- Ngành đào tạo: ${subject.majorName}`);
+            if (subject.expertiseArea) subjectMetaLines.push(`- Lĩnh vực chuyên môn: ${subject.expertiseArea}`);
+            if (subject.targetAudience) subjectMetaLines.push(`- Đối tượng người học: ${subject.targetAudience}`);
+            if (subject.institutionType) subjectMetaLines.push(`- Bậc / Loại hình đào tạo: ${subject.institutionType}`);
+            if (subject.language) subjectMetaLines.push(`- Ngôn ngữ giảng dạy chính: ${subject.language}`);
+            if (subject.additionalContext) subjectMetaLines.push(`- Ghi chú chuyên môn bổ sung: ${subject.additionalContext}`);
+
+            const lessonNum = typeof sl.sortOrder === 'number' ? String(sl.sortOrder + 1).padStart(2, '0') : '01';
+            const totalLessonsCount = Array.isArray((sl.syllabus as any).lessons)
+                ? (sl.syllabus as any).lessons.length
+                : undefined;
+
+            let baseContext = `## THÔNG TIN HỌC PHẦN & CHUYÊN NGÀNH\n${subjectMetaLines.join('\n')}\n\n`;
+            baseContext += `## VỊ TRÍ & BÀI THỰC HÀNH\n- Số bài: Bài ${lessonNum}${totalLessonsCount ? ` (trên tổng số ${totalLessonsCount} bài trong đề cương)` : ''}\n- Tên bài: ${sl.title}\n\n## ĐỀ CƯƠNG CHI TIẾT CỦA BÀI\n${sl.outline}\n\n`;
+
+            if (infoBlock?.content?.trim()) {
+                baseContext += `## THÔNG TIN TỔNG QUAN HỌC PHẦN\n${infoBlock.content.slice(0, 3000)}\n\n`;
+            }
+            if (cloBlock?.content?.trim()) {
+                baseContext += `## CHUẨN ĐẦU RA HỌC PHẦN (CLO)\n${cloBlock.content.slice(0, 4000)}\n\n`;
+            }
+            if (descBlock?.content?.trim()) {
+                baseContext += `## MÔ TẢ HỌC PHẦN\n${descBlock.content.slice(0, 3000)}\n\n`;
+            }
+            if (tasksBlock?.content?.trim()) {
+                baseContext += `## NHIỆM VỤ SINH VIÊN & YÊU CẦU THỰC HÀNH TRONG ĐỀ CƯƠNG\n${tasksBlock.content.slice(0, 4000)}\n\n`;
+            }
+            if (assessmentBlock?.content?.trim()) {
+                baseContext += `## PHƯƠNG PHÁP ĐÁNH GIÁ & RUBRIC HỌC PHẦN\n${assessmentBlock.content.slice(0, 4000)}\n\n`;
+            }
+
+            // ── Step 0: EXTRACT (RAG retrieval, fallback to AI-extract) ──
+            this.logger.log(`[PracticeGuide] Step 0: EXTRACT references (embeddingModel=${embeddingModelName || 'none'})`);
+            let relevantRefs = '';
+            const refs = sl.syllabus.references.slice(0, 3);
+
+            let ragSucceeded = false;
+            if (embeddingModelName && refs.length > 0) {
+                try {
+                    for (const ref of refs) {
+                        if (!ref.markdownContent) continue;
+                        await this.referenceRag.indexReference(ref.id, embeddingModelName, userId);
+                    }
+                    const query = `Thực hành bài tập thí nghiệm hướng dẫn: ${sl.title}\n${sl.outline}`;
+                    const hits = await this.referenceRag.retrieve(syllabusId, query, embeddingModelName, userId, 12);
+                    if (hits.length > 0) {
+                        const byFile = new Map<string, string[]>();
+                        for (const h of hits) {
+                            if (!byFile.has(h.fileName)) byFile.set(h.fileName, []);
+                            byFile.get(h.fileName)!.push(h.content);
+                        }
+                        for (const [fileName, contents] of byFile) {
+                            relevantRefs += `\n## TÀI LIỆU THAM KHẢO: ${fileName}\n${contents.join('\n\n---\n\n')}\n`;
+                        }
+                        ragSucceeded = true;
+                        this.logger.log(`[PracticeGuide] RAG retrieved ${hits.length} chunks → ${relevantRefs.length} chars`);
+                    }
+                } catch (err: any) {
+                    this.logger.warn(`[PracticeGuide] RAG failed, falling back to AI-extract: ${err.message}`);
+                }
+            }
+
+            if (!ragSucceeded && refs.length > 0) {
+                for (const ref of refs) {
+                    if (!ref.markdownContent) continue;
+                    try {
+                        const extractResult = await this.aiProvider.generateTextWithSystem(
+                            EXTRACT_PROMPT,
+                            `BÀI THỰC HÀNH: "${sl.title}"\nĐỀ CƯƠNG: ${sl.outline}\n\nTÀI LIỆU (${ref.fileName}):\n${ref.markdownContent.slice(0, REF_CHAR_LIMIT)}`,
+                            modelName,
+                            userId,
+                        );
+                        if (!extractResult.content.includes('KHÔNG CÓ NỘI DUNG LIÊN QUAN')) {
+                            relevantRefs += `\n## TÀI LIỆU THAM KHẢO: ${fileNameSafe(ref.fileName)}\n${extractResult.content}\n`;
+                        }
+                    } catch (err: any) {
+                        this.logger.warn(`[PracticeGuide] EXTRACT failed for ${ref.fileName}: ${err.message}`);
+                    }
+                }
+            }
+
+            // ── Step 1: PLAN (Domain Archetype + Stepwise Scenario Design) ──
+            await this.updatePracticePhase(syllabusLessonId, 'generating', 'planning');
+            this.logger.log(`[PracticeGuide] Step 1: PLAN`);
+
+            const planResult = await this.aiProvider.generateTextWithSystem(
+                PRACTICE_PLAN_PROMPT,
+                `${baseContext}\n${relevantRefs ? `## TÀI LIỆU THAM KHẢO ĐÃ TRÍCH\n${relevantRefs}\n` : ''}`,
+                modelName,
+                userId,
+            );
+
+            let planJson = planResult.content.trim();
+            if (planJson.startsWith('```')) {
+                planJson = planJson.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+            }
+            await this.prisma.syllabusLesson.update({
+                where: { id: syllabusLessonId },
+                data: { practicePlan: planJson },
+            });
+
+            // ── Step 2: WRITE ──
+            await this.updatePracticePhase(syllabusLessonId, 'generating', 'writing');
+            this.logger.log(`[PracticeGuide] Step 2: WRITE guide`);
+
+            const writeResult = await this.aiProvider.generateTextWithSystem(
+                PRACTICE_WRITE_PROMPT,
+                `## KẾ HOẠCH HƯỚNG DẪN THỰC HÀNH (PLAN)\n${planJson}\n\n${baseContext}\n${relevantRefs ? `## TÀI LIỆU THAM KHẢO\n${relevantRefs}\n` : ''}`,
+                modelName,
+                userId,
+            );
+            let draft = writeResult.content.trim();
+
+            // ── Step 3: ILLUSTRATE ──
+            await this.updatePracticePhase(syllabusLessonId, 'generating', 'illustrating');
+            this.logger.log(`[PracticeGuide] Step 3: ILLUSTRATE`);
+
+            try {
+                draft = await this.illustratePracticeGuide(
+                    draft,
+                    syllabusId,
+                    syllabusLessonId,
+                    modelName,
+                    imageModelName,
+                    userId,
+                );
+            } catch (err: any) {
+                this.logger.warn(`[PracticeGuide] ILLUSTRATE failed (non-fatal): ${err.message}`);
+            }
+
+            // ── Step 4: REVIEW + FIX ──
+            await this.updatePracticePhase(syllabusLessonId, 'generating', 'reviewing');
+            this.logger.log(`[PracticeGuide] Step 4: REVIEW + FIX`);
+
+            const reviewResult = await this.aiProvider.generateTextWithSystem(
+                PRACTICE_REVIEW_FIX_PROMPT,
+                `${relevantRefs ? `## TÀI LIỆU THAM KHẢO ĐỐI CHIẾU\n${relevantRefs}\n\n` : ''}## TÀI LIỆU HƯỚNG DẪN THỰC HÀNH CẦN RÀ SOÁT:\n\n${draft}`,
+                modelName,
+                userId,
+            );
+            const finalContent = reviewResult.content.trim();
+
+            await this.prisma.syllabusLesson.update({
+                where: { id: syllabusLessonId },
+                data: {
+                    practiceContent: finalContent,
+                    practiceStatus: 'done',
+                    practicePhase: 'done',
+                },
+            });
+
+            this.logger.log(`[PracticeGuide] ✅ Complete: ${finalContent.length} chars`);
+            return this.prisma.syllabusLesson.findUnique({ where: { id: syllabusLessonId } });
+        } catch (err: any) {
+            this.logger.error(`[PracticeGuide] Pipeline failed: ${err.message}`);
+            await this.updatePracticePhase(syllabusLessonId, 'error', 'error');
+            throw new BadRequestException(`Practice Guide generation failed: ${err.message}`);
+        }
+    }
+
+    private async updatePracticePhase(lessonId: string, status: string, phase: string) {
+        await this.prisma.syllabusLesson.update({
+            where: { id: lessonId },
+            data: { practiceStatus: status, practicePhase: phase },
+        });
+    }
+
+    /**
+     * ILLUSTRATE step for Practice Guide: saves assets with `practice_*` prefix
+     * so they never overwrite Textbook illustrations on the same lesson.
+     */
+    private async illustratePracticeGuide(
+        draft: string,
+        syllabusId: string,
+        lessonId: string,
+        modelName: string,
+        imageModelName?: string,
+        userId?: string,
+    ): Promise<string> {
+        const illustrateResult = await this.aiProvider.generateTextWithSystem(
+            PRACTICE_ILLUSTRATE_PROMPT,
+            `TÀI LIỆU HƯỚNG DẪN THỰC HÀNH:\n\n${draft}`,
+            modelName,
+            userId,
+        );
+
+        let illustrations: Array<{ position: string; type: string; caption: string; content: string }>;
+        try {
+            let jsonStr = illustrateResult.content.trim();
+            if (jsonStr.startsWith('```')) {
+                jsonStr = jsonStr.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+            }
+            illustrations = JSON.parse(jsonStr);
+            if (!Array.isArray(illustrations)) illustrations = [];
+        } catch {
+            this.logger.warn('[PracticeGuide] Could not parse ILLUSTRATE response');
+            return draft;
+        }
+
+        if (illustrations.length === 0) return draft;
+        illustrations = illustrations.slice(0, 4);
+
+        const imageRecords: Array<{ url: string; caption: string; type: string }> = [];
+        const markdownInserts: string[] = [];
+
+        for (let i = 0; i < illustrations.length; i++) {
+            const ill = illustrations[i];
+            const idx = String(i + 1).padStart(3, '0');
+            try {
+                if (ill.type === 'mermaid') {
+                    const png = await this.mermaid.renderToPng(ill.content);
+                    const filename = `practice_diagram_${idx}.png`;
+                    const { publicUrl } = await this.fileStorage.saveTextbookAsset(syllabusId, lessonId, png, filename);
+                    markdownInserts.push(`\n![${ill.caption}](${publicUrl})\n`);
+                    imageRecords.push({ url: publicUrl, caption: ill.caption, type: 'mermaid' });
+                } else if (ill.type === 'ai_image') {
+                    const geminiApiKey = userId ? await this.apiKeysService.getActiveKey(userId, 'GEMINI') : undefined;
+                    const generated = await this.imagen.generateImage(ill.content, '16:9', imageModelName, geminiApiKey || undefined, userId);
+                    if (generated.mimeType !== 'image/svg+xml') {
+                        const ext = generated.mimeType.includes('jpeg') ? 'jpg' : 'png';
+                        const filename = `practice_img_${idx}.${ext}`;
+                        const buffer = Buffer.from(generated.base64, 'base64');
+                        const { publicUrl } = await this.fileStorage.saveTextbookAsset(syllabusId, lessonId, buffer, filename);
+                        markdownInserts.push(`\n![${ill.caption}](${publicUrl})\n`);
+                        imageRecords.push({ url: publicUrl, caption: ill.caption, type: 'ai_image' });
+                    }
+                }
+            } catch (err: any) {
+                this.logger.warn(`[PracticeGuide] Illustration ${i + 1} failed: ${err.message}`);
+            }
+        }
+
+        if (imageRecords.length > 0) {
+            await this.prisma.syllabusLesson.update({
+                where: { id: lessonId },
+                data: { practiceImages: imageRecords as any },
+            });
+        }
+
+        let result = draft;
+        const markerRegex = /<!-- ILLUSTRATION:\s*\{[^}]+\}\s*-->/g;
+        const markers = [...result.matchAll(markerRegex)];
+
+        for (let i = 0; i < markers.length && i < markdownInserts.length; i++) {
+            result = result.replace(markers[i][0], markdownInserts[i]);
+        }
+        for (let i = markers.length; i < markdownInserts.length; i++) {
+            result += '\n' + markdownInserts[i];
+        }
+
+        this.logger.log(`[PracticeGuide] Illustrated: ${imageRecords.length} images added`);
+        return result;
+    }
+}
+
+function fileNameSafe(name: string): string {
+    return name.replace(/[\r\n]+/g, ' ').trim();
 }
 
 const LESSON_SPLIT_SYSTEM_PROMPT = `You are an educational course designer. Your task is to analyze a Vietnamese university course syllabus (content_detail section) and split it into individual lessons/lectures.

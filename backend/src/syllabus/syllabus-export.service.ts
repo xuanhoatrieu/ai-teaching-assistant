@@ -10,6 +10,11 @@
  */
 
 import { Injectable, Logger } from '@nestjs/common';
+import { execFileSync, execFile } from 'child_process';
+import * as crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import {
     Document,
     Packer,
@@ -24,6 +29,7 @@ import {
     TableCell,
     WidthType,
     BorderStyle,
+    VerticalAlign,
     VerticalMergeType,
     convertMillimetersToTwip,
 } from 'docx';
@@ -544,7 +550,6 @@ export class SyllabusExportService {
         
         // 1. Try default system-wide command
         const works = await new Promise<boolean>((resolve) => {
-            const { execFile } = require('child_process');
             execFile(defaultCmd, ['--version'], (err) => {
                 resolve(!err);
             });
@@ -552,20 +557,16 @@ export class SyllabusExportService {
         if (works) return defaultCmd;
 
         // 2. Try common paths
-        const { homedir } = require('os');
-        const { join } = require('path');
-        const { existsSync } = require('fs');
-        
-        const home = homedir();
+        const home = os.homedir();
         const commonPaths = [
-            join(process.cwd(), '.local/bin/pandoc'),
-            join(home, '.local/bin/pandoc'),
+            path.join(process.cwd(), '.local/bin/pandoc'),
+            path.join(home, '.local/bin/pandoc'),
             '/usr/local/bin/pandoc',
             '/usr/bin/pandoc',
         ];
 
         for (const p of commonPaths) {
-            if (existsSync(p)) {
+            if (fs.existsSync(p)) {
                 this.logger.log(`Found pandoc at fallback path: ${p}`);
                 return p;
             }
@@ -581,15 +582,13 @@ export class SyllabusExportService {
      * (backend/assets, the source location). Try the known locations in order.
      */
     private resolveAssetPath(fileName: string): string {
-        const { existsSync } = require('fs');
-        const { resolve } = require('path');
         const candidates = [
-            resolve(__dirname, '..', '..', 'assets', fileName), // dist/assets (copied)
-            resolve(process.cwd(), 'assets', fileName),         // backend/assets (source)
-            resolve(process.cwd(), 'dist', 'assets', fileName),
+            path.resolve(__dirname, '..', '..', 'assets', fileName), // dist/assets (copied)
+            path.resolve(process.cwd(), 'assets', fileName),         // backend/assets (source)
+            path.resolve(process.cwd(), 'dist', 'assets', fileName),
         ];
         for (const p of candidates) {
-            if (existsSync(p)) return p;
+            if (fs.existsSync(p)) return p;
         }
         // Fall back to the first candidate so the error message is meaningful
         this.logger.warn(`Asset "${fileName}" not found in: ${candidates.join(', ')}`);
@@ -607,46 +606,92 @@ export class SyllabusExportService {
         subjectName: string,
     ): Promise<Buffer> {
         this.logger.log(`Generating textbook DOCX: ${subjectName}, ${lessons.length} lessons`);
+        return this.renderMarkdownChaptersDocx(
+            lessons.map((l) => ({
+                title: l.title,
+                sortOrder: l.sortOrder,
+                content: l.textbookContent,
+            })),
+            'GIÁO TRÌNH',
+            subjectName,
+            'textbook',
+        );
+    }
 
-        const { execSync } = await import('child_process');
-        const fs = await import('fs');
-        const path = await import('path');
-        const os = await import('os');
+    /**
+     * Generate a DOCX file combining lessons' hands-on practice guides.
+     * Uses the same Pandoc + TUAF reference.docx + code-block styling pipeline as Textbook DOCX,
+     * while keeping Practice Guide completely separate and parallel to Textbook.
+     */
+    async generatePracticeDocx(
+        lessons: { title: string; sortOrder: number; practiceContent: string | null }[],
+        subjectName: string,
+    ): Promise<Buffer> {
+        this.logger.log(`Generating practice guide DOCX: ${subjectName}, ${lessons.length} lessons`);
+        return this.renderMarkdownChaptersDocx(
+            lessons.map((l) => ({
+                title: l.title,
+                sortOrder: l.sortOrder,
+                content: l.practiceContent,
+            })),
+            'TÀI LIỆU HƯỚNG DẪN THỰC HÀNH',
+            subjectName,
+            'practice',
+        );
+    }
 
-        // Build combined markdown document
+    /**
+     * Shared Pandoc Markdown-to-DOCX renderer for Textbook & Practice Guide exports.
+     * Uses execFileSync (no shell interpolation) and strict path-containment validation for embedded images.
+     */
+    private async renderMarkdownChaptersDocx(
+        chapters: { title: string; sortOrder: number; content: string | null }[],
+        docTitle: string,
+        subjectName: string,
+        tmpPrefix: string,
+    ): Promise<Buffer> {
+        const profile: 'textbook' | 'practice' = tmpPrefix === 'practice' ? 'practice' : 'textbook';
         const mdParts: string[] = [];
+        const safeSubjectTitle = subjectName.replace(/[\r\n]+/g, ' ').trim();
 
-        // YAML front-matter for Pandoc metadata
+        // YAML front-matter for Pandoc metadata (JSON.stringify safely escapes quotes/backslashes)
         mdParts.push(`---`);
-        mdParts.push(`title: "GIÁO TRÌNH"`);
-        mdParts.push(`subtitle: "${subjectName}"`);
+        mdParts.push(`title: ${JSON.stringify(docTitle)}`);
+        mdParts.push(`subtitle: ${JSON.stringify(safeSubjectTitle)}`);
         mdParts.push(`---\n`);
 
-        // Each lesson as a chapter
-        for (const lesson of lessons) {
-            if (!lesson.textbookContent?.trim()) continue;
+        const resolvedTextbookUploadsRoot = path.resolve(process.cwd(), 'uploads', 'syllabus-textbook');
+        const sanitizedChapters: { title: string; sortOrder: number; content: string | null }[] = [];
+
+        let renderedCount = 0;
+        for (const lesson of chapters) {
+            if (!lesson.content?.trim()) continue;
 
             const paddedNum = String(lesson.sortOrder + 1).padStart(2, '0');
             const cleanedTitle = lesson.title.replace(/^Bài\s*\d+\s*[:.\\-]\s*/i, '');
 
             // Pre-process markdown: normalize bullets and math notation
-            let md = lesson.textbookContent;
+            let md = lesson.content;
             // Convert ● bullets to standard markdown bullets
             md = md.replace(/^[●•]\s*/gm, '- ');
             // Convert LaTeX display math \[...\] to $$...$$
             md = md.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_m, p1) => `$$${p1}$$`);
-            // Convert LaTeX inline math \(...\) to $$
+            // Convert LaTeX inline math \(...\) to $...$
             md = md.replace(/\\\(\s*([^)]*?)\s*\\\)/g, (_m, p1) => `$${p1}$`);
             // Convert standalone display math [ expr ] on its own line
             md = md.replace(/^\[\s*(.+?)\s*\]$/gm, (_m, p1) => `$$${p1}$$`);
 
-            // Convert image URLs to absolute file paths for Pandoc embedding
-            // e.g., ![caption](/files/public/syllabus-textbook/abc/def/assets/diagram_001.png)
-            // → ![caption](/absolute/path/uploads/syllabus-textbook/abc/def/assets/diagram_001.png)
-            const uploadsDir = path.join(process.cwd(), 'uploads');
+            // Convert image URLs to validated absolute file paths for Pandoc embedding
             md = md.replace(
                 /!\[([^\]]*)\]\(\/files\/public\/syllabus-textbook\/([^)]+)\)/g,
-                (_m, caption, relPath) => `![${caption}](${path.join(uploadsDir, 'syllabus-textbook', relPath)})`,
+                (_m, caption, relPath) => {
+                    const candidate = path.resolve(resolvedTextbookUploadsRoot, relPath);
+                    if (!candidate.startsWith(resolvedTextbookUploadsRoot + path.sep)) {
+                        this.logger.warn(`Blocked out-of-bounds image path in DOCX export: ${relPath}`);
+                        return '';
+                    }
+                    return `![${caption}](${candidate})`;
+                },
             );
 
             // Convert ```output blocks to plain text blocks (Pandoc doesn't know "output" language)
@@ -655,75 +700,367 @@ export class SyllabusExportService {
             // Strip leftover ILLUSTRATION markers
             md = md.replace(/<!-- ILLUSTRATION:\s*\{[^}]+\}\s*-->/g, '');
 
-            mdParts.push(`\\newpage\n`);
+            sanitizedChapters.push({ title: lesson.title, sortOrder: lesson.sortOrder, content: md });
+
+            if (profile !== 'practice' || renderedCount > 0) {
+                mdParts.push(`\\newpage\n`);
+            }
             mdParts.push(`# Bài ${paddedNum}: ${cleanedTitle}\n`);
             mdParts.push(md);
             mdParts.push('\n');
+            renderedCount++;
         }
 
         const fullMd = mdParts.join('\n');
 
-        // Write to temp file
         const tmpDir = os.tmpdir();
-        const tmpMd = path.join(tmpDir, `textbook_${Date.now()}.md`);
-        const tmpDocx = path.join(tmpDir, `textbook_${Date.now()}.docx`);
+        const uniqueSuffix = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
+        const tmpMd = path.join(tmpDir, `${tmpPrefix}_${uniqueSuffix}.md`);
+        const tmpDocx = path.join(tmpDir, `${tmpPrefix}_${uniqueSuffix}.docx`);
 
         try {
             fs.writeFileSync(tmpMd, fullMd, 'utf-8');
 
-            // Run Pandoc to convert Markdown → DOCX
-            // Uses reference.docx template: TNR 13pt, justified, A4 2cm/3cm margins
             const refDoc = this.resolveAssetPath('reference.docx');
             const pandoc = await this.getPandocCommand();
-            const pandocCmd = [
-                pandoc,
-                JSON.stringify(tmpMd),
-                '-o', JSON.stringify(tmpDocx),
-                '-f', 'markdown',
-                '-t', 'docx',
+            const pandocArgs = [
+                tmpMd,
+                '-o',
+                tmpDocx,
+                '-f',
+                'markdown',
+                '-t',
+                'docx',
                 '--standalone',
                 '--wrap=none',
                 '--highlight-style=tango',
-                `--reference-doc=${JSON.stringify(refDoc)}`,
-            ].join(' ');
+                `--reference-doc=${refDoc}`,
+            ];
 
-            this.logger.log(`Running Pandoc: ${pandocCmd}`);
-            execSync(pandocCmd, { timeout: 60_000 });
-
-            // Post-process DOCX: add gray background + border to code blocks
-            const postprocessScript = this.resolveAssetPath('docx_postprocess.py');
-            const tmpDocxStyled = tmpDocx.replace('.docx', '_styled.docx');
+            this.logger.log(`Running Pandoc (${tmpPrefix}): ${pandoc} ${pandocArgs.join(' ')}`);
             try {
-                // Auto-install python-docx if not available
-                try {
-                    execSync('python3 -c "import docx"', { timeout: 5_000, stdio: 'pipe' });
-                } catch {
-                    this.logger.log('python-docx not found, installing...');
-                    execSync('pip3 install --break-system-packages python-docx', { timeout: 60_000, stdio: 'pipe' });
-                    this.logger.log('python-docx installed successfully');
+                execFileSync(pandoc, pandocArgs, { timeout: 60_000 });
+            } catch (pandocErr: any) {
+                if (pandocErr?.code === 'ENOENT') {
+                    this.logger.warn(`Pandoc binary not found on host; falling back to pure-JS docx renderer (${tmpPrefix})`);
+                    const fallbackBuf = await this.buildFallbackChaptersDocx(sanitizedChapters, docTitle, safeSubjectTitle, profile);
+                    const tmpFallbackIn = path.join(tmpDir, `${tmpPrefix}_fb_${uniqueSuffix}.docx`);
+                    try {
+                        fs.writeFileSync(tmpFallbackIn, fallbackBuf);
+                        const styledFallback = this.tryRunDocxPostprocess(tmpFallbackIn, profile, tmpPrefix);
+                        if (styledFallback) return styledFallback;
+                    } finally {
+                        try { fs.unlinkSync(tmpFallbackIn); } catch { /* ignore */ }
+                    }
+                    return fallbackBuf;
                 }
-                execSync(`python3 ${JSON.stringify(postprocessScript)} ${JSON.stringify(tmpDocx)} ${JSON.stringify(tmpDocxStyled)}`, { timeout: 30_000 });
-                // Use styled version if post-processing succeeded
-                if (fs.existsSync(tmpDocxStyled)) {
-                    const styledBuffer = fs.readFileSync(tmpDocxStyled);
-                    this.logger.log(`Post-processed DOCX: ${styledBuffer.length} bytes (code blocks styled)`);
-                    return Buffer.from(styledBuffer);
-                }
-            } catch (ppErr: any) {
-                this.logger.warn(`Post-processing failed (using raw Pandoc output): ${ppErr.message}`);
-            } finally {
-                try { fs.unlinkSync(tmpDocxStyled); } catch { /* ignore */ }
+                throw pandocErr;
             }
 
-            // Fallback: use raw Pandoc output
+            const styledBuffer = this.tryRunDocxPostprocess(tmpDocx, profile, tmpPrefix);
+            if (styledBuffer) {
+                return styledBuffer;
+            }
+
             const docxBuffer = fs.readFileSync(tmpDocx);
-            this.logger.log(`Pandoc DOCX generated: ${docxBuffer.length} bytes`);
+            this.logger.log(`Pandoc DOCX generated (${tmpPrefix}): ${docxBuffer.length} bytes`);
 
             return Buffer.from(docxBuffer);
         } finally {
-            // Cleanup temp files
             try { fs.unlinkSync(tmpMd); } catch { /* ignore */ }
             try { fs.unlinkSync(tmpDocx); } catch { /* ignore */ }
         }
+    }
+
+    /**
+     * Run Python docx_postprocess.py on an existing DOCX file with the requested profile.
+     */
+    private tryRunDocxPostprocess(
+        inputDocxPath: string,
+        profile: 'textbook' | 'practice',
+        tmpPrefix: string,
+    ): Buffer | null {
+        const postprocessScript = this.resolveAssetPath('docx_postprocess.py');
+        const tmpDocxStyled = inputDocxPath.replace(/\.docx$/, '_styled.docx');
+        try {
+            try {
+                execFileSync('python3', ['-c', 'import docx'], { timeout: 5_000, stdio: 'pipe' });
+            } catch {
+                this.logger.log('python-docx not found, installing...');
+                execFileSync('pip3', ['install', '--break-system-packages', 'python-docx'], {
+                    timeout: 60_000,
+                    stdio: 'pipe',
+                });
+                this.logger.log('python-docx installed successfully');
+            }
+            execFileSync('python3', [postprocessScript, inputDocxPath, tmpDocxStyled, '--profile', profile], {
+                timeout: 30_000,
+            });
+            if (fs.existsSync(tmpDocxStyled)) {
+                const styledBuffer = fs.readFileSync(tmpDocxStyled);
+                this.logger.log(`Post-processed DOCX (${tmpPrefix}, profile=${profile}): ${styledBuffer.length} bytes`);
+                return Buffer.from(styledBuffer);
+            }
+        } catch (ppErr: any) {
+            this.logger.warn(`Post-processing failed (using unstyled DOCX): ${ppErr.message}`);
+        } finally {
+            try { fs.unlinkSync(tmpDocxStyled); } catch { /* ignore */ }
+        }
+        return null;
+    }
+
+    /**
+     * Pure-JS DOCX fallback when `pandoc` is not installed on a local dev/CI host.
+     * Applies TUAF/Practice page setup (A4, left 3cm, T/R/B 2cm), TNR 13pt, 1.3x line spacing, 4pt paragraph after,
+     * and zero-spacing tables (centered header & numeric cols, left-middle text cols).
+     */
+    private async buildFallbackChaptersDocx(
+        chapters: { title: string; sortOrder: number; content: string | null }[],
+        docTitle: string,
+        subjectName: string,
+        profile: 'textbook' | 'practice' = 'textbook',
+    ): Promise<Buffer> {
+        const isPractice = profile === 'practice';
+        const bodySpacing = isPractice ? { before: 0, after: 80, line: 312 } : { after: 120, line: 312 };
+
+        const children: (Paragraph | Table)[] = [
+            new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 120, after: 80, line: 312 },
+                children: [
+                    new TextRun({ text: docTitle, font: FONT_NAME, size: isPractice ? 30 : TITLE_SIZE, bold: true }),
+                ],
+            }),
+        ];
+
+        if (subjectName) {
+            children.push(
+                new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 0, after: 160, line: 312 },
+                    children: [
+                        new TextRun({ text: subjectName, font: FONT_NAME, size: isPractice ? 26 : HEADING_SIZE, bold: true }),
+                    ],
+                }),
+            );
+        }
+
+        let chapterIdx = 0;
+        for (const lesson of chapters) {
+            if (!lesson.content?.trim()) continue;
+            const paddedNum = String(lesson.sortOrder + 1).padStart(2, '0');
+            const cleanedTitle = lesson.title.replace(/^Bài\s*\d+\s*[:.\\-]\s*/i, '');
+
+            children.push(
+                new Paragraph({
+                    heading: HeadingLevel.HEADING_1,
+                    pageBreakBefore: chapterIdx > 0,
+                    spacing: { before: 120, after: 80, line: 312 },
+                    children: [
+                        new TextRun({
+                            text: `Bài ${paddedNum}: ${cleanedTitle}`,
+                            font: FONT_NAME,
+                            size: isPractice ? 28 : TITLE_SIZE,
+                            bold: true,
+                        }),
+                    ],
+                }),
+            );
+            chapterIdx++;
+
+            // Strip HTML illustration comments and split around fenced code blocks
+            const cleanedMd = lesson.content.replace(/<!-- ILLUSTRATION:\s*\{[^}]+\}\s*-->/g, '');
+            const codeSplit = cleanedMd.split(/(```[\s\S]*?```)/g);
+
+            for (const part of codeSplit) {
+                if (!part.trim()) continue;
+                if (part.startsWith('```') && part.endsWith('```')) {
+                    const codeLines = part.replace(/^```[^\n]*\n?/, '').replace(/\n?```$/, '').split('\n');
+                    for (const cLine of codeLines) {
+                        children.push(
+                            new Paragraph({
+                                alignment: AlignmentType.LEFT,
+                                spacing: { before: 0, after: 20, line: 264 },
+                                shading: { fill: 'F5F5F5' },
+                                children: [
+                                    new TextRun({
+                                        text: cLine || ' ',
+                                        font: 'Consolas',
+                                        size: 20, // 10pt
+                                    }),
+                                ],
+                            }),
+                        );
+                    }
+                } else {
+                    const segments = this.splitIntoSegments(part);
+                    for (const seg of segments) {
+                        if (seg.type === 'table') {
+                            children.push(
+                                isPractice
+                                    ? this.buildPracticeFallbackTable(seg.table)
+                                    : this.buildDocxTable(seg.table, false),
+                            );
+                        } else if (seg.text.trim()) {
+                            for (const line of seg.text.split('\n')) {
+                                const trimmed = line.trim();
+                                const headingMatch = /^(#{1,4})\s+(.+)$/.exec(trimmed);
+                                if (headingMatch) {
+                                    const level = headingMatch[1].length;
+                                    children.push(
+                                        new Paragraph({
+                                            alignment: AlignmentType.LEFT,
+                                            spacing: isPractice
+                                                ? { before: 120, after: 80, line: 312 }
+                                                : { before: 220, after: 100 },
+                                            children: [
+                                                new TextRun({
+                                                    text: headingMatch[2].replace(/\*\*/g, ''),
+                                                    font: FONT_NAME,
+                                                    size: isPractice
+                                                        ? level === 1
+                                                            ? 28
+                                                            : FONT_SIZE
+                                                        : level <= 2
+                                                          ? HEADING_SIZE
+                                                          : FONT_SIZE,
+                                                    bold: true,
+                                                }),
+                                            ],
+                                        }),
+                                    );
+                                } else if (isPractice) {
+                                    if (!trimmed) continue;
+                                    const isBullet = /^[-•*]\s/.test(trimmed);
+                                    const textContent = isBullet ? trimmed.replace(/^[-•*]\s+/, '') : trimmed;
+                                    children.push(
+                                        new Paragraph({
+                                            ...(isBullet ? { bullet: { level: 0 } } : {}),
+                                            alignment: AlignmentType.JUSTIFIED,
+                                            spacing: bodySpacing,
+                                            children: this.parseInlineFormatting(textContent),
+                                        }),
+                                    );
+                                } else {
+                                    children.push(...this.buildLines(line));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        const doc = new Document({
+            creator: 'AI Teaching Assistant',
+            title: `${docTitle} - ${subjectName}`,
+            styles: {
+                default: {
+                    document: {
+                        run: { font: FONT_NAME, size: FONT_SIZE },
+                        paragraph: { spacing: bodySpacing, alignment: AlignmentType.JUSTIFIED },
+                    },
+                },
+            },
+            sections: [
+                {
+                    properties: {
+                        page: {
+                            size: { width: 11906, height: 16838 },
+                            margin: MARGIN,
+                        },
+                    },
+                    children,
+                },
+            ],
+        });
+
+        return Buffer.from(await Packer.toBuffer(doc));
+    }
+
+    /**
+     * Build a table adhering strictly to Practice Guide rules:
+     * - Zero line/paragraph spacing (single line, before=0, after=0)
+     * - Vertical alignment = CENTER for all cells
+     * - Header row = CENTER horizontal + bold
+     * - Numeric/data columns = CENTER horizontal; text columns = LEFT horizontal ("trái ở giữa")
+     */
+    private buildPracticeFallbackTable(parsed: { headers: string[]; rows: string[][] }): Table {
+        const { headers, rows } = parsed;
+        const numCols = headers.length;
+        const numericCols = this.detectNumericColumnsJs(headers, rows);
+
+        const makeCell = (text: string, isHeader: boolean, isNumeric: boolean) => {
+            const lines = (text || '').split('\n');
+            const alignment = isHeader || isNumeric ? AlignmentType.CENTER : AlignmentType.LEFT;
+            const paragraphs = lines.map(
+                (ln) =>
+                    new Paragraph({
+                        alignment,
+                        spacing: { before: 0, after: 0, line: 240 },
+                        children: this.parseInlineFormatting(ln, isHeader),
+                    }),
+            );
+            return new TableCell({
+                verticalAlign: VerticalAlign.CENTER,
+                shading: isHeader ? { fill: 'F2F2F2' } : undefined,
+                margins: { top: 60, bottom: 60, left: 100, right: 100 },
+                children: paragraphs.length > 0 ? paragraphs : [new Paragraph({ spacing: { before: 0, after: 0, line: 240 } })],
+            });
+        };
+
+        const tableRows: TableRow[] = [
+            new TableRow({
+                tableHeader: true,
+                cantSplit: true,
+                children: headers.map((h) => makeCell(h, true, false)),
+            }),
+            ...rows.map(
+                (row) =>
+                    new TableRow({
+                        cantSplit: true,
+                        children: Array.from({ length: numCols }, (_, c) =>
+                            makeCell(row[c] ?? '', false, numericCols.has(c)),
+                        ),
+                    }),
+            ),
+        ];
+
+        return new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            borders: {
+                top: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                left: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                right: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+                insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '000000' },
+            },
+            rows: tableRows,
+        });
+    }
+
+    private detectNumericColumnsJs(headers: string[], rows: string[][]): Set<number> {
+        const numericRe =
+            /^([-+]?\d+(?:[.,]\d+)?(\s*(%|cm|mm|m|km|ml|l|g|kg|mg|ug|µg|°c|c|k|v|mv|a|ma|w|kw|hz|khz|mhz|s|ms|phút|giờ|tiết|đ|đ\.|điểm|lần|mẫu|px))?|\d+\s*[:/×x\-–]\s*\d+|[.\-_]{2,})$/i;
+        const headerHintRe =
+            /^(stt|tt|số\s*tt|thứ\s*tự|số\s*lượng|trọng\s*số(\s*\(%\))?|điểm(\s*tối\s*đa)?|tỷ\s*lệ(\s*\(%\))?|lần\s*\d+|mẫu\s*\d+|thời\s*lượng|thời\s*gian)$/i;
+
+        const out = new Set<number>();
+        if (rows.length === 0) return out;
+        for (let c = 0; c < headers.length; c++) {
+            const hdr = (headers[c] || '').trim();
+            const vals = rows.map((r) => (r[c] || '').trim()).filter(Boolean);
+            if (vals.length === 0) {
+                if (headerHintRe.test(hdr)) out.add(c);
+                continue;
+            }
+            const ratio = vals.filter((v) => numericRe.test(v)).length / vals.length;
+            const avgLen = vals.reduce((s, v) => s + v.length, 0) / vals.length;
+            if (ratio >= 0.7 || (headerHintRe.test(hdr) && avgLen <= 24)) {
+                out.add(c);
+            }
+        }
+        return out;
     }
 }

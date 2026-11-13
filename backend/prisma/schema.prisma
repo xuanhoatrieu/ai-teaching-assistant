@@ -544,6 +544,11 @@ model SyllabusLesson {
   textbookImages  Json?    @map("textbook_images")
   textbookPhase   String?  @map("textbook_phase")
   textbookPlan    String?  @map("textbook_plan")
+  practiceContent String?  @map("practice_content")
+  practiceStatus  String   @default("none") @map("practice_status")
+  practicePhase   String?  @map("practice_phase")
+  practicePlan    String?  @map("practice_plan")
+  practiceImages  Json?    @map("practice_images")
   lesson          Lesson?  @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   syllabus        Syllabus @relation(fields: [syllabusId], references: [id], onDelete: Cascade)
 

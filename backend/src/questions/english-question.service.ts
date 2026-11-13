@@ -13,6 +13,9 @@ import {
     isMatchingQuestionText,
     extractMatchPairs,
     upgradeClozeToMultichoice,
+    cleanQuestionText,
+    stripOptionPrefix,
+    cleanExplanation,
 } from './moodle-xml.helper';
 
 import { IsOptional, IsNumber, IsArray, IsString } from 'class-validator';
@@ -362,7 +365,7 @@ export class EnglishQuestionService implements OnModuleInit {
             for (let i = 0; i < rawList.length; i++) {
                 const item = rawList[i];
                 let qType = (item.questionType || 'MC').toUpperCase();
-                const questionText = item.questionText || item.question || 'English Question';
+                const questionText = cleanQuestionText(item.questionText || item.question || 'English Question');
 
                 // Robust data extraction
                 let parsedData: any = null;
@@ -400,6 +403,13 @@ export class EnglishQuestionService implements OnModuleInit {
                     }
                 }
 
+                if (Array.isArray(parsedData?.options)) {
+                    parsedData.options = parsedData.options.map((opt: any) => ({
+                        ...opt,
+                        text: stripOptionPrefix(String(opt.text ?? opt.answer ?? opt.label ?? '')),
+                    }));
+                }
+
                 // Upgrade any CLOZE question to Moodle shuffled dropdown MULTICHOICE_S (never free-text SHORTANSWER)
                 let finalQuestionText = questionText;
                 if (qType === 'CLOZE') {
@@ -423,7 +433,7 @@ export class EnglishQuestionService implements OnModuleInit {
                     title: item.title || `ENG-${i + 1}`,
                     questionText: finalQuestionText,
                     dataJson: dataJson,
-                    explanation: item.explanation || item.feedback || null,
+                    explanation: cleanExplanation(item.explanation || item.feedback || '') || undefined,
                     points: item.points || 1,
                 });
                 createdList.push(created);
